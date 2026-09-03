@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --church-gold: #D4AF37;
+    --church-gold-light: #F3E5AB;
+    --church-gold-dark: #AA820A;
+    --church-navy: #001122;
+    --church-navy-surface: #001F3F;
+    --church-navy-card: rgba(0, 31, 63, 0.6);
+  }
+  
+  body {
+    background-color: #001122;
+    color: #ffffff;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  /* JW Library-style smart, clean, restrained heading typography */
+  h1, h2, h3, h4, .font-serif-church, .font-heading {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+  }
+
+  h1 {
+    font-size: 1.35rem;
+    line-height: 1.3;
+  }
+
+  h2 {
+    font-size: 1.15rem;
+    line-height: 1.35;
+  }
+
+  h3 {
+    font-size: 1.025rem;
+    line-height: 1.4;
+  }
+}
+
+/* Sleek Interface Custom Utilities */
+.bg-sleek-bg {
+  background-color: #001122;
+}
+
+.bg-sleek-surface {
+  background-color: #001F3F;
+}
+
+.bg-sleek-card {
+  background-color: rgba(0, 31, 63, 0.6);
+  backdrop-filter: blur(12px);
+}
+
+.border-sleek-gold {
+  border-color: rgba(212, 175, 55, 0.4);
+}
+
+.text-sleek-gold {
+  color: #D4AF37;
+}
+
+/* Custom scrollbar for low-profile mobile experience */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #001122;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.35);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 175, 55, 0.7);
+}
+
+@keyframes pulse-gold {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(212, 175, 55, 0);
+  }
+}
+
+.animate-pulse-gold {
+  animation: pulse-gold 2s infinite;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  display: flex;
+  width: 200%;
+  animation: marquee 25s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+
