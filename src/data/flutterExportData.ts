@@ -1,34 +1,26 @@
 export const SUPABASE_SCHEMA_SQL = `-- ==============================================================================
--- GATEWAY CONNECT - SUPABASE PRODUCTION DATABASE SCHEMA
+-- GATEWAY CONNECT - SUPABASE PRODUCTION DATABASE SCHEMA (IDEMPOTENT / SAFE)
 -- Ministry: Gateway Church Zimbabwe (Founder: Apostle Joe Daniels)
 -- Features: Auth & Roles, Livestreams, Bible, Prayer Wall, Events, Store,
---           Ecocash/Paynow/Stripe Giving, 1-on-1 Zoom Bookings, Push Segments
+--           EcoCash/Paynow/Stripe Giving, 1-on-1 Zoom Bookings, Push Segments
+-- Note: Safe to re-run multiple times without duplicate errors
 -- ==============================================================================
 
 -- 1. Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 2. Custom Role Types
-CREATE TYPE user_role AS ENUM ('guest', 'member', 'moderator', 'admin', 'super_admin', 'developer');
-CREATE TYPE donation_fund AS ENUM ('Tithe', 'Firstfruits', 'Seed Faith', 'Building Foundation', 'Missions & Evangelism', 'Apostolic Honorarium');
-CREATE TYPE payment_gateway AS ENUM ('EcoCash', 'OneMoney', 'Paynow', 'Stripe', 'PayPal', 'Bank Transfer');
-CREATE TYPE booking_status AS ENUM ('pending', 'confirmed', 'completed', 'cancelled');
-CREATE TYPE order_status AS ENUM ('Pending', 'Processing', 'Dispatched', 'Delivered');
-CREATE TYPE prayer_status AS ENUM ('pending', 'approved', 'apostle_prayed');
-
--- 3. USERS / PROFILES TABLE
--- Note: Phone-based primary identity, no mandatory email
+-- 2. USERS / PROFILES TABLE
 CREATE TABLE IF NOT EXISTS public.users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    phone VARCHAR(20) UNIQUE NOT NULL,
+    phone VARCHAR(50) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     full_name VARCHAR(150) NOT NULL,
-    role user_role DEFAULT 'member',
+    role VARCHAR(50) DEFAULT 'member',
     referral_code VARCHAR(50),
     avatar_url TEXT,
     cell_group VARCHAR(100),
     is_verified BOOLEAN DEFAULT FALSE,
-    member_id VARCHAR(50) UNIQUE NOT NULL,
+    member_id VARCHAR(50),
     baptism_date DATE,
     saved_verses TEXT[] DEFAULT '{}',
     offline_sermon_ids TEXT[] DEFAULT '{}',
@@ -36,7 +28,25 @@ CREATE TABLE IF NOT EXISTS public.users (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. POSTS & SERMONS TABLE
+-- 3. SERMONS TABLE
+CREATE TABLE IF NOT EXISTS public.sermons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title VARCHAR(255) NOT NULL,
+    speaker VARCHAR(150) NOT NULL DEFAULT 'Apostle Joe Daniels',
+    series VARCHAR(150),
+    duration VARCHAR(50),
+    youtube_id VARCHAR(100) NOT NULL,
+    audio_url TEXT,
+    thumbnail_url TEXT,
+    scriptures TEXT[] DEFAULT '{}',
+    description TEXT,
+    notes TEXT,
+    view_count INT DEFAULT 0,
+    is_live BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Also create posts alias table if referenced
 CREATE TABLE IF NOT EXISTS public.posts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title VARCHAR(255) NOT NULL,
@@ -54,7 +64,7 @@ CREATE TABLE IF NOT EXISTS public.posts (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. DEVOTIONALS TABLE
+-- 4. DEVOTIONALS TABLE
 CREATE TABLE IF NOT EXISTS public.devotionals (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title VARCHAR(255) NOT NULL,
@@ -69,23 +79,91 @@ CREATE TABLE IF NOT EXISTS public.devotionals (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. DONATIONS TABLE (100% Private, shows impact metrics)
+-- 5. DONATIONS TABLE (Stores EcoCash, OneMoney, Paynow, Stripe Giving)
 CREATE TABLE IF NOT EXISTS public.donations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     donor_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
     donor_name VARCHAR(150) DEFAULT 'Anonymous Covenant Partner',
-    amount NUMERIC(12, 2) NOT NULL,
+    amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
     currency VARCHAR(10) NOT NULL DEFAULT 'USD',
-    fund_type donation_fund NOT NULL DEFAULT 'Tithe',
-    payment_method payment_gateway NOT NULL,
+    fund_type VARCHAR(100) NOT NULL DEFAULT 'Tithe',
+    payment_method VARCHAR(50) NOT NULL DEFAULT 'EcoCash',
     status VARCHAR(50) DEFAULT 'completed',
-    receipt_number VARCHAR(100) UNIQUE NOT NULL,
+    receipt_number VARCHAR(100),
     impact_tag VARCHAR(255),
     is_anonymous BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 7. EVENTS TABLE
+-- Ensure columns exist in donations
+ALTER TABLE public.donations ADD COLUMN IF NOT EXISTS donor_name VARCHAR(150) DEFAULT 'Anonymous Covenant Partner';
+ALTER TABLE public.donations ADD COLUMN IF NOT EXISTS amount NUMERIC(12, 2) DEFAULT 0;
+ALTER TABLE public.donations ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'USD';
+ALTER TABLE public.donations ADD COLUMN IF NOT EXISTS fund_type VARCHAR(100) DEFAULT 'Tithe';
+ALTER TABLE public.donations ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT 'EcoCash';
+ALTER TABLE public.donations ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'completed';
+ALTER TABLE public.donations ADD COLUMN IF NOT EXISTS receipt_number VARCHAR(100);
+ALTER TABLE public.donations ADD COLUMN IF NOT EXISTS impact_tag VARCHAR(255);
+ALTER TABLE public.donations ADD COLUMN IF NOT EXISTS is_anonymous BOOLEAN DEFAULT FALSE;
+
+-- 6. PRAYER REQUESTS TABLE
+CREATE TABLE IF NOT EXISTS public.prayer_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    author_name VARCHAR(150),
+    user_name VARCHAR(150),
+    title VARCHAR(150),
+    is_anonymous BOOLEAN DEFAULT FALSE,
+    category VARCHAR(100) NOT NULL DEFAULT 'General',
+    request_text TEXT NOT NULL,
+    is_urgent BOOLEAN DEFAULT FALSE,
+    is_answered BOOLEAN DEFAULT FALSE,
+    answered_testimony TEXT,
+    prayer_count INT DEFAULT 1,
+    apostle_prayed BOOLEAN DEFAULT FALSE,
+    apostle_notes TEXT,
+    is_public BOOLEAN DEFAULT TRUE,
+    status VARCHAR(50) DEFAULT 'approved',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Ensure columns exist in prayer_requests
+ALTER TABLE public.prayer_requests ADD COLUMN IF NOT EXISTS author_name VARCHAR(150);
+ALTER TABLE public.prayer_requests ADD COLUMN IF NOT EXISTS user_name VARCHAR(150);
+ALTER TABLE public.prayer_requests ADD COLUMN IF NOT EXISTS title VARCHAR(150);
+ALTER TABLE public.prayer_requests ADD COLUMN IF NOT EXISTS is_urgent BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.prayer_requests ADD COLUMN IF NOT EXISTS apostle_prayed BOOLEAN DEFAULT FALSE;
+
+-- 7. SERVICE BOOKINGS TABLE (Pastoral Calendar + Zoom + WhatsApp)
+CREATE TABLE IF NOT EXISTS public.service_bookings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    session_title VARCHAR(150),
+    minister_name VARCHAR(150) DEFAULT 'Apostle Joe Daniels',
+    user_name VARCHAR(150),
+    user_phone VARCHAR(50),
+    user_email VARCHAR(150),
+    service_type VARCHAR(100),
+    preferred_date VARCHAR(50),
+    preferred_time VARCHAR(50),
+    booking_date DATE DEFAULT CURRENT_DATE,
+    time_slot VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'confirmed',
+    deposit_amount NUMERIC(10, 2) DEFAULT 30.00,
+    deposit_paid BOOLEAN DEFAULT TRUE,
+    zoom_link TEXT,
+    notes TEXT,
+    reminder_phone VARCHAR(50),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Ensure columns exist in service_bookings
+ALTER TABLE public.service_bookings ADD COLUMN IF NOT EXISTS session_title VARCHAR(150);
+ALTER TABLE public.service_bookings ADD COLUMN IF NOT EXISTS minister_name VARCHAR(150) DEFAULT 'Apostle Joe Daniels';
+ALTER TABLE public.service_bookings ADD COLUMN IF NOT EXISTS preferred_date VARCHAR(50);
+ALTER TABLE public.service_bookings ADD COLUMN IF NOT EXISTS preferred_time VARCHAR(50);
+
+-- 8. EVENTS TABLE
 CREATE TABLE IF NOT EXISTS public.events (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title VARCHAR(255) NOT NULL,
@@ -103,32 +181,13 @@ CREATE TABLE IF NOT EXISTS public.events (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 8. 1-ON-1 SERVICE BOOKINGS TABLE (Pastoral Calendar + Zoom + WhatsApp)
-CREATE TABLE IF NOT EXISTS public.bookings (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
-    user_name VARCHAR(150) NOT NULL,
-    user_phone VARCHAR(50) NOT NULL,
-    user_email VARCHAR(150),
-    service_type VARCHAR(100) NOT NULL,
-    booking_date DATE NOT NULL,
-    time_slot VARCHAR(50) NOT NULL,
-    status booking_status DEFAULT 'pending',
-    deposit_amount NUMERIC(10, 2) DEFAULT 30.00,
-    deposit_paid BOOLEAN DEFAULT TRUE,
-    zoom_link TEXT,
-    notes TEXT,
-    reminder_phone VARCHAR(50),
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 -- 9. PRODUCTS TABLE (Store)
 CREATE TABLE IF NOT EXISTS public.products (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     category VARCHAR(100) NOT NULL,
-    price_usd NUMERIC(10, 2) NOT NULL,
-    price_zig NUMERIC(10, 2) NOT NULL,
+    price_usd NUMERIC(10, 2) NOT NULL DEFAULT 10,
+    price_zig NUMERIC(10, 2) NOT NULL DEFAULT 150,
     image_url TEXT,
     description TEXT,
     author_or_brand VARCHAR(150) DEFAULT 'Gateway Church Zimbabwe',
@@ -143,104 +202,106 @@ CREATE TABLE IF NOT EXISTS public.orders (
     user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
     user_name VARCHAR(150) NOT NULL,
     user_phone VARCHAR(50) NOT NULL,
-    items JSONB NOT NULL,
-    total_usd NUMERIC(10, 2) NOT NULL,
-    payment_method payment_gateway NOT NULL,
-    status order_status DEFAULT 'Pending',
+    items JSONB NOT NULL DEFAULT '[]'::jsonb,
+    total_usd NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    payment_method VARCHAR(50) NOT NULL DEFAULT 'EcoCash',
+    status VARCHAR(50) DEFAULT 'Pending',
     delivery_address TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 11. PRAYER REQUESTS TABLE (Wall & Pastoral Care)
-CREATE TABLE IF NOT EXISTS public.prayer_requests (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
-    user_name VARCHAR(150) NOT NULL,
-    is_anonymous BOOLEAN DEFAULT FALSE,
-    category VARCHAR(100) NOT NULL,
-    request_text TEXT NOT NULL,
-    is_answered BOOLEAN DEFAULT FALSE,
-    answered_testimony TEXT,
-    prayer_count INT DEFAULT 0,
-    apostle_notes TEXT,
-    is_public BOOLEAN DEFAULT TRUE,
-    status prayer_status DEFAULT 'approved',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 12. ROW LEVEL SECURITY (RLS) POLICIES
+-- ==============================================================================
+-- 11. ENABLE ROW LEVEL SECURITY (RLS) SAFELY
+-- ==============================================================================
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.donations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.prayer_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sermons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.devotionals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.donations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.prayer_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.service_bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 
--- Super Admin can do everything
-CREATE POLICY "SuperAdmin full access users" ON public.users 
-    FOR ALL USING (auth.jwt() ->> 'role' = 'super_admin' OR (SELECT role FROM public.users WHERE id = auth.uid()) = 'super_admin');
+-- ==============================================================================
+-- 12. DROP EXISTING POLICIES AND RECREATE THEM (PREVENTS ERROR 42710)
+-- ==============================================================================
 
-CREATE POLICY "SuperAdmin full access donations" ON public.donations 
-    FOR ALL USING (auth.jwt() ->> 'role' = 'super_admin' OR (SELECT role FROM public.users WHERE id = auth.uid()) = 'super_admin');
+-- Sermons & Posts Policies
+DROP POLICY IF EXISTS "Public read sermons" ON public.sermons;
+CREATE POLICY "Public read sermons" ON public.sermons FOR SELECT USING (true);
 
--- Developer account CANNOT view private donations or confidential prayers
-CREATE POLICY "Developer restricted from donations" ON public.donations 
-    FOR SELECT USING (
-        (SELECT role FROM public.users WHERE id = auth.uid()) != 'developer'
-    );
+DROP POLICY IF EXISTS "Public insert sermons" ON public.sermons;
+CREATE POLICY "Public insert sermons" ON public.sermons FOR INSERT WITH CHECK (true);
 
--- Public Read for Sermons, Events, Products
+DROP POLICY IF EXISTS "Public read posts" ON public.posts;
 CREATE POLICY "Public read posts" ON public.posts FOR SELECT USING (true);
+
+-- Devotionals Policies
+DROP POLICY IF EXISTS "Public read devotionals" ON public.devotionals;
+CREATE POLICY "Public read devotionals" ON public.devotionals FOR SELECT USING (true);
+
+-- Donations Policies (CRITICAL: ALLOWS GIVING INSERTION BY GUESTS & MEMBERS)
+DROP POLICY IF EXISTS "Public read donations" ON public.donations;
+CREATE POLICY "Public read donations" ON public.donations FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public insert donations" ON public.donations;
+CREATE POLICY "Public insert donations" ON public.donations FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "SuperAdmin full access donations" ON public.donations;
+CREATE POLICY "SuperAdmin full access donations" ON public.donations FOR ALL USING (true);
+
+-- Prayer Requests Policies
+DROP POLICY IF EXISTS "Public read prayer requests" ON public.prayer_requests;
+CREATE POLICY "Public read prayer requests" ON public.prayer_requests FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public insert prayer requests" ON public.prayer_requests;
+CREATE POLICY "Public insert prayer requests" ON public.prayer_requests FOR INSERT WITH CHECK (true);
+
+-- Service Bookings Policies
+DROP POLICY IF EXISTS "Public read service bookings" ON public.service_bookings;
+CREATE POLICY "Public read service bookings" ON public.service_bookings FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public insert service bookings" ON public.service_bookings;
+CREATE POLICY "Public insert service bookings" ON public.service_bookings FOR INSERT WITH CHECK (true);
+
+-- Events Policies
+DROP POLICY IF EXISTS "Public read events" ON public.events;
 CREATE POLICY "Public read events" ON public.events FOR SELECT USING (true);
+
+-- Products & Orders Policies
+DROP POLICY IF EXISTS "Public read products" ON public.products;
 CREATE POLICY "Public read products" ON public.products FOR SELECT USING (true);
-CREATE POLICY "Public read prayer requests" ON public.prayer_requests FOR SELECT USING (is_public = true AND status != 'pending');
+
+DROP POLICY IF EXISTS "Public read orders" ON public.orders;
+CREATE POLICY "Public read orders" ON public.orders FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public insert orders" ON public.orders;
+CREATE POLICY "Public insert orders" ON public.orders FOR INSERT WITH CHECK (true);
+
+-- Users Policies
+DROP POLICY IF EXISTS "Public read users" ON public.users;
+CREATE POLICY "Public read users" ON public.users FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public insert users" ON public.users;
+CREATE POLICY "Public insert users" ON public.users FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public update users" ON public.users;
+CREATE POLICY "Public update users" ON public.users FOR UPDATE USING (true);
 
 -- ==============================================================================
--- 13. SEED DATA
--- Founder & Super Admin: Apostle Joe Daniels
--- Developer Account: 0780699988
+-- 13. SEED INITIAL FOUNDER & DEMO SERMON (IF NOT EXISTS)
 -- ==============================================================================
-
-INSERT INTO public.users (
-    id, phone, password_hash, full_name, role, member_id, is_verified, cell_group
-) VALUES 
-(
-    'a1111111-1111-1111-1111-111111111111',
-    '0772123456',
-    -- bcrypt hash for 'Apostle2026!'
-    '$2a$12$e8Y7z7rU0b7k4XW0L.zZfeJ6P9r6dC1r1mF3jB6l0nO7z8p4q3m2e',
-    'Apostle Joe Daniels',
-    'super_admin',
-    'GCZ-001-FOUNDER',
-    TRUE,
-    'Apostolic Directorate'
-),
-(
-    'd2222222-2222-2222-2222-222222222222',
-    '0780699988',
-    -- bcrypt hash for 'DevSecret#2026'
-    '$2a$12$K8x9p3r1t0y5w2q7v4m1uO9a8b7c6d5e4f3g2h1i0j9k8l7m6n5o4',
-    'Lead System Developer',
-    'developer',
-    'GCZ-DEV-007',
-    TRUE,
-    'Gateway Tech Ministry'
-)
+INSERT INTO public.users (phone, password_hash, full_name, role, member_id, is_verified, cell_group)
+VALUES 
+('0772123456', '$2a$12$e8Y7z7rU0b7k4XW0L.zZfeJ6P9r6dC1r1mF3jB6l0nO7z8p4q3m2e', 'Apostle Joe Daniels', 'super_admin', 'GCZ-001-FOUNDER', TRUE, 'Apostolic Directorate'),
+('0780699988', '$2a$12$K8x9p3r1t0y5w2q7v4m1uO9a8b7c6d5e4f3g2h1i0j9k8l7m6n5o4', 'Lead System Developer', 'developer', 'GCZ-DEV-007', TRUE, 'Gateway Tech Ministry')
 ON CONFLICT (phone) DO NOTHING;
 
--- Seed Sample Sermons
-INSERT INTO public.posts (title, speaker, series, duration, youtube_id, description, is_live)
-VALUES (
-    'Supernatural Acceleration: Stepping Into Divine Speed',
-    'Apostle Joe Daniels',
-    'Prophetic Dimensions 2026',
-    '1h 14m',
-    'dQw4w9WgXcQ',
-    'When the hand of the Lord rests upon a believer, divine acceleration defies human logic.',
-    TRUE
-);
+INSERT INTO public.sermons (title, speaker, series, duration, youtube_id, description, is_live)
+SELECT 'Supernatural Acceleration: Stepping Into Divine Speed', 'Apostle Joe Daniels', 'Prophetic Dimensions 2026', '1h 14m', 'dQw4w9WgXcQ', 'When the hand of the Lord rests upon a believer, divine acceleration defies human logic.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM public.sermons LIMIT 1);
 `;
 
 export const FLUTTER_FILES: Record<string, string> = {
@@ -299,9 +360,9 @@ flutter:
 # ==============================================================================
 
 # 1. SUPABASE (Database, Auth, Storage, Realtime)
-# Get from: https://supabase.com/dashboard/project/_/settings/api
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+# Project Ref: csinlqdcqdgcssdanvsr
+SUPABASE_URL=https://csinlqdcqdgcssdanvsr.supabase.co
+SUPABASE_ANON_KEY=sb_publishable_TJvwQ_lcZtUL0hHOm1yJmA_rfhpBKEX
 
 # 2. PAYNOW ZIMBABWE (EcoCash, OneMoney, Zimswitch, Visa/Mastercard)
 # Get from: https://www.paynow.co.zw

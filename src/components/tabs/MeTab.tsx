@@ -24,13 +24,16 @@ import {
   CheckCircle2,
   LogIn,
   UserPlus,
-  Video
+  Video,
+  CreditCard
 } from 'lucide-react';
 import { User, Sermon } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { PaynowService } from '../../services/paynowService';
 import { INITIAL_USERS, MOCK_SERMONS } from '../../data/mockData';
 import { ImagePickerModal } from '../modals/ImagePickerModal';
 import { UpgradeModal } from '../modals/UpgradeModal';
+import { PaynowConfigModal } from '../modals/PaynowConfigModal';
 import { VerifiedBadge } from '../common/VerifiedBadge';
 import confetti from 'canvas-confetti';
 
@@ -64,6 +67,7 @@ export const MeTab: React.FC<MeTabProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'videos' | 'saved' | 'settings'>('videos');
   const [showPhotoPicker, setShowPhotoPicker] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showPaynowModal, setShowPaynowModal] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [bioText, setBioText] = useState(
@@ -141,16 +145,6 @@ export const MeTab: React.FC<MeTabProps> = ({
             >
               <UserPlus className="w-4 h-4 text-[#D4AF37]" />
               <span>Create New Account</span>
-            </button>
-          </div>
-
-          <div className="pt-4 border-t border-white/10 text-[11px] text-white/50">
-            <span>Fast test switch: </span>
-            <button
-              onClick={() => onSwitchUser(INITIAL_USERS[0])}
-              className="text-[#D4AF37] hover:underline font-semibold"
-            >
-              Apostle Joe Daniels
             </button>
           </div>
         </div>
@@ -516,29 +510,76 @@ export const MeTab: React.FC<MeTabProps> = ({
             </button>
           </div>
 
-          {/* Quick Switch Accounts for testing */}
-          <div className="p-4 bg-[#001F3F] border border-white/10 rounded-2xl space-y-2">
-            <p className="font-bold text-xs text-white">Switch Test Profile</p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              {INITIAL_USERS.map(u => (
+          {/* Developer-Only Controls: Paynow Gateway & Test Profile Switching */}
+          {currentUser.role === 'developer' && (
+            <div className="space-y-3 pt-2 border-t border-purple-500/30">
+              <div className="flex items-center gap-2 px-1">
+                <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+                <span className="text-[11px] font-mono font-bold text-purple-300 uppercase tracking-wider">
+                  Developer Portal Controls
+                </span>
+              </div>
+
+              {/* Paynow Zimbabwe Gateway Configuration (Developer Only) */}
+              <div className="p-4 bg-slate-900 border border-purple-500/40 rounded-2xl flex items-center justify-between text-xs shadow-lg">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-bold text-white">Paynow Zimbabwe Gateway</p>
+                      <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
+                        PaynowService.getConfig().isConfigured 
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                          : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      }`}>
+                        {PaynowService.getConfig().isConfigured ? 'Active' : 'Setup Required'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      {PaynowService.getConfig().isConfigured 
+                        ? `ID: ${PaynowService.getConfig().integrationId} • EcoCash / OneMoney` 
+                        : 'Enter your Paynow Integration ID & Auth Key for live giving'}
+                    </p>
+                  </div>
+                </div>
                 <button
-                  key={u.phone}
-                  onClick={() => {
-                    StorageService.setCurrentUser(u);
-                    onSwitchUser(u);
-                  }}
-                  className={`p-2 rounded-xl text-left border transition-all ${
-                    currentUser.phone === u.phone
-                      ? 'bg-[#D4AF37]/20 border-[#D4AF37] text-white font-bold'
-                      : 'bg-[#001122] border-white/10 text-white/70 hover:border-white/20'
-                  }`}
+                  onClick={() => setShowPaynowModal(true)}
+                  className="px-3 py-1.5 rounded-xl font-bold bg-[#D4AF37] text-[#001F3F] hover:bg-[#c29e2e] transition-colors"
                 >
-                  <p className="font-bold truncate">{u.full_name}</p>
-                  <p className="text-[10px] text-white/50 font-mono">{u.phone}</p>
+                  {PaynowService.getConfig().isConfigured ? 'Edit Keys' : 'Setup Keys'}
                 </button>
-              ))}
+              </div>
+
+              {/* Quick Switch Accounts for testing (Developer Only) */}
+              <div className="p-4 bg-slate-900 border border-purple-500/30 rounded-2xl space-y-2 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <p className="font-bold text-xs text-purple-300">Switch Test Profile (Developer Mode)</p>
+                  <span className="text-[10px] text-slate-400 font-mono">Dev ID: 0780699988</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {INITIAL_USERS.map(u => (
+                    <button
+                      key={u.phone}
+                      onClick={() => {
+                        StorageService.setCurrentUser(u);
+                        onSwitchUser(u);
+                      }}
+                      className={`p-2 rounded-xl text-left border transition-all ${
+                        currentUser.phone === u.phone
+                          ? 'bg-[#D4AF37]/20 border-[#D4AF37] text-white font-bold'
+                          : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                      }`}
+                    >
+                      <p className="font-bold truncate">{u.full_name}</p>
+                      <p className="text-[10px] text-slate-400 font-mono">{u.phone} ({u.role})</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Log Out */}
           {onLogout && (
@@ -559,7 +600,7 @@ export const MeTab: React.FC<MeTabProps> = ({
         isOpen={showPhotoPicker}
         onClose={() => setShowPhotoPicker(false)}
         onSelectImage={handleSaveAvatar}
-        currentImageUrl={currentUser.avatar_url}
+        currentImage={currentUser.avatar_url}
       />
 
       <UpgradeModal
@@ -567,6 +608,11 @@ export const MeTab: React.FC<MeTabProps> = ({
         onClose={() => setShowUpgradeModal(false)}
         currentUser={currentUser}
         onUpdateUser={onUpdateUser}
+      />
+
+      <PaynowConfigModal
+        isOpen={showPaynowModal}
+        onClose={() => setShowPaynowModal(false)}
       />
 
     </div>

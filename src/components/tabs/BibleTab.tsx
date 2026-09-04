@@ -41,6 +41,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
   const [selectedChapter, setSelectedChapter] = useState<number>(23);
   const [targetVerse, setTargetVerse] = useState<number | null>(null);
   const [version, setVersion] = useState<BibleVersion>('KJV');
+  const [hasSelectedBook, setHasSelectedBook] = useState<boolean>(Boolean(initialReference));
   
   // JW-style navigation modal state
   const [showNavModal, setShowNavModal] = useState<boolean>(false);
@@ -419,6 +420,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                   setSelectedBook(res.book);
                   setSelectedChapter(res.chapter);
                   setTargetVerse(res.verse);
+                  setHasSelectedBook(true);
                   setIsSearching(false);
                 }}
                 className="w-full text-left p-2 rounded-lg bg-white/5 hover:bg-[#D4AF37]/10 border border-white/5 hover:border-[#D4AF37]/40 transition-all block"
@@ -538,44 +540,143 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
         </button>
       </div>
 
-      {/* 3. Main Reading Content (JW Style Clean Professional Typography) */}
+      {/* 3. Main Reading Content (Requires selecting a book first) */}
       {activeTab === 'reader' && (
-        <div className="bg-[#001F3F]/70 border border-white/10 rounded-2xl p-4 sm:p-6 space-y-4 shadow-xl">
-          
-          {/* Chapter Title Bar */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-3">
-            <div>
-              <h2 className={`text-xl sm:text-2xl font-bold text-[#D4AF37] ${fontFamily === 'serif' ? 'font-serif-church' : 'font-sans'}`}>
-                {selectedBook} {selectedChapter}
-              </h2>
-              <p className="text-xs text-white/50">
-                Translation: {version === 'Shona' ? 'Bhaibheri Dzvene (Shona)' : version} • {currentBookObj.testament === 'OT' ? 'Hebrew-Aramaic Scriptures (OT)' : 'Christian Greek Scriptures (NT)'}
-              </p>
+        !hasSelectedBook ? (
+          /* Clean Book Selection Portal (Before Scriptures are loaded) */
+          <div className="bg-[#001F3F]/70 border border-[#D4AF37]/30 rounded-2xl p-4 sm:p-6 space-y-4 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-[#D4AF37] font-serif-church flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-[#D4AF37]" />
+                  <span>Select a Book from the Holy Scriptures</span>
+                </h2>
+                <p className="text-xs text-white/60 mt-0.5">
+                  Choose any book below to open its chapters and display verses ({version}):
+                </p>
+              </div>
+
+              {/* Testament Filter buttons */}
+              <div className="flex bg-[#001122] rounded-xl p-1 border border-white/10 text-xs font-bold self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setNavTestament('OT')}
+                  className={`px-3 py-1.5 rounded-lg transition-all ${
+                    navTestament === 'OT' 
+                      ? 'bg-[#D4AF37] text-[#001F3F] shadow' 
+                      : 'text-white/60 hover:text-white'
+                  }`}
+                >
+                  Old Testament (39)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNavTestament('NT')}
+                  className={`px-3 py-1.5 rounded-lg transition-all ${
+                    navTestament === 'NT' 
+                      ? 'bg-[#D4AF37] text-[#001F3F] shadow' 
+                      : 'text-white/60 hover:text-white'
+                  }`}
+                >
+                  New Testament (27)
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-1 text-xs">
-              <button
-                disabled={selectedChapter <= 1}
-                onClick={() => {
-                  setSelectedChapter(prev => Math.max(1, prev - 1));
-                  setTargetVerse(1);
-                }}
-                className="px-2.5 py-1 rounded-lg bg-[#001122] border border-white/10 text-white/70 hover:text-white disabled:opacity-30"
-              >
-                ‹ Prev Chapter
-              </button>
-              <button
-                disabled={selectedChapter >= currentBookObj.chaptersCount}
-                onClick={() => {
-                  setSelectedChapter(prev => Math.min(currentBookObj.chaptersCount, prev + 1));
-                  setTargetVerse(1);
-                }}
-                className="px-2.5 py-1 rounded-lg bg-[#001122] border border-white/10 text-white/70 hover:text-white disabled:opacity-30"
-              >
-                Next Chapter ›
-              </button>
+            {/* Quick Category filter tabs */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+              {availableCategories.map(cat => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setBookCategoryFilter(cat)}
+                  className={`px-2.5 py-1 rounded-lg whitespace-nowrap text-[11px] font-semibold transition-all ${
+                    bookCategoryFilter === cat
+                      ? 'bg-white/20 text-[#D4AF37] border border-[#D4AF37]/50'
+                      : 'bg-[#001122] text-white/50 hover:text-white border border-white/5'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Books Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 pt-1 max-h-[520px] overflow-y-auto pr-1">
+              {filteredBooks.map((b) => (
+                <button
+                  key={b.name}
+                  type="button"
+                  onClick={() => {
+                    setSelectedBook(b.name);
+                    setSelectedChapter(1);
+                    setTargetVerse(null);
+                    setHasSelectedBook(true);
+                  }}
+                  className="bg-[#001122]/90 hover:bg-[#D4AF37]/20 border border-white/10 hover:border-[#D4AF37]/60 rounded-xl p-3 text-left transition-all group flex flex-col justify-between shadow-sm hover:scale-[1.02]"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white group-hover:text-[#D4AF37] transition-colors truncate">
+                      {b.name}
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-[#D4AF37] font-mono">
+                      {b.abbreviation}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-white/50 mt-2 flex items-center justify-between">
+                    <span className="truncate">{b.category}</span>
+                    <span className="text-white/40">{b.chaptersCount} ch.</span>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
+        ) : (
+          <div className="bg-[#001F3F]/70 border border-white/10 rounded-2xl p-4 sm:p-6 space-y-4 shadow-xl">
+            
+            {/* Chapter Title Bar with Back to Books Button */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setHasSelectedBook(false)}
+                  className="px-2.5 py-1.5 rounded-xl bg-[#001122] hover:bg-[#D4AF37] text-[#D4AF37] hover:text-[#001F3F] border border-[#D4AF37]/40 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+                >
+                  <span>← Choose Another Book</span>
+                </button>
+                <div>
+                  <h2 className={`text-xl sm:text-2xl font-bold text-[#D4AF37] ${fontFamily === 'serif' ? 'font-serif-church' : 'font-sans'}`}>
+                    {selectedBook} {selectedChapter}
+                  </h2>
+                  <p className="text-xs text-white/50">
+                    Translation: {version === 'Shona' ? 'Bhaibheri Dzvene (Shona)' : version} • {currentBookObj.testament === 'OT' ? 'Hebrew-Aramaic Scriptures (OT)' : 'Christian Greek Scriptures (NT)'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 text-xs">
+                <button
+                  disabled={selectedChapter <= 1}
+                  onClick={() => {
+                    setSelectedChapter(prev => Math.max(1, prev - 1));
+                    setTargetVerse(1);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-[#001122] border border-white/10 text-white/70 hover:text-white disabled:opacity-30"
+                >
+                  ‹ Prev Chapter
+                </button>
+                <button
+                  disabled={selectedChapter >= currentBookObj.chaptersCount}
+                  onClick={() => {
+                    setSelectedChapter(prev => Math.min(currentBookObj.chaptersCount, prev + 1));
+                    setTargetVerse(1);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-[#001122] border border-white/10 text-white/70 hover:text-white disabled:opacity-30"
+                >
+                  Next Chapter ›
+                </button>
+              </div>
+            </div>
 
           {/* MODE A: Verse by Verse Layout */}
           {viewStyle === 'verse' && (
@@ -789,6 +890,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
           </div>
 
         </div>
+        )
       )}
 
       {/* Reading Plans Tab */}
@@ -805,7 +907,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {READING_PLANS.map(plan => {
-              const progressPercent = Math.round((plan.currentDay / plan.totalDays) * 100);
+              const progressPercent = Math.round((plan.currentDay / plan.daysTotal) * 100);
               return (
                 <div key={plan.id} className="p-4 rounded-xl bg-[#001122] border border-white/10 space-y-3">
                   <div>

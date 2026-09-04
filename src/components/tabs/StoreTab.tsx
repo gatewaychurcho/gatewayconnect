@@ -28,7 +28,9 @@ import {
 import confetti from 'canvas-confetti';
 import { Product, CartItem, DonationFund, PaymentGateway, Donation, ServiceBooking } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { PaynowService } from '../../services/paynowService';
 import { MoorsDepositModal } from '../modals/MoorsDepositModal';
+import { PaynowConfigModal } from '../modals/PaynowConfigModal';
 
 interface StoreTabProps {
   products: Product[];
@@ -48,11 +50,14 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
   const [giveAmount, setGiveAmount] = useState<number>(50);
   const [customAmount, setCustomAmount] = useState<string>('');
   const [paymentGateway, setPaymentGateway] = useState<PaymentGateway>('EcoCash');
-  const [donorPhone, setDonorPhone] = useState<string>(StorageService.getCurrentUser().phone || '0772123456');
+  const [donorPhone, setDonorPhone] = useState<string>(StorageService.getCurrentUser()?.phone || '0772123456');
   const [isAnonymousDonation, setIsAnonymousDonation] = useState<boolean>(false);
   const [activeReceipt, setActiveReceipt] = useState<Donation | null>(null);
   const [showMoorsModal, setShowMoorsModal] = useState<boolean>(false);
+  const [showPaynowConfigModal, setShowPaynowConfigModal] = useState<boolean>(false);
   const [copiedUssdCode, setCopiedUssdCode] = useState<boolean>(false);
+  const [paynowRedirectUrl, setPaynowRedirectUrl] = useState<string | null>(null);
+  const [paynowInstruction, setPaynowInstruction] = useState<string | null>(null);
 
   const PAYMENT_ACCOUNT_NUMBER = '0771445642';
 
@@ -60,9 +65,9 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
   const [bookingService, setBookingService] = useState<ServiceBooking['service_type']>('Prophetic Mentorship');
   const [bookingDate, setBookingDate] = useState<string>('2026-09-15');
   const [bookingTime, setBookingTime] = useState<string>('02:00 PM CAT');
-  const [bookingName, setBookingName] = useState<string>(StorageService.getCurrentUser().full_name);
-  const [bookingPhone, setBookingPhone] = useState<string>(StorageService.getCurrentUser().phone);
-  const [bookingLocation, setBookingLocation] = useState<string>(StorageService.getCurrentUser().cell_group || 'Harare, Zimbabwe');
+  const [bookingName, setBookingName] = useState<string>(StorageService.getCurrentUser()?.full_name || 'Church Member');
+  const [bookingPhone, setBookingPhone] = useState<string>(StorageService.getCurrentUser()?.phone || '+263780699988');
+  const [bookingLocation, setBookingLocation] = useState<string>(StorageService.getCurrentUser()?.cell_group || 'Harare, Zimbabwe');
   const [bookingEmail, setBookingEmail] = useState<string>('believer@gatewayzim.org');
   const [bookingNotes, setBookingNotes] = useState<string>('');
   const [confirmedBooking, setConfirmedBooking] = useState<ServiceBooking | null>(null);
@@ -94,10 +99,16 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
 
   const totalCartUsd = cart.reduce((sum, item) => sum + (item.product.price_usd * item.quantity), 0);
 
-  const handleProcessDonation = (e: React.FormEvent) => {
+  const handleProcessDonation = async (e: React.FormEvent) => {
     e.preventDefault();
     const finalAmt = customAmount ? parseFloat(customAmount) : giveAmount;
     if (!finalAmt || finalAmt <= 0) return;
+
+    // For mobile money (EcoCash / OneMoney), open the interactive USSD prompt modal directly
+    if (paymentGateway === 'EcoCash' || paymentGateway === 'OneMoney') {
+      setShowMoorsModal(true);
+      return;
+    }
 
     const user = StorageService.getCurrentUser();
     const impactMap: Record<DonationFund, string> = {
@@ -109,9 +120,32 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
       'Apostolic Honorarium': 'Direct apostolic blessing and prophetic mantle honoring'
     };
 
+    const refNumber = `GCZ-PAYNOW-${Date.now().toString().slice(-6)}`;
+
+    // If payment gateway is Paynow, initiate with Paynow Zimbabwe
+    if (paymentGateway === 'Paynow') {
+      const paynowRes = await PaynowService.initiateTransaction({
+        reference: refNumber,
+        amount: finalAmt,
+        additionalInfo: `${giveFund} - Gateway Church Zimbabwe`,
+        phone: donorPhone,
+        paymentMethod: 'Paynow'
+      });
+
+      if (paynowRes.browserUrl && !paynowRes.isSimulated) {
+        window.open(paynowRes.browserUrl, '_blank');
+      }
+      if (paynowRes.browserUrl) {
+        setPaynowRedirectUrl(paynowRes.browserUrl);
+      }
+      if (paynowRes.instructions) {
+        setPaynowInstruction(paynowRes.instructions);
+      }
+    }
+
     const donation = StorageService.recordDonation({
-      donor_id: user.id,
-      donor_name: isAnonymousDonation ? 'Anonymous Covenant Partner' : user.full_name,
+      donor_id: user?.id || 'usr_guest',
+      donor_name: isAnonymousDonation ? 'Anonymous Covenant Partner' : (user?.full_name || 'Covenant Partner'),
       amount: finalAmt,
       currency: currency,
       fund_type: giveFund,
@@ -121,6 +155,9 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
     });
 
     setActiveReceipt(donation);
+    if (onDonationSuccess) {
+      onDonationSuccess(donation);
+    }
     confetti({
       particleCount: 50,
       spread: 80,
@@ -380,9 +417,15 @@ _Forwarded to ministry intake desk._`;
                     <label className="text-xs font-semibold text-slate-300">
                       Payment Method (Target: {PAYMENT_ACCOUNT_NUMBER})
                     </label>
-                    <span className="text-[10px] text-amber-400 font-mono">
-                      Acct: {PAYMENT_ACCOUNT_NUMBER}
-                    </span>
+                    {StorageService.getCurrentUser()?.role === 'developer' && (
+                      <button
+                        type="button"
+                        onClick={() => setShowPaynowConfigModal(true)}
+                        className="text-[10px] px-2 py-0.5 rounded-lg bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 border border-purple-500/40 font-mono flex items-center gap-1 transition-colors"
+                      >
+                        <span>⚙️ Paynow Config (Dev)</span>
+                      </button>
+                    )}
                   </div>
                   <div className="grid grid-cols-3 gap-1.5">
                     {(['EcoCash', 'OneMoney', 'Paynow', 'Stripe', 'PayPal', 'Bank Transfer'] as PaymentGateway[]).map(gw => (
@@ -400,6 +443,27 @@ _Forwarded to ministry intake desk._`;
                       </button>
                     ))}
                   </div>
+
+                  {/* Paynow Quick Connect Banner (Developer Only) */}
+                  {StorageService.getCurrentUser()?.role === 'developer' && (paymentGateway === 'Paynow' || paymentGateway === 'EcoCash') && (
+                    <div className="mt-2 p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/30 flex items-center justify-between text-[11px]">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-slate-300">
+                          {PaynowService.getConfig().isConfigured 
+                            ? `Paynow Active (ID: ${PaynowService.getConfig().integrationId})` 
+                            : 'Paynow Gateway Ready (Click to enter your ID & Auth Key)'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowPaynowConfigModal(true)}
+                        className="text-purple-300 font-bold hover:underline"
+                      >
+                        {PaynowService.getConfig().isConfigured ? 'Edit Keys' : 'Enter Credentials'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Phone / Mobile Prompt */}
@@ -910,6 +974,12 @@ _Forwarded to ministry intake desk._`;
         }}
         defaultFund={giveFund}
         initialAmount={customAmount ? parseFloat(customAmount) || 20 : giveAmount}
+      />
+
+      {/* 8. Paynow Zimbabwe Credentials Configuration Modal */}
+      <PaynowConfigModal
+        isOpen={showPaynowConfigModal}
+        onClose={() => setShowPaynowConfigModal(false)}
       />
 
     </div>

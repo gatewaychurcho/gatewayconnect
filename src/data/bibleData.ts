@@ -407,27 +407,9 @@ export const READING_PLANS: ReadingPlan[] = [
     title: 'Supernatural Acceleration (21-Day Prophetic Walk)',
     daysTotal: 21,
     currentDay: 7,
-    description: 'Scriptures on speed, divine favor, covenant wealth, and open heavens curated by Apostle Joe Daniels.',
+    description: 'Daily scriptures on divine speed, covenant favor, and open heavens curated by Apostle Joe Daniels.',
     todaysReading: '1 Kings 18:41-46 & Amos 9:11-15',
     category: 'Prophetic'
-  },
-  {
-    id: 'plan_gospels',
-    title: 'Walk with Jesus (30-Day Gospel Deep Dive)',
-    daysTotal: 30,
-    currentDay: 12,
-    description: 'Experience the miracles, parables, and power of Christ in the four gospels.',
-    todaysReading: 'John 3 & John 4',
-    category: 'Spiritual Growth'
-  },
-  {
-    id: 'plan_shona',
-    title: 'Shona Devotional: Rutendo neKukunda (Faith & Victory)',
-    daysTotal: 14,
-    currentDay: 4,
-    description: 'Bhaibheri Dzvene verses for daily meditation, prayer, and family blessing.',
-    todaysReading: 'Mapisarema 23 & Varoma 8:28-39',
-    category: 'Bhaibheri Dzvene'
   }
 ];
 

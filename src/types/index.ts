@@ -6,9 +6,13 @@ export interface User {
   id: string;
   phone: string;
   full_name: string;
+  handle?: string;
   role: UserRole;
+  password?: string;
   referral_code?: string;
   avatar_url?: string;
+  bio?: string;
+  location?: string;
   cell_group?: string;
   is_verified: boolean;
   badge_type?: BadgeType;
@@ -20,11 +24,27 @@ export interface User {
   created_at: string;
   saved_verses?: string[];
   offline_sermon_ids?: string[];
+  followers_count?: number;
+  following_count?: number;
+}
+
+export interface PostComment {
+  id: string;
+  user_id: string;
+  user_name: string;
+  user_handle?: string;
+  user_avatar?: string;
+  text: string;
+  created_at: string;
+  likes_count?: number;
+  badge_type?: BadgeType;
 }
 
 export interface Testimony {
   id: string;
+  user_id?: string;
   user_name: string;
+  user_handle?: string;
   user_avatar?: string;
   title: string;
   category: 'Healing' | 'Financial Breakthrough' | 'Spiritual Growth' | 'Deliverance' | 'Family' | 'Praise & Testimony' | 'Joe Vibes' | 'Prophetic Word' | 'Youth & Campus' | 'Kingdom Impact' | 'Pastoral Care' | 'Ministry Milestone';
@@ -32,10 +52,13 @@ export interface Testimony {
   image_url?: string;
   scripture_tag?: string;
   date: string;
+  created_at?: string;
   likes_count: number;
+  liked_user_ids?: string[];
   verified_by_church: boolean;
   user_liked?: boolean;
   comments_count?: number;
+  comments?: PostComment[];
 }
 
 export interface Sermon {
@@ -245,3 +268,12 @@ export interface PushNotification {
   sent_at: string;
   read_count: number;
 }
+
+export interface PaynowConfig {
+  integrationId: string;
+  integrationKey: string;
+  isLive: boolean;
+  merchantEmail?: string;
+  isConfigured: boolean;
+}
+

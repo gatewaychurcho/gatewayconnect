@@ -14,7 +14,8 @@ import {
   UserRole, 
   Testimony,
   PremiumPlan,
-  BadgeType
+  BadgeType,
+  PaynowConfig
 } from '../types';
 
 import { 
@@ -33,6 +34,7 @@ import {
   MOCK_TESTIMONIES,
   DEFAULT_PREMIUM_PLANS
 } from '../data/mockData';
+import { SupabaseSyncService } from './supabaseSyncService';
 
 const KEYS = {
   CURRENT_USER: 'gcz_current_user',
@@ -53,6 +55,7 @@ const KEYS = {
   SAVED_VERSES: 'gcz_saved_verses',
   OFFLINE_SERMONS: 'gcz_offline_sermons',
   SUPABASE_CONFIG: 'gcz_supabase_config',
+  PAYNOW_CONFIG: 'gcz_paynow_config',
   PREMIUM_PLANS: 'gcz_premium_plans'
 };
 
@@ -100,16 +103,18 @@ function setLocal<T>(key: string, data: T): void {
 }
 
 export class StorageService {
-  // Current User
-  static getCurrentUser(): User {
-    // Default to Super Admin Apostle Joe Daniels for high-fidelity evaluation, or guest
+  // Current User (returns null on first launch or when logged out)
+  static getCurrentUser(): User | null {
     const saved = getLocal<User | null>(KEYS.CURRENT_USER, null);
-    if (saved) return saved;
-    return INITIAL_USERS[0]; // Apostle Joe Daniels by default
+    return saved;
   }
 
-  static setCurrentUser(user: User): void {
-    setLocal(KEYS.CURRENT_USER, user);
+  static setCurrentUser(user: User | null): void {
+    if (user === null) {
+      this.logout();
+    } else {
+      setLocal(KEYS.CURRENT_USER, user);
+    }
   }
 
   static getAllUsers(): User[] {
@@ -125,7 +130,8 @@ export class StorageService {
       users.push(user);
     }
     setLocal(KEYS.ALL_USERS, users);
-    if (this.getCurrentUser().id === user.id) {
+    const curr = this.getCurrentUser();
+    if (curr && curr.id === user.id) {
       this.setCurrentUser(user);
     }
   }
@@ -137,14 +143,15 @@ export class StorageService {
       target.role = newRole;
       setLocal(KEYS.ALL_USERS, users);
       const curr = this.getCurrentUser();
-      if (curr.id === userId) {
+      if (curr && curr.id === userId) {
         this.setCurrentUser({ ...curr, role: newRole });
       }
     }
   }
 
-  static updateUserProfile(updates: Partial<User>): User {
+  static updateUserProfile(updates: Partial<User>): User | null {
     const curr = this.getCurrentUser();
+    if (!curr) return null;
     const updated: User = { ...curr, ...updates };
     this.setCurrentUser(updated);
     this.saveUser(updated);
@@ -220,6 +227,10 @@ export class StorageService {
     };
     prayers.unshift(newPrayer);
     setLocal(KEYS.PRAYERS, prayers);
+    // Background sync to Supabase PostgreSQL
+    SupabaseSyncService.syncPrayerRequest(newPrayer).catch(err => {
+      console.warn('Supabase prayer sync deferred:', err);
+    });
     return newPrayer;
   }
 
@@ -313,6 +324,10 @@ export class StorageService {
     };
     donations.unshift(newDonation);
     setLocal(KEYS.DONATIONS, donations);
+    // Background sync to Supabase PostgreSQL
+    SupabaseSyncService.syncDonation(newDonation).catch(err => {
+      console.warn('Supabase donation sync deferred:', err);
+    });
     return newDonation;
   }
 
@@ -333,6 +348,10 @@ export class StorageService {
     };
     bookings.unshift(newBooking);
     setLocal(KEYS.BOOKINGS, bookings);
+    // Background sync to Supabase PostgreSQL
+    SupabaseSyncService.syncBooking(newBooking).catch(err => {
+      console.warn('Supabase booking sync deferred:', err);
+    });
     return newBooking;
   }
 
@@ -506,8 +525,9 @@ export class StorageService {
   }
 
   // Unlock single sermon ($5 or specified price)
-  static unlockSermon(sermonId: string): User {
+  static unlockSermon(sermonId: string): User | null {
     const user = this.getCurrentUser();
+    if (!user) return null;
     const unlocked = user.unlocked_sermon_ids || [];
     if (!unlocked.includes(sermonId)) {
       unlocked.push(sermonId);
@@ -518,7 +538,7 @@ export class StorageService {
   }
 
   // Subscribe to Premium (3 months, 6 months, 1 year)
-  static subscribePremium(months: number): User {
+  static subscribePremium(months: number): User | null {
     const expiry = new Date();
     expiry.setMonth(expiry.getMonth() + months);
     
@@ -531,37 +551,41 @@ export class StorageService {
   }
 
   // Auth: Login, Signup, & Logout
-  static logout(): User {
-    const guestUser: User = {
-      id: `usr_guest_${Date.now()}`,
-      phone: '0770000000',
-      full_name: 'Guest Believer',
-      role: 'guest',
-      member_id: 'GCZ-GST-000',
-      is_verified: false,
-      badge_type: 'none',
-      is_premium: false,
-      created_at: new Date().toISOString(),
-      saved_verses: []
-    };
-    this.setCurrentUser(guestUser);
-    return guestUser;
+  static logout(): void {
+    if (storageAvailable) {
+      try {
+        window.localStorage.removeItem(KEYS.CURRENT_USER);
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+    delete memoryStore[KEYS.CURRENT_USER];
   }
 
-  // Auth: Login & Signup (Requirement 1 & Moderator jd#mode)
-  static login(phone: string, _password?: string): User | null {
+  // Auth: Login & Signup with credentials verification
+  static login(phone: string, password?: string): { success: boolean; user?: User; error?: string } {
     const users = this.getAllUsers();
     // Normalize phone numbers (strip spaces, dashes)
     const cleanPhone = phone.replace(/[^0-9+]/g, '');
     const found = users.find(u => u.phone.replace(/[^0-9+]/g, '') === cleanPhone);
+    
     if (found) {
+      // Validate password if user has password set
+      if (found.password && password && found.password.trim() !== password.trim()) {
+        return { 
+          success: false, 
+          error: `Incorrect password for ${found.full_name}. Please verify credentials.` 
+        };
+      }
       this.setCurrentUser(found);
-      return found;
+      return { success: true, user: found };
     }
-    // If not found in users, create as member
+
+    // If not found in users, create as a new covenant member
     const newUser: User = {
       id: `usr_${Date.now()}`,
       phone: phone,
+      password: password || 'Gateway2026!',
       full_name: phone === '0780699988' ? 'Lead System Developer' : 'Gateway Believer',
       role: phone === '0780699988' ? 'developer' : 'member',
       badge_type: phone === '0780699988' ? 'gold' : 'none',
@@ -570,11 +594,11 @@ export class StorageService {
       created_at: new Date().toISOString()
     };
     this.saveUser(newUser);
-    return newUser;
+    this.setCurrentUser(newUser);
+    return { success: true, user: newUser };
   }
 
-  static signup(fullName: string, phone: string, _password: string, referralCode?: string): User {
-    const users = this.getAllUsers();
+  static signup(fullName: string, phone: string, password: string, referralCode?: string): User {
     const cleanRef = referralCode?.trim().toLowerCase();
     // Secret code 'jd#mode' or 'joedaniels789' grants Moderator role and Silver Verified Badge
     const isModeratorCode = cleanRef === 'jd#mode' || cleanRef === 'joedaniels789';
@@ -594,6 +618,7 @@ export class StorageService {
     const newUser: User = {
       id: `usr_${Date.now()}`,
       phone,
+      password: password || 'Gateway2026!',
       full_name: fullName,
       role,
       badge_type: badge,
@@ -612,14 +637,47 @@ export class StorageService {
   // Supabase Config
   static getSupabaseConfig(): { url: string; anonKey: string; isLiveConnected: boolean } {
     return getLocal(KEYS.SUPABASE_CONFIG, {
-      url: 'https://gateway-connect-zimbabwe.supabase.co',
-      anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-      isLiveConnected: false
+      url: (import.meta as any).env?.VITE_SUPABASE_URL || 'https://csinlqdcqdgcssdanvsr.supabase.co',
+      anonKey: (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 'sb_publishable_TJvwQ_lcZtUL0hHOm1yJmA_rfhpBKEX',
+      isLiveConnected: true
     });
   }
 
   static setSupabaseConfig(config: { url: string; anonKey: string; isLiveConnected: boolean }): void {
     setLocal(KEYS.SUPABASE_CONFIG, config);
+  }
+
+  static removeSavedVerse(verseKey: string): User | null {
+    const user = this.getCurrentUser();
+    if (!user) return null;
+    const currentList = user.saved_verses || [];
+    const updatedList = currentList.filter(v => v !== verseKey);
+    return this.updateUserProfile({ saved_verses: updatedList });
+  }
+
+  static addSavedVerse(verseKey: string): User | null {
+    const user = this.getCurrentUser();
+    if (!user) return null;
+    const currentList = user.saved_verses || [];
+    if (!currentList.includes(verseKey)) {
+      return this.updateUserProfile({ saved_verses: [...currentList, verseKey] });
+    }
+    return user;
+  }
+
+  // Paynow Zimbabwe Gateway Configuration
+  static getPaynowConfig(): PaynowConfig {
+    return getLocal<PaynowConfig>(KEYS.PAYNOW_CONFIG, {
+      integrationId: '',
+      integrationKey: '',
+      isLive: true,
+      merchantEmail: 'gatewaychurchzim@gmail.com',
+      isConfigured: false
+    });
+  }
+
+  static setPaynowConfig(config: PaynowConfig): void {
+    setLocal(KEYS.PAYNOW_CONFIG, config);
   }
 }
 

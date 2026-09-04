@@ -10,6 +10,7 @@ import { AdminPanel } from './components/admin/AdminPanel';
 import { DevConsole } from './components/dev/DevConsole';
 import { FlutterExportModal } from './components/modals/FlutterExportModal';
 import { WhatsAppProfileModal } from './components/modals/WhatsAppProfileModal';
+import { LoginScreen } from './components/auth/LoginScreen';
 import { StorageService } from './services/storageService';
 import { 
   TabType, 
@@ -43,7 +44,7 @@ import confetti from 'canvas-confetti';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('home');
-  const [currentUser, setCurrentUser] = useState<User>(StorageService.getCurrentUser());
+  const [currentUser, setCurrentUser] = useState<User | null>(StorageService.getCurrentUser());
   const [lowDataMode, setLowDataMode] = useState<boolean>(StorageService.getLowDataMode());
   
   // App Data States
@@ -101,8 +102,8 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    const guestUser = StorageService.logout();
-    setCurrentUser(guestUser);
+    StorageService.logout();
+    setCurrentUser(null);
     setShowProfileModal(false);
     confetti({ particleCount: 20, spread: 50 });
   };
@@ -117,15 +118,15 @@ export default function App() {
     setAuthError(null);
 
     if (authMode === 'login') {
-      const user = StorageService.login(authPhone.trim(), authPassword.trim());
-      if (user) {
-        setCurrentUser(user);
+      const res = StorageService.login(authPhone.trim(), authPassword.trim());
+      if (res.success && res.user) {
+        setCurrentUser(res.user);
         setShowAuthModal(false);
         setAuthPhone('');
         setAuthPassword('');
         confetti({ particleCount: 30, spread: 60 });
       } else {
-        setAuthError('Invalid phone number or password. Try one of the test accounts or sign up.');
+        setAuthError(res.error || 'Invalid phone number or password. Please verify credentials.');
       }
     } else {
       if (!authFullName.trim() || !authPhone.trim() || !authPassword.trim()) {
@@ -149,11 +150,34 @@ export default function App() {
   };
 
   const handleGuestLogin = () => {
-    const guest = INITIAL_USERS.find(u => u.role === 'guest') || INITIAL_USERS[3];
-    StorageService.setCurrentUser(guest);
-    setCurrentUser(guest);
+    const guestUser: User = {
+      id: `usr_guest_${Date.now()}`,
+      phone: '0770000000',
+      full_name: 'Guest Believer',
+      role: 'guest',
+      member_id: 'GCZ-GST-000',
+      is_verified: false,
+      badge_type: 'none',
+      is_premium: false,
+      created_at: new Date().toISOString(),
+      saved_verses: []
+    };
+    StorageService.setCurrentUser(guestUser);
+    setCurrentUser(guestUser);
     setShowAuthModal(false);
   };
+
+  // Enforce Login Screen when user opens app for the 1st time or after logging out
+  if (!currentUser) {
+    return (
+      <LoginScreen
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+        }}
+        onContinueAsGuest={handleGuestLogin}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#001122] text-white flex flex-col selection:bg-[#D4AF37] selection:text-[#001F3F] bg-[radial-gradient(ellipse_at_top_right,_#001F3F_0%,_#001122_70%)]">
@@ -305,6 +329,7 @@ export default function App() {
             setShowDevConsole(false);
             setShowFlutterExport(true);
           }}
+          onSwitchUser={(user) => setCurrentUser(user)}
         />
       )}
 
