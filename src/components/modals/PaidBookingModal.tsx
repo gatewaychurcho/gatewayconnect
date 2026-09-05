@@ -11,7 +11,13 @@ import {
   MessageSquare, 
   Send, 
   CreditCard,
-  Sparkles
+  Sparkles,
+  Video,
+  Copy,
+  Check,
+  ExternalLink,
+  Link2,
+  CalendarCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { StorageService } from '../../services/storageService';
@@ -30,128 +36,188 @@ export const PaidBookingModal: React.FC<PaidBookingModalProps> = ({
   const currentUser = StorageService.getCurrentUser();
   const [fullName, setFullName] = useState(currentUser?.full_name || '');
   const [phone, setPhone] = useState(currentUser?.phone || '');
+  const [email, setEmail] = useState(currentUser?.phone ? `${currentUser.phone.replace(/[^0-9]/g, '')}@gatewayzim.org` : 'believer@gatewayzim.org');
   const [location, setLocation] = useState(currentUser?.cell_group || currentUser?.location || 'Harare, Zimbabwe');
   const [serviceType, setServiceType] = useState(defaultService);
   const [bookingDate, setBookingDate] = useState(new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0]);
   const [bookingTime, setBookingTime] = useState('10:00 AM CAT');
-  const [sessionFormat, setSessionFormat] = useState<'In-Person (Belvedere Cathedral)' | 'Private Zoom Video' | 'Direct Phone Call'>('Private Zoom Video');
+  
+  // Zoom mode: generate gateway room or enter custom link
+  const [zoomMode, setZoomMode] = useState<'gateway_room' | 'custom_link'>('gateway_room');
+  const [customZoomLink, setCustomZoomLink] = useState('');
   const [notes, setNotes] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
-
-  const MINISTRY_REPRESENTATIVE_PHONE = '+263780699988';
-  const WA_CLEAN_PHONE = '263780699988';
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [confirmedZoomUrl, setConfirmedZoomUrl] = useState('');
 
   if (!isOpen) return null;
+
+  const defaultGatewayZoomUrl = 'https://zoom.us/j/81239019284?pwd=GATEWAY_CONNECT';
+  const meetingId = '812 3901 9284';
+  const meetingPasscode = 'GATEWAY';
 
   const handleSubmitBooking = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Compile WhatsApp message for the representative at +263780699988
-    const messageText = `*PAID 1-ON-1 PASTORAL CONSULTATION BOOKING*
-----------------------------------------
-*Name:* ${fullName.trim()}
-*Phone:* ${phone.trim()}
-*Location:* ${location.trim()}
-*Preferred Date:* ${bookingDate}
-*Preferred Time:* ${bookingTime}
-*Session Format:* ${sessionFormat}
-*Ministry Focus:* ${serviceType}
-*Notes/Prayer Request:* ${notes.trim() || 'Seeking apostolic guidance and impartation.'}
-----------------------------------------
-_Submitted via Gateway Connect Official App for review and payment scheduling._`;
+    const activeZoomUrl = (zoomMode === 'custom_link' && customZoomLink.trim()) 
+      ? customZoomLink.trim() 
+      : defaultGatewayZoomUrl;
 
-    // Save locally
-    const existing = JSON.parse(localStorage.getItem('user_service_bookings') || '[]');
-    existing.push({
-      id: `book_${Date.now()}`,
-      name: fullName,
-      phone,
-      location,
+    setConfirmedZoomUrl(activeZoomUrl);
+
+    // Save to service bookings
+    StorageService.createBooking({
+      user_name: fullName.trim(),
+      user_phone: phone.trim(),
+      user_email: email.trim(),
+      service_type: serviceType as any,
       date: bookingDate,
-      time: bookingTime,
-      service: serviceType,
-      created_at: new Date().toISOString()
+      time_slot: bookingTime,
+      deposit_amount: serviceType.includes('Prophetic') ? 50 : 30,
+      deposit_paid: true,
+      notes: `Location: ${location.trim()} | Zoom Mode: ${zoomMode} | User Notes: ${notes.trim() || 'Apostolic consultation session with Apostle Joe Daniels'}`,
+      reminder_phone: phone.trim()
     });
-    localStorage.setItem('user_service_bookings', JSON.stringify(existing));
 
-    confetti({ particleCount: 35, spread: 70, origin: { y: 0.5 } });
+    confetti({ particleCount: 45, spread: 80, origin: { y: 0.5 } });
     setIsSubmitted(true);
+  };
 
-    // Open WhatsApp directly to +263780699988
-    const waUrl = `https://wa.me/${WA_CLEAN_PHONE}?text=${encodeURIComponent(messageText)}`;
-    window.open(waUrl, '_blank');
+  const handleCopyMeetingLink = () => {
+    const inviteText = `Gateway Connect 1-on-1 Pastoral Meeting with Apostle Joe Daniels\nDate: ${bookingDate} @ ${bookingTime}\nTopic: ${serviceType}\nZoom Link: ${confirmedZoomUrl}\nMeeting ID: ${meetingId}\nPasscode: ${meetingPasscode}`;
+    navigator.clipboard.writeText(inviteText);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  const handleLaunchZoom = () => {
+    window.open(confirmedZoomUrl, '_blank');
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#001122]/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-[#001F3F] border border-[#D4AF37]/50 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150 my-4 text-white">
+    <div className="fixed inset-0 z-50 bg-[#001122]/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-[#001F3F] border border-[#D4AF37]/50 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150 my-4 text-white">
         
         {/* Header */}
-        <div className="bg-[#001122] p-4 sm:p-5 border-b border-white/10 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#D4AF37]/20 border border-[#D4AF37]/50 flex items-center justify-center text-[#D4AF37]">
-              <Calendar className="w-4 h-4" />
+        <div className="bg-[#00172e] p-4 sm:p-5 border-b border-white/10 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center font-black shadow-lg">
+              <Video className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-sm sm:text-base text-white leading-tight">
-                Book 1-on-1 Pastoral Session
-              </h3>
-              <p className="text-[11px] text-[#D4AF37] font-medium">
-                Paid Consultation • Reviewed at {MINISTRY_REPRESENTATIVE_PHONE}
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-base sm:text-lg text-white">
+                  Zoom Meetings Portal
+                </h3>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/40">
+                  1-on-1 with Apostle Joe Daniels
+                </span>
+              </div>
+              <p className="text-xs text-white/60">
+                Direct live pastoral consultation & prophetic impartation
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors"
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Form Body or Success State */}
+        {/* Live Meetings Portal View after submission */}
         {isSubmitted ? (
-          <div className="p-6 text-center space-y-4">
-            <div className="w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/40">
+          <div className="p-5 sm:p-6 text-center space-y-4">
+            <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/40 shadow-xl">
               <CheckCircle2 className="w-8 h-8" />
             </div>
 
-            <div className="space-y-1.5">
-              <h4 className="text-base font-bold text-white">
-                Booking Request Dispatched!
+            <div className="space-y-1">
+              <h4 className="text-lg font-bold text-white">
+                Zoom Meeting Session Confirmed!
               </h4>
               <p className="text-xs text-white/70 leading-relaxed max-w-sm mx-auto">
-                Your consultation request has been forwarded directly to the ministry intake team at <strong className="text-[#D4AF37] font-mono">{MINISTRY_REPRESENTATIVE_PHONE}</strong>. They will confirm the fee arrangement and coordinate your session.
+                Your 1-on-1 session is synchronized into Apostle Joe Daniels' Meetings Portal. You can join directly or share your invite link.
               </p>
             </div>
 
-            <div className="p-3 bg-[#001122] rounded-xl border border-white/10 text-left text-xs space-y-1 font-mono">
-              <p className="text-white/80"><span className="text-white/40">Applicant:</span> {fullName}</p>
-              <p className="text-white/80"><span className="text-white/40">Location:</span> {location}</p>
-              <p className="text-white/80"><span className="text-white/40">Slot:</span> {bookingDate} @ {bookingTime}</p>
-              <p className="text-white/80"><span className="text-white/40">Dispatched To:</span> {MINISTRY_REPRESENTATIVE_PHONE}</p>
+            {/* Meeting Pass Card */}
+            <div className="bg-[#001428] border border-blue-500/30 rounded-2xl p-4 text-left space-y-2.5">
+              <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-blue-400">HOST & COUNSELOR</span>
+                  <p className="text-xs font-bold text-white">Apostle Joe Daniels (General Overseer)</p>
+                </div>
+                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold">
+                  PORTAL ACTIVE
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                <div>
+                  <span className="text-white/40 text-[10px]">DATE & TIME</span>
+                  <p className="text-white font-bold">{bookingDate} • {bookingTime}</p>
+                </div>
+                <div>
+                  <span className="text-white/40 text-[10px]">CONSULTATION</span>
+                  <p className="text-[#D4AF37] font-bold truncate">{serviceType}</p>
+                </div>
+              </div>
+
+              <div className="bg-[#001F3F] p-2.5 rounded-xl border border-white/10 space-y-1">
+                <span className="text-[10px] text-white/50">ZOOM MEETING LINK</span>
+                <p className="text-xs font-mono text-blue-300 break-all select-all">
+                  {confirmedZoomUrl}
+                </p>
+                <div className="flex items-center justify-between text-[10px] text-white/60 pt-1 font-mono">
+                  <span>Meeting ID: <strong>{meetingId}</strong></span>
+                  <span>Passcode: <strong>{meetingPasscode}</strong></span>
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-2 pt-2">
+            {/* Action Buttons */}
+            <div className="space-y-2 pt-1">
               <button
-                onClick={() => {
-                  setIsSubmitted(false);
-                  onClose();
-                }}
-                className="w-full py-2.5 bg-[#D4AF37] hover:bg-[#c49f2f] text-[#001F3F] font-bold text-xs rounded-xl shadow transition-all"
+                id="btn-launch-zoom-session"
+                onClick={handleLaunchZoom}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:brightness-110 text-white font-bold text-sm shadow-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
               >
-                Close & Return
+                <Video className="w-4 h-4" />
+                <span>Launch Zoom Meeting Room Now</span>
+                <ExternalLink className="w-3.5 h-3.5" />
               </button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={handleCopyMeetingLink}
+                  className="py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/10 flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedLink ? 'Copied Invitation!' : 'Copy Zoom Link'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsSubmitted(false);
+                    onClose();
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] font-bold text-xs shadow transition-colors"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmitBooking} className="p-4 sm:p-5 space-y-3.5">
+          <form onSubmit={handleSubmitBooking} className="p-4 sm:p-5 space-y-3.5 max-h-[80vh] overflow-y-auto">
             
-            <div className="bg-[#001122] p-2.5 rounded-xl border border-[#D4AF37]/30 text-xs text-white/80 flex items-start gap-2">
-              <ShieldCheck className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
+            <div className="bg-[#001428] p-3 rounded-2xl border border-blue-500/30 text-xs text-white/80 flex items-start gap-2.5">
+              <Video className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
               <p className="text-[11px] leading-relaxed">
-                This is a <strong className="text-[#D4AF37]">paid 1-on-1 pastoral session</strong>. Fill in where you are and when you would like to meet. Submitting connects you directly to <strong className="text-white font-mono">{MINISTRY_REPRESENTATIVE_PHONE}</strong> who handles your booking.
+                Connect directly with <strong className="text-white">Apostle Joe Daniels</strong> via our interactive <strong className="text-blue-400">Zoom Meetings Portal</strong>. You can use the official Gateway Zoom room or send your personal Zoom link!
               </p>
             </div>
 
@@ -160,22 +226,22 @@ _Submitted via Gateway Connect Official App for review and payment scheduling._`
               <div>
                 <label className="block text-[11px] font-semibold text-white/80 mb-1 flex items-center gap-1">
                   <User className="w-3 h-3 text-[#D4AF37]" />
-                  <span>Full Name</span>
+                  <span>Your Full Name</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Your full name"
-                  className="w-full bg-[#001122] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#D4AF37]"
+                  placeholder="e.g. Tinashe Chikwava"
+                  className="w-full bg-[#001428] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#D4AF37]"
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-semibold text-white/80 mb-1 flex items-center gap-1">
                   <Phone className="w-3 h-3 text-[#D4AF37]" />
-                  <span>Your Phone / WhatsApp</span>
+                  <span>Phone Number</span>
                 </label>
                 <input
                   type="tel"
@@ -183,37 +249,37 @@ _Submitted via Gateway Connect Official App for review and payment scheduling._`
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+263 77..."
-                  className="w-full bg-[#001122] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#D4AF37]"
+                  className="w-full bg-[#001428] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#D4AF37]"
                 />
               </div>
             </div>
 
-            {/* Location & Service */}
+            {/* Location & Service Focus */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
                 <label className="block text-[11px] font-semibold text-white/80 mb-1 flex items-center gap-1">
                   <MapPin className="w-3 h-3 text-[#D4AF37]" />
-                  <span>Your Location (Where you are)</span>
+                  <span>Location / Country</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
-                  placeholder="e.g. Harare / London / Bulawayo"
-                  className="w-full bg-[#001122] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#D4AF37]"
+                  placeholder="Harare / UK / USA / Diaspora"
+                  className="w-full bg-[#001428] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#D4AF37]"
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-semibold text-white/80 mb-1 flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-[#D4AF37]" />
-                  <span>Ministry Focus</span>
+                  <span>Consultation Focus</span>
                 </label>
                 <select
                   value={serviceType}
                   onChange={(e) => setServiceType(e.target.value)}
-                  className="w-full bg-[#001122] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#D4AF37]"
+                  className="w-full bg-[#001428] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#D4AF37]"
                 >
                   <option value="Prophetic Consultation & Prayer">Prophetic Consultation & Prayer</option>
                   <option value="Deliverance & Spiritual Warfare">Deliverance & Spiritual Warfare</option>
@@ -224,31 +290,31 @@ _Submitted via Gateway Connect Official App for review and payment scheduling._`
               </div>
             </div>
 
-            {/* Preferred Date & Time */}
+            {/* Date & Time Slot */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
                 <label className="block text-[11px] font-semibold text-white/80 mb-1 flex items-center gap-1">
                   <Calendar className="w-3 h-3 text-[#D4AF37]" />
-                  <span>When you want to book (Date)</span>
+                  <span>Preferred Date</span>
                 </label>
                 <input
                   type="date"
                   required
                   value={bookingDate}
                   onChange={(e) => setBookingDate(e.target.value)}
-                  className="w-full bg-[#001122] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#D4AF37]"
+                  className="w-full bg-[#001428] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#D4AF37]"
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-semibold text-white/80 mb-1 flex items-center gap-1">
                   <Clock className="w-3 h-3 text-[#D4AF37]" />
-                  <span>Time Preference</span>
+                  <span>Time Preference (CAT)</span>
                 </label>
                 <select
                   value={bookingTime}
                   onChange={(e) => setBookingTime(e.target.value)}
-                  className="w-full bg-[#001122] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#D4AF37]"
+                  className="w-full bg-[#001428] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#D4AF37]"
                 >
                   <option value="09:30 AM CAT">09:30 AM CAT (Morning)</option>
                   <option value="11:30 AM CAT">11:30 AM CAT (Midday)</option>
@@ -259,30 +325,61 @@ _Submitted via Gateway Connect Official App for review and payment scheduling._`
               </div>
             </div>
 
-            {/* Session Format */}
-            <div>
-              <label className="block text-[11px] font-semibold text-white/80 mb-1">
-                Meeting Preference
+            {/* Zoom Meeting Link Configuration */}
+            <div className="space-y-2 bg-[#001428] p-3 rounded-2xl border border-blue-500/20">
+              <label className="block text-[11px] font-bold text-blue-300 flex items-center gap-1.5">
+                <Link2 className="w-3.5 h-3.5" />
+                <span>Zoom Connection Preference</span>
               </label>
-              <div className="grid grid-cols-3 gap-1.5 text-center">
-                {(['Private Zoom Video', 'In-Person (Belvedere Cathedral)', 'Direct Phone Call'] as const).map(fmt => (
-                  <button
-                    type="button"
-                    key={fmt}
-                    onClick={() => setSessionFormat(fmt)}
-                    className={`py-1.5 px-2 rounded-xl text-[10px] font-bold border transition-all ${
-                      sessionFormat === fmt
-                        ? 'bg-[#D4AF37] text-[#001F3F] border-[#D4AF37]'
-                        : 'bg-[#001122] border-white/10 text-white/70 hover:border-white/20'
-                    }`}
-                  >
-                    {fmt.split(' ')[0]}
-                  </button>
-                ))}
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setZoomMode('gateway_room')}
+                  className={`py-2 px-2.5 rounded-xl text-[11px] font-bold border transition-all text-left ${
+                    zoomMode === 'gateway_room'
+                      ? 'bg-blue-600 text-white border-blue-400 shadow'
+                      : 'bg-[#001F3F] border-white/10 text-white/70 hover:border-white/20'
+                  }`}
+                >
+                  Gateway Zoom Room
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setZoomMode('custom_link')}
+                  className={`py-2 px-2.5 rounded-xl text-[11px] font-bold border transition-all text-left ${
+                    zoomMode === 'custom_link'
+                      ? 'bg-blue-600 text-white border-blue-400 shadow'
+                      : 'bg-[#001F3F] border-white/10 text-white/70 hover:border-white/20'
+                  }`}
+                >
+                  Send My Personal Link
+                </button>
               </div>
+
+              {zoomMode === 'custom_link' ? (
+                <div className="pt-1">
+                  <input
+                    type="url"
+                    required
+                    value={customZoomLink}
+                    onChange={(e) => setCustomZoomLink(e.target.value)}
+                    placeholder="Paste your Zoom/Teams meeting URL (https://zoom.us/j/...)"
+                    className="w-full bg-[#001F3F] border border-blue-400/40 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none"
+                  />
+                  <p className="text-[10px] text-blue-200/70 mt-1">
+                    Apostle Joe Daniels will join using the link you provide.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-[10px] text-white/60 pt-0.5">
+                  The system will connect you to Apostle Joe Daniels via official room (ID: <strong>{meetingId}</strong>).
+                </p>
+              )}
             </div>
 
-            {/* Discussion Notes */}
+            {/* Notes */}
             <div>
               <label className="block text-[11px] font-semibold text-white/80 mb-1">
                 Brief Discussion Background (Optional)
@@ -292,7 +389,7 @@ _Submitted via Gateway Connect Official App for review and payment scheduling._`
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Give a brief description of what you wish to discuss..."
-                className="w-full bg-[#001122] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#D4AF37]"
+                className="w-full bg-[#001428] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#D4AF37]"
               />
             </div>
 
@@ -300,10 +397,10 @@ _Submitted via Gateway Connect Official App for review and payment scheduling._`
             <button
               id="btn-submit-paid-booking"
               type="submit"
-              className="w-full py-3 rounded-xl bg-[#D4AF37] hover:bg-[#c49f2f] text-[#001F3F] font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg transition-all active:scale-[0.99]"
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:brightness-110 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl transition-all active:scale-[0.99]"
             >
-              <Send className="w-4 h-4" />
-              <span>Submit Booking to {MINISTRY_REPRESENTATIVE_PHONE}</span>
+              <Video className="w-4 h-4" />
+              <span>Confirm & Enter Zoom Meetings Portal</span>
             </button>
 
           </form>

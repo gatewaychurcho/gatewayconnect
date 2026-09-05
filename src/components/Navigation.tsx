@@ -22,35 +22,35 @@ export const Navigation: React.FC<NavigationProps> = ({
   const tabs = [
     {
       id: 'home' as TabType,
-      label: 'HOME',
+      label: 'Home',
       icon: Home
     },
     {
       id: 'bible' as TabType,
-      label: 'BIBLE',
+      label: 'Bible',
       icon: BookOpen
     },
     {
       id: 'community' as TabType,
-      label: 'COMMUNITY',
+      label: 'Community',
       icon: Users
     },
     {
       id: 'store' as TabType,
-      label: 'STORE/GIVE',
+      label: 'Store',
       icon: ShoppingBag,
       badge: cartCount > 0 ? cartCount : undefined
     },
     {
       id: 'me' as TabType,
-      label: 'ME / ADMIN',
+      label: 'Me',
       icon: UserIcon
     }
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#001F3F]/95 backdrop-blur-xl border-t border-white/10 sm:border-[#D4AF37]/30 py-2 px-3 safe-area-bottom shadow-2xl">
-      <div className="max-w-md mx-auto grid grid-cols-5 gap-1.5">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#00172e]/95 backdrop-blur-xl border-t border-white/10 py-1.5 px-2 safe-area-bottom shadow-2xl">
+      <div className="max-w-md mx-auto grid grid-cols-5 gap-1">
         {tabs.map(tab => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -60,27 +60,27 @@ export const Navigation: React.FC<NavigationProps> = ({
               key={tab.id}
               id={`tab-btn-${tab.id}`}
               onClick={() => onTabChange(tab.id)}
-              className={`relative flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all duration-200 ${
+              className={`relative flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-200 ${
                 isActive 
-                  ? 'text-[#D4AF37] bg-[#D4AF37]/15 border border-[#D4AF37]/40 shadow-sm' 
-                  : 'text-white/40 hover:text-[#D4AF37] hover:bg-white/5 border border-transparent'
+                  ? 'text-[#D4AF37] bg-[#D4AF37]/15' 
+                  : 'text-white/50 hover:text-white hover:bg-white/5'
               }`}
             >
-              {/* Active Indicator Glow */}
+              {/* Active Indicator Bar */}
               {isActive && (
-                <div className="absolute -top-1 w-6 h-1 rounded-full bg-[#D4AF37] shadow-[0_0_8px_#D4AF37]" />
+                <div className="absolute -top-1 w-5 h-0.5 rounded-full bg-[#D4AF37] shadow-[0_0_6px_#D4AF37]" />
               )}
 
               <div className="relative">
-                <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive ? 'scale-110 text-[#D4AF37]' : 'text-white/40'}`} />
+                <Icon className={`w-4.5 h-4.5 transition-transform duration-200 ${isActive ? 'scale-105 text-[#D4AF37]' : 'text-white/50'}`} />
                 {tab.badge && (
-                  <span className="absolute -top-1.5 -right-2 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-[#D4AF37] text-[#001F3F] text-[10px] font-black">
+                  <span className="absolute -top-1.5 -right-2 flex items-center justify-center min-w-[15px] h-3.5 px-1 rounded-full bg-rose-600 text-white text-[9px] font-bold shadow-sm">
                     {tab.badge}
                   </span>
                 )}
               </div>
 
-              <span className={`text-[10px] font-bold mt-1 tracking-wider uppercase ${isActive ? 'text-[#D4AF37]' : 'text-white/40'}`}>
+              <span className={`text-[9.5px] font-semibold mt-0.5 tracking-tight ${isActive ? 'text-[#D4AF37]' : 'text-white/50'}`}>
                 {tab.label}
               </span>
             </button>

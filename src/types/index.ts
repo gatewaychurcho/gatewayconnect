@@ -1,5 +1,5 @@
 export type TabType = 'home' | 'bible' | 'community' | 'store' | 'me';
-export type UserRole = 'guest' | 'member' | 'moderator' | 'admin' | 'super_admin' | 'developer';
+export type UserRole = 'guest' | 'member' | 'moderator' | 'admin' | 'super_admin' | 'developer' | 'pastor' | 'elder' | 'youth';
 export type BadgeType = 'gold' | 'silver' | 'blue' | 'none';
 
 export interface User {
@@ -16,6 +16,7 @@ export interface User {
   cell_group?: string;
   is_verified: boolean;
   badge_type?: BadgeType;
+  verified_badge?: BadgeType;
   is_premium?: boolean;
   premium_expires_at?: string;
   unlocked_sermon_ids?: string[];
@@ -26,6 +27,8 @@ export interface User {
   offline_sermon_ids?: string[];
   followers_count?: number;
   following_count?: number;
+  is_banned?: boolean;
+  ban_reason?: string;
 }
 
 export interface PostComment {
@@ -202,7 +205,26 @@ export interface CartItem {
 }
 
 export type DonationFund = 'Tithe' | 'Firstfruits' | 'Seed Faith' | 'Building Foundation' | 'Missions & Evangelism' | 'Apostolic Honorarium';
-export type PaymentGateway = 'EcoCash' | 'OneMoney' | 'Paynow' | 'Stripe' | 'PayPal' | 'Bank Transfer';
+export type PaymentGateway = 'EcoCash' | 'Credit Card' | 'PayPal' | 'OneMoney' | 'Paynow' | 'Stripe' | 'Bank Transfer';
+
+export interface UnbanAppeal {
+  id: string;
+  user_id: string;
+  user_name: string;
+  user_phone: string;
+  reason: string;
+  created_at: string;
+  status: 'pending' | 'approved' | 'rejected';
+}
+
+export interface PasswordResetRequest {
+  id: string;
+  phone: string;
+  user_name?: string;
+  note: string;
+  created_at: string;
+  status: 'pending' | 'resolved';
+}
 
 export interface Donation {
   id: string;

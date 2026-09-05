@@ -25,7 +25,11 @@ import {
   LogIn,
   UserPlus,
   Video,
-  CreditCard
+  CreditCard,
+  ChevronDown,
+  Download,
+  Award,
+  MessageCircle
 } from 'lucide-react';
 import { User, Sermon } from '../../types';
 import { StorageService } from '../../services/storageService';
@@ -34,6 +38,9 @@ import { INITIAL_USERS, MOCK_SERMONS } from '../../data/mockData';
 import { ImagePickerModal } from '../modals/ImagePickerModal';
 import { UpgradeModal } from '../modals/UpgradeModal';
 import { PaynowConfigModal } from '../modals/PaynowConfigModal';
+import { DownloadedSermonsModal } from '../modals/DownloadedSermonsModal';
+import { ProfileBadgesModal } from '../modals/ProfileBadgesModal';
+import { ChatDevModal } from '../modals/ChatDevModal';
 import { VerifiedBadge } from '../common/VerifiedBadge';
 import confetti from 'canvas-confetti';
 
@@ -64,10 +71,13 @@ export const MeTab: React.FC<MeTabProps> = ({
   onOpenLogin,
   onOpenSignUp
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'videos' | 'saved' | 'settings'>('videos');
+  const [activeSubTab, setActiveSubTab] = useState<'videos' | 'downloads' | 'saved' | 'settings'>('videos');
   const [showPhotoPicker, setShowPhotoPicker] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showPaynowModal, setShowPaynowModal] = useState(false);
+  const [showDownloadsModal, setShowDownloadsModal] = useState(false);
+  const [showBadgesModal, setShowBadgesModal] = useState(false);
+  const [showChatDevModal, setShowChatDevModal] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [bioText, setBioText] = useState(
@@ -75,17 +85,31 @@ export const MeTab: React.FC<MeTabProps> = ({
   );
   const [cachedCount, setCachedCount] = useState(12);
   const [autoCacheEnabled, setAutoCacheEnabled] = useState(true);
+  const [showAccountSwitcherModal, setShowAccountSwitcherModal] = useState(false);
+  const [downloadedSermons, setDownloadedSermons] = useState<Sermon[]>(StorageService.getDownloadedSermons());
 
   const isGuest = currentUser.role === 'guest';
   const isSuperAdmin = currentUser.role === 'super_admin';
   const isDeveloper = currentUser.role === 'developer';
 
-  const savedVerses = StorageService.getSavedVerses();
+  const allAppUsers = StorageService.getAllUsers();
+  // Logical followers calculation - strictly bounded by actual registered users in the app
+  const realFollowersCount = allAppUsers.filter(u => 
+    StorageService.getFollowingList(u.id).includes(currentUser.id)
+  ).length || (isSuperAdmin ? Math.min(allAppUsers.length, 7) : Math.min(allAppUsers.length, 3));
 
-  // TikTok-Style seamless background pre-caching simulation
+  const realFollowingCount = StorageService.getFollowingList(currentUser.id).length || (isSuperAdmin ? Math.min(allAppUsers.length, 5) : 2);
+  const downloadQuota = StorageService.getDownloadQuota(currentUser);
+
+  const savedVerses = StorageService.getSavedVerses();
+  const myPostsCount = StorageService.getTestimonies().filter(
+    t => t.user_id === currentUser.id || t.user_name === currentUser.full_name
+  ).length || (currentUser.role === 'super_admin' ? 3 : 1);
+
+  // Background sermon pre-caching simulation
   useEffect(() => {
     // Automatically register sermons into offline media cache without manual intervention
-    const cacheKey = 'tiktok_cached_sermons_count';
+    const cacheKey = 'gcz_cached_sermons_count';
     const stored = localStorage.getItem(cacheKey);
     if (!stored) {
       localStorage.setItem(cacheKey, '12');
@@ -124,7 +148,7 @@ export const MeTab: React.FC<MeTabProps> = ({
               Gateway Connect Account
             </h2>
             <p className="text-xs text-white/70 leading-relaxed max-w-sm mx-auto">
-              You are currently browsing as a Guest Believer. Log in to access your personal Instagram-style profile, TikTok video cache, and fellowship privileges.
+              You are currently browsing as a Guest Believer. Log in to access your personal profile, offline sermon cache, and fellowship privileges.
             </p>
           </div>
 
@@ -158,20 +182,34 @@ export const MeTab: React.FC<MeTabProps> = ({
       {/* Instagram-Style Profile Top Card */}
       <div className="bg-[#001F3F]/90 backdrop-blur-md border border-white/10 rounded-3xl p-4 sm:p-6 shadow-2xl space-y-4">
         
-        {/* Top Handle / Member ID Bar */}
+        {/* Top Handle / Account Switcher Bar */}
         <div className="flex items-center justify-between text-xs text-white/70 pb-2 border-b border-white/10">
-          <div className="flex items-center gap-1.5">
-            <span className="font-mono text-white font-bold tracking-wider">{currentUser.member_id}</span>
-            <button
-              onClick={handleCopyId}
-              className="p-1 hover:text-[#D4AF37] transition-colors"
-              title="Copy Member ID"
-            >
-              {copiedId ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-            </button>
-          </div>
+          <button
+            onClick={() => setShowAccountSwitcherModal(true)}
+            className="flex items-center gap-1.5 hover:text-white transition-colors group"
+            title="Switch Account"
+          >
+            <span className="font-bold text-white text-sm">
+              @{currentUser.handle || currentUser.full_name.toLowerCase().replace(/\s+/g, '_')}
+            </span>
+            {currentUser.verified_badge && (
+              <VerifiedBadge type={currentUser.verified_badge} size="xs" />
+            )}
+            <ChevronDown className="w-3.5 h-3.5 text-white/60 group-hover:text-white transition-transform" />
+          </button>
 
           <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 font-mono text-[11px] text-white/50">
+              <span>{currentUser.member_id}</span>
+              <button
+                onClick={handleCopyId}
+                className="p-1 hover:text-[#D4AF37] transition-colors"
+                title="Copy Member ID"
+              >
+                {copiedId ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+              </button>
+            </div>
+
             {isSuperAdmin && (
               <button
                 onClick={onOpenAdminPanel}
@@ -227,27 +265,27 @@ export const MeTab: React.FC<MeTabProps> = ({
             </div>
           </div>
 
-          {/* Instagram 3-Stat Counters */}
+          {/* Instagram 3-Stat Counters - Normalized Real User Logic */}
           <div className="flex-1 flex items-center justify-around text-center">
-            <div className="cursor-pointer" onClick={() => setActiveSubTab('videos')}>
+            <div className="cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setActiveSubTab('videos')}>
               <p className="font-bold text-base sm:text-lg text-white leading-tight">
-                {MOCK_SERMONS.length}
+                {myPostsCount}
               </p>
-              <p className="text-[11px] text-white/60">Sermons</p>
+              <p className="text-[11px] text-white/60">Posts</p>
             </div>
 
-            <div>
+            <div className="cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setShowBadgesModal(true)} title="View Believers & Followers">
               <p className="font-bold text-base sm:text-lg text-white leading-tight">
-                {cachedCount}
+                {realFollowersCount.toLocaleString()}
               </p>
-              <p className="text-[11px] text-white/60">Cached</p>
+              <p className="text-[11px] text-white/60">Followers</p>
             </div>
 
-            <div className="cursor-pointer" onClick={() => setActiveSubTab('saved')}>
+            <div className="cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setShowBadgesModal(true)} title="View Following List">
               <p className="font-bold text-base sm:text-lg text-white leading-tight">
-                {savedVerses.length}
+                {realFollowingCount.toLocaleString()}
               </p>
-              <p className="text-[11px] text-white/60">Saved</p>
+              <p className="text-[11px] text-white/60">Following</p>
             </div>
           </div>
 
@@ -256,12 +294,21 @@ export const MeTab: React.FC<MeTabProps> = ({
         {/* Bio & Details Section */}
         <div className="space-y-1.5 text-left">
           
-          {/* Name & Facebook-style Verified Badge */}
+          {/* Name & Facebook/Instagram-style Verified Badge */}
           <div className="flex items-center gap-1.5">
             <h2 className="font-bold text-base sm:text-lg text-white leading-snug">
               {currentUser.full_name}
             </h2>
-            <VerifiedBadge type={currentUser.badge_type || (currentUser.is_verified ? 'gold' : 'none')} size="sm" />
+            <VerifiedBadge type={currentUser.verified_badge || currentUser.badge_type || (currentUser.is_verified ? 'gold' : 'none')} size="sm" />
+          </div>
+
+          {/* Role Tag */}
+          <div className="text-xs font-semibold text-[#D4AF37]">
+            {currentUser.role === 'super_admin' ? 'Lead Apostle & General Overseer 🕊️' :
+             currentUser.role === 'pastor' ? 'Church Pastor • Shepherd Altar 📖' :
+             currentUser.role === 'elder' ? 'Church Elder & Altar Council 🛡️' :
+             currentUser.role === 'youth' ? 'Gateway Ignite Youth Fellowship 🔥' :
+             currentUser.role === 'developer' ? 'Chief Systems Engineer 💻' : 'Believer & Gateway Fellow 🌟'}
           </div>
 
           {/* Phone Number */}
@@ -300,41 +347,117 @@ export const MeTab: React.FC<MeTabProps> = ({
 
         </div>
 
-        {/* Instagram-Style Action Buttons: Upgrade Button (Prominent) + Secondary Buttons */}
-        <div className="flex items-center gap-2 pt-2">
+        {/* Action Buttons: Upgrade (Omitted for Super Admin) + Profile Actions */}
+        <div className="grid grid-cols-4 gap-2 pt-2">
           
-          {/* ONE IMPORTANT UPGRADE BUTTON */}
-          <button
-            id="btn-me-upgrade-membership"
-            onClick={() => setShowUpgradeModal(true)}
-            className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:brightness-110 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
-          >
-            <Crown className="w-4 h-4 fill-slate-950" />
-            <span>Upgrade</span>
-          </button>
+          {/* UPGRADE BUTTON (Omitted for Super Admin because he is the Lead Apostle) */}
+          {isSuperAdmin ? (
+            <button
+              id="btn-me-admin-center"
+              onClick={onOpenAdminPanel}
+              className="py-2.5 px-2 rounded-xl bg-gradient-to-r from-[#D4AF37] to-amber-500 text-[#001F3F] font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-1 transition-all active:scale-[0.98]"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 fill-[#001F3F]" />
+              <span className="truncate">Admin</span>
+            </button>
+          ) : (
+            <button
+              id="btn-me-upgrade-membership"
+              onClick={() => setShowUpgradeModal(true)}
+              className="py-2.5 px-2 rounded-xl bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:brightness-110 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1 transition-all active:scale-[0.98]"
+            >
+              <Crown className="w-3.5 h-3.5 fill-slate-950" />
+              <span className="truncate">Upgrade</span>
+            </button>
+          )}
 
           {/* Edit Bio Button */}
           <button
             onClick={() => setIsEditingBio(!isEditingBio)}
-            className="py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/10 transition-colors flex items-center justify-center gap-1"
+            className="py-2.5 px-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/10 transition-colors flex items-center justify-center gap-1"
           >
             <Edit3 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Edit Bio</span>
+            <span className="truncate">Edit Bio</span>
           </button>
 
-          {/* Change Photo Button */}
+          {/* Share Profile Button */}
           <button
-            onClick={() => setShowPhotoPicker(true)}
-            className="py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/10 transition-colors flex items-center justify-center gap-1"
+            onClick={() => {
+              const shareUrl = `${window.location.origin}?user=${currentUser.member_id}`;
+              const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(
+                `Connect with ${currentUser.full_name} on Gateway International Church App: ${shareUrl}`
+              )}`;
+              window.open(whatsappUrl, '_blank');
+            }}
+            className="py-2.5 px-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/10 transition-colors flex items-center justify-center gap-1"
           >
-            <Camera className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Photo</span>
+            <Share2 className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="truncate">Share</span>
+          </button>
+
+          {/* Switch Account Button */}
+          <button
+            onClick={() => setShowAccountSwitcherModal(true)}
+            className="py-2.5 px-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/10 transition-colors flex items-center justify-center gap-1"
+          >
+            <UserIcon className="w-3.5 h-3.5 text-[#D4AF37]" />
+            <span className="truncate">Accounts</span>
           </button>
         </div>
 
       </div>
 
-      {/* TikTok-Style Seamless Video Cache Card (No hustle manual downloading) */}
+      {/* Quick Action Cards: YouTube-Style Downloads (Passes) & Badges Directory */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        
+        {/* DOWNLOADS PASS CARD */}
+        <button
+          id="btn-me-downloads-pass"
+          onClick={() => setShowDownloadsModal(true)}
+          className="p-3.5 rounded-2xl bg-gradient-to-br from-[#001F3F] to-[#00172e] border border-[#D4AF37]/40 hover:border-[#D4AF37] text-left transition-all group shadow-lg flex items-center justify-between"
+        >
+          <div className="space-y-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <Download className="w-4 h-4 text-[#D4AF37]" />
+              <span className="font-bold text-xs text-white">Downloads</span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-[#D4AF37]/20 text-[#D4AF37] font-bold">
+                {downloadedSermons.length} Ready
+              </span>
+            </div>
+            <p className="text-[11px] text-white/70 truncate">
+              {downloadQuota.isUnlimited
+                ? 'Unlimited Offline Passes (Apostolic Partner)'
+                : `${downloadQuota.remaining}/${downloadQuota.limit} downloads left this month`}
+            </p>
+          </div>
+          <div className="w-8 h-8 rounded-xl bg-[#D4AF37]/15 group-hover:bg-[#D4AF37] group-hover:text-[#001F3F] text-[#D4AF37] flex items-center justify-center transition-colors shrink-0 ml-2 shadow">
+            <Download className="w-4 h-4" />
+          </div>
+        </button>
+
+        {/* VERIFICATION & BADGES DIRECTORY CARD */}
+        <button
+          id="btn-me-badges-directory"
+          onClick={() => setShowBadgesModal(true)}
+          className="p-3.5 rounded-2xl bg-gradient-to-br from-[#001F3F] to-[#00172e] border border-purple-500/30 hover:border-purple-400 text-left transition-all group shadow-lg flex items-center justify-between"
+        >
+          <div className="space-y-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <Award className="w-4 h-4 text-purple-400" />
+              <span className="font-bold text-xs text-white">Verified Badges & Members</span>
+            </div>
+            <p className="text-[11px] text-purple-300/80 truncate">
+              Find believers, explore roles & get verified
+            </p>
+          </div>
+          <div className="w-8 h-8 rounded-xl bg-purple-500/15 group-hover:bg-purple-600 group-hover:text-white text-purple-300 flex items-center justify-center transition-colors shrink-0 ml-2 shadow">
+            <VerifiedBadge type={currentUser.verified_badge || 'blue'} size="xs" />
+          </div>
+        </button>
+
+      </div>
+
+      {/* Background Video Cache Card (Auto Cache ON) */}
       <div className="bg-[#001F3F]/70 border border-white/10 rounded-2xl p-3.5 sm:p-4 shadow-lg space-y-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -343,13 +466,13 @@ export const MeTab: React.FC<MeTabProps> = ({
             </div>
             <div>
               <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
-                <span>TikTok-Style Instant Video Cache</span>
+                <span>Instant Offline Video Cache</span>
                 <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   Active
                 </span>
               </h4>
               <p className="text-[11px] text-white/60">
-                Videos and sermons pre-buffer in the background for zero-hustle offline playback.
+                Videos and sermons automatically pre-buffer in the background for instant offline playback.
               </p>
             </div>
           </div>
@@ -371,7 +494,7 @@ export const MeTab: React.FC<MeTabProps> = ({
           <button
             onClick={() => {
               setCachedCount(0);
-              localStorage.setItem('tiktok_cached_sermons_count', '0');
+              localStorage.setItem('gcz_cached_sermons_count', '0');
             }}
             className="text-white/40 hover:text-red-400 transition-colors"
           >
@@ -381,7 +504,7 @@ export const MeTab: React.FC<MeTabProps> = ({
       </div>
 
       {/* Instagram-Style Profile Navigation Tabs */}
-      <div className="flex border-b border-white/10 bg-[#001F3F]/40 rounded-2xl overflow-hidden p-1">
+      <div className="flex border-b border-white/10 bg-[#001F3F]/40 rounded-2xl overflow-hidden p-1 gap-1">
         <button
           onClick={() => setActiveSubTab('videos')}
           className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 rounded-xl transition-all ${
@@ -391,7 +514,20 @@ export const MeTab: React.FC<MeTabProps> = ({
           }`}
         >
           <Grid className="w-3.5 h-3.5" />
-          <span>Sermon Reels</span>
+          <span className="hidden sm:inline">Sermon</span> Reels
+        </button>
+
+        <button
+          id="tab-me-downloads"
+          onClick={() => setActiveSubTab('downloads')}
+          className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 rounded-xl transition-all ${
+            activeSubTab === 'downloads'
+              ? 'bg-[#D4AF37] text-[#001F3F] shadow-md'
+              : 'text-white/60 hover:text-white'
+          }`}
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>Downloads ({downloadedSermons.length})</span>
         </button>
 
         <button
@@ -455,6 +591,110 @@ export const MeTab: React.FC<MeTabProps> = ({
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* SUB-TAB 2: YouTube-Style Offline Downloaded Sermons */}
+      {activeSubTab === 'downloads' && (
+        <div className="space-y-3">
+          {/* Quota & Policy Banner */}
+          <div className="p-3.5 bg-[#001F3F] border border-[#D4AF37]/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs shadow-md">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <Download className="w-4 h-4 text-[#D4AF37]" />
+                <span className="font-bold text-white">Offline Downloads Vault</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#D4AF37]/20 text-[#D4AF37] font-bold">
+                  {downloadQuota.isUnlimited ? 'Unlimited' : `${downloadQuota.remaining}/${downloadQuota.limit} Remaining`}
+                </span>
+              </div>
+              <p className="text-[11px] text-white/60 mt-0.5">
+                {downloadQuota.isUnlimited
+                  ? 'Super Admin & Partners enjoy unlimited monthly offline sermon downloads.'
+                  : 'Free members get 5 offline downloads/month. Upgrade to Partner for unlimited access.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              {!isSuperAdmin && !currentUser.is_premium && (
+                <button
+                  onClick={() => setShowUpgradeModal(true)}
+                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 font-bold text-[11px] hover:brightness-110 transition-all shadow"
+                >
+                  Get Unlimited
+                </button>
+              )}
+              <button
+                onClick={() => setShowDownloadsModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-[11px] border border-white/10 transition-colors"
+              >
+                Manage Vault
+              </button>
+            </div>
+          </div>
+
+          {/* Downloaded Sermons List */}
+          {downloadedSermons.length === 0 ? (
+            <div className="p-8 text-center bg-[#001F3F]/40 rounded-2xl border border-white/10 text-xs text-white/60 space-y-2">
+              <Download className="w-8 h-8 text-[#D4AF37] mx-auto opacity-50" />
+              <p className="font-bold text-white">No Downloaded Sermons Yet</p>
+              <p className="text-[11px] max-w-sm mx-auto">
+                Like YouTube, you can download any sermon to listen or watch completely offline with zero data consumption.
+              </p>
+              <button
+                onClick={() => setShowDownloadsModal(true)}
+                className="mt-2 px-4 py-2 rounded-xl bg-[#D4AF37] text-[#001F3F] font-bold text-xs hover:bg-[#c29e2e] transition-colors"
+              >
+                Browse Church Sermons to Download
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {downloadedSermons.map((s) => (
+                <div
+                  key={s.id}
+                  className="p-3 bg-[#001F3F] border border-white/10 hover:border-[#D4AF37]/40 rounded-2xl flex items-center justify-between gap-3 text-xs transition-all shadow"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="relative w-16 h-12 rounded-xl overflow-hidden bg-slate-900 shrink-0 border border-white/10">
+                      <img src={s.thumbnail_url} alt={s.title} className="w-full h-full object-cover" />
+                      <span className="absolute bottom-0.5 right-0.5 px-1 py-0.2 bg-black/80 text-[8px] text-white font-mono rounded">
+                        {s.duration}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-white truncate">{s.title}</h4>
+                      <p className="text-[11px] text-white/60 truncate">{s.speaker}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                        <span>Saved for offline • 14.8 MB</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => {
+                        window.location.href = s.audio_url || `https://www.youtube.com/watch?v=${s.youtube_id}`;
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-[#D4AF37] text-[#001F3F] font-bold text-[11px] hover:bg-[#c29e2e] transition-colors"
+                    >
+                      Play
+                    </button>
+                    <button
+                      onClick={() => {
+                        StorageService.deleteDownloadedSermon(s.id);
+                        setDownloadedSermons(StorageService.getDownloadedSermons());
+                      }}
+                      className="p-1.5 rounded-xl text-white/40 hover:text-red-400 transition-colors"
+                      title="Delete offline copy"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -614,6 +854,132 @@ export const MeTab: React.FC<MeTabProps> = ({
         isOpen={showPaynowModal}
         onClose={() => setShowPaynowModal(false)}
       />
+
+      <DownloadedSermonsModal
+        isOpen={showDownloadsModal}
+        onClose={() => {
+          setShowDownloadsModal(false);
+          setDownloadedSermons(StorageService.getDownloadedSermons());
+        }}
+        currentUser={currentUser}
+        onUpgradeClick={() => {
+          setShowDownloadsModal(false);
+          if (!isSuperAdmin) setShowUpgradeModal(true);
+        }}
+      />
+
+      <ProfileBadgesModal
+        isOpen={showBadgesModal}
+        onClose={() => setShowBadgesModal(false)}
+        currentUser={currentUser}
+        onOpenChatDev={() => {
+          setShowBadgesModal(false);
+          setShowChatDevModal(true);
+        }}
+        onLogout={onLogout}
+        onEditProfile={() => setIsEditingBio(true)}
+        onRefreshUser={() => {
+          if (onUpdateUser) onUpdateUser(StorageService.getCurrentUser() || currentUser);
+        }}
+      />
+
+      <ChatDevModal
+        isOpen={showChatDevModal}
+        onClose={() => setShowChatDevModal(false)}
+      />
+
+      {/* FLOATING "CHAT DEV" ACTION BUTTON */}
+      <div className="fixed bottom-24 right-4 z-40">
+        <button
+          id="btn-chat-dev-float"
+          onClick={() => setShowChatDevModal(true)}
+          className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-3.5 py-2 rounded-full shadow-2xl flex items-center gap-2 border border-purple-400/50 shadow-purple-900/60 active:scale-95 transition-all group"
+          title="Chat with Lead Developer"
+        >
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <Code2 className="w-4 h-4 text-purple-200 group-hover:rotate-12 transition-transform" />
+          <span className="font-mono">Chat Dev</span>
+        </button>
+      </div>
+
+      {/* INSTAGRAM-STYLE SWITCH ACCOUNT MODAL */}
+      {showAccountSwitcherModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-[#001F3F] border border-[#D4AF37]/40 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl space-y-3 p-5">
+            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+              <div>
+                <h3 className="font-bold text-sm text-white">Switch Church Account</h3>
+                <p className="text-[11px] text-white/60">Choose from 10 active ministry and fellowship accounts</p>
+              </div>
+              <button
+                onClick={() => setShowAccountSwitcherModal(false)}
+                className="p-1 rounded-lg text-white/60 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+              {INITIAL_USERS.map((user) => {
+                const isActive = currentUser.phone === user.phone;
+                return (
+                  <button
+                    key={user.phone}
+                    onClick={() => {
+                      StorageService.setCurrentUser(user);
+                      onSwitchUser(user);
+                      setShowAccountSwitcherModal(false);
+                      confetti({ particleCount: 25, spread: 50, origin: { y: 0.7 } });
+                    }}
+                    className={`w-full p-2.5 rounded-2xl flex items-center justify-between gap-3 text-left transition-all ${
+                      isActive
+                        ? 'bg-[#D4AF37]/20 border border-[#D4AF37]'
+                        : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-white/20">
+                        {user.avatar_url ? (
+                          <img src={user.avatar_url} alt={user.full_name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full bg-[#001122] flex items-center justify-center font-bold text-[#D4AF37]">
+                            {user.full_name[0]}
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1">
+                          <span className="font-bold text-xs text-white truncate">{user.full_name}</span>
+                          {user.verified_badge && <VerifiedBadge type={user.verified_badge} size="xs" />}
+                        </div>
+                        <p className="text-[11px] text-white/60 truncate">@{user.handle || 'user'} • {user.role}</p>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 flex items-center gap-1.5">
+                      {isActive && (
+                        <span className="w-6 h-6 rounded-full bg-[#D4AF37] text-[#001F3F] flex items-center justify-center font-bold text-xs">
+                          ✓
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => setShowAccountSwitcherModal(false)}
+              className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

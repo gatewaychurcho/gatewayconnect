@@ -13,9 +13,12 @@ import {
   PushNotification, 
   UserRole, 
   Testimony,
+  PostComment,
   PremiumPlan,
   BadgeType,
-  PaynowConfig
+  PaynowConfig,
+  UnbanAppeal,
+  PasswordResetRequest
 } from '../types';
 
 import { 
@@ -56,7 +59,10 @@ const KEYS = {
   OFFLINE_SERMONS: 'gcz_offline_sermons',
   SUPABASE_CONFIG: 'gcz_supabase_config',
   PAYNOW_CONFIG: 'gcz_paynow_config',
-  PREMIUM_PLANS: 'gcz_premium_plans'
+  PREMIUM_PLANS: 'gcz_premium_plans',
+  BANNED_USERS: 'gcz_banned_users',
+  UNBAN_APPEALS: 'gcz_unban_appeals',
+  PASSWORD_RESETS: 'gcz_password_resets'
 };
 
 // In-memory fallback dictionary for when third-party cookies or localStorage are restricted/blocked
@@ -118,7 +124,33 @@ export class StorageService {
   }
 
   static getAllUsers(): User[] {
-    return getLocal<User[]>(KEYS.ALL_USERS, INITIAL_USERS);
+    const saved = getLocal<User[]>(KEYS.ALL_USERS, INITIAL_USERS);
+    // Ensure all 10 registered accounts exist in the storage pool & normalize any old inflated counts
+    const existingIds = new Set(saved.map(u => u.id));
+    let changed = false;
+    for (const initUser of INITIAL_USERS) {
+      if (!existingIds.has(initUser.id)) {
+        saved.push(initUser);
+        changed = true;
+      }
+    }
+    for (const u of saved) {
+      // Fix unrealistic follower counts if stored from older versions
+      if (u.followers_count && u.followers_count > 10) {
+        const matchingInit = INITIAL_USERS.find(iu => iu.id === u.id);
+        u.followers_count = matchingInit ? matchingInit.followers_count : 4;
+        changed = true;
+      }
+      if (u.following_count && u.following_count > 10) {
+        const matchingInit = INITIAL_USERS.find(iu => iu.id === u.id);
+        u.following_count = matchingInit ? matchingInit.following_count : 3;
+        changed = true;
+      }
+    }
+    if (changed) {
+      setLocal(KEYS.ALL_USERS, saved);
+    }
+    return saved;
   }
 
   static saveUser(user: User): void {
@@ -178,25 +210,103 @@ export class StorageService {
     setLocal(KEYS.SERMONS, sermons);
   }
 
-  static toggleOfflineSermon(sermonId: string): boolean {
+  static toggleOfflineSermon(sermonId: string, currentUser?: User | null): { success: boolean; isDownloaded: boolean; message: string } {
     const offline = getLocal<string[]>(KEYS.OFFLINE_SERMONS, ['sermon_1', 'sermon_2']);
     const exists = offline.includes(sermonId);
-    let updated: string[];
+    const user = currentUser || this.getCurrentUser();
+    const isPremium = user?.is_premium || user?.role === 'super_admin' || user?.role === 'developer';
+
     if (exists) {
-      updated = offline.filter(id => id !== sermonId);
+      const updated = offline.filter(id => id !== sermonId);
+      setLocal(KEYS.OFFLINE_SERMONS, updated);
+      return { success: true, isDownloaded: false, message: 'Removed from downloaded sermons.' };
     } else {
-      if (offline.length >= 5) {
-        // limit 5 offline sermons as per spec
-        offline.shift();
+      if (!isPremium && offline.length >= 5) {
+        return {
+          success: false,
+          isDownloaded: false,
+          message: 'Free limit reached: Normal accounts are limited to 5 offline sermon downloads per month. Upgrade to Premium for unlimited downloads!'
+        };
       }
-      updated = [...offline, sermonId];
+      const updated = [...offline, sermonId];
+      setLocal(KEYS.OFFLINE_SERMONS, updated);
+      return { success: true, isDownloaded: true, message: 'Downloaded for offline playback!' };
     }
-    setLocal(KEYS.OFFLINE_SERMONS, updated);
-    return !exists;
   }
 
   static getOfflineSermonsList(): string[] {
     return getLocal<string[]>(KEYS.OFFLINE_SERMONS, ['sermon_1', 'sermon_2']);
+  }
+
+  static getDownloadedSermons(): Sermon[] {
+    const ids = this.getOfflineSermonsList();
+    const all = this.getSermons();
+    return all.filter(s => ids.includes(s.id));
+  }
+
+  static deleteDownloadedSermon(sermonId: string): void {
+    const offline = getLocal<string[]>(KEYS.OFFLINE_SERMONS, ['sermon_1', 'sermon_2']);
+    const updated = offline.filter(id => id !== sermonId);
+    setLocal(KEYS.OFFLINE_SERMONS, updated);
+  }
+
+  static getDownloadQuota(currentUser?: User | null): { used: number; max: number; isUnlimited: boolean; remaining: number; limit: number } {
+    const user = currentUser || this.getCurrentUser();
+    const isPremium = user?.is_premium || user?.role === 'super_admin' || user?.role === 'developer';
+    const used = this.getOfflineSermonsList().length;
+    const max = isPremium ? 9999 : 5;
+    return {
+      used,
+      max,
+      isUnlimited: isPremium,
+      remaining: Math.max(0, max - used),
+      limit: max
+    };
+  }
+
+  static toggleFollowUser(targetUserId: string): { isFollowing: boolean; targetUserFollowers: number } {
+    const currentUser = this.getCurrentUser();
+    const allUsers = this.getAllUsers();
+    const followingKey = `following_list_${currentUser?.id || 'guest'}`;
+    const followingList = getLocal<string[]>(followingKey, ['usr_apostle_joe', 'usr_developer']);
+    const isCurrentlyFollowing = followingList.includes(targetUserId);
+
+    let updatedList: string[];
+    const targetUser = allUsers.find(u => u.id === targetUserId);
+
+    if (isCurrentlyFollowing) {
+      updatedList = followingList.filter(id => id !== targetUserId);
+      if (targetUser && targetUser.followers_count && targetUser.followers_count > 0) {
+        targetUser.followers_count = Math.max(0, targetUser.followers_count - 1);
+      }
+      if (currentUser && currentUser.following_count && currentUser.following_count > 0) {
+        currentUser.following_count = Math.max(0, currentUser.following_count - 1);
+      }
+    } else {
+      updatedList = [...followingList, targetUserId];
+      if (targetUser) {
+        targetUser.followers_count = (targetUser.followers_count || 0) + 1;
+      }
+      if (currentUser) {
+        currentUser.following_count = (currentUser.following_count || 0) + 1;
+      }
+    }
+
+    setLocal(followingKey, updatedList);
+    setLocal(KEYS.ALL_USERS, allUsers);
+    if (currentUser) {
+      this.setCurrentUser(currentUser);
+    }
+
+    return {
+      isFollowing: !isCurrentlyFollowing,
+      targetUserFollowers: targetUser?.followers_count || 1
+    };
+  }
+
+  static getFollowingList(userId?: string): string[] {
+    const uid = userId || this.getCurrentUser()?.id || 'guest';
+    return getLocal<string[]>(`following_list_${uid}`, ['usr_apostle_joe', 'usr_developer']);
   }
 
   // Devotionals
@@ -452,26 +562,32 @@ export class StorageService {
     return !exists;
   }
 
-  // Testimonies
+  // Testimonies & Posts
   static getTestimonies(): Testimony[] {
     const list = getLocal<Testimony[]>(KEYS.TESTIMONIES, MOCK_TESTIMONIES);
-    // If list is empty or doesn't have the official posts, merge with default
-    if (!list || list.length < 3) {
+    // If list is legacy, empty, or lacks liked_user_ids, refresh to the 10 real community accounts
+    const validAccountIds = new Set(INITIAL_USERS.map(u => u.id));
+    const hasLegacyData = !list || list.length < 3 || list.some(t => !Array.isArray(t.liked_user_ids) || (t.user_id && !validAccountIds.has(t.user_id)));
+    if (hasLegacyData) {
       setLocal(KEYS.TESTIMONIES, MOCK_TESTIMONIES);
       return MOCK_TESTIMONIES;
     }
     return list;
   }
 
-  static submitTestimony(testimony: Omit<Testimony, 'id' | 'date' | 'likes_count' | 'verified_by_church'>): Testimony {
+  static submitTestimony(testimony: Omit<Testimony, 'id' | 'date' | 'likes_count' | 'verified_by_church' | 'liked_user_ids' | 'user_liked' | 'comments' | 'comments_count'>): Testimony {
     const list = this.getTestimonies();
     const newTest: Testimony = {
       ...testimony,
       id: `test_${Date.now()}`,
-      date: 'Just Now',
-      likes_count: 1,
-      verified_by_church: true,
-      user_liked: true
+      date: 'Just now',
+      created_at: new Date().toISOString(),
+      liked_user_ids: [],
+      likes_count: 0,
+      user_liked: false,
+      comments: [],
+      comments_count: 0,
+      verified_by_church: true
     };
     list.unshift(newTest);
     setLocal(KEYS.TESTIMONIES, list);
@@ -481,14 +597,67 @@ export class StorageService {
     return newTest;
   }
 
-  static likeTestimony(id: string): void {
+  static likeTestimony(id: string, userId?: string): { user_liked: boolean; likes_count: number } {
     const list = this.getTestimonies();
     const target = list.find(t => t.id === id);
-    if (target) {
-      target.user_liked = !target.user_liked;
-      target.likes_count += target.user_liked ? 1 : -1;
-      setLocal(KEYS.TESTIMONIES, list);
+    if (!target) return { user_liked: false, likes_count: 0 };
+
+    const currUser = this.getCurrentUser();
+    const effectiveUserId = userId || currUser?.id || 'usr_guest';
+
+    if (!Array.isArray(target.liked_user_ids)) {
+      target.liked_user_ids = [];
     }
+
+    const alreadyLiked = target.liked_user_ids.includes(effectiveUserId);
+    if (alreadyLiked) {
+      target.liked_user_ids = target.liked_user_ids.filter(uid => uid !== effectiveUserId);
+    } else {
+      target.liked_user_ids.push(effectiveUserId);
+    }
+
+    target.likes_count = target.liked_user_ids.length;
+    target.user_liked = !alreadyLiked;
+
+    setLocal(KEYS.TESTIMONIES, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: target }));
+    }
+    return { user_liked: target.user_liked, likes_count: target.likes_count };
+  }
+
+  static addCommentToTestimony(postId: string, text: string, user?: User | null): PostComment | null {
+    const list = this.getTestimonies();
+    const target = list.find(t => t.id === postId);
+    if (!target) return null;
+
+    const author = user || this.getCurrentUser();
+    if (!author) return null;
+
+    if (!Array.isArray(target.comments)) {
+      target.comments = [];
+    }
+
+    const newComment: PostComment = {
+      id: `comm_${Date.now()}`,
+      user_id: author.id,
+      user_name: author.full_name,
+      user_handle: author.handle || `@${author.full_name.toLowerCase().replace(/\s+/g, '_')}`,
+      user_avatar: author.avatar_url || '/assets/apostle_joe_daniels_main.jpg',
+      text: text.trim(),
+      created_at: new Date().toISOString(),
+      likes_count: 0,
+      badge_type: author.badge_type || (author.is_verified ? 'blue' : 'none')
+    };
+
+    target.comments.push(newComment);
+    target.comments_count = target.comments.length;
+
+    setLocal(KEYS.TESTIMONIES, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: target }));
+    }
+    return newComment;
   }
 
   static updateTestimony(id: string, updates: Partial<Testimony>): void {
@@ -615,6 +784,7 @@ export class StorageService {
       badge = 'gold';
     }
 
+    const autoFollowIds = ['usr_apostle_joe', 'usr_developer'];
     const newUser: User = {
       id: `usr_${Date.now()}`,
       phone,
@@ -626,9 +796,12 @@ export class StorageService {
       member_id: `GCZ-${role === 'moderator' ? 'MOD' : (role === 'developer' ? 'DEV' : 'MEM')}-${Math.floor(1000 + Math.random() * 9000)}`,
       is_verified: true,
       created_at: new Date().toISOString(),
-      saved_verses: ['John 1:1', 'Isaiah 40:31']
+      saved_verses: ['John 1:1', 'Isaiah 40:31'],
+      followers_count: 0,
+      following_count: autoFollowIds.length
     };
 
+    setLocal(`following_list_${newUser.id}`, autoFollowIds);
     this.saveUser(newUser);
     this.setCurrentUser(newUser);
     return newUser;
@@ -678,6 +851,151 @@ export class StorageService {
 
   static setPaynowConfig(config: PaynowConfig): void {
     setLocal(KEYS.PAYNOW_CONFIG, config);
+  }
+
+  // Developer God Mode: Account Bans & Security
+  static getBannedUsers(): Record<string, { banned_at: string; reason: string }> {
+    return getLocal<Record<string, { banned_at: string; reason: string }>>(KEYS.BANNED_USERS, {});
+  }
+
+  static isUserBanned(userIdOrPhone: string): { isBanned: boolean; reason?: string; banned_at?: string } {
+    const bannedMap = this.getBannedUsers();
+    // Check by user ID or clean phone
+    const clean = userIdOrPhone.replace(/[^0-9]/g, '');
+    if (bannedMap[userIdOrPhone]) {
+      return { isBanned: true, reason: bannedMap[userIdOrPhone].reason, banned_at: bannedMap[userIdOrPhone].banned_at };
+    }
+    for (const [key, val] of Object.entries(bannedMap)) {
+      if (key === userIdOrPhone || (clean && key.replace(/[^0-9]/g, '') === clean)) {
+        return { isBanned: true, reason: val.reason, banned_at: val.banned_at };
+      }
+    }
+    return { isBanned: false };
+  }
+
+  static banUser(userIdOrPhone: string, reason: string = 'Violation of Community Fellowship Guidelines or Administrative Restraint'): void {
+    const map = this.getBannedUsers();
+    map[userIdOrPhone] = {
+      banned_at: new Date().toISOString(),
+      reason
+    };
+    setLocal(KEYS.BANNED_USERS, map);
+
+    // Also flag in all users
+    const allUsers = this.getAllUsers();
+    const u = allUsers.find(user => user.id === userIdOrPhone || user.phone === userIdOrPhone);
+    if (u) {
+      u.is_banned = true;
+      u.ban_reason = reason;
+      setLocal(KEYS.ALL_USERS, allUsers);
+    }
+  }
+
+  static unbanUser(userIdOrPhone: string): void {
+    const map = this.getBannedUsers();
+    delete map[userIdOrPhone];
+    const clean = userIdOrPhone.replace(/[^0-9]/g, '');
+    for (const key of Object.keys(map)) {
+      if (key === userIdOrPhone || (clean && key.replace(/[^0-9]/g, '') === clean)) {
+        delete map[key];
+      }
+    }
+    setLocal(KEYS.BANNED_USERS, map);
+
+    // Also unflag in all users
+    const allUsers = this.getAllUsers();
+    const u = allUsers.find(user => user.id === userIdOrPhone || user.phone === userIdOrPhone);
+    if (u) {
+      u.is_banned = false;
+      u.ban_reason = undefined;
+      setLocal(KEYS.ALL_USERS, allUsers);
+    }
+  }
+
+  // Unban Appeals (Blind Chat with Developer & Admin)
+  static getUnbanAppeals(): UnbanAppeal[] {
+    return getLocal<UnbanAppeal[]>(KEYS.UNBAN_APPEALS, [
+      {
+        id: 'appeal_demo_1',
+        user_id: 'usr_guest',
+        user_name: 'Member Appeal',
+        user_phone: '0712345678',
+        reason: 'Greetings Developer & Apostle. Please review my account suspension. I was sharing Sunday choir recordings in the group.',
+        created_at: new Date(Date.now() - 3600000).toISOString(),
+        status: 'pending'
+      }
+    ]);
+  }
+
+  static submitUnbanAppeal(appeal: Omit<UnbanAppeal, 'id' | 'created_at' | 'status'>): UnbanAppeal {
+    const list = this.getUnbanAppeals();
+    const newAppeal: UnbanAppeal = {
+      ...appeal,
+      id: `appeal_${Date.now()}`,
+      status: 'pending',
+      created_at: new Date().toISOString()
+    };
+    list.unshift(newAppeal);
+    setLocal(KEYS.UNBAN_APPEALS, list);
+    return newAppeal;
+  }
+
+  static resolveUnbanAppeal(appealId: string, status: 'approved' | 'rejected'): void {
+    const list = this.getUnbanAppeals();
+    const item = list.find(a => a.id === appealId);
+    if (item) {
+      item.status = status;
+      if (status === 'approved') {
+        this.unbanUser(item.user_id);
+        this.unbanUser(item.user_phone);
+      }
+      setLocal(KEYS.UNBAN_APPEALS, list);
+    }
+  }
+
+  // Password Recovery Requests
+  static getPasswordResetRequests(): PasswordResetRequest[] {
+    return getLocal<PasswordResetRequest[]>(KEYS.PASSWORD_RESETS, []);
+  }
+
+  static submitPasswordResetRequest(phone: string, note: string = 'User requested password recovery from Lead Developer', userName?: string): PasswordResetRequest {
+    const list = this.getPasswordResetRequests();
+    const req: PasswordResetRequest = {
+      id: `pwd_req_${Date.now()}`,
+      phone,
+      user_name: userName || 'Gateway Member',
+      note,
+      status: 'pending',
+      created_at: new Date().toISOString()
+    };
+    list.unshift(req);
+    setLocal(KEYS.PASSWORD_RESETS, list);
+    return req;
+  }
+
+  static resolvePasswordResetRequest(id: string): void {
+    const list = this.getPasswordResetRequests();
+    const item = list.find(r => r.id === id);
+    if (item) {
+      item.status = 'resolved';
+      setLocal(KEYS.PASSWORD_RESETS, list);
+    }
+  }
+
+  static updateUserPassword(phoneOrUserId: string, newPass: string): boolean {
+    const allUsers = this.getAllUsers();
+    const u = allUsers.find(user => user.id === phoneOrUserId || user.phone === phoneOrUserId);
+    if (u) {
+      u.password = newPass;
+      setLocal(KEYS.ALL_USERS, allUsers);
+      const cur = this.getCurrentUser();
+      if (cur && (cur.id === u.id || cur.phone === u.phone)) {
+        cur.password = newPass;
+        this.setCurrentUser(cur);
+      }
+      return true;
+    }
+    return false;
   }
 }
 

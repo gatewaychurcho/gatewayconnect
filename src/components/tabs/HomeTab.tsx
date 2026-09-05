@@ -68,11 +68,11 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const [inputChat, setInputChat] = useState<string>('');
   const [showChat, setShowChat] = useState<boolean>(false);
   const [activeReactionCount, setActiveReactionCount] = useState<Record<string, number>>({
-    '👍': 342,
-    '❤️': 418,
-    '🙏': 289,
-    '🔥': 315,
-    '👏': 190
+    '👍': 5,
+    '❤️': 8,
+    '🙏': 7,
+    '🔥': 6,
+    '👏': 4
   });
   const [userReacted, setUserReacted] = useState<Record<string, boolean>>({});
   const [activeDevotionalIndex, setActiveDevotionalIndex] = useState<number>(0);
@@ -140,7 +140,10 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   };
 
   const handleToggleDownload = (sermonId: string) => {
-    const isNowDownloaded = StorageService.toggleOfflineSermon(sermonId);
+    const res = StorageService.toggleOfflineSermon(sermonId);
+    if (!res.success) {
+      alert(res.message);
+    }
     setOfflineIds(StorageService.getOfflineSermonsList());
   };
 

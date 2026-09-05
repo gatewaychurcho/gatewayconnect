@@ -20,7 +20,9 @@ import {
   Check,
   Play,
   KeyRound,
-  Users
+  Users,
+  MoreVertical,
+  ChevronDown
 } from 'lucide-react';
 import { StorageService } from '../../services/storageService';
 import { PaynowService } from '../../services/paynowService';
@@ -40,6 +42,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   const [showPaynowModal, setShowPaynowModal] = useState(false);
   const [isPingingSupabase, setIsPingingSupabase] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const paynowConfig = PaynowService.getConfig();
   const supabaseConfig = StorageService.getSupabaseConfig();
   const [logs, setLogs] = useState<string[]>([
@@ -97,31 +100,38 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-xl flex flex-col overflow-hidden text-slate-100 font-sans">
       
-      {/* 1. Header Bar */}
-      <header className="bg-slate-900 border-b border-purple-500/30 p-4 flex items-center justify-between shadow-lg">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white font-black shadow">
-            <Code2 className="w-6 h-6" />
+      {/* 1. Header Bar - Fully Responsive */}
+      <header className="bg-slate-900 border-b border-purple-500/30 px-3 sm:px-4 py-3 sm:py-3.5 flex items-center justify-between shadow-lg shrink-0">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white font-black shadow shrink-0">
+            <Code2 className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-mono font-black text-lg text-purple-400">
-                DEVELOPER DEV-CONSOLE
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 truncate">
+              <h1 className="font-mono font-black text-sm sm:text-lg text-purple-400 truncate">
+                DEV-CONSOLE
               </h1>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono border border-purple-500/40">
-                ROLE: DEVELOPER (0780699988)
+              <span className="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono border border-purple-500/40 shrink-0">
+                0780699988
               </span>
             </div>
-            <p className="text-xs text-slate-400">
-              Gateway Connect Flutter / Supabase Engine Telemetry
+            <p className="text-[10px] sm:text-xs text-slate-400 truncate hidden sm:block">
+              Gateway Connect Flutter & Supabase Engine Telemetry
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Desktop Header Actions */}
+        <div className="hidden md:flex items-center gap-2">
+          <button
+            onClick={() => setShowPaynowModal(true)}
+            className="px-3 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 text-xs font-bold border border-purple-500/30 transition-colors"
+          >
+            Paynow Config
+          </button>
           <button
             onClick={onOpenFlutterExport}
-            className="px-3 py-1.5 rounded-xl bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 text-xs font-bold border border-purple-500/40"
+            className="px-3 py-1.5 rounded-xl bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 text-xs font-bold border border-purple-500/40 transition-colors"
           >
             Flutter & SQL Specs
           </button>
@@ -133,23 +143,93 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
             Exit Console
           </button>
         </div>
+
+        {/* Mobile Header Actions (3-Dots Tag & Exit) */}
+        <div className="flex md:hidden items-center gap-1.5 relative">
+          <button
+            id="btn-dev-more-options"
+            onClick={() => setShowMobileMenu(prev => !prev)}
+            title="More Options"
+            className="p-2 rounded-xl bg-purple-600/20 text-purple-300 hover:bg-purple-600/30 border border-purple-500/40 transition-colors"
+          >
+            <MoreVertical className="w-4 h-4" />
+          </button>
+          
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700"
+          >
+            <XCircle className="w-4 h-4" />
+          </button>
+
+          {/* 3-Dots Dropdown Menu */}
+          {showMobileMenu && (
+            <div className="absolute right-0 top-12 z-50 w-56 bg-slate-900 border border-purple-500/40 rounded-2xl shadow-2xl p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+              <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800">
+                Developer Actions
+              </div>
+              <button
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  onOpenFlutterExport();
+                }}
+                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-purple-300 hover:bg-purple-500/20 flex items-center gap-2"
+              >
+                <FileCode className="w-3.5 h-3.5" />
+                <span>Flutter & SQL Specs</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setShowPaynowModal(true);
+                }}
+                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-purple-300 hover:bg-purple-500/20 flex items-center gap-2"
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>Paynow Zimbabwe Setup</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  handleTestSupabaseLive();
+                }}
+                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 flex items-center gap-2"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Ping Supabase Edge</span>
+              </button>
+              <div className="border-t border-slate-800 my-1" />
+              <button
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  onClose();
+                }}
+                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/20 flex items-center gap-2"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                <span>Exit Dev Console</span>
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
       {/* 2. Privacy Policy Banner */}
-      <div className="bg-purple-950/40 border-b border-purple-500/30 px-4 py-2 flex items-center justify-between text-xs text-purple-200">
-        <div className="flex items-center gap-2">
-          <Lock className="w-4 h-4 text-purple-400" />
-          <span>
-            <strong className="text-white">RLS Zero-Knowledge Privacy:</strong> Developer account is strictly barred from reading individual church donation ledgers, credit cards, or confidential pastoral altar petitions.
+      <div className="bg-purple-950/40 border-b border-purple-500/30 px-3 sm:px-4 py-2 flex items-center justify-between text-[11px] sm:text-xs text-purple-200 shrink-0">
+        <div className="flex items-center gap-2 truncate">
+          <Lock className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+          <span className="truncate">
+            <strong className="text-white">RLS Zero-Knowledge Privacy:</strong> Developer barred from confidential ledgers & altar petitions.
           </span>
         </div>
-        <span className="text-[10px] bg-purple-900/60 px-2 py-0.5 rounded font-mono">
+        <span className="text-[9px] sm:text-[10px] bg-purple-900/60 px-2 py-0.5 rounded font-mono shrink-0 ml-2">
           RLS ENFORCED
         </span>
       </div>
 
-      {/* 3. Sub Tabs */}
-      <div className="bg-slate-950 border-b border-slate-800 px-4 py-2 flex items-center gap-2 text-xs font-bold overflow-x-auto">
+      {/* 3. Sub Tabs Navigation */}
+      {/* Desktop Tab Bar */}
+      <div className="hidden md:flex bg-slate-950 border-b border-slate-800 px-4 py-2 items-center gap-2 text-xs font-bold overflow-x-auto shrink-0">
         {[
           { id: 'telemetry', label: '⚡ Telemetry & Health', icon: Activity },
           { id: 'schema', label: '🗄️ Supabase Postgres Schema', icon: Database },
@@ -172,19 +252,44 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
         ))}
       </div>
 
+      {/* Mobile Tab Dropdown Selector */}
+      <div className="flex md:hidden bg-slate-950 border-b border-slate-800 px-3 py-2 items-center justify-between gap-2 shrink-0">
+        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Module:</span>
+        <div className="relative flex-1">
+          <select
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value as any)}
+            className="w-full bg-slate-900 border border-purple-500/30 rounded-xl px-3 py-1.5 text-xs text-purple-300 font-bold appearance-none pr-8 focus:outline-none focus:border-purple-400"
+          >
+            {[
+              { id: 'telemetry', label: '⚡ Telemetry & Health' },
+              { id: 'schema', label: '🗄️ Supabase Postgres Schema' },
+              { id: 'logs', label: '📜 Live System Logs' },
+              { id: 'endpoints', label: '🌐 API Endpoints & Routes' },
+              { id: 'accounts', label: '👥 Test Profiles & Accounts' }
+            ].map(tab => (
+              <option key={tab.id} value={tab.id} className="bg-slate-900 text-white">
+                {tab.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="w-4 h-4 text-purple-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        </div>
+      </div>
+
       {/* 4. Main Body */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 max-w-6xl w-full mx-auto space-y-4 font-mono">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 max-w-6xl w-full mx-auto space-y-4 font-mono">
         
         {/* TELEMETRY TAB */}
         {activeTab === 'telemetry' && (
           <div className="space-y-4">
             
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-3.5 space-y-1">
                 <span className="text-xs text-slate-400">Supabase Project Ref</span>
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-xs font-mono font-bold text-emerald-400">csinlqdcqdgcssdanvsr</span>
+                  <span className="text-xs font-mono font-bold text-emerald-400 truncate">csinlqdcqdgcssdanvsr</span>
                 </div>
                 <p className="text-[10px] text-slate-500">PostgreSQL 15.x Live</p>
               </div>
@@ -372,7 +477,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {DEMO_ACCOUNTS.map((acc, idx) => {
                 const fullUser = INITIAL_USERS.find(u => u.phone === acc.phone);
                 const isCurrent = StorageService.getCurrentUser()?.phone === acc.phone;

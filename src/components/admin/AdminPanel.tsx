@@ -33,6 +33,7 @@ import {
   RefreshCw,
   ExternalLink,
   ChevronRight,
+  ChevronDown,
   ShieldAlert
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -277,9 +278,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       {/* 2. BODY WITH SIDEBAR NAVIGATION + MAIN CONTENT */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         
-        {/* SIDEBAR NAVIGATION (Desktop) / TOP TABS (Mobile) */}
-        <aside className="w-full md:w-56 bg-[#00172e] border-b md:border-b-0 md:border-r border-white/10 shrink-0 flex md:flex-col overflow-x-auto md:overflow-y-auto p-2 gap-1">
-          <div className="hidden md:block px-3 py-2 text-[10px] font-bold text-white/40 uppercase tracking-wider">
+        {/* SIDEBAR NAVIGATION (Desktop) & MOBILE DROPDOWN SELECTOR */}
+        {/* Mobile View: Quick Dropdown selector */}
+        <div className="md:hidden bg-[#00172e] border-b border-white/10 p-2.5 flex items-center justify-between gap-2 shrink-0">
+          <span className="text-[11px] font-bold text-white/50 uppercase tracking-wider">Module:</span>
+          <div className="relative flex-1">
+            <select
+              value={activeSection}
+              onChange={(e) => setActiveSection(e.target.value as AdminSection)}
+              className="w-full bg-[#001F3F] border border-[#D4AF37]/40 rounded-xl px-3 py-1.5 text-xs text-[#D4AF37] font-bold appearance-none pr-8 focus:outline-none focus:border-[#D4AF37]"
+            >
+              {[
+                { id: 'overview', label: '📊 Dashboard KPI' },
+                { id: 'broadcast', label: '🔴 Sermon & Live Stream' },
+                { id: 'inventory', label: '📦 Store & Inventory' },
+                { id: 'push', label: '🔔 Push Broadcasts' },
+                { id: 'members', label: '👥 Members & Roles' },
+                { id: 'prayers', label: '🙏 Altar Petitions' },
+                { id: 'finances', label: '💰 Tithes & Seed Fund' },
+                { id: 'vibes', label: '🎵 Joe Vibes Submissions' },
+              ].map(opt => (
+                <option key={opt.id} value={opt.id} className="bg-[#001F3F] text-white">
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-4 h-4 text-[#D4AF37] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
+        </div>
+
+        {/* Desktop Sidebar */}
+        <aside className="hidden md:flex w-56 bg-[#00172e] border-r border-white/10 shrink-0 flex-col overflow-y-auto p-2 gap-1">
+          <div className="px-3 py-2 text-[10px] font-bold text-white/40 uppercase tracking-wider">
             Management Modules
           </div>
 

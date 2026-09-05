@@ -180,25 +180,12 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
       reminder_phone: bookingPhone
     });
 
+    // Zoom session ready in Meetings Portal
     setConfirmedBooking(newBooking);
     confetti({
       particleCount: 40,
       spread: 70
     });
-
-    // Dispatch directly to WhatsApp number +263780699988
-    const waText = `*PAID 1-ON-1 PASTORAL CONSULTATION BOOKING*
-----------------------------------------
-*Name:* ${bookingName}
-*Phone:* ${bookingPhone}
-*Location (Where I am):* ${bookingLocation}
-*Preferred Date:* ${bookingDate}
-*Preferred Time:* ${bookingTime}
-*Service:* ${bookingService}
-*Notes:* ${bookingNotes || 'Apostolic consultation request'}
-----------------------------------------
-_Forwarded to ministry intake desk._`;
-    window.open(`https://wa.me/263780699988?text=${encodeURIComponent(waText)}`, '_blank');
   };
 
   const handleProcessOrderCheckout = () => {

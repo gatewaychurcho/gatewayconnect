@@ -41,7 +41,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
       badge: 'Blue Verified',
       perks: [
         'Facebook-style blue verified badge on all comments & posts',
-        'TikTok-style automatic background sermon pre-caching',
+        'Automatic background sermon offline pre-caching',
         'Priority scheduling for 1-on-1 pastoral consultations',
         'Direct monthly ministerial prayer impartation letter'
       ]

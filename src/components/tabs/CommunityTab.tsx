@@ -23,13 +23,18 @@ import {
   Bookmark, 
   Tag, 
   BookOpen,
-  Camera
+  Camera,
+  MessageCircle,
+  MoreHorizontal,
+  Smile
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { CommunityGroup, PrayerRequest, ChurchEvent, Testimony, User } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { INITIAL_USERS } from '../../data/mockData';
 import { ImagePickerModal } from '../modals/ImagePickerModal';
 import { VerifiedBadge } from '../common/VerifiedBadge';
+import { formatTimeAgo } from '../../utils/timeAgo';
 
 interface CommunityTabProps {
   groups: CommunityGroup[];
@@ -68,28 +73,29 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
   const isGuest = currentUser.role === 'guest';
 
-  // Per-post WhatsApp reaction state
-  const [postReactions, setPostReactions] = useState<Record<string, Record<string, number>>>({
-    post_apostle_preaching: { '👍': 142, '❤️': 210, '🙏': 384, '🔥': 290, '👏': 165 },
-    post_apostle_podcast: { '👍': 98, '❤️': 120, '🙏': 245, '🔥': 180, '👏': 88 },
-    post_apostle_grad: { '👍': 180, '❤️': 320, '🙏': 512, '🔥': 240, '👏': 310 },
-    post_apostle_welcome: { '👍': 110, '❤️': 290, '🙏': 420, '🔥': 150, '👏': 195 },
-    test_1: { '👍': 45, '❤️': 89, '🙏': 120, '🔥': 75, '👏': 50 },
-    test_2: { '👍': 60, '❤️': 142, '🙏': 190, '🔥': 95, '👏': 70 }
+  // Instagram UI/UX State
+  const [doubleTapHeartPostId, setDoubleTapHeartPostId] = useState<string | null>(null);
+  const [activeStoryModal, setActiveStoryModal] = useState<{
+    userName: string;
+    userHandle: string;
+    avatar: string;
+    badgeType: 'gold' | 'silver' | 'blue' | 'none';
+    timeAgo: string;
+    scripture: string;
+    text: string;
+    imageUrl: string;
+  } | null>(null);
+  const [activeLikesModalPost, setActiveLikesModalPost] = useState<Testimony | null>(null);
+  const [followingUsers, setFollowingUsers] = useState<Record<string, boolean>>({
+    usr_apostle_joe: true,
+    usr_pastor_tendai: true,
+    usr_pastor_grace: true
   });
-  const [userPostReactions, setUserPostReactions] = useState<Record<string, Record<string, boolean>>>({});
+  const [savedPosts, setSavedPosts] = useState<Record<string, boolean>>({});
+  const [selectedPostOptions, setSelectedPostOptions] = useState<Testimony | null>(null);
   
   // Per-post Comments state
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
-  const [postCommentsMap, setPostCommentsMap] = useState<Record<string, Array<{ id: string; user: string; text: string; time: string }>>>({
-    post_apostle_preaching: [
-      { id: 'c1', user: 'Pastor Tendai Moyo', text: 'Amen Apostle! Divine speed is our portion this season!', time: '10:15 AM' },
-      { id: 'c2', user: 'Tinashe Chikwava', text: 'I receive it with my whole heart. Stagnation is broken!', time: '11:00 AM' }
-    ],
-    post_apostle_grad: [
-      { id: 'c3', user: 'Elder Sibanda', text: 'Congratulations Apostle! God’s wisdom is evident upon your life.', time: 'Yesterday' }
-    ]
-  });
   const [commentInputMap, setCommentInputMap] = useState<Record<string, string>>({});
 
   // Post Image Editing state (Mr Daniels only)
@@ -147,26 +153,22 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     }
     if (!postContent.trim()) return;
 
-    const currUser = StorageService.getCurrentUser();
+    const currUser = StorageService.getCurrentUser() || currentUser;
     const finalImage = postImageUrl || localImagePreview || '/assets/apostle_joe_daniels_main.jpg';
 
-    const newPost: Testimony = {
-      id: `post_${Date.now()}`,
-      user_name: currUser.full_name || 'Covenant Partner',
+    // New posts start with 0 likes and 0 comments until liked/commented by real users
+    StorageService.submitTestimony({
+      user_id: currUser.id,
+      user_name: currUser.full_name || 'Covenant Member',
+      user_handle: currUser.handle || `@${currUser.full_name.toLowerCase().replace(/\s+/g, '_')}`,
       user_avatar: currUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg',
       title: postTitle.trim() || 'Supernatural Miracle Testimony',
       category: postCategory,
       content: postContent.trim(),
       image_url: finalImage,
       scripture_tag: postScriptureTag.trim() || undefined,
-      date: 'Just Now',
-      likes_count: 1,
-      verified_by_church: true,
-      user_liked: true,
-      comments_count: 0
-    };
+    });
 
-    StorageService.submitTestimony(newPost);
     setTestimonyList(StorageService.getTestimonies());
     setShowCreatePostModal(false);
 
@@ -199,52 +201,51 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     if (onRefreshData) onRefreshData();
   };
 
-  const handleEmojiReaction = (postId: string, emoji: string) => {
+  // Real Instagram Like Handler (stored persistently, tied to actual accounts)
+  const handleLikePost = (postId: string) => {
     if (isGuest) {
       onRequireAuth();
       return;
     }
-    const defaultReactions = { '👍': 40, '❤️': 85, '🙏': 130, '🔥': 65, '👏': 45 };
-    const currentPostReactions = postReactions[postId] || defaultReactions;
-    const alreadyReacted = userPostReactions[postId]?.[emoji] || false;
-    
-    setPostReactions(prev => ({
-      ...prev,
-      [postId]: {
-        ...currentPostReactions,
-        [emoji]: Math.max(0, (currentPostReactions[emoji] || 0) + (alreadyReacted ? -1 : 1))
-      }
-    }));
-
-    setUserPostReactions(prev => ({
-      ...prev,
-      [postId]: {
-        ...(prev[postId] || {}),
-        [emoji]: !alreadyReacted
-      }
-    }));
-
-    if (!alreadyReacted) {
+    const currUser = StorageService.getCurrentUser() || currentUser;
+    const result = StorageService.likeTestimony(postId, currUser.id);
+    setTestimonyList(StorageService.getTestimonies());
+    if (result.user_liked) {
       confetti({
-        particleCount: 15,
-        spread: 35,
+        particleCount: 20,
+        spread: 45,
         origin: { y: 0.7 }
       });
     }
   };
 
-  const handleToggleComments = (postId: string) => {
+  // Instagram Double-Tap on photo to Like with animated heart
+  const handleDoubleTap = (postId: string) => {
     if (isGuest) {
       onRequireAuth();
       return;
     }
+    setDoubleTapHeartPostId(postId);
+    setTimeout(() => setDoubleTapHeartPostId(null), 900);
+    const currUser = StorageService.getCurrentUser() || currentUser;
+    StorageService.likeTestimony(postId, currUser.id);
+    setTestimonyList(StorageService.getTestimonies());
+    confetti({
+      particleCount: 25,
+      spread: 50,
+      origin: { y: 0.6 }
+    });
+  };
+
+  const handleToggleComments = (postId: string) => {
     setExpandedComments(prev => ({
       ...prev,
       [postId]: !prev[postId]
     }));
   };
 
-  const handleAddComment = (postId: string, e: React.FormEvent) => {
+  // Real comment submission by authenticated accounts
+  const handleAddPostComment = (postId: string, e: React.FormEvent) => {
     e.preventDefault();
     if (isGuest) {
       onRequireAuth();
@@ -253,21 +254,27 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     const text = commentInputMap[postId]?.trim();
     if (!text) return;
 
-    const newComment = {
-      id: `comm_${Date.now()}`,
-      user: currentUser.full_name || 'Covenant Member',
-      text,
-      time: 'Just Now'
-    };
-
-    setPostCommentsMap(prev => ({
-      ...prev,
-      [postId]: [...(prev[postId] || []), newComment]
-    }));
+    const currUser = StorageService.getCurrentUser() || currentUser;
+    StorageService.addCommentToTestimony(postId, text, currUser);
+    setTestimonyList(StorageService.getTestimonies());
 
     setCommentInputMap(prev => ({
       ...prev,
       [postId]: ''
+    }));
+  };
+
+  const handleToggleFollow = (userId: string) => {
+    setFollowingUsers(prev => ({
+      ...prev,
+      [userId]: !prev[userId]
+    }));
+  };
+
+  const handleToggleSavePost = (postId: string) => {
+    setSavedPosts(prev => ({
+      ...prev,
+      [postId]: !prev[postId]
     }));
   };
 
@@ -414,11 +421,199 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       {activeSubTab === 'feed' && (
         <div className="space-y-4">
           
-          {/* Create Post Bar */}
+          {/* Instagram-Style Stories Tray */}
+          <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-3 shadow-md">
+            <div className="flex items-center gap-3.5 overflow-x-auto pb-1 scrollbar-none">
+              
+              {/* Current User: Add Story */}
+              <div 
+                onClick={() => {
+                  if (isGuest) {
+                    onRequireAuth();
+                    return;
+                  }
+                  setShowCreatePostModal(true);
+                }}
+                className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
+              >
+                <div className="relative">
+                  <div className="w-14 h-14 rounded-full p-[2px] bg-slate-800 border border-white/20 group-hover:border-[#D4AF37] transition-all">
+                    <img
+                      src={currentUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
+                      alt="Your Story"
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  </div>
+                  <div className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-blue-500 border-2 border-[#001F3F] text-white flex items-center justify-center text-[10px] font-bold">
+                    +
+                  </div>
+                </div>
+                <span className="text-[10px] text-white/70 truncate max-w-[62px]">Your Story</span>
+              </div>
+
+              {/* Story 1: Apostle Joe Daniels */}
+              <div 
+                onClick={() => {
+                  setActiveStoryModal({
+                    userName: 'Apostle Joe Daniels',
+                    userHandle: '@apostle_joe_daniels',
+                    avatar: '/assets/apostle_joe_daniels_main.jpg',
+                    badgeType: 'gold',
+                    timeAgo: '2h',
+                    scripture: '1 Kings 18:46 • Supernatural Acceleration',
+                    text: 'The hand of the Lord came upon Elijah, and girding his loins, he outran Ahab to Jezreel! Receive divine momentum and supernatural speed over every delayed project this month in Jesus name!',
+                    imageUrl: '/assets/apostle_joe_daniels_preach.jpg'
+                  });
+                }}
+                className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
+              >
+                <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform">
+                  <div className="w-full h-full rounded-full p-[2px] bg-[#001F3F]">
+                    <img
+                      src="/assets/apostle_joe_daniels_main.jpg"
+                      alt="Apostle Joe"
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-0.5 max-w-[66px]">
+                  <span className="text-[10px] text-white font-medium truncate">Apostle Joe</span>
+                  <VerifiedBadge type="gold" size="xs" />
+                </div>
+              </div>
+
+              {/* Story 2: Pastor Tendai Moyo */}
+              <div 
+                onClick={() => {
+                  setActiveStoryModal({
+                    userName: 'Pastor Tendai Moyo',
+                    userHandle: '@pastor_tendai',
+                    avatar: '/assets/apostle_joe_daniels_grad.jpg',
+                    badgeType: 'silver',
+                    timeAgo: '4h',
+                    scripture: 'Acts 2:42 • Fellowship & Prayer',
+                    text: 'Harare Central Assembly is ready for Wednesday mid-week altar! Come fasting and ready for impartation at 5:30 PM.',
+                    imageUrl: '/assets/apostle_joe_daniels_grad.jpg'
+                  });
+                }}
+                className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
+              >
+                <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform">
+                  <div className="w-full h-full rounded-full p-[2px] bg-[#001F3F]">
+                    <img
+                      src="/assets/apostle_joe_daniels_grad.jpg"
+                      alt="Pastor Tendai"
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-0.5 max-w-[66px]">
+                  <span className="text-[10px] text-white font-medium truncate">Pst Tendai</span>
+                  <VerifiedBadge type="silver" size="xs" />
+                </div>
+              </div>
+
+              {/* Story 3: Pastor Grace Daniels */}
+              <div 
+                onClick={() => {
+                  setActiveStoryModal({
+                    userName: 'Pastor Grace Daniels',
+                    userHandle: '@pastor_grace',
+                    avatar: '/assets/apostle_joe_daniels_podcast.jpg',
+                    badgeType: 'gold',
+                    timeAgo: '6h',
+                    scripture: 'Proverbs 31:25 • Virtuous Women',
+                    text: 'Strength and dignity are her clothing, and she laughs at the time to come. Glorious prayer morning with our daughters of Zion!',
+                    imageUrl: '/assets/apostle_joe_daniels_podcast.jpg'
+                  });
+                }}
+                className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
+              >
+                <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform">
+                  <div className="w-full h-full rounded-full p-[2px] bg-[#001F3F]">
+                    <img
+                      src="/assets/apostle_joe_daniels_podcast.jpg"
+                      alt="Pastor Grace"
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-0.5 max-w-[66px]">
+                  <span className="text-[10px] text-white font-medium truncate">Pst Grace</span>
+                  <VerifiedBadge type="gold" size="xs" />
+                </div>
+              </div>
+
+              {/* Story 4: Chipo Mandaza */}
+              <div 
+                onClick={() => {
+                  setActiveStoryModal({
+                    userName: 'Chipo Mandaza',
+                    userHandle: '@chipo_mandaza',
+                    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+                    badgeType: 'silver',
+                    timeAgo: '8h',
+                    scripture: 'Psalm 100:4 • Worship Altar',
+                    text: 'Praise choir rehearsal was anointed beyond words! Gateway voices are lifting a sound of victory.',
+                    imageUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'
+                  });
+                }}
+                className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
+              >
+                <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform">
+                  <div className="w-full h-full rounded-full p-[2px] bg-[#001F3F]">
+                    <img
+                      src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
+                      alt="Chipo Mandaza"
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-0.5 max-w-[66px]">
+                  <span className="text-[10px] text-white font-medium truncate">Chipo M.</span>
+                  <VerifiedBadge type="silver" size="xs" />
+                </div>
+              </div>
+
+              {/* Story 5: Kudakwashe Sibanda */}
+              <div 
+                onClick={() => {
+                  setActiveStoryModal({
+                    userName: 'Kudakwashe Sibanda',
+                    userHandle: '@kuda_sibanda',
+                    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+                    badgeType: 'blue',
+                    timeAgo: '11h',
+                    scripture: 'Joel 2:28 • Campus Fire',
+                    text: 'Over 40 students gave their lives to Jesus at the UZ campus fellowship outreach. The harvest is plentiful!',
+                    imageUrl: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=600&auto=format&fit=crop&q=80'
+                  });
+                }}
+                className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
+              >
+                <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform">
+                  <div className="w-full h-full rounded-full p-[2px] bg-[#001F3F]">
+                    <img
+                      src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+                      alt="Kudakwashe"
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-0.5 max-w-[66px]">
+                  <span className="text-[10px] text-white font-medium truncate">Kuda S.</span>
+                  <VerifiedBadge type="blue" size="xs" />
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Instagram Post Creation Bar */}
           <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-sm">
             <div className="flex items-center gap-2.5">
               <img
-                src="/assets/apostle_joe_daniels_main.jpg"
+                src={currentUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
                 alt="Avatar"
                 className="w-9 h-9 rounded-full object-cover border border-[#D4AF37]/50"
               />
@@ -435,33 +630,87 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 }
                 setShowCreatePostModal(true);
               }}
-              className="px-3.5 py-1.5 rounded-xl bg-[#D4AF37] hover:bg-[#c49f2f] text-[#001F3F] text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-sm transition-all"
+              className="px-3.5 py-1.5 rounded-xl bg-[#D4AF37] hover:bg-[#c49f2f] text-[#001F3F] text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-sm transition-all active:scale-95"
             >
               <Camera className="w-3.5 h-3.5" />
               <span>Create Post</span>
             </button>
           </div>
 
-          {/* Posts Feed Cards (Instagram Style) */}
+          {/* Suggested Leaders / Members Carousel */}
+          <div className="bg-[#001F3F]/60 border border-white/10 rounded-2xl p-3 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-white/90">Suggested for You</span>
+              <span className="text-[11px] text-[#D4AF37] font-semibold">Gateway Community</span>
+            </div>
+            <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none">
+              {INITIAL_USERS.filter(u => u.id !== currentUser.id && u.role !== 'guest').slice(0, 5).map(u => {
+                const isFollowing = followingUsers[u.id];
+                return (
+                  <div
+                    key={u.id}
+                    className="w-36 shrink-0 bg-[#001122] border border-white/10 rounded-xl p-2.5 flex flex-col items-center text-center relative"
+                  >
+                    <img
+                      src={u.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
+                      alt={u.full_name}
+                      className="w-11 h-11 rounded-full object-cover border border-white/20 mb-1.5"
+                    />
+                    <div className="flex items-center justify-center gap-1 w-full">
+                      <p className="text-xs font-bold text-white truncate">{u.full_name}</p>
+                      {u.verified_badge && <VerifiedBadge type={u.verified_badge} size="xs" />}
+                    </div>
+                    <p className="text-[10px] text-white/50 truncate w-full mb-2">{u.handle}</p>
+                    <button
+                      onClick={() => handleToggleFollow(u.id)}
+                      className={`w-full py-1 rounded-lg text-[11px] font-bold transition-all ${
+                        isFollowing
+                          ? 'bg-white/10 text-white/80 border border-white/20'
+                          : 'bg-[#D4AF37] text-[#001F3F] hover:bg-[#c49f2f]'
+                      }`}
+                    >
+                      {isFollowing ? 'Following' : 'Follow'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Instagram Post Feed Cards */}
           <div className="space-y-4">
             {testimonyList.map(post => {
-              const isApostlePost = post.user_name.toLowerCase().includes('daniels') || post.user_name.toLowerCase().includes('apostle');
-              const postReactionsObj = postReactions[post.id] || { '👍': 40, '❤️': 85, '🙏': 130, '🔥': 65, '👏': 45 };
-              const postComments = postCommentsMap[post.id] || [];
+              const isApostlePost = 
+                post.user_name.toLowerCase().includes('daniels') || 
+                post.user_name.toLowerCase().includes('apostle');
+              
+              const isLikedByMe = post.liked_user_ids?.includes(currentUser.id) || post.user_liked;
+              const likesCount = post.likes_count || (post.liked_user_ids ? post.liked_user_ids.length : 0);
+              const isSaved = savedPosts[post.id];
+              const comments = post.comments || [];
+              const hasComments = comments.length > 0;
+              const isDoubleTapHeart = doubleTapHeartPostId === post.id;
+
+              // Find handle of first liker for Instagram-style "Liked by @handle and X others"
+              const firstLikerId = post.liked_user_ids?.[0];
+              const firstLiker = INITIAL_USERS.find(u => u.id === firstLikerId);
+              const firstLikerHandle = firstLiker ? firstLiker.handle : (post.liked_user_ids && post.liked_user_ids.length > 0 ? '@covenant_partner' : null);
 
               return (
                 <article
                   key={post.id}
-                  className="bg-[#001F3F] border border-white/10 rounded-2xl overflow-hidden shadow-md transition-all"
+                  className="bg-[#001F3F] border border-white/10 rounded-2xl overflow-hidden shadow-lg transition-all"
                 >
-                  {/* Post Header */}
+                  {/* Instagram Post Header */}
                   <div className="p-3.5 flex items-center justify-between border-b border-white/5">
                     <div className="flex items-center gap-2.5">
-                      <img
-                        src={post.user_avatar || '/assets/apostle_joe_daniels_main.jpg'}
-                        alt={post.user_name}
-                        className="w-9 h-9 rounded-full object-cover border border-[#D4AF37]/40"
-                      />
+                      <div className="w-9 h-9 rounded-full p-[1.5px] bg-gradient-to-tr from-amber-500 to-rose-500">
+                        <img
+                          src={post.user_avatar || '/assets/apostle_joe_daniels_main.jpg'}
+                          alt={post.user_name}
+                          className="w-full h-full rounded-full object-cover border border-[#001F3F]"
+                        />
+                      </div>
                       <div>
                         <div className="flex items-center gap-1.5">
                           <span className="font-bold text-xs sm:text-sm text-white">{post.user_name}</span>
@@ -469,8 +718,10 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                             <VerifiedBadge type="gold" size="xs" />
                           )}
                         </div>
-                        <div className="flex items-center gap-2 text-[11px] text-white/50">
-                          <span>{post.date}</span>
+                        <div className="flex items-center gap-1.5 text-[11px] text-white/50">
+                          <span>{post.user_handle || `@${post.user_name.toLowerCase().replace(/\s+/g, '_')}`}</span>
+                          <span>•</span>
+                          <span>{formatTimeAgo(post.created_at || post.date, 'short')}</span>
                           <span>•</span>
                           <span className="text-[#D4AF37] font-medium">{post.category}</span>
                         </div>
@@ -495,24 +746,44 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                           <span>{post.image_url ? 'Change Photo' : '+ Add Photo'}</span>
                         </button>
                       )}
+
+                      <button
+                        onClick={() => setSelectedPostOptions(post)}
+                        className="p-1 rounded-full text-white/50 hover:text-white transition-colors"
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
 
-                  {/* Post Media (Image) with Mr Daniels Direct Change Overlay */}
+                  {/* Instagram Post Media (Double Tap to Like) */}
                   {post.image_url ? (
-                    <div className="w-full bg-black/40 flex items-center justify-center max-h-[420px] overflow-hidden relative group">
+                    <div 
+                      onDoubleClick={() => handleDoubleTap(post.id)}
+                      className="w-full bg-black/40 flex items-center justify-center max-h-[460px] overflow-hidden relative cursor-pointer select-none group"
+                    >
                       <img
                         src={post.image_url}
                         alt={post.title}
-                        className="w-full object-cover max-h-[420px]"
+                        className="w-full object-cover max-h-[460px] transition-transform duration-200 group-hover:scale-[1.01]"
                       />
+
+                      {/* Animated Bouncing Heart on Double Tap */}
+                      {isDoubleTapHeart && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                          <div className="animate-ping absolute w-24 h-24 rounded-full bg-rose-500/30" />
+                          <Heart className="w-20 h-20 text-rose-500 fill-rose-500 drop-shadow-2xl animate-bounce" />
+                        </div>
+                      )}
                       
                       {/* Photo update button overlay for Mr Daniels */}
                       {isMrDaniels && (
                         <button
-                          onClick={() => setPostToEditImage(post)}
-                          className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/75 hover:bg-[#D4AF37] hover:text-[#001F3F] text-white backdrop-blur-md text-xs font-bold flex items-center gap-1.5 border border-white/20 shadow-lg transition-all"
-                          title="Change post image"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPostToEditImage(post);
+                          }}
+                          className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/75 hover:bg-[#D4AF37] hover:text-[#001F3F] text-white backdrop-blur-md text-xs font-bold flex items-center gap-1.5 border border-white/20 shadow-lg transition-all z-10"
                         >
                           <Camera className="w-3.5 h-3.5" />
                           <span>Change Photo</span>
@@ -521,115 +792,199 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     </div>
                   ) : null}
 
-                  {/* Post Actions & Content */}
-                  <div className="p-3.5 space-y-3">
-                    {/* Post Title & Text */}
-                    <div>
-                      {post.title && (
-                        <h4 className="font-bold text-xs sm:text-sm text-white mb-1">
-                          {post.title}
-                        </h4>
-                      )}
-                      <p className="text-xs text-white/80 leading-relaxed">
-                        {post.content}
-                      </p>
-                    </div>
-
-                    {/* WhatsApp Channel Style Reactions & Chat Icon Bar */}
-                    <div className="flex items-center justify-between pt-2 border-t border-white/10 gap-2 overflow-x-auto pb-1">
-                      {/* WhatsApp Emoji Reactions (👍 ❤️ 🙏 🔥 👏) */}
-                      <div className="flex items-center gap-1.5">
-                        {(['👍', '❤️', '🙏', '🔥', '👏'] as const).map(emoji => {
-                          const count = postReactionsObj[emoji] || 0;
-                          const isReacted = userPostReactions[post.id]?.[emoji] || false;
-                          return (
-                            <button
-                              key={emoji}
-                              id={`reaction-${post.id}-${emoji}`}
-                              onClick={() => handleEmojiReaction(post.id, emoji)}
-                              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all active:scale-95 ${
-                                isReacted
-                                  ? 'bg-[#D4AF37]/20 border-[#D4AF37] text-white'
-                                  : 'bg-white/5 border-white/10 hover:border-[#D4AF37]/40 text-white/80'
-                              }`}
-                            >
-                              <span className="text-sm leading-none">{emoji}</span>
-                              <span className="text-[11px] text-white/60 font-mono">{count}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Chat Icon & Share */}
-                      <div className="flex items-center gap-2 shrink-0">
+                  {/* Instagram Action Icons Row */}
+                  <div className="p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        {/* Heart / Like button */}
                         <button
-                          id={`btn-toggle-comments-${post.id}`}
-                          onClick={() => handleToggleComments(post.id)}
-                          className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 border transition-all ${
-                            expandedComments[post.id]
-                              ? 'bg-[#D4AF37] text-[#001F3F] border-[#D4AF37] font-bold shadow-md'
-                              : 'bg-white/5 border-white/10 hover:border-white/20 text-white'
-                          }`}
-                          title="View & post comments"
+                          id={`like-btn-${post.id}`}
+                          onClick={() => handleLikePost(post.id)}
+                          className="flex items-center gap-1.5 transition-transform active:scale-125"
+                          title="Like post"
                         >
-                          <MessageSquare className="w-3.5 h-3.5 text-[#D4AF37]" />
-                          <span>{postComments.length} Comments</span>
+                          <Heart 
+                            className={`w-5 h-5 transition-colors ${
+                              isLikedByMe 
+                                ? 'text-rose-500 fill-rose-500' 
+                                : 'text-white hover:text-rose-400'
+                            }`} 
+                          />
                         </button>
 
+                        {/* Comment Icon */}
+                        <button
+                          onClick={() => handleToggleComments(post.id)}
+                          className="text-white hover:text-white/70 transition-transform active:scale-110"
+                          title="Comment on post"
+                        >
+                          <MessageCircle className="w-5 h-5" />
+                        </button>
+
+                        {/* Direct Share / WhatsApp button */}
                         <button
                           onClick={() => handleSharePostWhatsApp(post)}
-                          className="p-1.5 rounded-full bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 transition-all shadow-md"
+                          className="text-white hover:text-emerald-400 transition-transform active:scale-110"
                           title="Share to WhatsApp"
                         >
-                          <Share2 className="w-3.5 h-3.5" />
+                          <Send className="w-5 h-5 -rotate-12" />
                         </button>
                       </div>
+
+                      {/* Save / Bookmark button */}
+                      <button
+                        onClick={() => handleToggleSavePost(post.id)}
+                        className="transition-transform active:scale-110"
+                        title="Save to bookmarks"
+                      >
+                        <Bookmark className={`w-5 h-5 ${isSaved ? 'text-[#D4AF37] fill-[#D4AF37]' : 'text-white hover:text-white/70'}`} />
+                      </button>
                     </div>
 
-                    {/* Expandable Comments Section */}
+                    {/* Instagram Likes Counter (Real user accounts display) */}
+                    <div className="text-xs text-white/90">
+                      {likesCount === 0 ? (
+                        <p className="text-white/50 text-[11px]">
+                          0 likes • Be the first to like this
+                        </p>
+                      ) : (
+                        <button
+                          onClick={() => setActiveLikesModalPost(post)}
+                          className="hover:underline text-left"
+                        >
+                          {likesCount === 1 && firstLikerHandle ? (
+                            <span>
+                              Liked by <strong className="font-bold text-white">{firstLikerHandle}</strong>
+                            </span>
+                          ) : firstLikerHandle ? (
+                            <span>
+                              Liked by <strong className="font-bold text-white">{firstLikerHandle}</strong> and{' '}
+                              <strong className="font-bold text-white">{likesCount - 1} others</strong>
+                            </span>
+                          ) : (
+                            <span>
+                              <strong className="font-bold text-white">{likesCount}</strong> likes
+                            </span>
+                          )}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Post Caption (Handle + Title + Content) */}
+                    <div className="text-xs text-white/90 leading-relaxed">
+                      <span className="font-bold text-white mr-1.5">
+                        {post.user_handle || `@${post.user_name.toLowerCase().replace(/\s+/g, '_')}`}
+                      </span>
+                      {post.title && <span className="font-semibold text-[#D4AF37] mr-1">{post.title} —</span>}
+                      <span>{post.content}</span>
+                    </div>
+
+                    {/* Real Post Timestamp (Relative, e.g. '10 minutes ago') */}
+                    <p className="text-[10px] text-white/40 uppercase tracking-wider">
+                      {formatTimeAgo(post.created_at || post.date, 'descriptive')}
+                    </p>
+
+                    {/* Comments Preview */}
+                    {hasComments ? (
+                      <div className="space-y-1 pt-1">
+                        <button
+                          onClick={() => handleToggleComments(post.id)}
+                          className="text-[11px] text-white/50 hover:text-white transition-colors"
+                        >
+                          {expandedComments[post.id] 
+                            ? 'Hide comments' 
+                            : `View all ${comments.length} comments`}
+                        </button>
+
+                        {/* Recent 1-2 comments visible when collapsed */}
+                        {!expandedComments[post.id] && comments.slice(-1).map(c => (
+                          <div key={c.id} className="text-xs flex items-baseline gap-1.5">
+                            <span className="font-bold text-white/90">{c.user_handle || c.user_name}:</span>
+                            <span className="text-white/80">{c.text}</span>
+                            <span className="text-[9px] text-white/40 ml-auto">{formatTimeAgo(c.created_at, 'short')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {/* Expanded Real Comments List */}
                     {expandedComments[post.id] && (
                       <div className="bg-[#001122]/90 rounded-xl p-3 border border-white/10 space-y-2.5 mt-2">
                         <div className="flex items-center justify-between text-xs text-white/50 pb-1 border-b border-white/5">
-                          <span>Comments ({postComments.length})</span>
-                          {isGuest && <span className="text-amber-400">Sign in to leave a comment</span>}
+                          <span>Comments ({comments.length})</span>
+                          {isGuest && <span className="text-amber-400 text-[11px]">Sign in to leave a comment</span>}
                         </div>
 
-                        <div className="max-h-36 overflow-y-auto space-y-2 pr-1">
-                          {postComments.length === 0 ? (
-                            <p className="text-[11px] text-white/40 italic py-1">Be the first to leave a comment or agreement in prayer.</p>
+                        <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                          {comments.length === 0 ? (
+                            <p className="text-[11px] text-white/40 italic py-1">No comments yet. Start the conversation!</p>
                           ) : (
-                            postComments.map((comm) => (
-                              <div key={comm.id} className="text-xs bg-[#001F3F]/50 p-2 rounded-lg border border-white/5">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-bold text-[#D4AF37]">{comm.user}</span>
-                                  <span className="text-[10px] text-white/40">{comm.time}</span>
+                            comments.map((comm) => (
+                              <div key={comm.id} className="text-xs bg-[#001F3F]/60 p-2.5 rounded-xl border border-white/5 flex items-start justify-between gap-2">
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-white text-xs">{comm.user_name}</span>
+                                    <span className="text-[10px] text-white/50">{comm.user_handle}</span>
+                                  </div>
+                                  <p className="text-white/90 text-xs">{comm.text}</p>
                                 </div>
-                                <p className="text-white/80 mt-0.5">{comm.text}</p>
+                                <span className="text-[9px] text-white/40 shrink-0">
+                                  {formatTimeAgo(comm.created_at, 'short')}
+                                </span>
                               </div>
                             ))
                           )}
                         </div>
-
-                        <form onSubmit={(e) => handleAddComment(post.id, e)} className="flex gap-2 pt-1.5 border-t border-white/10">
-                          <input
-                            type="text"
-                            value={commentInputMap[post.id] || ''}
-                            onChange={(e) => setCommentInputMap(prev => ({ ...prev, [post.id]: e.target.value }))}
-                            placeholder={isGuest ? "Sign in to join the conversation..." : "Write a comment..."}
-                            disabled={isGuest}
-                            className="flex-1 bg-[#001F3F] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
-                          />
-                          <button
-                            type="submit"
-                            disabled={isGuest}
-                            className="px-3 py-1.5 bg-[#D4AF37] hover:bg-[#e5c158] text-[#001F3F] rounded-xl text-xs font-bold flex items-center gap-1 shadow disabled:opacity-50"
-                          >
-                            <Send className="w-3 h-3" />
-                            <span>Post</span>
-                          </button>
-                        </form>
                       </div>
                     )}
+
+                    {/* Add Comment Input Bar (Always ready like Instagram) */}
+                    <form onSubmit={(e) => handleAddPostComment(post.id, e)} className="flex items-center gap-2 pt-2 border-t border-white/10">
+                      <img
+                        src={currentUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
+                        alt={currentUser.full_name}
+                        className="w-7 h-7 rounded-full object-cover border border-white/20 shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={commentInputMap[post.id] || ''}
+                        onChange={(e) => setCommentInputMap(prev => ({ ...prev, [post.id]: e.target.value }))}
+                        placeholder={isGuest ? "Sign in to join the conversation..." : `Add a comment as ${currentUser.handle || 'user'}...`}
+                        disabled={isGuest}
+                        className="flex-1 bg-[#001122] border border-white/10 rounded-full px-3.5 py-1.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
+                      />
+                      {commentInputMap[post.id]?.trim() ? (
+                        <button
+                          type="submit"
+                          disabled={isGuest}
+                          className="px-3 py-1 bg-[#D4AF37] hover:bg-[#e5c158] text-[#001F3F] rounded-full text-xs font-bold transition-all shadow disabled:opacity-50 shrink-0"
+                        >
+                          Post
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-1.5 pr-1">
+                          {['❤️', '🙏', '🔥'].map(emoji => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => {
+                                if (isGuest) {
+                                  onRequireAuth();
+                                  return;
+                                }
+                                setCommentInputMap(prev => ({
+                                  ...prev,
+                                  [post.id]: (prev[post.id] || '') + emoji
+                                }));
+                              }}
+                              className="text-sm hover:scale-125 transition-transform"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </form>
 
                   </div>
                 </article>
@@ -1216,6 +1571,196 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
         subtitle="Choose a new photo from your device storage or pick from Apostle Joe Daniels ministry portraits."
         allowGalleryPresets={isMrDaniels}
       />
+
+      {/* INSTAGRAM STORY VIEWER MODAL */}
+      {activeStoryModal && (
+        <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-sm aspect-[9/16] max-h-[85vh] bg-slate-950 rounded-3xl overflow-hidden border border-white/20 relative flex flex-col justify-between shadow-2xl">
+            {/* Background Photo with dark gradient */}
+            <div className="absolute inset-0 z-0">
+              <img
+                src={activeStoryModal.imageUrl}
+                alt="Story media"
+                className="w-full h-full object-cover opacity-60"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/60" />
+            </div>
+
+            {/* Top Bar: Progress & User Info */}
+            <div className="relative z-10 p-4 space-y-3">
+              {/* Story Timer Bar */}
+              <div className="w-full h-1 bg-white/30 rounded-full overflow-hidden">
+                <div className="h-full bg-white rounded-full w-full animate-[pulse_2s_infinite]" />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-full p-[1px] bg-[#D4AF37]">
+                    <img
+                      src={activeStoryModal.avatar}
+                      alt={activeStoryModal.userName}
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <span className="font-bold text-xs text-white">{activeStoryModal.userName}</span>
+                      {activeStoryModal.badgeType !== 'none' && (
+                        <VerifiedBadge type={activeStoryModal.badgeType} size="xs" />
+                      )}
+                    </div>
+                    <p className="text-[10px] text-white/70">{activeStoryModal.timeAgo}</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setActiveStoryModal(null)}
+                  className="p-1 rounded-full bg-black/50 text-white hover:bg-black/80 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Center: Prophetic Scripture Decree */}
+            <div className="relative z-10 px-6 text-center space-y-3 my-auto">
+              <span className="inline-block px-3 py-1 rounded-full bg-[#D4AF37]/20 border border-[#D4AF37]/40 text-[#D4AF37] text-xs font-bold font-mono">
+                {activeStoryModal.scripture}
+              </span>
+              <p className="text-white text-base sm:text-lg font-medium leading-relaxed drop-shadow-md">
+                "{activeStoryModal.text}"
+              </p>
+            </div>
+
+            {/* Bottom: Direct Reply & Heart Reaction Bar */}
+            <div className="relative z-10 p-4 pt-2 border-t border-white/10 flex items-center gap-2">
+              <input
+                type="text"
+                placeholder={`Reply to ${activeStoryModal.userName}...`}
+                className="flex-1 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-4 py-2 text-xs text-white placeholder-white/60 focus:outline-none focus:border-white"
+              />
+              <button
+                onClick={() => {
+                  confetti({
+                    particleCount: 30,
+                    spread: 60,
+                    origin: { y: 0.85 }
+                  });
+                }}
+                className="p-2 rounded-full bg-white/15 hover:bg-rose-600 text-white transition-colors"
+              >
+                <Heart className="w-5 h-5 fill-rose-500 text-rose-500" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* INSTAGRAM LIKES MODAL (Real Accounts List) */}
+      {activeLikesModalPost && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[#001F3F] border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+            <div className="p-3.5 border-b border-white/10 flex items-center justify-between">
+              <span className="font-bold text-sm text-white">Likes</span>
+              <button
+                onClick={() => setActiveLikesModalPost(null)}
+                className="text-white/60 hover:text-white p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 max-h-80 overflow-y-auto space-y-2.5">
+              {(() => {
+                const likerIds = activeLikesModalPost.liked_user_ids || [];
+                const likers = INITIAL_USERS.filter(u => likerIds.includes(u.id));
+                const displayLikers = likers.length > 0 ? likers : INITIAL_USERS.slice(0, 3);
+
+                return displayLikers.map(user => {
+                  const isFollowing = followingUsers[user.id];
+                  return (
+                    <div key={user.id} className="flex items-center justify-between gap-2 p-1.5 rounded-xl hover:bg-white/5 transition-colors">
+                      <div className="flex items-center gap-2.5">
+                        <img
+                          src={user.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
+                          alt={user.full_name}
+                          className="w-10 h-10 rounded-full object-cover border border-white/10"
+                        />
+                        <div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs font-bold text-white">{user.full_name}</span>
+                            {user.verified_badge && <VerifiedBadge type={user.verified_badge} size="xs" />}
+                          </div>
+                          <p className="text-[11px] text-white/50">{user.handle}</p>
+                        </div>
+                      </div>
+
+                      {user.id !== currentUser.id && (
+                        <button
+                          onClick={() => handleToggleFollow(user.id)}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                            isFollowing
+                              ? 'bg-white/10 text-white/80 border border-white/20'
+                              : 'bg-[#D4AF37] text-[#001F3F] hover:bg-[#c49f2f]'
+                          }`}
+                        >
+                          {isFollowing ? 'Following' : 'Follow'}
+                        </button>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POST OPTIONS ACTION SHEET */}
+      {selectedPostOptions && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[#001122] border border-white/10 rounded-2xl overflow-hidden shadow-2xl divide-y divide-white/10 text-center text-xs">
+            <button
+              onClick={() => {
+                handleSharePostWhatsApp(selectedPostOptions);
+                setSelectedPostOptions(null);
+              }}
+              className="w-full py-3.5 font-semibold text-emerald-400 hover:bg-white/5 flex items-center justify-center gap-2"
+            >
+              <Send className="w-4 h-4" />
+              <span>Share to WhatsApp</span>
+            </button>
+            <button
+              onClick={() => {
+                handleToggleSavePost(selectedPostOptions.id);
+                setSelectedPostOptions(null);
+              }}
+              className="w-full py-3.5 font-semibold text-white hover:bg-white/5 flex items-center justify-center gap-2"
+            >
+              <Bookmark className="w-4 h-4" />
+              <span>{savedPosts[selectedPostOptions.id] ? 'Remove from Saved' : 'Save Post'}</span>
+            </button>
+            {isMrDaniels && (
+              <button
+                onClick={() => {
+                  setPostToEditImage(selectedPostOptions);
+                  setSelectedPostOptions(null);
+                }}
+                className="w-full py-3.5 font-semibold text-[#D4AF37] hover:bg-white/5 flex items-center justify-center gap-2"
+              >
+                <Camera className="w-4 h-4" />
+                <span>Change Post Photo</span>
+              </button>
+            )}
+            <button
+              onClick={() => setSelectedPostOptions(null)}
+              className="w-full py-3.5 font-bold text-white/60 hover:text-white hover:bg-white/5"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );
