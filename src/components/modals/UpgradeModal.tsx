@@ -13,6 +13,7 @@ import {
 import confetti from 'canvas-confetti';
 import { StorageService } from '../../services/storageService';
 import { User } from '../../types';
+import { PaynowService } from '../../services/paynowService';
 
 interface UpgradeModalProps {
   isOpen: boolean;
@@ -30,6 +31,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   const [selectedTier, setSelectedTier] = useState<'pillar' | 'ambassador'>('pillar');
   const [isProcessing, setIsProcessing] = useState(false);
   const [upgradedSuccess, setUpgradedSuccess] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -61,9 +63,30 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
     }
   ];
 
-  const handleUpgrade = () => {
+  const handleUpgrade = async () => {
     setIsProcessing(true);
-    setTimeout(() => {
+    setPaymentError(null);
+    const amount = selectedTier === 'ambassador' ? 100 : 25;
+    const payment = await PaynowService.initiateTransaction({
+      reference: `GCZ-UPGRADE-${Date.now().toString().slice(-8)}`,
+      amount,
+      additionalInfo: `${selectedTier === 'ambassador' ? 'Global Ambassador' : 'Kingdom Pillar'} membership`,
+      phone: currentUser.phone,
+      paymentMethod: 'EcoCash'
+    });
+    if (!payment.success || !payment.pollUrl) {
+      setIsProcessing(false);
+      setPaymentError(payment.error || 'Payment could not be started. Membership was not upgraded.');
+      return;
+    }
+    if (payment.browserUrl) window.open(payment.browserUrl, '_blank', 'noopener,noreferrer');
+    const result = await PaynowService.waitForPayment(payment.pollUrl);
+    if (!result.isPaid) {
+      setIsProcessing(false);
+      setPaymentError(`Payment status: ${result.status}. Membership was not upgraded.`);
+      return;
+    }
+    {
       const isGold = selectedTier === 'ambassador';
       const updated = StorageService.updateUserProfile({
         is_verified: true,
@@ -74,7 +97,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
       setIsProcessing(false);
       setUpgradedSuccess(true);
       confetti({ particleCount: 50, spread: 80, origin: { y: 0.5 } });
-    }, 1000);
+    }
   };
 
   return (
@@ -175,6 +198,11 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             </div>
 
             {/* Action CTA */}
+            {paymentError && (
+              <div className="rounded-xl border border-rose-500/40 bg-rose-950/40 p-3 text-xs text-rose-200">
+                {paymentError}
+              </div>
+            )}
             <button
               id="btn-confirm-upgrade"
               disabled={isProcessing}

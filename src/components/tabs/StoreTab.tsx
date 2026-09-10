@@ -129,6 +129,7 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
   const [bookingEmail, setBookingEmail] = useState<string>('believer@gatewayzim.org');
   const [bookingNotes, setBookingNotes] = useState<string>('');
   const [confirmedBooking, setConfirmedBooking] = useState<ServiceBooking | null>(null);
+  const [bookingPaymentError, setBookingPaymentError] = useState<string | null>(null);
 
   // Currency Exchange helper
   const getPrice = (usd: number) => {
@@ -245,6 +246,9 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
       if (paynowRes.instructions) {
         setPaynowInstruction(paynowRes.instructions);
       }
+    } else if (!['EcoCash', 'OneMoney'].includes(paymentGateway)) {
+      setPaynowInstruction(`${paymentGateway} is not connected yet. Choose EcoCash, OneMoney, or Paynow so the payment can be verified securely.`);
+      return;
     }
 
     const donation = StorageService.recordDonation({
@@ -285,8 +289,27 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
     });
   };
 
-  const handleProcessBooking = (e: React.FormEvent) => {
+  const handleProcessBooking = async (e: React.FormEvent) => {
     e.preventDefault();
+    setBookingPaymentError(null);
+    const depositAmount = bookingService === 'Prophetic Mentorship' ? 50 : 30;
+    const payment = await PaynowService.initiateTransaction({
+      reference: `GCZ-BOOKING-${Date.now().toString().slice(-8)}`,
+      amount: depositAmount,
+      additionalInfo: `Pastoral booking - ${bookingService}`,
+      phone: bookingPhone,
+      paymentMethod: 'EcoCash'
+    });
+    if (!payment.success || !payment.pollUrl) {
+      setBookingPaymentError(payment.error || 'Payment could not be started. Booking was not confirmed.');
+      return;
+    }
+    if (payment.browserUrl) window.open(payment.browserUrl, '_blank', 'noopener,noreferrer');
+    const paymentResult = await PaynowService.waitForPayment(payment.pollUrl);
+    if (!paymentResult.isPaid) {
+      setBookingPaymentError(`Payment status: ${paymentResult.status}. Booking was not confirmed.`);
+      return;
+    }
     const newBooking = StorageService.createBooking({
       user_name: bookingName,
       user_phone: bookingPhone,
@@ -294,7 +317,7 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
       service_type: bookingService,
       date: bookingDate,
       time_slot: bookingTime,
-      deposit_amount: bookingService === 'Prophetic Mentorship' ? 50 : 30,
+      deposit_amount: depositAmount,
       deposit_paid: true,
       notes: `Location: ${bookingLocation} | ${bookingNotes}`,
       reminder_phone: bookingPhone
@@ -632,6 +655,18 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
                   <span>Keep Donation Anonymous on Kingdom Impact Tickers</span>
                 </label>
 
+                {paynowInstruction && (
+                  <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200 space-y-2">
+                    <p>{paynowInstruction}</p>
+                    {paynowRedirectUrl && (
+                      <a href={paynowRedirectUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-bold underline">
+                        Open Paynow checkout
+                        <ArrowRight className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                )}
+
                 {/* Submit CTA */}
                 <button
                   id="btn-submit-giving"
@@ -810,6 +845,11 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
               </div>
 
               {/* Submit CTA */}
+              {bookingPaymentError && (
+                <div className="rounded-xl border border-rose-500/40 bg-rose-950/40 p-3 text-xs text-rose-200">
+                  {bookingPaymentError}
+                </div>
+              )}
               <button
                 id="btn-confirm-booking-submit"
                 type="submit"
@@ -1716,6 +1756,7 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
         isOpen={showMoorsModal}
         onClose={() => setShowMoorsModal(false)}
         onDepositSuccess={(donation) => {
+          setShowMoorsModal(false);
           setActiveReceipt(donation);
           if (onDonationSuccess) {
             onDonationSuccess(donation);
