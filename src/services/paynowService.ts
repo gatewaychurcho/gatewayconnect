@@ -70,15 +70,13 @@ export class PaynowService {
     const resultUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/paynow/callback` : 'https://gatewayzim.org/api/paynow/callback';
     const authEmail = params.authEmail || config.merchantEmail || 'gatewaychurchzim@gmail.com';
 
-    // If no credentials configured yet, provide clear instruction and simulated fallback
+    // Never claim a payment succeeded without a configured merchant gateway.
     if (!config.isConfigured || !config.integrationId || !config.integrationKey) {
-      console.warn('[PAYNOW] Credentials not configured. Running in Test Demonstration mode.');
+      console.warn('[PAYNOW] Credentials are not configured. Payment initiation was refused.');
       return {
-        success: true,
+        success: false,
         reference: params.reference,
-        isSimulated: true,
-        browserUrl: `https://www.paynow.co.zw/Payment/ConfirmPaymentDemo?ref=${params.reference}&amt=${params.amount}`,
-        instructions: `Demo Mode Active: EcoCash USSD prompt would be pushed to ${params.phone || '0772123456'} for $${params.amount}. To process live funds to your church merchant account, configure your Paynow ID & Auth Key in Developer Settings.`
+        error: 'Paynow is not configured. Add the live Integration ID and Integration Key before accepting payments.'
       };
     }
 
@@ -173,13 +171,11 @@ export class PaynowService {
       }
     } catch (e: any) {
       console.error('[PAYNOW] Error initiating transaction:', e);
-      // Fallback graceful degradation for demo/presentation with live credentials
+      // Do not convert a gateway/network failure into a successful payment.
       return {
-        success: true,
+        success: false,
         reference: params.reference,
-        browserUrl: `https://www.paynow.co.zw/Payment/ConfirmPayment/${config.integrationId}?ref=${params.reference}`,
-        isSimulated: true,
-        instructions: `Connecting to Paynow gateway. (If CORS restricts direct browser call, open Paynow checkout directly). Error notice: ${e.message || 'CORS Network Handshake'}`
+        error: e.message || 'Unable to reach Paynow. No payment was recorded.'
       };
     }
   }

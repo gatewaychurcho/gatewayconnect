@@ -27,11 +27,13 @@ import confetti from 'canvas-confetti';
 
 interface LoginScreenProps {
   onLoginSuccess: (user: UserType) => void;
+  onInstantJoin: (nameOrHandle: string) => void;
   onContinueAsGuest: () => void;
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({
   onLoginSuccess,
+  onInstantJoin,
   onContinueAsGuest
 }) => {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -43,6 +45,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [referralCode, setReferralCode] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [instantJoinName, setInstantJoinName] = useState<string>('');
+  const [showInstantJoin, setShowInstantJoin] = useState<boolean>(false);
 
   // Helper to format full international phone number or pass through username
   const formatPhoneWithCountryCode = (rawPhone: string, code: string) => {
@@ -211,6 +215,40 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               Create Account
             </button>
           </div>
+
+          {showInstantJoin ? (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (instantJoinName.trim()) onInstantJoin(instantJoinName);
+              }}
+              className="p-3 rounded-xl border border-[#D4AF37]/40 bg-[#001122]/80 space-y-2"
+            >
+              <label className="block text-xs font-semibold text-white/80">Name or handle</label>
+              <div className="flex gap-2">
+                <input
+                  autoFocus
+                  required
+                  value={instantJoinName}
+                  onChange={(event) => setInstantJoinName(event.target.value)}
+                  placeholder="e.g. @tendai or Tendai Moyo"
+                  className="min-w-0 flex-1 bg-[#001F3F] border border-white/20 rounded-xl px-3 py-2.5 text-white placeholder:text-white/40 focus:outline-none focus:border-[#D4AF37] text-sm"
+                />
+                <button type="submit" className="px-4 py-2.5 bg-[#D4AF37] text-[#001F3F] rounded-xl font-bold text-xs whitespace-nowrap">
+                  Join Live
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowInstantJoin(true)}
+              className="w-full py-2.5 rounded-xl border border-[#D4AF37]/60 text-[#D4AF37] hover:bg-[#D4AF37]/10 transition-all text-xs font-bold flex items-center justify-center gap-2"
+            >
+              <Users className="w-4 h-4" />
+              <span>Instant Join the Live Community</span>
+            </button>
+          )}
 
           {errorMessage && (
             <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-red-300 text-xs space-y-2 animate-in fade-in duration-200">

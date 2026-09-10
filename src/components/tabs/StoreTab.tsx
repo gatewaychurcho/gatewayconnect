@@ -233,6 +233,10 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
       if (paynowRes.browserUrl && !paynowRes.isSimulated) {
         window.open(paynowRes.browserUrl, '_blank');
       }
+      if (!paynowRes.success) {
+        setPaynowInstruction(paynowRes.error || 'Paynow could not start this payment. No funds were recorded.');
+        return;
+      }
       if (paynowRes.browserUrl) {
         setPaynowRedirectUrl(paynowRes.browserUrl);
       }
@@ -250,7 +254,7 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
       payment_method: paymentGateway,
       impact_tag: impactMap[giveFund] || 'Kingdom Advancement',
       is_anonymous: isAnonymousDonation
-    });
+    }, paymentGateway === 'Paynow' ? 'pending' : 'completed');
 
     setActiveReceipt(donation);
     if (onDonationSuccess) {

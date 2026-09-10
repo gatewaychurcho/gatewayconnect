@@ -17,6 +17,7 @@ import { DirectMessagesModal } from './components/modals/DirectMessagesModal';
 import { NotificationsModal } from './components/modals/NotificationsModal';
 import { FloatingNotificationToast } from './components/common/FloatingNotificationToast';
 import { StorageService } from './services/storageService';
+import { liveSyncService } from './services/liveSyncService';
 import { 
   TabType, 
   User, 
@@ -140,6 +141,50 @@ export default function App() {
     setCurrentUser(updated);
   };
 
+  const handleInstantJoin = (nameOrHandle: string) => {
+    const trimmedName = nameOrHandle.trim();
+    const displayName = trimmedName.replace(/^@/, '') || 'Gateway Believer';
+    const instantUser: User = {
+      id: `usr_instant_${Date.now()}`,
+      phone: `instant_${Date.now()}`,
+      full_name: displayName,
+      handle: `@${displayName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'believer'}`,
+      role: 'member',
+      member_id: `GCZ-INSTANT-${Date.now().toString().slice(-6)}`,
+      is_verified: false,
+      badge_type: 'none',
+      is_premium: false,
+      created_at: new Date().toISOString(),
+      location: 'Harare',
+      city_location: 'Harare',
+      saved_verses: []
+    };
+    StorageService.saveUser(instantUser);
+    StorageService.setCurrentUser(instantUser);
+    ['usr_apostle_joe', 'usr_developer', 'usr_pastor_tendai', 'usr_pastor_grace', 'usr_prophetess_melinda', 'usr_pastor_easter']
+      .forEach(leaderId => StorageService.toggleFollowUser(leaderId, instantUser.id));
+    setCurrentUser(instantUser);
+    confetti({ particleCount: 30, spread: 60 });
+  };
+
+  useEffect(() => {
+    if (!currentUser) {
+      liveSyncService.disconnect();
+      return;
+    }
+    liveSyncService.connect(currentUser);
+    const unbind = liveSyncService.bindLocalEvents();
+    const refreshLiveState = () => refreshAppData();
+    window.addEventListener('gcz_live_state_updated', refreshLiveState);
+    window.addEventListener('gcz_live_event_received', refreshLiveState);
+    return () => {
+      unbind();
+      liveSyncService.disconnect();
+      window.removeEventListener('gcz_live_state_updated', refreshLiveState);
+      window.removeEventListener('gcz_live_event_received', refreshLiveState);
+    };
+  }, [currentUser?.id]);
+
   // Login / Signup Handlers
   const handleAuthSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -216,6 +261,7 @@ export default function App() {
         onLoginSuccess={(user) => {
           setCurrentUser(user);
         }}
+        onInstantJoin={handleInstantJoin}
         onContinueAsGuest={handleGuestLogin}
       />
     );
@@ -447,10 +493,6 @@ export default function App() {
             refreshAppData();
           }}
           onRefreshAppState={refreshAppData}
-          onOpenDevConsole={() => {
-            setShowAdminPanel(false);
-            setShowDevConsole(true);
-          }}
         />
       )}
 

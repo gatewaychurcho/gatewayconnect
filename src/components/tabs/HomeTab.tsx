@@ -354,9 +354,10 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               <iframe
                 id="youtube-hero-stream-player"
                 className="w-full h-full pointer-events-auto border-0"
-                src={streamEmbedInfo.embedUrl || `https://www.youtube-nocookie.com/embed/${activeVideoId}?autoplay=1&mute=0&controls=1&rel=0&playsinline=1&enablejsapi=1`}
+                src={streamEmbedInfo.embedUrl || StorageService.getYoutubeEmbedUrl(activeVideoId)}
                 title={activeSermon.title || 'Church & Politics (Controversial Issues) - Apostle Joe Daniels'}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                referrerPolicy="strict-origin-when-cross-origin"
                 allowFullScreen
               />
             )}

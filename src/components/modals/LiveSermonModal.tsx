@@ -322,6 +322,7 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
                   src={streamEmbedInfo.embedUrl}
                   title={status.title || 'Gateway Connect Zimbabwe Live Service'}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  referrerPolicy="strict-origin-when-cross-origin"
                   allowFullScreen
                 />
               )}

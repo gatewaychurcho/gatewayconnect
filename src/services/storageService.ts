@@ -640,6 +640,9 @@ export class StorageService {
     };
     prayers.unshift(newPrayer);
     setLocal(KEYS.PRAYERS, prayers);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_prayer_updated', { detail: newPrayer }));
+    }
     // Background sync to Supabase PostgreSQL
     SupabaseSyncService.syncPrayerRequest(newPrayer).catch(err => {
       console.warn('Supabase prayer sync deferred:', err);
@@ -654,6 +657,9 @@ export class StorageService {
       p.prayer_count += 1;
       p.user_prayed = true;
       setLocal(KEYS.PRAYERS, prayers);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_prayer_updated', { detail: p }));
+      }
     }
   }
 
@@ -1018,32 +1024,36 @@ export class StorageService {
     return getLocal<DonationsList>(KEYS.DONATIONS, MOCK_DONATIONS);
   }
 
-  static recordDonation(donation: Omit<Donation, 'id' | 'receipt_number' | 'created_at' | 'status'>): Donation {
+  static recordDonation(
+    donation: Omit<Donation, 'id' | 'receipt_number' | 'created_at' | 'status'>,
+    status: Donation['status'] = 'completed'
+  ): Donation {
     const donations = this.getDonations();
     const newDonation: Donation = {
       ...donation,
       id: `don_${Date.now()}`,
       receipt_number: `GCZ-RC-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-      status: 'completed',
+      status,
       created_at: new Date().toISOString()
     };
     donations.unshift(newDonation);
     setLocal(KEYS.DONATIONS, donations);
 
-    // Generate formal receipt in real-time
-    this.addReceipt({
-      id: `rec_${Date.now()}`,
-      reference: newDonation.receipt_number,
-      date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-      payer_name: newDonation.donor_name,
-      amount: newDonation.amount,
-      currency: (newDonation.currency as any) || 'USD',
-      purpose: newDonation.fund_type,
-      payment_method: newDonation.payment_method,
-      status: 'Paid',
-      created_at: newDonation.created_at,
-      items_summary: `${newDonation.fund_type} via ${newDonation.payment_method}`
-    });
+    if (newDonation.status === 'completed') {
+      this.addReceipt({
+        id: `rec_${Date.now()}`,
+        reference: newDonation.receipt_number,
+        date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+        payer_name: newDonation.donor_name,
+        amount: newDonation.amount,
+        currency: (newDonation.currency as any) || 'USD',
+        purpose: newDonation.fund_type,
+        payment_method: newDonation.payment_method,
+        status: 'Paid',
+        created_at: newDonation.created_at,
+        items_summary: `${newDonation.fund_type} via ${newDonation.payment_method}`
+      });
+    }
 
     // Background sync to Supabase PostgreSQL
     SupabaseSyncService.syncDonation(newDonation).catch(err => {
@@ -1513,7 +1523,7 @@ export class StorageService {
     const list = this.getTestimonies().filter(t => t.id !== id);
     setLocal(KEYS.TESTIMONIES, list);
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('gcz_testimony_updated'));
+      window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: { id, deleted: true } }));
     }
   }
 
@@ -2112,6 +2122,10 @@ export class StorageService {
   }
 
   // DIRECT MESSAGING (DM) SYSTEM - INSTAGRAM STYLE
+  static getAllDirectMessages(): DirectMessage[] {
+    return getLocal<DirectMessage[]>(KEYS.DIRECT_MESSAGES, []);
+  }
+
   static getDirectMessages(userAId: string, userBId: string, currentUserId?: string): DirectMessage[] {
     const all = getLocal<DirectMessage[]>(KEYS.DIRECT_MESSAGES, [
       {
@@ -2780,12 +2794,27 @@ export class StorageService {
     };
   }
 
+  static getYoutubeEmbedUrl(videoId: string, autoplay = true): string {
+    const params = new URLSearchParams({
+      autoplay: autoplay ? '1' : '0',
+      mute: '0',
+      controls: '1',
+      rel: '0',
+      playsinline: '1',
+      enablejsapi: '1'
+    });
+    if (typeof window !== 'undefined' && /^https?:$/.test(window.location.protocol)) {
+      params.set('origin', window.location.origin);
+    }
+    return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?${params.toString()}`;
+  }
+
   static getStreamEmbedInfo(urlOrId?: string): StreamEmbedInfo {
     if (!urlOrId || !urlOrId.trim()) {
       const defaultYt = '-CibsaxijIk';
       return {
         platform: 'youtube',
-        embedUrl: `https://www.youtube-nocookie.com/embed/${defaultYt}?autoplay=1&mute=0&controls=1&rel=0&playsinline=1&enablejsapi=1`,
+        embedUrl: this.getYoutubeEmbedUrl(defaultYt),
         originalUrl: '',
         videoId: defaultYt,
         isFacebook: false,
@@ -2834,7 +2863,7 @@ export class StorageService {
     if (ytId) {
       return {
         platform: 'youtube',
-        embedUrl: `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=0&controls=1&rel=0&playsinline=1&enablejsapi=1`,
+        embedUrl: this.getYoutubeEmbedUrl(ytId),
         originalUrl: raw,
         videoId: ytId,
         isFacebook: false,
@@ -2857,7 +2886,7 @@ export class StorageService {
     const defaultYt = '-CibsaxijIk';
     return {
       platform: 'youtube',
-      embedUrl: `https://www.youtube-nocookie.com/embed/${defaultYt}?autoplay=1&mute=0&controls=1&rel=0&playsinline=1&enablejsapi=1`,
+      embedUrl: this.getYoutubeEmbedUrl(defaultYt),
       originalUrl: raw,
       videoId: defaultYt,
       isFacebook: false,
@@ -3458,6 +3487,83 @@ export class StorageService {
     }
 
     return newMsg;
+  }
+
+  static getAllChatGroupMessages(): ChatGroupMessage[] {
+    return Object.values(getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES)).flat();
+  }
+
+  static applyLiveState(state: {
+    testimonies?: Testimony[];
+    prayers?: PrayerRequest[];
+    directMessages?: DirectMessage[];
+    fellowshipPosts?: ChatGroupMessage[];
+  }): void {
+    if (state.testimonies?.length) setLocal(KEYS.TESTIMONIES, state.testimonies);
+    if (state.prayers?.length) setLocal(KEYS.PRAYERS, state.prayers);
+    if (state.directMessages?.length) setLocal(KEYS.DIRECT_MESSAGES, state.directMessages);
+    if (state.fellowshipPosts?.length) {
+      const grouped = state.fellowshipPosts.reduce<Record<string, ChatGroupMessage[]>>((all, message) => {
+        (all[message.group_id] ||= []).push(message);
+        return all;
+      }, {});
+      setLocal(KEYS.CHAT_GROUP_MESSAGES, grouped);
+    }
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('gcz_live_state_updated'));
+  }
+
+  static applyLiveEvent(type: string, payload: unknown): void {
+    if (type === 'direct_message') {
+      const message = payload as DirectMessage & { deleted?: boolean };
+      if (message.deleted) {
+        const messages = this.getAllDirectMessages().filter(item => item.id !== message.id);
+        setLocal(KEYS.DIRECT_MESSAGES, messages);
+        window.dispatchEvent(new CustomEvent('gcz_direct_messages_updated', { detail: message }));
+      } else {
+        this.receiveIncomingDirectMessage(message);
+      }
+    } else if (type === 'fellowship_post') {
+      const message = payload as ChatGroupMessage & { deleted?: boolean };
+      if (message.deleted) {
+        const all = getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
+        all[message.group_id] = (all[message.group_id] || []).filter(item => item.id !== message.id);
+        setLocal(KEYS.CHAT_GROUP_MESSAGES, all);
+        window.dispatchEvent(new CustomEvent('gcz_group_messages_updated', { detail: { groupId: message.group_id, message } }));
+      } else {
+        this.receiveIncomingGroupMessage(message);
+      }
+    } else if (type === 'prayer') {
+      const prayer = payload as PrayerRequest;
+      const prayers = this.getPrayerRequests().filter(item => item.id !== prayer.id);
+      prayers.unshift(prayer);
+      setLocal(KEYS.PRAYERS, prayers);
+      window.dispatchEvent(new CustomEvent('gcz_prayer_updated', { detail: prayer }));
+    } else if (['testimony', 'comment', 'like'].includes(type)) {
+      const testimony = payload as Testimony;
+      const testimonies = this.getTestimonies();
+      if ((testimony as Testimony & { deleted?: boolean }).deleted) {
+        setLocal(KEYS.TESTIMONIES, testimonies.filter(item => item.id !== testimony.id));
+      } else {
+        const index = testimonies.findIndex(item => item.id === testimony.id);
+        if (index >= 0) testimonies[index] = { ...testimonies[index], ...testimony };
+        else testimonies.unshift(testimony);
+        setLocal(KEYS.TESTIMONIES, testimonies);
+      }
+      window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: testimony }));
+    } else {
+      const eventName = type === 'follow'
+        ? 'gcz_follow_updated'
+        : type === 'notification'
+          ? 'gcz_new_notification'
+          : type === 'story'
+            ? 'gcz_story_updated'
+            : type === 'group'
+              ? 'gcz_groups_updated'
+              : type === 'reaction'
+                ? 'gcz_reactions_updated'
+                : 'gcz_stream_url_updated';
+      window.dispatchEvent(new CustomEvent(eventName, { detail: payload }));
+    }
   }
 
   static receiveIncomingGroupMessage(message: ChatGroupMessage): void {

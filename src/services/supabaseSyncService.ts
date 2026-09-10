@@ -721,7 +721,7 @@ export class SupabaseSyncService {
             if (!uid) return;
             this.socialSubscribers.forEach(cb => cb.onStreamerLeft?.(uid));
           })
-          .on('broadcast', { event: 'notification_created' }, ({ payload }: any) => {
+          .on('broadcast', { event: 'new_notification' }, ({ payload }: any) => {
             if (!payload) return;
             this.socialSubscribers.forEach(cb => cb.onNotificationCreated?.(payload));
           })

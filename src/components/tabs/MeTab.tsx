@@ -651,9 +651,10 @@ export const MeTab: React.FC<MeTabProps> = ({
               <div className="aspect-video w-full rounded-xl overflow-hidden bg-black border border-white/10 shadow-lg">
                 <iframe
                   title={playingOfflineSermon.title}
-                  src={`https://www.youtube-nocookie.com/embed/${StorageService.extractYoutubeId(playingOfflineSermon.youtube_id || playingOfflineSermon.video_url)}?autoplay=1&controls=1&rel=0&playsinline=1`}
+                  src={StorageService.getYoutubeEmbedUrl(StorageService.extractYoutubeId(playingOfflineSermon.youtube_id || playingOfflineSermon.video_url))}
                   className="w-full h-full border-0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  referrerPolicy="strict-origin-when-cross-origin"
                   allowFullScreen
                 />
               </div>
