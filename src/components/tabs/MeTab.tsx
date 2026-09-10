@@ -98,6 +98,19 @@ export const MeTab: React.FC<MeTabProps> = ({
     StorageService.getNotificationSettings(currentUser.id)
   );
   const [notificationSavedToast, setNotificationSavedToast] = useState(false);
+  const [, setFollowRefreshTick] = useState(0);
+
+  useEffect(() => {
+    const handleFollowChange = () => {
+      setFollowRefreshTick(t => t + 1);
+    };
+    window.addEventListener('gcz_follow_updated', handleFollowChange);
+    window.addEventListener('gcz_user_profile_updated', handleFollowChange);
+    return () => {
+      window.removeEventListener('gcz_follow_updated', handleFollowChange);
+      window.removeEventListener('gcz_user_profile_updated', handleFollowChange);
+    };
+  }, []);
 
   useEffect(() => {
     setNotificationSettings(StorageService.getNotificationSettings(currentUser.id));
@@ -122,13 +135,9 @@ export const MeTab: React.FC<MeTabProps> = ({
   const isSuperAdmin = currentUser.role === 'super_admin';
   const isDeveloper = currentUser.role === 'developer';
 
-  const allAppUsers = StorageService.getAllUsers();
-  // Logical followers calculation - strictly bounded by actual registered users in the app
-  const realFollowersCount = allAppUsers.filter(u => 
-    StorageService.getFollowingList(u.id).includes(currentUser.id)
-  ).length || (isSuperAdmin ? Math.min(allAppUsers.length, 7) : Math.min(allAppUsers.length, 3));
-
-  const realFollowingCount = StorageService.getFollowingList(currentUser.id).length || (isSuperAdmin ? Math.min(allAppUsers.length, 5) : 2);
+  // Actual followers and following calculation - strictly real user interactions updating instantly
+  const realFollowersCount = StorageService.getFollowersList(currentUser.id).length;
+  const realFollowingCount = StorageService.getFollowingList(currentUser.id).length;
   const downloadQuota = StorageService.getDownloadQuota(currentUser);
 
   const savedVerses = StorageService.getSavedVerses();

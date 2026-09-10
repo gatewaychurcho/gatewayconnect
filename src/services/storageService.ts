@@ -509,6 +509,21 @@ export class StorageService {
       this.setCurrentUser({ ...currentUser, following_count: followerUser.following_count });
     }
 
+    // Interactive notification on follow
+    if (!isCurrentlyFollowing && targetUser) {
+      this.addAppNotification({
+        type: 'follow',
+        actor_id: effectiveFollowerId,
+        actor_name: followerUser?.full_name || 'A believer',
+        actor_avatar: followerUser?.avatar_url,
+        title: 'New Follower Joined',
+        message: `${followerUser?.full_name || 'A believer'} (@${followerUser?.handle?.replace('@', '') || 'member'}) is now following your ministry profile.`,
+        recipient_id: targetUser.id,
+        link_tab: 'profile',
+        meta_id: effectiveFollowerId
+      });
+    }
+
     // Sync to Supabase table in background
     SupabaseSyncService.syncFollowState(effectiveFollowerId, effectiveTargetId, !isCurrentlyFollowing).catch(() => {});
 
@@ -517,6 +532,8 @@ export class StorageService {
       window.dispatchEvent(new CustomEvent('gcz_follow_updated', { 
         detail: { followerId: effectiveFollowerId, targetUserId: effectiveTargetId, isFollowing: !isCurrentlyFollowing } 
       }));
+      window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+      window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
     }
 
     return {
@@ -1549,35 +1566,95 @@ export class StorageService {
 
   // Auto-follow Super Admin and Developer on login or registration
   static autoFollowSuperAdminAndDeveloper(userId: string): void {
-    const superAdminId = 'usr_apostle_joe';
-    const developerId = 'usr_developer';
-    
+    if (!userId || userId === 'guest') return;
+
+    const allUsers = this.getAllUsers();
+    const newUser = allUsers.find(u => u.id === userId);
+    if (!newUser) return;
+
+    // Identify all super admins and lead developer accounts
+    const leaders = allUsers.filter(u => 
+      u.id !== userId && (
+        u.role === 'super_admin' || 
+        u.role === 'developer' || 
+        u.id === 'usr_apostle_joe' || 
+        u.id === 'usr_prophetess_melinda' || 
+        u.id === 'usr_pastor_easter' || 
+        u.id === 'usr_developer' || 
+        u.phone === '0780699988'
+      )
+    );
+
+    const records = this.getUserFollowsRecords();
     const followingKey = `following_list_${userId}`;
     const currentFollowing = getLocal<string[]>(followingKey, []);
     let changed = false;
 
-    const targets = [superAdminId, developerId].filter(id => id !== userId);
-    targets.forEach(targetId => {
-      if (!currentFollowing.includes(targetId)) {
-        currentFollowing.push(targetId);
+    leaders.forEach(leader => {
+      const alreadyInRecords = records.some(
+        r => r.follower_id === userId && (r.following_id === leader.id || (leader.role === 'super_admin' && r.following_id === 'usr_apostle_joe'))
+      );
+
+      if (!alreadyInRecords) {
+        records.push({
+          follower_id: userId,
+          following_id: leader.id,
+          created_at: new Date().toISOString()
+        });
         changed = true;
-        // Increment follower count on target user
-        const allUsers = this.getAllUsers();
-        const targetUser = allUsers.find(u => u.id === targetId);
-        if (targetUser) {
-          targetUser.followers_count = (targetUser.followers_count || 0) + 1;
-          this.saveUser(targetUser);
-        }
+
+        // Interactive Notification dispatched to leader
+        this.addAppNotification({
+          type: 'follow',
+          actor_id: newUser.id,
+          actor_name: newUser.full_name,
+          actor_avatar: newUser.avatar_url,
+          title: 'New Disciple / Follower',
+          message: `${newUser.full_name} (@${newUser.handle?.replace('@', '') || newUser.phone}) joined Gateway Connect and is now following you.`,
+          recipient_id: leader.id,
+          link_tab: 'profile',
+          meta_id: newUser.id
+        });
+
+        // Sync to Supabase in background
+        SupabaseSyncService.syncFollowState(userId, leader.id, true).catch(() => {});
+      }
+
+      if (!currentFollowing.includes(leader.id)) {
+        currentFollowing.push(leader.id);
+        changed = true;
       }
     });
 
     if (changed) {
+      setLocal(KEYS.USER_FOLLOWS_TABLE, records);
       setLocal(followingKey, currentFollowing);
-      const allUsers = this.getAllUsers();
-      const cur = allUsers.find(u => u.id === userId);
-      if (cur) {
-        cur.following_count = currentFollowing.length;
-        this.saveUser(cur);
+
+      // Recalculate followers count for all affected leaders
+      leaders.forEach(leader => {
+        const exactFollowers = records.filter(
+          r => r.following_id === leader.id || (leader.role === 'super_admin' && r.following_id === 'usr_apostle_joe')
+        ).length;
+        leader.followers_count = exactFollowers;
+      });
+
+      // Recalculate following count for new user
+      const exactFollowing = records.filter(r => r.follower_id === userId).length;
+      newUser.following_count = exactFollowing;
+
+      setLocal(KEYS.ALL_USERS, allUsers);
+
+      const cur = this.getCurrentUser();
+      if (cur && cur.id === userId) {
+        cur.following_count = exactFollowing;
+        this.setCurrentUser(cur);
+      }
+
+      // Dispatch realtime events across components
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_follow_updated', { detail: { userId } }));
+        window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+        window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
       }
     }
   }

@@ -120,6 +120,18 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
   }, [isOpen, userId]);
 
   useEffect(() => {
+    const handleFollowChange = () => {
+      if (profileUser) {
+        setIsFollowing(StorageService.isFollowingUser(currentUser.id, profileUser.id));
+        setFollowersCount(StorageService.getUserFollowersCount(profileUser.id));
+        setFollowingCount(StorageService.getUserFollowingCount(profileUser.id));
+      }
+    };
+    window.addEventListener('gcz_follow_updated', handleFollowChange);
+    return () => window.removeEventListener('gcz_follow_updated', handleFollowChange);
+  }, [profileUser, currentUser.id]);
+
+  useEffect(() => {
     if (!profileUser || !showFollowsListModal) return;
     if (showFollowsListModal === 'followers') {
       const list = StorageService.getFollowersUsers(profileUser.id);

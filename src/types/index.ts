@@ -475,6 +475,8 @@ export interface AppNotification {
   target_id?: string;
   target_type?: 'live' | 'dm' | 'group' | 'testimony' | 'prayer' | 'event' | 'store' | 'url';
   redirect_url?: string;
+  link_tab?: string;
+  meta_id?: string;
   created_at: string;
   is_read: boolean;
 }

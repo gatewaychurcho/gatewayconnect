@@ -61,6 +61,7 @@ import { PaynowConfigModal } from '../modals/PaynowConfigModal';
 import { DEMO_ACCOUNTS, INITIAL_USERS } from '../../data/mockData';
 import { User, UnbanAppeal, PasswordResetRequest, StreamAttendanceRecord, LiveStreamViewer, SUPPORTED_CITIES } from '../../types';
 import type { UserRole } from '../../types';
+import { AdminCyberBackground } from '../admin/AdminCyberBackground';
 
 /**
  * Hacker-style Matrix binary digital rain telemetry component
@@ -138,6 +139,25 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const paynowConfig = PaynowService.getConfig();
   const supabaseConfig = StorageService.getSupabaseConfig();
+  
+  // Cyber-Futuristic Hacker Background Toggle
+  const [showCyberBackground, setShowCyberBackground] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('gcz_admin_cyber_bg');
+      return saved !== null ? saved === 'true' : true;
+    }
+    return true;
+  });
+
+  const handleToggleCyberBackground = () => {
+    setShowCyberBackground(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('gcz_admin_cyber_bg', String(next));
+      }
+      return next;
+    });
+  };
   
   // Congregation Stream Tracking State (Who is streaming now & after stream ends with locations and contact details)
   const [streamAttendees, setStreamAttendees] = useState<StreamAttendanceRecord[]>(StorageService.getStreamAttendanceHistory());
@@ -436,10 +456,13 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-xl flex flex-col overflow-hidden text-slate-100 font-sans">
+    <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col overflow-hidden text-slate-100 font-sans isolate">
       
+      {/* 0. Cyber-Futuristic Matrix / Binary Background (Strictly BEHIND all cards, tables and logs) */}
+      <AdminCyberBackground enabled={showCyberBackground} />
+
       {/* 1. Header Bar - Fully Responsive */}
-      <header className="bg-slate-900 border-b border-purple-500/30 px-3 sm:px-4 py-3 sm:py-3.5 flex items-center justify-between shadow-lg shrink-0">
+      <header className="relative z-20 bg-slate-900/90 backdrop-blur-md border-b border-purple-500/30 px-3 sm:px-4 py-3 sm:py-3.5 flex items-center justify-between shadow-lg shrink-0">
         <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
           <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white font-black shadow shrink-0">
             <Code2 className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -466,6 +489,22 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
 
         {/* Desktop Header Actions - Compact Icon Buttons */}
         <div className="hidden md:flex items-center gap-1.5">
+          {/* Cyber Futuristic Background Toggle */}
+          <button
+            type="button"
+            onClick={handleToggleCyberBackground}
+            title={showCyberBackground ? "Turn Cyber Background OFF" : "Turn Cyber Background ON"}
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
+              showCyberBackground
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.25)]'
+                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:bg-slate-700'
+            }`}
+          >
+            <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">Matrix:</span>
+            <span className="text-[11px] uppercase">{showCyberBackground ? 'ON' : 'OFF'}</span>
+          </button>
+
           <button
             onClick={() => setShowPaynowModal(true)}
             title="Paynow Zimbabwe Config"
@@ -492,6 +531,20 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
 
         {/* Mobile Header Actions (3-Dots Tag & Exit) */}
         <div className="flex md:hidden items-center gap-1.5 relative">
+          {/* Mobile Cyber Matrix Toggle */}
+          <button
+            type="button"
+            onClick={handleToggleCyberBackground}
+            title="Toggle Matrix FX"
+            className={`p-2 rounded-xl border text-xs font-mono font-bold transition-all ${
+              showCyberBackground
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
+                : 'bg-slate-800 text-slate-400 border-slate-700'
+            }`}
+          >
+            <Terminal className="w-4 h-4" />
+          </button>
+
           <button
             id="btn-dev-more-options"
             onClick={() => setShowMobileMenu(prev => !prev)}
@@ -514,6 +567,16 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
               <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800">
                 Developer Actions
               </div>
+              <button
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  handleToggleCyberBackground();
+                }}
+                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 flex items-center gap-2"
+              >
+                <Terminal className="w-3.5 h-3.5" />
+                <span>Toggle Matrix FX ({showCyberBackground ? 'ON' : 'OFF'})</span>
+              </button>
               <button
                 onClick={() => {
                   setShowMobileMenu(false);
@@ -2018,6 +2081,39 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
               <span className="px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-300 text-xs font-mono font-bold border border-purple-500/40">
                 {passwordRequests.filter(p => p.status === 'pending').length} Pending Requests
               </span>
+            </div>
+
+            {/* Direct Instant Password Reset Tool for Any Account */}
+            <div className="bg-slate-900 border border-purple-500/20 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+              <div>
+                <h4 className="font-bold text-xs text-white flex items-center gap-1.5">
+                  <KeyRound className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Direct Account Password Override (Real-Time)</span>
+                </h4>
+                <p className="text-[11px] text-slate-400">
+                  Select any registered member to immediately generate or set a new password, synchronized across devices.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  onChange={(e) => {
+                    const user = usersList.find(u => u.id === e.target.value);
+                    if (user) {
+                      handleDirectPasswordReset(user);
+                    }
+                    e.target.value = '';
+                  }}
+                  defaultValue=""
+                  className="bg-slate-950 border border-purple-500/40 rounded-xl px-3 py-1.5 text-xs text-purple-300 font-bold focus:outline-none focus:border-purple-400"
+                >
+                  <option value="" disabled>Select member to reset...</option>
+                  {usersList.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.full_name} ({u.phone}) - {u.role.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {passwordRequests.length === 0 ? (

@@ -447,6 +447,10 @@ export default function App() {
             refreshAppData();
           }}
           onRefreshAppState={refreshAppData}
+          onOpenDevConsole={() => {
+            setShowAdminPanel(false);
+            setShowDevConsole(true);
+          }}
         />
       )}
 

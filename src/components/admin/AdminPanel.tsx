@@ -38,7 +38,10 @@ import {
   ShieldAlert,
   MapPin,
   Tv,
-  Play
+  Play,
+  Terminal,
+  MoreVertical,
+  BadgeCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -62,17 +65,45 @@ import {
 } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { downloadCsvForExcel } from '../../utils/exportUtils';
+import { AdminCyberBackground } from './AdminCyberBackground';
 
 interface AdminPanelProps {
   onClose: () => void;
   onRefreshAppState: () => void;
+  onOpenDevConsole?: () => void;
 }
 
 type AdminSection = 'overview' | 'congregations' | 'stream_attendees' | 'broadcast' | 'content_moderation' | 'inventory' | 'members' | 'prayers' | 'push' | 'finances' | 'vibes';
 
-export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppState }) => {
+export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppState, onOpenDevConsole }) => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
   
+  // Cyber-Futuristic Hacker Background Toggle
+  const [showCyberBackground, setShowCyberBackground] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('gcz_admin_cyber_bg');
+      return saved !== null ? saved === 'true' : true; // Default ON for hacker movie screen vibe
+    }
+    return true;
+  });
+
+  const handleToggleCyberBackground = () => {
+    setShowCyberBackground(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('gcz_admin_cyber_bg', String(next));
+      }
+      return next;
+    });
+  };
+
+  // Header 3-Dots Dropdown menu state
+  const [showHeaderMenu, setShowHeaderMenu] = useState<boolean>(false);
+
+  // Row-level 3-dot dropdown states
+  const [activeMemberMenuId, setActiveMemberMenuId] = useState<string | null>(null);
+  const [activeProductMenuId, setActiveProductMenuId] = useState<string | null>(null);
+
   // App data states
   const [users, setUsers] = useState<User[]>(StorageService.getAllUsers());
   const [sermons, setSermons] = useState<Sermon[]>(StorageService.getSermons());
@@ -299,10 +330,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#001122]/95 backdrop-blur-md flex flex-col text-white font-sans overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-[#001122] flex flex-col text-white font-sans overflow-hidden isolate">
       
+      {/* 0. CYBER-FUTURISTIC BACKGROUND (Matrix Streams strictly BEHIND everything in the background) */}
+      <AdminCyberBackground enabled={showCyberBackground} />
+
       {/* 1. TOP ERP-STYLE HEADER */}
-      <header className="bg-[#001F3F] border-b border-white/10 px-4 py-3 flex items-center justify-between shrink-0 shadow-lg">
+      <header className="relative z-20 bg-[#001F3F]/90 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between shrink-0 shadow-lg">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-[#D4AF37] text-[#001F3F] flex items-center justify-center font-black shadow-md">
             <ShieldCheck className="w-5 h-5" />
@@ -323,6 +357,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Cyber Futuristic Background Toggle */}
+          <button
+            type="button"
+            onClick={handleToggleCyberBackground}
+            title={showCyberBackground ? "Turn Cyber Background OFF" : "Turn Cyber Background ON"}
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
+              showCyberBackground
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+                : 'bg-white/5 text-white/50 border-white/10 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline font-mono">Cyber Matrix:</span>
+            <span className="font-mono text-[11px] uppercase">{showCyberBackground ? 'ON' : 'OFF'}</span>
+          </button>
+
           <button
             onClick={() => {
               confetti({ particleCount: 20 });
@@ -334,6 +384,75 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
             <RefreshCw className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Refresh</span>
           </button>
+
+          {/* 3-Dots Quick Actions Menu */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowHeaderMenu(prev => !prev)}
+              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 text-xs transition-colors cursor-pointer"
+              title="More Options"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+
+            {showHeaderMenu && (
+              <div className="absolute right-0 top-11 z-50 w-56 bg-[#00172e] border border-[#D4AF37]/30 rounded-2xl shadow-2xl p-2 space-y-1 font-sans animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-3 py-1.5 text-[10px] font-bold text-white/40 uppercase tracking-wider border-b border-white/10">
+                  Admin Actions
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowHeaderMenu(false);
+                    handleToggleCyberBackground();
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-emerald-400 hover:bg-emerald-500/10 flex items-center gap-2"
+                >
+                  <Terminal className="w-3.5 h-3.5" />
+                  <span>Toggle Cyber Matrix ({showCyberBackground ? 'Turn OFF' : 'Turn ON'})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowHeaderMenu(false);
+                    confetti({ particleCount: 20 });
+                    onRefreshAppState();
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-[#D4AF37] hover:bg-[#D4AF37]/10 flex items-center gap-2"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Sync & Refresh All Data</span>
+                </button>
+                {onOpenDevConsole && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowHeaderMenu(false);
+                      onOpenDevConsole();
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-purple-400 hover:bg-purple-500/10 flex items-center gap-2"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Launch Developer Console</span>
+                  </button>
+                )}
+                <div className="border-t border-white/10 my-1" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowHeaderMenu(false);
+                    onClose();
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10 flex items-center gap-2"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Exit Admin Panel</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           <button
             id="btn-close-admin-panel"
             onClick={onClose}
@@ -345,7 +464,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       </header>
 
       {/* 2. BODY WITH SIDEBAR NAVIGATION + MAIN CONTENT */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+      <div className="relative z-10 flex-1 flex flex-col md:flex-row overflow-hidden">
         
         {/* SIDEBAR NAVIGATION (Desktop) & MOBILE DROPDOWN SELECTOR */}
         {/* Mobile View: Quick Dropdown selector */}
@@ -426,8 +545,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
           })}
         </aside>
 
-        {/* MAIN WORKSPACE CONTENT */}
-        <main className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#001122]">
+        {/* MAIN WORKSPACE CONTENT - Cyber background streams purely behind all cards and content */}
+        <main className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#001122]/70 backdrop-blur-[2px]">
           
           {/* SECTION 1: DASHBOARD OVERVIEW */}
           {activeSection === 'overview' && (
@@ -1368,16 +1487,82 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                             </span>
                           </td>
                           <td className="p-3 text-right">
-                            <button
-                              onClick={() => {
-                                prod.in_stock = !prod.in_stock;
-                                setProducts([...products]);
-                                confetti({ particleCount: 15 });
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold transition-all"
-                            >
-                              Toggle Stock
-                            </button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  prod.in_stock = !prod.in_stock;
+                                  setProducts([...products]);
+                                  confetti({ particleCount: 15 });
+                                }}
+                                className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold transition-all"
+                              >
+                                Toggle Stock
+                              </button>
+
+                              {/* 3-Dots Dropdown Menu for Item Options */}
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveProductMenuId(activeProductMenuId === prod.id ? null : prod.id)}
+                                  className="p-1.5 rounded-lg bg-white/5 hover:bg-white/15 text-white/70 hover:text-white border border-white/10 transition-colors cursor-pointer"
+                                  title="Item Options"
+                                >
+                                  <MoreVertical className="w-3.5 h-3.5" />
+                                </button>
+
+                                {activeProductMenuId === prod.id && (
+                                  <div className="absolute right-0 top-8 z-50 w-48 bg-[#00172e] border border-[#D4AF37]/30 rounded-xl shadow-2xl p-1.5 space-y-1 text-left font-sans animate-in fade-in zoom-in-95 duration-150">
+                                    <div className="px-2 py-1 text-[10px] font-bold text-white/40 uppercase tracking-wider border-b border-white/10 truncate">
+                                      {prod.name}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        prod.in_stock = !prod.in_stock;
+                                        setProducts([...products]);
+                                        setActiveProductMenuId(null);
+                                        confetti({ particleCount: 15 });
+                                      }}
+                                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-white/90 hover:bg-white/10 flex items-center gap-1.5"
+                                    >
+                                      <Check className="w-3 h-3 text-emerald-400" />
+                                      <span>{prod.in_stock ? 'Set Out of Stock' : 'Set In Stock'}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(`${prod.name} - $${prod.price_usd} / ${prod.price_zig} ZiG`);
+                                        setActiveProductMenuId(null);
+                                        setModerationMessage(`Copied details for ${prod.name}`);
+                                        setTimeout(() => setModerationMessage(null), 2500);
+                                      }}
+                                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-white/90 hover:bg-white/10 flex items-center gap-1.5"
+                                    >
+                                      <Copy className="w-3 h-3 text-[#D4AF37]" />
+                                      <span>Copy Pricing & Info</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActiveProductMenuId(null);
+                                        const confirmed = window.confirm(`Remove ${prod.name} from store catalog?`);
+                                        if (confirmed) {
+                                          const next = products.filter(p => p.id !== prod.id);
+                                          setProducts(next);
+                                          setModerationMessage(`Removed ${prod.name} from inventory`);
+                                          setTimeout(() => setModerationMessage(null), 2500);
+                                        }
+                                      }}
+                                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:bg-rose-500/10 flex items-center gap-1.5 border-t border-white/10"
+                                    >
+                                      <Trash2 className="w-3 h-3 text-rose-400" />
+                                      <span>Remove Item</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1467,16 +1652,110 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                             </span>
                           </td>
                           <td className="p-3 text-right">
-                            <select
-                              value={u.role}
-                              onChange={e => handleUpdateRole(u.id, e.target.value as UserRole)}
-                              className="bg-[#001122] border border-white/15 rounded-lg px-2 py-1 text-xs text-white"
-                            >
-                              <option value="member">Member</option>
-                              <option value="moderator">Pastor / Moderator</option>
-                              <option value="developer">Developer</option>
-                              <option value="super_admin">Super Admin</option>
-                            </select>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* Quick Role Selector */}
+                              <select
+                                value={u.role}
+                                onChange={e => handleUpdateRole(u.id, e.target.value as UserRole)}
+                                className="hidden sm:inline-block bg-[#001122] border border-white/15 rounded-lg px-2 py-1 text-xs text-white"
+                              >
+                                <option value="member">Member</option>
+                                <option value="moderator">Pastor / Moderator</option>
+                                <option value="developer">Developer</option>
+                                <option value="super_admin">Super Admin</option>
+                              </select>
+
+                              {/* 3-Dots Dropdown Menu for Member Actions */}
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveMemberMenuId(activeMemberMenuId === u.id ? null : u.id)}
+                                  className="p-1.5 rounded-lg bg-white/5 hover:bg-white/15 text-white/70 hover:text-white border border-white/10 transition-colors cursor-pointer"
+                                  title="Member Actions"
+                                >
+                                  <MoreVertical className="w-3.5 h-3.5" />
+                                </button>
+
+                                {activeMemberMenuId === u.id && (
+                                  <div className="absolute right-0 top-8 z-50 w-52 bg-[#00172e] border border-[#D4AF37]/30 rounded-xl shadow-2xl p-1.5 space-y-1 text-left font-sans animate-in fade-in zoom-in-95 duration-150">
+                                    <div className="px-2 py-1 text-[10px] font-bold text-white/40 uppercase tracking-wider border-b border-white/10 truncate">
+                                      {u.full_name}
+                                    </div>
+                                    <div className="px-2 py-0.5 text-[9px] font-mono text-[#D4AF37]">
+                                      Assign Role:
+                                    </div>
+                                    {(['member', 'moderator', 'developer', 'super_admin'] as UserRole[]).map(r => (
+                                      <button
+                                        key={r}
+                                        type="button"
+                                        onClick={() => {
+                                          handleUpdateRole(u.id, r);
+                                          setActiveMemberMenuId(null);
+                                        }}
+                                        className={`w-full text-left px-2 py-1 rounded-lg text-xs font-semibold flex items-center justify-between ${
+                                          u.role === r ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'text-white/80 hover:bg-white/10'
+                                        }`}
+                                      >
+                                        <span className="capitalize">{r === 'super_admin' ? 'Super Admin' : r === 'moderator' ? 'Pastor / Mod' : r}</span>
+                                        {u.role === r && <Check className="w-3 h-3 text-[#D4AF37]" />}
+                                      </button>
+                                    ))}
+
+                                    <div className="border-t border-white/10 my-1" />
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextStatus = !u.is_verified;
+                                        StorageService.developerSetVerificationBadge(u.id, nextStatus, nextStatus ? 'blue' : 'none');
+                                        const updatedUsers = users.map(user => {
+                                          if (user.id === u.id) {
+                                            return { ...user, is_verified: nextStatus };
+                                          }
+                                          return user;
+                                        });
+                                        setUsers(updatedUsers);
+                                        setActiveMemberMenuId(null);
+                                        setModerationMessage(`Updated verification for ${u.full_name}`);
+                                        setTimeout(() => setModerationMessage(null), 2500);
+                                      }}
+                                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-white/90 hover:bg-white/10 flex items-center gap-1.5"
+                                    >
+                                      <BadgeCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
+                                      <span>{u.is_verified ? 'Remove Verified Badge' : 'Grant Verified Badge'}</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(u.member_id || u.id);
+                                        setActiveMemberMenuId(null);
+                                        setModerationMessage(`Copied Member ID for ${u.full_name}`);
+                                        setTimeout(() => setModerationMessage(null), 2500);
+                                      }}
+                                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-white/90 hover:bg-white/10 flex items-center gap-1.5"
+                                    >
+                                      <Copy className="w-3.5 h-3.5 text-white/60" />
+                                      <span>Copy Member ID</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(u.phone);
+                                        setActiveMemberMenuId(null);
+                                        setModerationMessage(`Copied Phone for ${u.full_name}`);
+                                        setTimeout(() => setModerationMessage(null), 2500);
+                                      }}
+                                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-white/90 hover:bg-white/10 flex items-center gap-1.5"
+                                    >
+                                      <Copy className="w-3.5 h-3.5 text-white/60" />
+                                      <span>Copy Phone Number</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </td>
                         </tr>
                       ))}
