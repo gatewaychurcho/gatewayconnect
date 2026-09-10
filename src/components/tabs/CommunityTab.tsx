@@ -32,7 +32,8 @@ import {
   UserPlus,
   Radio,
   Timer,
-  Compass
+  Compass,
+  LogIn
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { CommunityGroup, PrayerRequest, ChurchEvent, Testimony, User } from '../../types';
@@ -498,6 +499,14 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   };
 
   const handleJoinStream = (event: ChurchEvent) => {
+    const liveStatus = StorageService.getLiveSermonStatus();
+    if (!liveStatus.isLive) {
+      setEventFeedbackToast({
+        title: '📡 Sanctuary Broadcast Offline',
+        message: 'Currently no live stream session in progress.'
+      });
+      return;
+    }
     if (currentUser) {
       StorageService.joinLiveStream(currentUser, event.title);
     }
@@ -618,6 +627,31 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
         {/* Search Results Dropdown or Directory View */}
         {(memberSearchQuery.trim() || showMemberDirectory) && (() => {
+          const isGuest = currentUser?.role === 'guest' || currentUser?.id === 'usr_guest' || currentUser?.id?.startsWith('usr_guest');
+          if (isGuest) {
+            return (
+              <div className="pt-3 border-t border-white/10">
+                <div className="p-5 bg-[#001830] border border-[#D4AF37]/30 rounded-2xl text-center space-y-2.5">
+                  <div className="w-10 h-10 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/30 flex items-center justify-center mx-auto text-[#D4AF37]">
+                    <Shield className="w-5 h-5" />
+                  </div>
+                  <h4 className="text-white font-bold text-xs">Believers Directory Restricted</h4>
+                  <p className="text-[11px] text-white/70 max-w-sm mx-auto">
+                    Guests cannot view the believers directory. Please log in or register to connect with Gateway Cathedral members.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onRequireAuth()}
+                    className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-[#D4AF37] to-amber-400 text-[#001F3F] font-bold text-xs shadow hover:brightness-110 transition-all cursor-pointer inline-flex items-center gap-1.5"
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span>Log In to View Directory</span>
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
           const allMembers = StorageService.getAllUsers();
           const filteredMembers = memberSearchQuery.trim()
             ? allMembers.filter(m => 
@@ -1437,6 +1471,27 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
       {/* 4. SUB-TAB: CELL GROUPS */}
       {activeSubTab === 'groups' && (
+        (currentUser?.role === 'guest' || currentUser?.id === 'usr_guest' || currentUser?.id?.startsWith('usr_guest')) ? (
+          <div className="p-8 bg-[#001830] border border-[#D4AF37]/30 rounded-3xl text-center space-y-4 my-4 max-w-lg mx-auto">
+            <div className="w-14 h-14 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/40 flex items-center justify-center mx-auto text-[#D4AF37]">
+              <Users className="w-7 h-7" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-white font-serif-church font-bold text-lg">Fellowship Groups Are Protected</h3>
+              <p className="text-xs text-white/70 leading-relaxed">
+                Cell ministrations, location branches, and youth fellowships are private community spaces reserved for verified Gateway Cathedral members. Please log in or create an account to view and participate in church groups.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onRequireAuth()}
+              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#D4AF37] to-amber-400 text-[#001F3F] font-bold text-xs shadow-lg hover:brightness-110 transition-all cursor-pointer inline-flex items-center gap-2"
+            >
+              <LogIn className="w-4 h-4" />
+              <span>Log In to View Groups</span>
+            </button>
+          </div>
+        ) : (
         <div className="space-y-4">
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
             {['All', 'Location', 'Youth', 'Business', 'Diaspora'].map(cat => (
@@ -1633,6 +1688,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             );
           })()}
         </div>
+        )
       )}
 
       {/* 5. SUB-TAB: EVENTS & SERVICES */}

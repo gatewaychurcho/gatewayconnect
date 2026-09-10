@@ -183,6 +183,10 @@ export default function App() {
   };
 
   const handleOpenDirectChat = (recipientId?: string) => {
+    if (!currentUser || currentUser.role === 'guest' || currentUser.id.startsWith('usr_guest')) {
+      setShowAuthModal(true);
+      return;
+    }
     setDirectMessageRecipientId(recipientId);
     setShowDirectMessagesModal(true);
   };
@@ -335,11 +339,21 @@ export default function App() {
               setShowAuthModal(true);
             }}
             onOpenGroupChat={(groupId) => {
+              if (!currentUser || currentUser.role === 'guest' || currentUser.id.startsWith('usr_guest')) {
+                setAuthMode('login');
+                setShowAuthModal(true);
+                return;
+              }
               setDirectMessageGroupId(groupId);
               setDirectMessageRecipientId(undefined);
               setShowDirectMessagesModal(true);
             }}
             onOpenDirectChat={(recipientId) => {
+              if (!currentUser || currentUser.role === 'guest' || currentUser.id.startsWith('usr_guest')) {
+                setAuthMode('login');
+                setShowAuthModal(true);
+                return;
+              }
               setDirectMessageRecipientId(recipientId);
               setDirectMessageGroupId(undefined);
               setShowDirectMessagesModal(true);
@@ -498,11 +512,21 @@ export default function App() {
       <FloatingNotificationToast
         onOpenLiveSermon={() => setShowLiveSermonModal(true)}
         onOpenDirectChat={(recipientId) => {
+          if (!currentUser || currentUser.role === 'guest' || currentUser.id.startsWith('usr_guest')) {
+            setAuthMode('login');
+            setShowAuthModal(true);
+            return;
+          }
           setDirectMessageRecipientId(recipientId);
           setDirectMessageGroupId(undefined);
           setShowDirectMessagesModal(true);
         }}
         onOpenGroupChat={(groupId) => {
+          if (!currentUser || currentUser.role === 'guest' || currentUser.id.startsWith('usr_guest')) {
+            setAuthMode('login');
+            setShowAuthModal(true);
+            return;
+          }
           setDirectMessageGroupId(groupId);
           setDirectMessageRecipientId(undefined);
           setShowDirectMessagesModal(true);
@@ -520,11 +544,21 @@ export default function App() {
           onClose={() => setShowNotificationsModal(false)}
           onOpenLiveSermon={() => setShowLiveSermonModal(true)}
           onOpenDirectChat={(recipientId) => {
+            if (!currentUser || currentUser.role === 'guest' || currentUser.id.startsWith('usr_guest')) {
+              setAuthMode('login');
+              setShowAuthModal(true);
+              return;
+            }
             setDirectMessageRecipientId(recipientId);
             setDirectMessageGroupId(undefined);
             setShowDirectMessagesModal(true);
           }}
           onOpenGroupChat={(groupId) => {
+            if (!currentUser || currentUser.role === 'guest' || currentUser.id.startsWith('usr_guest')) {
+              setAuthMode('login');
+              setShowAuthModal(true);
+              return;
+            }
             setDirectMessageGroupId(groupId);
             setDirectMessageRecipientId(undefined);
             setShowDirectMessagesModal(true);

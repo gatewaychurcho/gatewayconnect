@@ -421,3 +421,246 @@ export const PASTOR_FOLLOW_SCRIPTURE = {
   shonaText: 'Ruoko rwaJehovha rwakanga rwuri pamusoro paEriya; akasunga chiuno chake, akamhanya pamberi paAhabi kusvikira pasuo reJezreeri.',
   commentary: 'Apostle Joe Daniels: "Notice that divine speed is not human stamina, but the tangible resting hand of God!"'
 };
+
+// Biblical Lexicon & Dictionary Entries (Strong's Concordance Definitions)
+export interface BibleDictionaryEntry {
+  term: string;
+  originalWord: string;
+  language: 'Hebrew' | 'Greek' | 'Aramaic';
+  strongsNumber: string;
+  phonetic: string;
+  partOfSpeech: string;
+  definition: string;
+  theologicalUsage: string;
+  relatedVerses: string[];
+}
+
+export const BIBLE_DICTIONARY: Record<string, BibleDictionaryEntry> = {
+  'shepherd': {
+    term: 'Shepherd (Rohi)',
+    originalWord: 'רֹעִי (Ra\'ah / Rohi)',
+    language: 'Hebrew',
+    strongsNumber: 'H7462',
+    phonetic: 'ro-EE',
+    partOfSpeech: 'Noun / Participle',
+    definition: 'One who tends, pastures, feeds, guides, and fiercely defends the flock from devourers.',
+    theologicalUsage: 'A prophetic title of Yahweh in Psalms 23:1 and Jesus the Good Shepherd in John 10:11. Denotes intimate covenant oversight, continuous provision, and total security.',
+    relatedVerses: ['Psalms 23:1', 'John 10:11', 'Ezekiel 34:15', 'Hebrews 13:20']
+  },
+  'lord': {
+    term: 'The LORD (Yahweh / Jehovah)',
+    originalWord: 'יְהוָה (YHWH)',
+    language: 'Hebrew',
+    strongsNumber: 'H3068',
+    phonetic: 'yah-WEH',
+    partOfSpeech: 'Proper Name',
+    definition: 'The self-existent, uncreated, eternal covenant God who reveals Himself and redeems His people.',
+    theologicalUsage: 'The most sacred covenant name of God in Scripture, rendered as LORD in capitals in the KJV. Represents absolute faithfulness to covenant promises.',
+    relatedVerses: ['Exodus 3:14', 'Psalms 23:1', 'Isaiah 42:8', 'Jeremiah 33:2']
+  },
+  'want': {
+    term: 'Lack / Want (Chaser)',
+    originalWord: 'חָסֵר (Chaser)',
+    language: 'Hebrew',
+    strongsNumber: 'H2637',
+    phonetic: 'khaw-SARE',
+    partOfSpeech: 'Verb',
+    definition: 'To diminish, suffer deprivation, decrease, or be in deficit of what is needed.',
+    theologicalUsage: 'In Psalms 23:1 ("I shall not want"), it is a total decree of divine sufficiency: because the Lord is the shepherd, zero deficit can prevail in the believer\'s life.',
+    relatedVerses: ['Psalms 23:1', 'Psalms 34:10', 'Deuteronomy 2:7', 'Philippians 4:19']
+  },
+  'peace': {
+    term: 'Peace (Shalom)',
+    originalWord: 'שָׁלוֹם (Shalom)',
+    language: 'Hebrew',
+    strongsNumber: 'H7965',
+    phonetic: 'shah-LOHM',
+    partOfSpeech: 'Noun Masculine',
+    definition: 'Completeness, soundness, health, safety, tranquil prosperity, and total reconciliation with God.',
+    theologicalUsage: 'Far beyond passive absence of conflict, Shalom signifies supernatural wholeness: nothing missing, nothing broken, and total covenant serenity.',
+    relatedVerses: ['Isaiah 26:3', 'Numbers 6:26', 'Philippians 4:7', 'John 14:27']
+  },
+  'power': {
+    term: 'Power (Dunamis)',
+    originalWord: 'δύναμις (Dunamis)',
+    language: 'Greek',
+    strongsNumber: 'G1411',
+    phonetic: 'DOO-nah-mis',
+    partOfSpeech: 'Noun Feminine',
+    definition: 'Miraculous power, dynamic inherent ability, supernatural strength, and mighty working.',
+    theologicalUsage: 'Root of the English words "dynamic" and "dynamite". Describes the explosive resurrection power deposited in the believer by the Holy Ghost.',
+    relatedVerses: ['Acts 1:8', 'Ephesians 3:20', '2 Timothy 1:7', 'Luke 10:19']
+  },
+  'faith': {
+    term: 'Faith (Pistis)',
+    originalWord: 'πίστις (Pistis)',
+    language: 'Greek',
+    strongsNumber: 'G4102',
+    phonetic: 'PIS-tis',
+    partOfSpeech: 'Noun Feminine',
+    definition: 'Firm conviction, unwavering trust, reliance on Christ, and holy assurance of divine truth.',
+    theologicalUsage: 'The spiritual currency of the Kingdom that substance-izes unseen promises into physical manifestation (Hebrews 11:1).',
+    relatedVerses: ['Hebrews 11:1', 'Romans 10:17', 'Galatians 2:20', 'Mark 11:22']
+  },
+  'mercy': {
+    term: 'Mercy / Lovingkindness (Chesed)',
+    originalWord: 'חֶסֶד (Chesed)',
+    language: 'Hebrew',
+    strongsNumber: 'H2617',
+    phonetic: 'KHEH-sed',
+    partOfSpeech: 'Noun Masculine',
+    definition: 'Steadfast covenant loyalty, persistent lovingkindness, unfailing favor, and tender grace.',
+    theologicalUsage: 'God\'s unalterable covenant devotion to His people that pursues them through valleys and crowns them with goodness (Psalms 23:6).',
+    relatedVerses: ['Psalms 23:6', 'Lamentations 3:22', 'Micah 7:18', 'Psalms 136:1']
+  },
+  'life': {
+    term: 'Life (Zoe)',
+    originalWord: 'ζωή (Zoe)',
+    language: 'Greek',
+    strongsNumber: 'G2222',
+    phonetic: 'dzoh-AY',
+    partOfSpeech: 'Noun Feminine',
+    definition: 'The divine, uncreated, indestructible life of God Himself imparted through the New Birth.',
+    theologicalUsage: 'Distinguished from Bios (biological existence) and Psuche (soul life). Zoe is God-nature living inside human spirit.',
+    relatedVerses: ['John 10:10', '1 John 5:11-12', 'John 1:4', 'Romans 8:2']
+  },
+  'spirit': {
+    term: 'Spirit (Ruach / Pneuma)',
+    originalWord: 'רוּחַ (Ruach) / πνεῦμα (Pneuma)',
+    language: 'Hebrew',
+    strongsNumber: 'H7307 / G4151',
+    phonetic: 'ROO-akh / PNEH-oo-mah',
+    partOfSpeech: 'Noun',
+    definition: 'Wind, breath, invisible energetic agency, the Holy Spirit of God, and the regenerated human spirit.',
+    theologicalUsage: 'The life-giving divine breath that turns dry bones into an exceeding great army (Ezekiel 37) and empowers apostolic testimony.',
+    relatedVerses: ['Genesis 1:2', 'Ezekiel 37:9', 'John 3:8', 'Romans 8:14']
+  },
+  'word': {
+    term: 'Word (Logos / Rhema)',
+    originalWord: 'λόγος (Logos) / ῥῆμα (Rhema)',
+    language: 'Greek',
+    strongsNumber: 'G3056 / G4487',
+    phonetic: 'LOG-os / HRAY-mah',
+    partOfSpeech: 'Noun',
+    definition: 'Logos: The divine counsel, eternal Word personified in Christ. Rhema: The living, spoken, now-word of God.',
+    theologicalUsage: 'Rhema is the specific Scripture illuminated by the Spirit into a sword that cuts through demonic resistance in personal battles.',
+    relatedVerses: ['John 1:1', 'Romans 10:17', 'Ephesians 6:17', 'Matthew 4:4']
+  },
+  'grace': {
+    term: 'Grace (Charis)',
+    originalWord: 'χάρις (Charis)',
+    language: 'Greek',
+    strongsNumber: 'G5485',
+    phonetic: 'KHAH-rees',
+    partOfSpeech: 'Noun Feminine',
+    definition: 'Unmerited divine favor, benevolent goodwill, and the empowering supernatural operational presence of God.',
+    theologicalUsage: 'Not merely pardon for sin, but the divine influence upon the heart that enables humans to perform what is humanly impossible.',
+    relatedVerses: ['Ephesians 2:8', '2 Corinthians 12:9', 'Titus 2:11', 'Hebrews 4:16']
+  },
+  'glory': {
+    term: 'Glory (Kabod / Doxa)',
+    originalWord: 'כָּבוֹד (Kabod) / δόξα (Doxa)',
+    language: 'Hebrew',
+    strongsNumber: 'H3519 / G1391',
+    phonetic: 'kaw-BOHD / DOK-sah',
+    partOfSpeech: 'Noun',
+    definition: 'Weight, heavy significance, splendor, majesty, and the manifest luminous presence of God.',
+    theologicalUsage: 'The manifest presence and tangible atmosphere of Heaven that shifts natural atmospheres and heals sickness.',
+    relatedVerses: ['Psalms 24:7', 'Isaiah 60:1', '2 Corinthians 3:18', 'Habakkuk 2:14']
+  }
+};
+
+// Apostolic Verse Interpreter Data
+export interface VerseInterpretation {
+  reference: string;
+  originalTextSummary: string;
+  apostolicHermeneutics: string;
+  propheticDeclaration: string;
+  culturalHistoricalContext: string;
+  lifeApplication: string[];
+  keyTerms: string[];
+}
+
+export const VERSE_INTERPRETATIONS: Record<string, VerseInterpretation> = {
+  'Psalms 23:1': {
+    reference: 'Psalms 23:1',
+    originalTextSummary: 'Hebrew: יְהוָה רֹעִי לֹא אֶחְסָר (Yahweh ro\'i lo echsar) — "The LORD is my shepherd; nothing shall I lack."',
+    apostolicHermeneutics: 'Apostle Joe Daniels highlights: "David does not say \'The Lord is A shepherd\', but \'MY shepherd\'. Dominion begins with personal covenant alignment. When the Almighty is your personal guardian, scarcity is legally revoked in your lineage."',
+    propheticDeclaration: 'In this season, I decree that lack, delay, and financial distress are broken over your household. The Shepherd leads you to green pastures of divine favor!',
+    culturalHistoricalContext: 'In ancient Near Eastern pastoral tradition, a shepherd slept across the sheepfold opening, literally becoming the door. Any predator had to step over the shepherd to touch the sheep.',
+    lifeApplication: [
+      'Surrender total control of your planning to God\'s divine direction.',
+      'Refuse the spirit of fear and scarcity; confess supernatural provision daily.',
+      'Rest in the knowledge that your provider is eternal and never runs out of resources.'
+    ],
+    keyTerms: ['shepherd', 'lord', 'want']
+  },
+  'Romans 8:28': {
+    reference: 'Romans 8:28',
+    originalTextSummary: 'Greek: οἴδαμεν δὲ ὅτι τοῖς ἀγαπῶσιν τὸν θεὸν πάντα συνεργεῖ εἰς ἀγαθόν — "And we know that to them that love God, all things work together for good."',
+    apostolicHermeneutics: 'The Greek verb \'sunergei\' means synergizing or weaving together. Apostle Joe Daniels teaches: "Even the attacks of the adversary and the delays of men are drafted by God into the machinery of your ultimate promotion."',
+    propheticDeclaration: 'Every disappointment from your past is being recalibrated into divine appointment. What the enemy meant for evil is turning around for your Kingdom testimony!',
+    culturalHistoricalContext: 'Paul addresses the early Roman church facing intense imperial persecution, reminding them that spiritual sovereignty overrides earthly imperial decrees.',
+    lifeApplication: [
+      'Stop mourning setbacks; ask the Holy Spirit what divine advantage is being birthed.',
+      'Anchor your heart in radical love for God regardless of temporary seasons.',
+      'Declare victory before the breakthrough is visibly manifested.'
+    ],
+    keyTerms: ['faith', 'power', 'life', 'grace']
+  },
+  'Habakkuk 2:2': {
+    reference: 'Habakkuk 2:2',
+    originalTextSummary: 'Hebrew: כְּתוֹב חָזוֹן וּבָאֵר עַל־הַלֻּחוֹת (Ketov chazon u-va\'er al-haluchot) — "Write the vision, and make it plain upon tablets."',
+    apostolicHermeneutics: 'Apostle Joe Daniels teaches: "A vision not written is a fantasy. When revelation is inscribed on tablets, divine momentum is activated for runners to accelerate."',
+    propheticDeclaration: 'Your tablets are receiving prophetic clarity! As you write down God\'s instructions, angelic runners are commissioned to bring supernatural acceleration to pass!',
+    culturalHistoricalContext: 'Prophets used clay or stone tablets mounted in public plazas so messengers running past could read the royal proclamations without stopping.',
+    lifeApplication: [
+      'Document the prophetic words and dreams God has deposited in your spirit.',
+      'Structure actionable steps aligned with your divine assignment.',
+      'Revisit your written vision during seasons of waiting and silence.'
+    ],
+    keyTerms: ['word', 'spirit', 'faith']
+  },
+  'John 1:1': {
+    reference: 'John 1:1',
+    originalTextSummary: 'Greek: Ἐν ἀρχῇ ἦν ὁ λόγος (En arche en ho Logos) — "In the beginning was the Word, and the Word was with God, and the Word was God."',
+    apostolicHermeneutics: 'Apostle Joe Daniels explains: "Jesus did not begin in Bethlehem; Jesus is the uncreated Logos who orchestrated Genesis 1. When you speak the Word, you release the Architect of the universe into your circumstances."',
+    propheticDeclaration: 'Let the living Word of God dismantle every contradiction in your health, career, and family today in Jesus\' Mighty Name!',
+    culturalHistoricalContext: 'John strategically bridged Hebrew thought (Dabar Yahweh) and Greek philosophy (Logos) to declare Jesus as the ultimate divine source of cosmic order and truth.',
+    lifeApplication: [
+      'Place God\'s Word above cultural opinions, human philosophies, and physical sensations.',
+      'Meditate on Scripture until it becomes living revelation in your spirit.',
+      'Confront spiritual darkness with an authoritative spoken \'It is written\'.'
+    ],
+    keyTerms: ['word', 'life', 'glory']
+  }
+};
+
+// Universal helper to get or synthesize interpretation for any verse
+export function getVerseInterpretationData(ref: string, text: string, bookName: string): VerseInterpretation {
+  if (VERSE_INTERPRETATIONS[ref]) {
+    return VERSE_INTERPRETATIONS[ref];
+  }
+
+  // Determine testament and contextual terms
+  const matchedTerms = Object.keys(BIBLE_DICTIONARY).filter(term => 
+    text.toLowerCase().includes(term) || ref.toLowerCase().includes(term)
+  );
+  if (matchedTerms.length === 0) {
+    matchedTerms.push('faith', 'word', 'grace');
+  }
+
+  return {
+    reference: ref,
+    originalTextSummary: `Text in translation: "${text}" • Sourced from ${bookName}`,
+    apostolicHermeneutics: `Apostolic Exposition by Apostle Joe Daniels: "${ref} reveals covenant dynamics for believers walking in dominion. In scripture, every verse carries prophetic weight—meditate upon the spiritual principle embedded in this passage and apply it in prayer."`,
+    propheticDeclaration: `By the authority of the Word in ${ref}, divine breakthrough, peace, and spiritual acceleration are released over your path today!`,
+    culturalHistoricalContext: `Contextual Biblical setting of ${bookName}: Inspired by the Holy Spirit, delivering God's eternal covenant truth to strengthen believers across every generation.`,
+    lifeApplication: [
+      `Meditate on the truth of ${ref} and confess it over your circumstances.`,
+      `Align your thoughts and daily conduct with the apostolic instruction here.`,
+      `Share this revelation with a brother or sister in the fellowship community.`
+    ],
+    keyTerms: matchedTerms.slice(0, 3)
+  };
+}

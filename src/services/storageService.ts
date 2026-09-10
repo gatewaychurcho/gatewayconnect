@@ -38,7 +38,8 @@ import {
   CartItem,
   MessageReaction,
   GroupMediaItem,
-  NotificationSettings
+  NotificationSettings,
+  Receipt
 } from '../types';
 
 import { 
@@ -114,7 +115,8 @@ const KEYS = {
   PASTOR_LOCATION_REQUESTS: 'gcz_pastor_location_requests_v1',
   KINGDOM_STORE_CART: 'gcz_kingdom_store_cart_v1',
   GROUP_MEDIA: 'gcz_group_media_v1',
-  NOTIFICATION_SETTINGS: 'gcz_notification_settings_v1'
+  NOTIFICATION_SETTINGS: 'gcz_notification_settings_v1',
+  RECEIPTS_ARCHIVE: 'gcz_receipts_archive_v1'
 };
 
 // In-memory fallback dictionary for when third-party cookies or localStorage are restricted/blocked
@@ -557,7 +559,17 @@ export class StorageService {
 
   // Prayer Requests
   static getPrayerRequests(): PrayerRequest[] {
-    return getLocal<PrayerRequest[]>(KEYS.PRAYERS, MOCK_PRAYER_REQUESTS);
+    const prayers = getLocal<PrayerRequest[]>(KEYS.PRAYERS, MOCK_PRAYER_REQUESTS);
+    const allUsers = this.getAllUsers();
+    prayers.forEach(p => {
+      if (p.user_id && !p.is_anonymous) {
+        const u = allUsers.find(usr => usr.id === p.user_id);
+        if (u) {
+          p.user_name = u.full_name;
+        }
+      }
+    });
+    return prayers;
   }
 
   static submitPrayer(request: Omit<PrayerRequest, 'id' | 'prayer_count' | 'created_at' | 'status' | 'is_answered'>): PrayerRequest {
@@ -831,16 +843,98 @@ export class StorageService {
         updated = true;
       }
     }
+    // Ensure all products have initial stock quantity
+    for (const p of rawList) {
+      if (p.stock_quantity === undefined) {
+        p.stock_quantity = 15;
+        updated = true;
+      }
+    }
     if (updated) {
       setLocal(KEYS.PRODUCTS, rawList);
     }
     return rawList;
   }
 
+  // Active Store Display: items marked out-of-stock or 0 quantity are removed until replenished
+  static getStoreAvailableProducts(): Product[] {
+    const prods = this.getProducts();
+    return prods.filter(p => p.in_stock !== false && (p.stock_quantity === undefined || p.stock_quantity > 0));
+  }
+
   static addProduct(prod: Product): void {
     const prods = this.getProducts();
     prods.unshift(prod);
     setLocal(KEYS.PRODUCTS, prods);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_products_updated'));
+    }
+  }
+
+  static updateProductStock(productId: string, stockDelta: number): void {
+    const prods = this.getProducts();
+    const p = prods.find(item => item.id === productId);
+    if (p) {
+      const cur = typeof p.stock_quantity === 'number' ? p.stock_quantity : 15;
+      p.stock_quantity = Math.max(0, cur + stockDelta);
+      if (p.stock_quantity <= 0) {
+        p.in_stock = false;
+      } else {
+        p.in_stock = true;
+      }
+      setLocal(KEYS.PRODUCTS, prods);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_products_updated'));
+      }
+    }
+  }
+
+  // Receipts Archive - Central Real-Time Persistence
+  static getReceiptsArchive(): Receipt[] {
+    const defaultReceipts: Receipt[] = [
+      {
+        id: 'rec_init_001',
+        reference: 'GCZ-RC-2026-8812',
+        date: '10 Mar 2026',
+        payer_name: 'Prophetess Melinda Daniels',
+        payer_phone: '+263 77 188 9900',
+        amount: 500,
+        currency: 'USD',
+        purpose: 'Altar Seed & Missions Expansion',
+        payment_method: 'EcoCash Push',
+        status: 'Paid',
+        created_at: '2026-03-10T08:30:00Z',
+        items_summary: 'Apostolic Prophetic Mission Offering'
+      },
+      {
+        id: 'rec_init_002',
+        reference: 'GCZ-ORD-2026-4419',
+        date: '08 Mar 2026',
+        payer_name: 'Tatenda Chirwa',
+        payer_phone: '+263 77 855 6677',
+        amount: 69.98,
+        currency: 'USD',
+        purpose: 'Kingdom Store (Apparel)',
+        payment_method: 'EcoCash',
+        status: 'Paid',
+        created_at: '2026-03-08T14:15:00Z',
+        items_summary: 'JD Collection "Make Heaven Crowded" T-Shirt (L) x1, JD Collection "Step In Faith" T-Shirt (M) x1'
+      }
+    ];
+    return getLocal<Receipt[]>(KEYS.RECEIPTS_ARCHIVE, defaultReceipts);
+  }
+
+  static addReceipt(receipt: Receipt): void {
+    const receipts = this.getReceiptsArchive();
+    const exists = receipts.find(r => r.reference === receipt.reference);
+    if (!exists) {
+      receipts.unshift(receipt);
+      setLocal(KEYS.RECEIPTS_ARCHIVE, receipts);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_receipts_updated', { detail: receipt }));
+      }
+      SupabaseSyncService.syncReceipt(receipt).catch(() => {});
+    }
   }
 
   // Donations
@@ -859,6 +953,22 @@ export class StorageService {
     };
     donations.unshift(newDonation);
     setLocal(KEYS.DONATIONS, donations);
+
+    // Generate formal receipt in real-time
+    this.addReceipt({
+      id: `rec_${Date.now()}`,
+      reference: newDonation.receipt_number,
+      date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      payer_name: newDonation.donor_name,
+      amount: newDonation.amount,
+      currency: (newDonation.currency as any) || 'USD',
+      purpose: newDonation.fund_type,
+      payment_method: newDonation.payment_method,
+      status: 'Paid',
+      created_at: newDonation.created_at,
+      items_summary: `${newDonation.fund_type} via ${newDonation.payment_method}`
+    });
+
     // Background sync to Supabase PostgreSQL
     SupabaseSyncService.syncDonation(newDonation).catch(err => {
       console.warn('Supabase donation sync deferred:', err);
@@ -931,6 +1041,46 @@ export class StorageService {
     };
     orders.unshift(newOrder);
     setLocal(KEYS.ORDERS, orders);
+
+    // Real-time stock reduction on purchase, like a real store
+    const prods = this.getProducts();
+    let stockChanged = false;
+    order.items.forEach(item => {
+      const prod = prods.find(p => p.id === item.product.id);
+      if (prod) {
+        const curStock = typeof prod.stock_quantity === 'number' ? prod.stock_quantity : 15;
+        const newStock = Math.max(0, curStock - item.quantity);
+        prod.stock_quantity = newStock;
+        if (newStock <= 0) {
+          prod.in_stock = false;
+        }
+        stockChanged = true;
+      }
+    });
+
+    if (stockChanged) {
+      setLocal(KEYS.PRODUCTS, prods);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_products_updated'));
+      }
+    }
+
+    // Generate formal receipt for confirmed store order
+    this.addReceipt({
+      id: `rec_${Date.now()}`,
+      reference: newOrder.id,
+      date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      payer_name: newOrder.user_name,
+      payer_phone: newOrder.user_phone,
+      amount: newOrder.total_usd,
+      currency: 'USD',
+      purpose: `Kingdom Store Order (${newOrder.items.length} item${newOrder.items.length > 1 ? 's' : ''})`,
+      payment_method: newOrder.payment_method,
+      status: 'Paid',
+      created_at: newOrder.created_at,
+      items_summary: newOrder.items.map(i => `${i.product.name}${i.selectedSize ? ` (${i.selectedSize})` : ''} x${i.quantity}`).join(', ')
+    });
+
     return newOrder;
   }
 
@@ -1052,6 +1202,9 @@ export class StorageService {
     SupabaseSyncService.syncNotificationSettings(settings, userId).catch(err => {
       console.warn('Supabase notification settings sync notice:', err);
     });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_notification_settings_updated', { detail: settings }));
+    }
   }
 
   static sendPushNotification(title: string, body: string, target_segment: PushNotification['target_segment']): PushNotification {
@@ -1121,9 +1274,24 @@ export class StorageService {
     const postLikes = this.getPostLikesRecords();
     const currentUser = this.getCurrentUser();
     const curUid = currentUser?.id || 'usr_guest';
+    const allUsers = this.getAllUsers();
+    const customAvatars = this.getPermanentCustomAvatars();
 
-    // Synchronize likes from dedicated table onto every testimony so likes never vanish on refresh
+    // Synchronize likes and user identity from dedicated records so usernames and profile pictures display consistently
     list.forEach(t => {
+      if (t.user_id) {
+        const author = allUsers.find(u => u.id === t.user_id);
+        if (author) {
+          t.user_name = author.full_name;
+          t.user_handle = author.handle || `@${author.full_name.toLowerCase().replace(/\s+/g, '_')}`;
+          if (customAvatars[t.user_id]) {
+            t.user_avatar = customAvatars[t.user_id];
+          } else if (author.avatar_url) {
+            t.user_avatar = author.avatar_url;
+          }
+        }
+      }
+
       const likesForThisPost = postLikes.filter(l => l.post_id === t.id).map(l => l.user_id);
       const combined = Array.from(new Set([...(t.liked_user_ids || []), ...likesForThisPost]));
       t.liked_user_ids = combined;
@@ -1132,6 +1300,18 @@ export class StorageService {
       t.comments_count = (t.comments || []).length;
       if (t.comments) {
         t.comments.forEach(c => {
+          if (c.user_id) {
+            const cAuthor = allUsers.find(u => u.id === c.user_id);
+            if (cAuthor) {
+              c.user_name = cAuthor.full_name;
+              c.user_handle = cAuthor.handle || `@${cAuthor.full_name.toLowerCase().replace(/\s+/g, '_')}`;
+              if (customAvatars[c.user_id]) {
+                c.user_avatar = customAvatars[c.user_id];
+              } else if (cAuthor.avatar_url) {
+                c.user_avatar = cAuthor.avatar_url;
+              }
+            }
+          }
           c.likes_count = (c.liked_user_ids || []).length;
         });
       }

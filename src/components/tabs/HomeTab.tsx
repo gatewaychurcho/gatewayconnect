@@ -337,15 +337,15 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             )}
           </div>
 
-          {/* No Live Stream Offline Overlay */}
-          {!liveStreamStatus.isLive && !overridePlayingVideo && (
+          {/* No Live Stream Offline Overlay - only show if there is completely no video/stream URL configured */}
+          {!liveStreamStatus.isLive && !overridePlayingVideo && !streamEmbedInfo.embedUrl && (
             <div className="absolute inset-0 z-25 bg-[#001122]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
               <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-amber-400 mb-3 shadow-inner">
                 <Radio className="w-7 h-7 text-[#D4AF37]" />
               </div>
               <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-white/90 text-xs font-bold mb-2">
                 <span className="w-2 h-2 rounded-full bg-white/40" />
-                <span>No live stream broadcast currently active</span>
+                <span>Currently no live stream session in progress</span>
               </div>
               <h4 className="text-white font-bold text-base sm:text-lg mb-1">
                 Sanctuary Stream is Offline
@@ -410,6 +410,9 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             </div>
           )}
 
+          {/* Only show floating Facebook pill, seed button, and in-stream donation when live streaming */}
+          {liveStreamStatus.isLive && (
+            <>
           {/* Floating Facebook Action Pill (if Facebook Live) */}
           {streamEmbedInfo.isFacebook && (
             <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2">
@@ -566,6 +569,8 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 </form>
               )}
             </div>
+          )}
+            </>
           )}
 
           {/* Audio-Only Low Data Mode Visualization (active when isAudioOnly is true) */}

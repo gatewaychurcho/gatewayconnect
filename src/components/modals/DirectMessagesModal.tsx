@@ -42,7 +42,14 @@ import {
   Image as ImageIcon,
   FileText,
   ChevronRight,
-  Paperclip
+  Paperclip,
+  Video,
+  Music,
+  Volume2,
+  Play,
+  Film,
+  Mic,
+  Upload
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { User, DirectMessage, DmThread, ChatGroup, ChatGroupMessage, GroupMembership, GroupInvite } from '../../types';
@@ -196,6 +203,69 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   const [showShareMediaPrompt, setShowShareMediaPrompt] = useState(false);
   const [shareMediaUrl, setShareMediaUrl] = useState('');
   const [shareMediaCaption, setShareMediaCaption] = useState('');
+  const [groupInfoTab, setGroupInfoTab] = useState<'members' | 'media'>('members');
+  const [groupMediaFilter, setGroupMediaFilter] = useState<'all' | 'image' | 'video' | 'audio'>('all');
+  const [stagedLocalMedia, setStagedLocalMedia] = useState<{
+    url: string;
+    type: 'image' | 'video' | 'audio';
+    name: string;
+    size: string;
+  } | null>(null);
+  const mediaFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleLocalMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    let mType: 'image' | 'video' | 'audio' = 'image';
+    if (file.type.startsWith('video/')) mType = 'video';
+    else if (file.type.startsWith('audio/')) mType = 'audio';
+
+    const sizeStr = file.size > 1024 * 1024
+      ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+      : `${Math.round(file.size / 1024)} KB`;
+
+    const reader = new FileReader();
+    reader.onload = (loadEvt) => {
+      const result = loadEvt.target?.result as string;
+      if (result) {
+        setStagedLocalMedia({
+          url: result,
+          type: mType,
+          name: file.name,
+          size: sizeStr
+        });
+        setShowShareMediaPrompt(true);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleConfirmSendMedia = () => {
+    if (!activeGroup || !stagedLocalMedia) return;
+    if (!activeGroup.member_ids.includes(currentUser.id)) {
+      alert('You cannot send media because you are not a member of this fellowship.');
+      return;
+    }
+
+    StorageService.sendChatGroupMessage(activeGroup.id, {
+      sender_id: currentUser.id,
+      sender_name: currentUser.full_name,
+      sender_avatar: currentUser.avatar_url,
+      sender_role: currentUser.role,
+      text: shareMediaCaption.trim() || (stagedLocalMedia.type === 'video' ? 'Shared a video' : stagedLocalMedia.type === 'audio' ? 'Shared an audio note' : 'Shared a photo'),
+      media_url: stagedLocalMedia.url,
+      media_type: stagedLocalMedia.type
+    });
+
+    setStagedLocalMedia(null);
+    setShareMediaCaption('');
+    setShowShareMediaPrompt(false);
+    refreshGroupsData();
+    setCopyFeedback('Media shared to fellowship group!');
+    setTimeout(() => setCopyFeedback(null), 3000);
+  };
 
   const isAdminOrDev = ['super_admin', 'developer', 'pastor', 'moderator'].includes(currentUser.role);
   const isSuperAdminOrDev = ['super_admin', 'developer'].includes(currentUser.role);
@@ -351,13 +421,13 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       .map(m => ({
         id: m.id,
         url: m.media_url!,
-        type: (m.media_type || 'image') as 'image' | 'video',
+        type: (m.media_type || 'image') as 'image' | 'video' | 'audio',
         caption: m.text,
         sender: m.sender_name,
         date: m.created_at
       }));
 
-    const defaultMedia: Record<string, Array<{ id: string; url: string; type: 'image' | 'video'; caption: string; sender: string; date: string }>> = {
+    const defaultMedia: Record<string, Array<{ id: string; url: string; type: 'image' | 'video' | 'audio'; caption: string; sender: string; date: string }>> = {
       group_ignite_worship: [
         {
           id: 'med_w1',
@@ -440,11 +510,11 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       ]
     };
 
-    const curated = defaultMedia[activeGroup.id] || [
+    const curated: Array<{ id: string; url: string; type: 'image' | 'video' | 'audio'; caption: string; sender: string; date: string }> = defaultMedia[activeGroup.id] || [
       {
         id: 'med_gen1',
         url: 'https://images.unsplash.com/photo-1438232992991-995b7058bbb3?w=800&auto=format&fit=crop&q=80',
-        type: 'image' as const,
+        type: 'image',
         caption: 'Gateway Church Fellowship Gathering in Harare',
         sender: 'Gateway Media',
         date: '2026-02-20'
@@ -452,7 +522,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       {
         id: 'med_gen2',
         url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop&q=80',
-        type: 'image' as const,
+        type: 'image',
         caption: 'Sunday Holy Communion & Anointing Service',
         sender: 'Gateway Media',
         date: '2026-02-27'

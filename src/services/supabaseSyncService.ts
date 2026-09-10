@@ -1,5 +1,5 @@
 import { getSupabase } from './supabaseClient';
-import { Donation, PrayerRequest, ServiceBooking, Sermon, Devotional, Testimony, PostComment, CommunityStory, CartItem, MessageReaction, GroupMediaItem, NotificationSettings } from '../types';
+import { Donation, PrayerRequest, ServiceBooking, Sermon, Devotional, Testimony, PostComment, CommunityStory, CartItem, MessageReaction, GroupMediaItem, NotificationSettings, Receipt } from '../types';
 
 export class SupabaseSyncService {
   /**
@@ -807,6 +807,48 @@ export class SupabaseSyncService {
         await supabase.from('users').update({
           notification_settings: settings
         }).eq('id', userId);
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Syncs confirmed transaction receipt into Supabase receipts / donations archive in real-time
+   */
+  static async syncReceipt(receipt: Receipt): Promise<{ success: boolean; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase client not initialized' };
+    try {
+      // Try receipts table first
+      const { error } = await supabase.from('receipts').upsert({
+        reference: receipt.reference,
+        date: receipt.date,
+        payer_name: receipt.payer_name,
+        payer_phone: receipt.payer_phone || null,
+        payer_email: receipt.payer_email || null,
+        amount: receipt.amount,
+        currency: receipt.currency,
+        purpose: receipt.purpose,
+        payment_method: receipt.payment_method,
+        status: receipt.status,
+        items_summary: receipt.items_summary || null,
+        created_at: receipt.created_at
+      }, { onConflict: 'reference' });
+
+      if (error) {
+        // Fallback to donations table
+        await supabase.from('donations').insert({
+          donor_name: receipt.payer_name,
+          amount: receipt.amount,
+          currency: receipt.currency,
+          fund_type: receipt.purpose,
+          payment_method: this.normalizeGateway(receipt.payment_method),
+          status: 'completed',
+          receipt_number: receipt.reference,
+          impact_tag: receipt.items_summary || null
+        });
       }
       return { success: true };
     } catch (err: any) {

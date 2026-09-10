@@ -25,10 +25,19 @@ import {
   List,
   LayoutGrid,
   Zap,
-  X
+  X,
+  Book,
+  HelpCircle
 } from 'lucide-react';
 import { BibleVersion, BibleBook, ReadingPlan } from '../../types';
-import { BIBLE_BOOKS, SAMPLE_VERSES_DATA, READING_PLANS, PASTOR_FOLLOW_SCRIPTURE } from '../../data/bibleData';
+import { 
+  BIBLE_BOOKS, 
+  SAMPLE_VERSES_DATA, 
+  READING_PLANS, 
+  PASTOR_FOLLOW_SCRIPTURE,
+  BIBLE_DICTIONARY,
+  getVerseInterpretationData
+} from '../../data/bibleData';
 import { StorageService } from '../../services/storageService';
 
 interface BibleTabProps {
@@ -84,6 +93,16 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
   // Real Holy Bible API state
   const [realVerses, setRealVerses] = useState<Array<{ verseNum: number; text: string }>>([]);
   const [isLoadingBible, setIsLoadingBible] = useState<boolean>(false);
+
+  // Apostolic Interpreter & Biblical Lexicon Modal state
+  const [activeStudyVerse, setActiveStudyVerse] = useState<{
+    verseKey: string;
+    verseNum: number;
+    text: string;
+  } | null>(null);
+  const [studyModalTab, setStudyModalTab] = useState<'interpreter' | 'dictionary'>('interpreter');
+  const [dictionarySearchQuery, setDictionarySearchQuery] = useState<string>('');
+  const [selectedDictTermKey, setSelectedDictTermKey] = useState<string | null>(null);
 
   const verseContainerRef = useRef<HTMLDivElement>(null);
 
@@ -402,13 +421,13 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
             </button>
           </div>
 
-          {/* Translation Switcher (JW Clean Style) */}
+          {/* Translation Switcher (JW Clean Style - KJV + NIV) */}
           <div className="flex items-center gap-1 bg-[#001122] p-1 rounded-xl border border-white/10">
-            {(['KJV', 'NKJV', 'NIV', 'ESV', 'AMP'] as BibleVersion[]).map(v => (
+            {(['KJV', 'NIV'] as BibleVersion[]).map(v => (
               <button
                 key={v}
                 onClick={() => setVersion(v)}
-                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all ${
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
                   version === v 
                     ? 'bg-[#D4AF37] text-[#001F3F] shadow-sm' 
                     : 'text-white/60 hover:text-white'
@@ -822,7 +841,33 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                         />
                       </div>
 
-                      <div className="flex items-center gap-1 text-[11px]">
+                      <div className="flex items-center gap-1 text-[11px] flex-wrap justify-end">
+                        {/* Apostolic Interpreter */}
+                        <button
+                          onClick={() => {
+                            setActiveStudyVerse({ verseKey, verseNum, text });
+                            setStudyModalTab('interpreter');
+                          }}
+                          className="px-2 py-0.5 rounded text-amber-300 hover:text-amber-200 bg-amber-400/10 hover:bg-amber-400/20 border border-amber-400/30 flex items-center gap-1 font-semibold transition-all"
+                          title="Apostolic Interpretation & Prophetic Exposition"
+                        >
+                          <Sparkles className="w-3 h-3 text-[#D4AF37]" />
+                          <span>Interpreter</span>
+                        </button>
+
+                        {/* Lexicon Dictionary */}
+                        <button
+                          onClick={() => {
+                            setActiveStudyVerse({ verseKey, verseNum, text });
+                            setStudyModalTab('dictionary');
+                          }}
+                          className="px-2 py-0.5 rounded text-sky-300 hover:text-sky-200 bg-sky-400/10 hover:bg-sky-400/20 border border-sky-400/30 flex items-center gap-1 font-semibold transition-all"
+                          title="Biblical Concordance & Dictionary"
+                        >
+                          <Book className="w-3 h-3 text-sky-400" />
+                          <span>Dictionary</span>
+                        </button>
+
                         {/* Add Note Trigger */}
                         <button
                           onClick={() => {
@@ -903,7 +948,12 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                     <span
                       key={verseNum}
                       id={`verse-${verseNum}`}
-                      className={`inline transition-colors ${
+                      onClick={() => {
+                        setTargetVerse(verseNum);
+                        setActiveStudyVerse({ verseKey, verseNum, text });
+                      }}
+                      title={`Click to view Interpreter & Lexicon for ${verseKey}`}
+                      className={`inline cursor-pointer hover:underline decoration-[#D4AF37]/50 transition-colors ${
                         isTarget ? 'bg-[#D4AF37]/30 text-white font-semibold px-1 rounded' : ''
                       } ${
                         highlightColor === 'gold' ? 'bg-amber-500/25 text-amber-200' :
@@ -1055,8 +1105,14 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
 
       {/* 4. JW.org-Style 3-Step Navigation Modal (Book -> Chapter -> Verse) */}
       {showNavModal && (
-        <div className="fixed inset-0 z-50 bg-[#001122]/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
-          <div className="bg-[#001F3F] border-2 border-[#D4AF37]/60 rounded-3xl max-w-xl w-full max-h-[88vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150">
+        <div 
+          className="fixed inset-0 z-50 bg-[#001122]/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4"
+          onClick={() => setShowNavModal(false)}
+        >
+          <div 
+            className="bg-[#001F3F] border-2 border-[#D4AF37]/60 rounded-3xl max-w-xl w-full max-h-[88vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
             
             {/* JW Nav Modal Header */}
             <div className="p-4 border-b border-white/10 bg-[#001122] flex items-center justify-between">
@@ -1253,6 +1309,347 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
           </div>
         </div>
       )}
+
+      {/* 5. Apostolic Interpreter & Biblical Lexicon Modal */}
+      {activeStudyVerse && (() => {
+        const interpData = getVerseInterpretationData(
+          activeStudyVerse.verseKey, 
+          activeStudyVerse.text, 
+          selectedBook
+        );
+
+        // Filter dictionary terms
+        const dictEntries = Object.entries(BIBLE_DICTIONARY);
+        const filteredDictEntries = dictEntries.filter(([key, entry]) => {
+          if (!dictionarySearchQuery.trim()) {
+            return interpData.keyTerms.includes(key) || selectedDictTermKey === key;
+          }
+          const query = dictionarySearchQuery.toLowerCase();
+          return (
+            entry.term.toLowerCase().includes(query) ||
+            entry.originalWord.toLowerCase().includes(query) ||
+            entry.strongsNumber.toLowerCase().includes(query) ||
+            entry.definition.toLowerCase().includes(query) ||
+            entry.theologicalUsage.toLowerCase().includes(query)
+          );
+        });
+
+        const activeDictEntry = selectedDictTermKey 
+          ? BIBLE_DICTIONARY[selectedDictTermKey] 
+          : (filteredDictEntries[0] ? filteredDictEntries[0][1] : BIBLE_DICTIONARY['faith']);
+
+        return (
+          <div 
+            className="fixed inset-0 z-50 bg-[#001122]/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150"
+            onClick={() => {
+              setActiveStudyVerse(null);
+              setSelectedDictTermKey(null);
+              setDictionarySearchQuery('');
+            }}
+          >
+            <div 
+              className="bg-[#001F3F] border-2 border-[#D4AF37]/60 rounded-3xl max-w-xl w-full max-h-[88vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="p-4 border-b border-white/10 bg-[#001122] flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-[#D4AF37]/20 border border-[#D4AF37]/40 flex items-center justify-center text-[#D4AF37] shrink-0">
+                    {studyModalTab === 'interpreter' ? <Sparkles className="w-4 h-4" /> : <Book className="w-4 h-4" />}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-serif-church font-bold text-white text-sm sm:text-base truncate">
+                      {activeStudyVerse.verseKey} ({version})
+                    </h3>
+                    <p className="text-[11px] text-[#D4AF37] font-medium">
+                      {studyModalTab === 'interpreter' ? 'Apostolic Interpreter & Prophetic Revelation' : 'Strong’s Concordance Lexicon & Dictionary'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setActiveStudyVerse(null);
+                    setSelectedDictTermKey(null);
+                    setDictionarySearchQuery('');
+                  }}
+                  className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors shrink-0"
+                  title="Close (Esc)"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Verse Text Display Banner */}
+              <div className="p-3.5 bg-[#00172e] border-b border-white/10">
+                <p className="text-xs sm:text-sm text-amber-100 font-serif-church italic leading-relaxed">
+                  "{activeStudyVerse.text}"
+                </p>
+              </div>
+
+              {/* Mode Tabs Switcher */}
+              <div className="flex border-b border-white/10 bg-[#001122] p-1.5 gap-1.5">
+                <button
+                  onClick={() => setStudyModalTab('interpreter')}
+                  className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    studyModalTab === 'interpreter'
+                      ? 'bg-[#D4AF37] text-[#001F3F] shadow-sm'
+                      : 'text-white/60 hover:text-white'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Apostolic Interpreter</span>
+                </button>
+                <button
+                  onClick={() => setStudyModalTab('dictionary')}
+                  className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    studyModalTab === 'dictionary'
+                      ? 'bg-[#D4AF37] text-[#001F3F] shadow-sm'
+                      : 'text-white/60 hover:text-white'
+                  }`}
+                >
+                  <Book className="w-3.5 h-3.5" />
+                  <span>Biblical Dictionary</span>
+                </button>
+              </div>
+
+              {/* Tab 1: Apostolic Interpreter Content */}
+              {studyModalTab === 'interpreter' && (
+                <div className="p-4 overflow-y-auto flex-1 space-y-4 text-xs">
+                  {/* Linguistic & Original Text Breakdown */}
+                  <div className="p-3 bg-[#001122] border border-white/10 rounded-2xl space-y-1.5">
+                    <span className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider block">
+                      Original Root & Translation Insight
+                    </span>
+                    <p className="text-slate-200 leading-relaxed font-sans">
+                      {interpData.originalTextSummary}
+                    </p>
+                  </div>
+
+                  {/* Apostolic Hermeneutics / Commentary by Apostle Joe Daniels */}
+                  <div className="p-3.5 bg-gradient-to-br from-[#001f3f] to-[#001122] border border-[#D4AF37]/40 rounded-2xl space-y-2 shadow-sm">
+                    <div className="flex items-center gap-1.5 text-[#D4AF37]">
+                      <Flame className="w-4 h-4" />
+                      <span className="font-bold uppercase tracking-wider text-[11px]">
+                        Apostolic Exposition • Apostle Joe Daniels
+                      </span>
+                    </div>
+                    <p className="text-slate-100 leading-relaxed font-serif-church italic">
+                      "{interpData.apostolicHermeneutics}"
+                    </p>
+                  </div>
+
+                  {/* Prophetic Declaration */}
+                  <div className="p-3 bg-amber-500/10 border border-amber-400/40 rounded-2xl space-y-1.5 text-amber-200">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 block">
+                      Prophetic Decree Over Your Life
+                    </span>
+                    <p className="font-medium leading-relaxed">
+                      {interpData.propheticDeclaration}
+                    </p>
+                  </div>
+
+                  {/* Cultural & Historical Setting */}
+                  <div className="p-3 bg-[#001122] border border-white/10 rounded-2xl space-y-1">
+                    <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider block">
+                      Historical Setting
+                    </span>
+                    <p className="text-slate-300 leading-relaxed">
+                      {interpData.culturalHistoricalContext}
+                    </p>
+                  </div>
+
+                  {/* Practical Life Application */}
+                  <div className="p-3 bg-[#001122] border border-white/10 rounded-2xl space-y-2">
+                    <span className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider block">
+                      Personal Kingdom Walk & Action Steps
+                    </span>
+                    <ul className="space-y-1.5 text-slate-200">
+                      {interpData.lifeApplication.map((app, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                          <span>{app}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Linked Concordance Terms */}
+                  <div className="pt-1">
+                    <span className="text-[11px] font-bold text-white/70 block mb-2">
+                      Linked Greek & Hebrew Terms In This Verse:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {interpData.keyTerms.map(termKey => {
+                        const entry = BIBLE_DICTIONARY[termKey];
+                        if (!entry) return null;
+                        return (
+                          <button
+                            key={termKey}
+                            onClick={() => {
+                              setSelectedDictTermKey(termKey);
+                              setStudyModalTab('dictionary');
+                            }}
+                            className="px-2.5 py-1 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-sky-200 text-xs font-bold flex items-center gap-1 transition-all"
+                          >
+                            <Book className="w-3 h-3 text-sky-400" />
+                            <span>{entry.term}</span>
+                            <span className="text-[10px] text-sky-300/60 font-mono">({entry.strongsNumber})</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: Biblical Lexicon & Dictionary */}
+              {studyModalTab === 'dictionary' && (
+                <div className="p-4 overflow-y-auto flex-1 space-y-3.5 text-xs">
+                  {/* Dictionary Search Input */}
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                    <input
+                      type="text"
+                      value={dictionarySearchQuery}
+                      onChange={(e) => {
+                        setDictionarySearchQuery(e.target.value);
+                        setSelectedDictTermKey(null);
+                      }}
+                      placeholder="Search Hebrew/Greek term, Strong’s #, or word..."
+                      className="w-full bg-[#001122] border border-white/15 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#D4AF37]"
+                    />
+                  </div>
+
+                  {/* Quick Term Pills */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    <span className="text-[10px] text-white/40 font-bold uppercase shrink-0">Glossary:</span>
+                    {dictEntries.map(([key, entry]) => (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          setSelectedDictTermKey(key);
+                          setDictionarySearchQuery('');
+                        }}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] font-bold shrink-0 transition-all ${
+                          (selectedDictTermKey === key || (!selectedDictTermKey && !dictionarySearchQuery && interpData.keyTerms[0] === key))
+                            ? 'bg-[#D4AF37] text-[#001F3F]'
+                            : 'bg-[#001122] text-white/60 hover:text-white border border-white/10'
+                        }`}
+                      >
+                        {key.charAt(0).toUpperCase() + key.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Active Selected Term Detailed Card */}
+                  {activeDictEntry && (
+                    <div className="p-4 bg-gradient-to-b from-[#001122] to-[#00172e] border border-[#D4AF37]/50 rounded-2xl space-y-3 shadow-md">
+                      <div className="flex items-start justify-between gap-2 border-b border-white/10 pb-3">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-bold text-sm sm:text-base text-[#D4AF37]">
+                              {activeDictEntry.term}
+                            </h4>
+                            <span className="px-2 py-0.5 rounded-md bg-white/10 text-white/80 font-mono text-[10px]">
+                              {activeDictEntry.strongsNumber}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-[10px] font-semibold">
+                              {activeDictEntry.language} • {activeDictEntry.partOfSpeech}
+                            </span>
+                          </div>
+                          <p className="text-sm font-serif text-white/90 mt-1 font-medium">
+                            {activeDictEntry.originalWord} • Pronunciation: <span className="text-amber-200 italic font-mono">{activeDictEntry.phonetic}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider block">
+                          Literal Lexical Definition
+                        </span>
+                        <p className="text-slate-100 leading-relaxed font-sans">
+                          {activeDictEntry.definition}
+                        </p>
+                      </div>
+
+                      <div className="space-y-1 p-2.5 rounded-xl bg-[#001F3F]/60 border border-white/5">
+                        <span className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider block">
+                          Theological & Prophetic Nuance
+                        </span>
+                        <p className="text-amber-100/90 leading-relaxed font-serif-church italic">
+                          "{activeDictEntry.theologicalUsage}"
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider block">
+                          Key Scripture References
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {activeDictEntry.relatedVerses.map(r => (
+                            <span
+                              key={r}
+                              className="px-2 py-0.5 rounded-lg bg-black/40 border border-white/10 text-[#D4AF37] text-[10px] font-bold"
+                            >
+                              {r}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* All Matching Glossary List if Searching */}
+                  {dictionarySearchQuery && (
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider block">
+                        Search Results ({filteredDictEntries.length})
+                      </span>
+                      {filteredDictEntries.map(([key, item]) => (
+                        <div
+                          key={key}
+                          onClick={() => setSelectedDictTermKey(key)}
+                          className="p-2.5 rounded-xl bg-[#001122] border border-white/10 hover:border-[#D4AF37]/40 cursor-pointer transition-all"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-white text-xs">{item.term}</span>
+                            <span className="text-[10px] text-[#D4AF37] font-mono">{item.strongsNumber}</span>
+                          </div>
+                          <p className="text-[11px] text-white/70 line-clamp-1 mt-0.5">{item.definition}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Modal Footer */}
+              <div className="p-3 bg-[#001122] border-t border-white/10 flex items-center justify-between gap-2">
+                <button
+                  onClick={() => handleShareVerse(activeStudyVerse.verseKey, activeStudyVerse.text)}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5 border border-emerald-500/40 transition-all"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Share via WhatsApp</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveStudyVerse(null);
+                    setSelectedDictTermKey(null);
+                    setDictionarySearchQuery('');
+                  }}
+                  className="px-4 py-1.5 rounded-xl bg-[#D4AF37] text-[#001F3F] font-bold text-xs hover:bg-[#c49f27] transition-all shadow"
+                >
+                  Done
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ShoppingBag, 
   Heart, 
@@ -29,7 +29,8 @@ import {
   X,
   Eye,
   Check,
-  Tag
+  Tag,
+  RotateCw
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Product, CartItem, DonationFund, PaymentGateway, Donation, ServiceBooking } from '../../types';
@@ -55,6 +56,27 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
   const [selectedSizes, setSelectedSizes] = useState<Record<string, string>>({});
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
+
+  // Real-time Available Products (automatically hides out-of-stock items)
+  const [availableProducts, setAvailableProducts] = useState<Product[]>(() => StorageService.getStoreAvailableProducts());
+
+  useEffect(() => {
+    const handleProductsUpdated = () => {
+      setAvailableProducts(StorageService.getStoreAvailableProducts());
+    };
+    window.addEventListener('gcz_products_updated', handleProductsUpdated);
+    window.addEventListener('storage', handleProductsUpdated);
+    return () => {
+      window.removeEventListener('gcz_products_updated', handleProductsUpdated);
+      window.removeEventListener('storage', handleProductsUpdated);
+    };
+  }, []);
+
+  // 3D Shirt Rotation State for Details/Eye Modal
+  const [rotationY, setRotationY] = useState<number>(0);
+  const [rotationX, setRotationX] = useState<number>(0);
+  const [isDragging3D, setIsDragging3D] = useState<boolean>(false);
+  const dragStartPos = useRef<{ x: number; y: number; initialY: number; initialX: number }>({ x: 0, y: 0, initialY: 0, initialX: 0 });
 
   // Cart Checkout & Delivery State
   const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'courier'>('pickup');
@@ -913,7 +935,7 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
 
           {/* Products Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {products
+            {availableProducts
               .filter(p => {
                 if (selectedCategory === 'All') return true;
                 if (selectedCategory === 'Apparel') return p.category === 'Kingdom Apparel';
@@ -950,7 +972,11 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
                         {/* Quick Details Button */}
                         <button
                           type="button"
-                          onClick={() => setPreviewProduct(prod)}
+                          onClick={() => {
+                            setRotationY(0);
+                            setRotationX(0);
+                            setPreviewProduct(prod);
+                          }}
                           className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-black/70 hover:bg-black/90 text-white text-[10px] font-bold backdrop-blur-sm border border-white/20 flex items-center gap-1 transition-all opacity-90 hover:opacity-100"
                           title="View Product Details"
                         >
@@ -1461,82 +1487,119 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
         </div>
       )}
 
-      {/* Product Quick View / Details Modal */}
+      {/* Product Quick View / Details Modal: Compact 3D Shirt Rotation Float */}
       {previewProduct && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 animate-in fade-in">
-          <div className="bg-slate-900 border border-amber-500/40 rounded-3xl max-w-lg w-full p-5 sm:p-6 space-y-4 shadow-2xl max-h-[90vh] flex flex-col text-white overflow-y-auto">
-            <div className="flex justify-between items-start border-b border-slate-800 pb-3">
-              <div>
-                <span className="text-[10px] font-bold tracking-wider text-amber-400 uppercase">
-                  {previewProduct.category}
-                </span>
-                <h3 className="font-serif-church font-bold text-white text-lg">
-                  {previewProduct.name}
-                </h3>
-              </div>
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 animate-in fade-in">
+          <div className="bg-[#001428] border border-[#D4AF37]/50 rounded-2xl max-w-[340px] w-full p-4 shadow-2xl max-h-[88vh] flex flex-col text-white overflow-y-auto space-y-3">
+            {/* Header: Product Name + X Close Button */}
+            <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
+              <h3 className="font-serif-church font-bold text-white text-sm sm:text-base truncate pr-2">
+                {previewProduct.name}
+              </h3>
               <button
                 type="button"
                 onClick={() => setPreviewProduct(null)}
-                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors shrink-0"
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white flex items-center justify-center transition-colors shrink-0"
+                title="Close"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Stage */}
-            <div className="relative aspect-square max-h-72 w-full bg-[#001122] rounded-2xl overflow-hidden flex items-center justify-center p-4 border border-white/10">
-              <img
-                src={previewProduct.image_url}
-                alt={previewProduct.name}
-                className="w-full h-full object-contain"
-              />
-              {previewProduct.color_theme && (
-                <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-full bg-black/80 text-amber-300 text-xs font-bold border border-amber-400/40 backdrop-blur-sm">
-                  {previewProduct.color_theme}
-                </span>
-              )}
+            {/* 3D Rotatable Shirt View */}
+            <div 
+              className="relative aspect-square max-h-56 w-full bg-[#000d1a] rounded-xl overflow-hidden flex items-center justify-center p-3 border border-white/10 cursor-grab active:cursor-grabbing select-none"
+              onMouseDown={(e) => {
+                setIsDragging3D(true);
+                dragStartPos.current = { x: e.clientX, y: e.clientY, initialY: rotationY, initialX: rotationX };
+              }}
+              onMouseMove={(e) => {
+                if (isDragging3D) {
+                  const deltaX = e.clientX - dragStartPos.current.x;
+                  const deltaY = e.clientY - dragStartPos.current.y;
+                  setRotationY((dragStartPos.current.initialY + deltaX * 0.8) % 360);
+                  setRotationX(Math.max(-45, Math.min(45, dragStartPos.current.initialX - deltaY * 0.5)));
+                }
+              }}
+              onMouseUp={() => setIsDragging3D(false)}
+              onMouseLeave={() => setIsDragging3D(false)}
+              onTouchStart={(e) => {
+                if (e.touches[0]) {
+                  setIsDragging3D(true);
+                  dragStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, initialY: rotationY, initialX: rotationX };
+                }
+              }}
+              onTouchMove={(e) => {
+                if (isDragging3D && e.touches[0]) {
+                  const deltaX = e.touches[0].clientX - dragStartPos.current.x;
+                  const deltaY = e.touches[0].clientY - dragStartPos.current.y;
+                  setRotationY((dragStartPos.current.initialY + deltaX * 0.8) % 360);
+                  setRotationX(Math.max(-45, Math.min(45, dragStartPos.current.initialX - deltaY * 0.5)));
+                }
+              }}
+              onTouchEnd={() => setIsDragging3D(false)}
+              onClick={() => {
+                if (!isDragging3D) {
+                  setRotationY(prev => (prev + 90) % 360);
+                }
+              }}
+              title="Click or drag to rotate 3D"
+            >
+              {/* Shirt with 3D Perspective Rotation */}
+              <div 
+                className="w-full h-full flex items-center justify-center"
+                style={{
+                  transform: `perspective(700px) rotateY(${rotationY}deg) rotateX(${rotationX}deg)`,
+                  transition: isDragging3D ? 'none' : 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                  transformStyle: 'preserve-3d'
+                }}
+              >
+                <img
+                  src={previewProduct.image_url}
+                  alt={previewProduct.name}
+                  className="w-full h-full object-contain pointer-events-none drop-shadow-xl"
+                  draggable={false}
+                />
+              </div>
+
+              {/* 3D Interactive Control Overlay */}
+              <div className="absolute top-2 right-2 pointer-events-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setRotationY(prev => (prev + 90) % 360);
+                  }}
+                  className="px-2 py-1 rounded-md bg-black/60 hover:bg-black/80 text-[10px] text-[#D4AF37] font-bold border border-white/10 flex items-center gap-1 shadow backdrop-blur-sm"
+                  title="Rotate 90 degrees"
+                >
+                  <RotateCw className="w-2.5 h-2.5" />
+                  <span>Rotate</span>
+                </button>
+              </div>
+
+              {/* Helper subtle tag */}
+              <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/70 text-[9px] text-white/70 backdrop-blur-sm border border-white/10">
+                Click or drag to rotate 3D
+              </span>
             </div>
 
-            {/* Description & Specs */}
-            <div className="space-y-2.5 text-xs text-slate-300">
-              <p className="leading-relaxed">{previewProduct.description}</p>
-              {previewProduct.fabric && (
-                <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1">
-                  <p className="text-amber-400 font-bold">Fabric & Quality:</p>
-                  <p>{previewProduct.fabric}</p>
-                </div>
-              )}
-              {previewProduct.features && previewProduct.features.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Highlights:</p>
-                  <ul className="grid grid-cols-2 gap-1.5 text-[11px]">
-                    {previewProduct.features.map((feat, idx) => (
-                      <li key={idx} className="flex items-center gap-1.5 text-slate-300">
-                        <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-
-            {/* Size selection in modal if apparel */}
-            {previewProduct.available_sizes && (
-              <div className="pt-2 border-t border-slate-800">
-                <p className="text-xs text-slate-300 font-bold mb-1.5">Select Size:</p>
-                <div className="flex items-center gap-2">
+            {/* Small Size Buttons */}
+            {previewProduct.available_sizes && previewProduct.available_sizes.length > 0 && (
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <span className="text-xs text-white/70 font-semibold">Size:</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
                   {previewProduct.available_sizes.map(size => {
-                    const chosen = selectedSizes[previewProduct.id] || (previewProduct.available_sizes ? previewProduct.available_sizes[1] || previewProduct.available_sizes[0] : 'M');
+                    const chosen = selectedSizes[previewProduct.id] || previewProduct.available_sizes![0];
                     return (
                       <button
                         key={size}
                         type="button"
                         onClick={() => setSelectedSizes(prev => ({ ...prev, [previewProduct.id]: size }))}
-                        className={`w-9 h-9 rounded-xl text-xs font-bold transition-all border ${
+                        className={`w-7 h-7 rounded-lg text-[11px] font-bold transition-all border ${
                           chosen === size
-                            ? 'bg-amber-500 text-slate-950 border-amber-400 font-black'
-                            : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-600'
+                            ? 'bg-[#D4AF37] text-[#001F3F] border-[#D4AF37] font-black shadow-sm'
+                            : 'bg-white/5 text-white/70 border-white/10 hover:border-white/30'
                         }`}
                       >
                         {size}
@@ -1547,24 +1610,50 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
               </div>
             )}
 
-            {/* Worldwide Order & Dispatch Line */}
-            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-400/20 text-xs space-y-1">
-              <p className="font-bold text-amber-400">Direct Order & Dispatch Lines:</p>
-              <p className="text-[11px] text-slate-300 font-mono">
-                USA: +1 214-412-4864 • UK: +44 7878 760868 • ZIM: +263 772 235 795
-              </p>
+            {/* WhatsApp Icons linking to highlighted phone numbers */}
+            <div className="pt-1.5 border-t border-white/10 space-y-1.5">
+              <span className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider block">
+                Direct WhatsApp Orders:
+              </span>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { country: 'ZIM', phone: '+263 772 235 795', raw: '263772235795' },
+                  { country: 'UK', phone: '+44 7878 760868', raw: '447878760868' },
+                  { country: 'USA', phone: '+1 214-412-4864', raw: '12144124864' }
+                ].map(line => {
+                  const size = previewProduct.available_sizes ? (selectedSizes[previewProduct.id] || previewProduct.available_sizes[0]) : '';
+                  const msg = encodeURIComponent(`Hello Gateway Cathedral Dispatch, I would like to order: ${previewProduct.name}${size ? ` (Size: ${size})` : ''} - USD $${previewProduct.price_usd}`);
+                  return (
+                    <a
+                      key={line.country}
+                      href={`https://wa.me/${line.raw}?text=${msg}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 text-white flex flex-col items-center justify-center text-center transition-all hover:scale-105 group"
+                      title={`Order via WhatsApp ${line.country}: ${line.phone}`}
+                    >
+                      <div className="flex items-center gap-1">
+                        <MessageCircle className="w-3 h-3 text-emerald-400 group-hover:scale-110 transition-transform" />
+                        <span className="text-[10px] font-black text-emerald-300">{line.country}</span>
+                      </div>
+                      <span className="text-[9px] text-white/80 font-mono mt-0.5">{line.phone}</span>
+                    </a>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Action Bar */}
-            <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-3">
+            {/* Price & Small Cart Button */}
+            <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2">
               <div>
-                <p className="text-[10px] text-slate-400 uppercase font-bold">Price</p>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-lg font-black text-amber-400">{getPrice(previewProduct.price_usd)}</span>
-                  {previewProduct.price_zar && (
-                    <span className="text-xs text-amber-200">| R{previewProduct.price_zar}</span>
-                  )}
-                </div>
+                <span className="text-xs font-black text-[#D4AF37]">
+                  {getPrice(previewProduct.price_usd)}
+                </span>
+                {previewProduct.price_zar && (
+                  <span className="text-[10px] text-white/50 ml-1">
+                    | R{previewProduct.price_zar}
+                  </span>
+                )}
               </div>
               <button
                 type="button"
@@ -1573,9 +1662,9 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
                   handleAddToCart(previewProduct, size);
                   setPreviewProduct(null);
                 }}
-                className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow flex items-center gap-2 active:scale-95 transition-all"
+                className="px-3.5 py-1.5 rounded-xl bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] font-black text-xs flex items-center gap-1.5 shadow active:scale-95 transition-all"
               >
-                <ShoppingBag className="w-4 h-4" />
+                <ShoppingBag className="w-3.5 h-3.5" />
                 <span>Add to Cart</span>
               </button>
             </div>

@@ -13,7 +13,7 @@ import {
   Bell,
   Terminal
 } from 'lucide-react';
-import { User, PushNotification } from '../types';
+import { User, PushNotification, NotificationSettings } from '../types';
 import { StorageService } from '../services/storageService';
 
 interface HeaderProps {
@@ -55,21 +55,38 @@ export const Header: React.FC<HeaderProps> = ({
   const isGuest = currentUser.role === 'guest';
 
   const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
+  const [notifSettings, setNotifSettings] = useState<NotificationSettings>(() =>
+    StorageService.getNotificationSettings(currentUser?.id)
+  );
 
   useEffect(() => {
-    const updateCount = () => {
+    const updateSettingsAndCount = () => {
+      const settings = StorageService.getNotificationSettings(currentUser?.id);
+      setNotifSettings(settings);
       const list = StorageService.getAppNotifications();
-      const count = list.filter(n => !n.is_read && !n.title.toLowerCase().includes('milestone') && !n.message.toLowerCase().includes('milestone')).length;
+      const count = list.filter(n => {
+        if (n.is_read) return false;
+        if (n.title.toLowerCase().includes('milestone') || n.message.toLowerCase().includes('milestone')) return false;
+        if (!settings.liveStreams && ((n.type as string) === 'stream' || (n.type as string) === 'broadcast' || n.title.toLowerCase().includes('live') || n.message.toLowerCase().includes('stream'))) return false;
+        if (!settings.prayerRequests && ((n.type as string) === 'prayer' || n.title.toLowerCase().includes('prayer') || n.message.toLowerCase().includes('prayer'))) return false;
+        if (!settings.directMessages && ((n.type as string) === 'dm' || (n.type as string) === 'chat' || n.title.toLowerCase().includes('message') || n.title.toLowerCase().includes('dm'))) return false;
+        return true;
+      }).length;
       setUnreadNotifsCount(count);
     };
-    updateCount();
-    window.addEventListener('gcz_notifications_updated', updateCount);
-    window.addEventListener('gcz_new_notification', updateCount as any);
+
+    updateSettingsAndCount();
+    window.addEventListener('gcz_notifications_updated', updateSettingsAndCount);
+    window.addEventListener('gcz_new_notification', updateSettingsAndCount as any);
+    window.addEventListener('gcz_notification_settings_updated', updateSettingsAndCount as any);
+    window.addEventListener('storage', updateSettingsAndCount);
     return () => {
-      window.removeEventListener('gcz_notifications_updated', updateCount);
-      window.removeEventListener('gcz_new_notification', updateCount as any);
+      window.removeEventListener('gcz_notifications_updated', updateSettingsAndCount);
+      window.removeEventListener('gcz_new_notification', updateSettingsAndCount as any);
+      window.removeEventListener('gcz_notification_settings_updated', updateSettingsAndCount as any);
+      window.removeEventListener('storage', updateSettingsAndCount);
     };
-  }, []);
+  }, [currentUser?.id]);
 
   const handleProfileClick = () => {
     if (isGuest) {
@@ -108,8 +125,8 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Action Controls & User Identity */}
       <div className="flex items-center gap-2 sm:gap-3">
         
-        {/* Live Sermon Broadcast Button */}
-        {isLiveSermon && onOpenLiveSermon && (
+        {/* Live Sermon Broadcast Button (Controlled by Live Streams notification preference) */}
+        {isLiveSermon && notifSettings.liveStreams && onOpenLiveSermon && (
           <button
             id="btn-live-sermon-header"
             onClick={onOpenLiveSermon}
@@ -122,7 +139,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Instagram-style Direct Messages Button */}
+        {/* Instagram-style Direct Messages Button (Badge controlled by DM notification preference) */}
         {!isGuest && onOpenDirectMessages && (
           <button
             id="btn-direct-messages-header"
@@ -131,7 +148,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="relative p-2 rounded-full bg-[#001122] border border-white/10 hover:border-[#D4AF37]/60 text-white/80 hover:text-white transition-all shadow-sm"
           >
             <Send className="w-4 h-4 text-[#D4AF37]" />
-            {unreadDmsCount > 0 && (
+            {unreadDmsCount > 0 && notifSettings.directMessages && (
               <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center shadow">
                 {unreadDmsCount}
               </span>

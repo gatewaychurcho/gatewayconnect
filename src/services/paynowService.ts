@@ -142,6 +142,12 @@ export class PaynowService {
         throw new Error(errText || `Paynow HTTP Error: ${response.status}`);
       }
 
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const jsonResult = await response.json();
+        return jsonResult;
+      }
+
       const rawText = await response.text();
       const responseParams = new URLSearchParams(rawText);
       const respStatus = responseParams.get('status');
@@ -183,7 +189,19 @@ export class PaynowService {
    */
   static async pollStatus(pollUrl: string): Promise<PaynowPollResult> {
     try {
-      const response = await fetch(pollUrl);
+      // Try local proxy poll endpoint first to avoid CORS in browser
+      let response: Response;
+      try {
+        response = await fetch(`/api/paynow/poll?url=${encodeURIComponent(pollUrl)}`);
+        if (response.ok) {
+          const data = await response.json();
+          return data;
+        }
+      } catch (err) {
+        // Fallback to direct poll
+      }
+
+      response = await fetch(pollUrl);
       const text = await response.text();
       const params = new URLSearchParams(text);
 

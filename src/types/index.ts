@@ -226,11 +226,29 @@ export interface Product {
   description: string;
   author_or_brand?: string;
   in_stock: boolean;
+  stock_quantity?: number;
   is_bestseller?: boolean;
   color_theme?: string;
   available_sizes?: string[];
   features?: string[];
   fabric?: string;
+}
+
+export interface Receipt {
+  id: string;
+  reference: string;
+  date: string;
+  payer_name: string;
+  payer_email?: string;
+  payer_phone?: string;
+  amount: number;
+  currency: 'USD' | 'ZiG' | 'GBP' | 'ZAR';
+  purpose: string; // e.g. Tithe, Altar Seed, Kingdom Store Order, Conference Pass
+  payment_method: string;
+  status: 'Paid' | 'Failed';
+  created_at: string;
+  items_summary?: string;
+  paynow_reference?: string;
 }
 
 export interface CartItem {

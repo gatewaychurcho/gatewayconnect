@@ -318,12 +318,12 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
                   <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-amber-400 mb-3 shadow-inner">
                     <Radio className="w-7 h-7 text-[#D4AF37]" />
                   </div>
-                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-white/90 text-xs font-bold mb-2">
-                    <span className="w-2 h-2 rounded-full bg-white/40" />
-                    <span>No live stream broadcast currently active</span>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 text-[#D4AF37] text-xs font-bold mb-2">
+                    <span className="w-2 h-2 rounded-full bg-[#D4AF37]/60" />
+                    <span>Currently no live stream session in progress.</span>
                   </div>
                   <h4 className="text-white font-bold text-base sm:text-lg mb-1">
-                    Sanctuary Stream is Offline
+                    Currently no live stream session in progress.
                   </h4>
                   <p className="text-white/70 text-xs max-w-sm mb-4 leading-relaxed">
                     The altar broadcast will resume during our next scheduled service (Sunday Glorious Service 09:30 AM CAT). Replays of all past services are available on the home page.
