@@ -138,11 +138,11 @@ export const DownloadedSermonsModal: React.FC<DownloadedSermonsModalProps> = ({
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="aspect-video w-full rounded-xl overflow-hidden bg-black border border-white/10">
+            <div className="aspect-video w-full rounded-xl overflow-hidden bg-black border border-white/10 shadow-lg">
               <iframe
                 title={playingSermon.title}
-                src={`https://www.youtube.com/embed/${playingSermon.youtube_id}?autoplay=1&rel=0`}
-                className="w-full h-full"
+                src={`https://www.youtube-nocookie.com/embed/${StorageService.extractYoutubeId(playingSermon.youtube_id || playingSermon.video_url)}?autoplay=1&controls=1&rel=0&playsinline=1`}
+                className="w-full h-full border-0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               />

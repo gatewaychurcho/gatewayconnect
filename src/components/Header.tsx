@@ -1,15 +1,20 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Wifi, 
   WifiOff, 
   ShieldCheck, 
   Code2, 
   FileCode, 
-  LogOut,
+  Database,
   UserCircle,
-  LogIn
+  LogIn,
+  Send,
+  Radio,
+  Bell,
+  Terminal
 } from 'lucide-react';
 import { User, PushNotification } from '../types';
+import { StorageService } from '../services/storageService';
 
 interface HeaderProps {
   currentUser: User;
@@ -21,6 +26,11 @@ interface HeaderProps {
   onOpenFlutterExport: () => void;
   onOpenAdminPanel?: () => void;
   onOpenDevConsole?: () => void;
+  onOpenDirectMessages?: () => void;
+  onOpenNotifications?: () => void;
+  onOpenLiveSermon?: () => void;
+  isLiveSermon?: boolean;
+  unreadDmsCount?: number;
   pushNotifications?: PushNotification[];
 }
 
@@ -33,11 +43,33 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
   onOpenFlutterExport,
   onOpenAdminPanel,
-  onOpenDevConsole
+  onOpenDevConsole,
+  onOpenDirectMessages,
+  onOpenNotifications,
+  onOpenLiveSermon,
+  isLiveSermon,
+  unreadDmsCount = 0
 }) => {
   const isSuperAdmin = currentUser.role === 'super_admin';
   const isDeveloper = currentUser.role === 'developer';
   const isGuest = currentUser.role === 'guest';
+
+  const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
+
+  useEffect(() => {
+    const updateCount = () => {
+      const list = StorageService.getAppNotifications();
+      const count = list.filter(n => !n.is_read && !n.title.toLowerCase().includes('milestone') && !n.message.toLowerCase().includes('milestone')).length;
+      setUnreadNotifsCount(count);
+    };
+    updateCount();
+    window.addEventListener('gcz_notifications_updated', updateCount);
+    window.addEventListener('gcz_new_notification', updateCount as any);
+    return () => {
+      window.removeEventListener('gcz_notifications_updated', updateCount);
+      window.removeEventListener('gcz_new_notification', updateCount as any);
+    };
+  }, []);
 
   const handleProfileClick = () => {
     if (isGuest) {
@@ -76,19 +108,78 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Action Controls & User Identity */}
       <div className="flex items-center gap-2 sm:gap-3">
         
-        {/* Low-Data Toggle Button */}
+        {/* Live Sermon Broadcast Button */}
+        {isLiveSermon && onOpenLiveSermon && (
+          <button
+            id="btn-live-sermon-header"
+            onClick={onOpenLiveSermon}
+            title="Apostle Joe Daniels Live Service • Tap to Stream"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-md shadow-red-600/30 transition-all animate-pulse"
+          >
+            <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+            <Radio className="w-3.5 h-3.5" />
+            <span className="text-[11px] font-black uppercase tracking-wider hidden sm:inline">LIVE SERVICE</span>
+          </button>
+        )}
+
+        {/* Instagram-style Direct Messages Button */}
+        {!isGuest && onOpenDirectMessages && (
+          <button
+            id="btn-direct-messages-header"
+            onClick={onOpenDirectMessages}
+            title="Direct Messages"
+            className="relative p-2 rounded-full bg-[#001122] border border-white/10 hover:border-[#D4AF37]/60 text-white/80 hover:text-white transition-all shadow-sm"
+          >
+            <Send className="w-4 h-4 text-[#D4AF37]" />
+            {unreadDmsCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center shadow">
+                {unreadDmsCount}
+              </span>
+            )}
+          </button>
+        )}
+
+        {/* Notifications Bell Button - Strictly for registered members/leadership (Guest accounts have no notification tab) */}
+        {!isGuest && onOpenNotifications && (
+          <button
+            id="btn-notifications-header"
+            onClick={onOpenNotifications}
+            title="Notifications & Live Alerts"
+            className="relative p-2 rounded-full bg-[#001122] border border-white/10 hover:border-[#D4AF37]/60 text-white/80 hover:text-white transition-all shadow-sm"
+          >
+            <Bell className="w-4 h-4 text-[#D4AF37]" />
+            {unreadNotifsCount > 0 ? (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center shadow animate-pulse">
+                {unreadNotifsCount}
+              </span>
+            ) : (
+              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#D4AF37]/40 ring-1 ring-[#001F3F]" />
+            )}
+          </button>
+        )}
+
+        {/* Low-Data / HD Stream Toggle (Icon Only) */}
         <button
           id="btn-low-data-toggle"
           onClick={onToggleLowData}
-          title={lowDataMode ? "Low-Data Lite Stream Active" : "Standard High Quality Stream"}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+          title={lowDataMode ? "Lite Low-Data Mode Active (Click for HD)" : "HD Stream Active (Click for Lite Mode)"}
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-semibold transition-all border ${
             lowDataMode
               ? 'bg-emerald-950/80 text-emerald-400 border-emerald-500/50 shadow-sm'
-              : 'bg-[#001122] text-white/60 border-white/10 hover:text-white'
+              : 'bg-[#001122] text-[#D4AF37] border-[#D4AF37]/40 hover:border-[#D4AF37]'
           }`}
         >
-          {lowDataMode ? <WifiOff className="w-3.5 h-3.5 text-emerald-400" /> : <Wifi className="w-3.5 h-3.5 text-white/60" />}
-          <span className="hidden sm:inline text-[11px]">{lowDataMode ? 'Lite 2G/3G' : 'Standard'}</span>
+          {lowDataMode ? (
+            <>
+              <WifiOff className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-[10px] font-black tracking-tight text-emerald-400">SD</span>
+            </>
+          ) : (
+            <>
+              <Wifi className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <span className="text-[10px] font-black tracking-tight text-[#D4AF37]">HD</span>
+            </>
+          )}
         </button>
 
         {/* Flutter / Supabase SQL Modal Trigger - Strictly restricted to Developer Account */}
@@ -96,11 +187,10 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="btn-flutter-export"
             onClick={onOpenFlutterExport}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#001122] border border-[#D4AF37]/40 text-[#D4AF37] hover:bg-[#D4AF37]/10 text-xs font-semibold transition-all"
-            title="Flutter Source & Supabase Schema"
+            className="flex items-center justify-center p-2 rounded-lg bg-[#001122] border border-[#D4AF37]/40 text-[#D4AF37] hover:bg-[#D4AF37]/10 text-xs transition-all shadow-sm"
+            title="Database Schema & Specs"
           >
-            <FileCode className="w-3.5 h-3.5 text-[#D4AF37]" />
-            <span className="hidden md:inline text-[11px]">Flutter / SQL</span>
+            <Database className="w-4 h-4 text-[#D4AF37]" />
           </button>
         )}
 
@@ -117,16 +207,16 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Dev Link if Developer */}
+        {/* Dev Link if Developer - Sleek Console Icon */}
         {isDeveloper && onOpenDevConsole && (
           <button
             id="btn-quick-dev"
             onClick={onOpenDevConsole}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-900/60 border border-purple-500/40 text-purple-300 hover:bg-purple-900 text-xs font-bold transition-all"
-            title="Developer Console"
+            className="p-2 rounded-xl bg-purple-900/60 hover:bg-purple-800 border border-purple-500/40 text-purple-300 hover:text-white transition-all flex items-center justify-center cursor-pointer shadow-sm"
+            title="Developer Console (mr_juice7)"
+            aria-label="Developer Console"
           >
-            <Code2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline text-[11px]">Dev</span>
+            <Terminal className="w-4 h-4 text-purple-300" />
           </button>
         )}
 
@@ -148,20 +238,14 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </button>
         ) : (
-          /* Member Account Button */
+          /* Member Account Button - Profile Picture Only (Name moved to Profile) */
           <button
             id="btn-user-profile-header"
             onClick={handleProfileClick}
             title="View Member Profile & Settings"
-            className="flex items-center gap-2.5 pl-2.5 pr-1.5 py-1 rounded-full bg-[#001122]/80 border border-white/10 hover:border-[#D4AF37]/60 hover:bg-[#001122] transition-all text-left shadow-sm group"
+            className="relative p-0.5 rounded-full hover:ring-2 hover:ring-[#D4AF37] transition-all shadow-sm group shrink-0"
           >
-            <div className="flex flex-col items-end hidden sm:flex">
-              <span className="text-xs text-white font-bold max-w-[120px] truncate leading-none group-hover:text-[#D4AF37] transition-colors">
-                {currentUser.full_name}
-              </span>
-            </div>
-
-            <div className="relative w-8 h-8 rounded-full border-2 border-[#D4AF37] bg-[#001F3F] flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+            <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 border-[#D4AF37] bg-[#001F3F] flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
               {currentUser.avatar_url ? (
                 <img 
                   src={currentUser.avatar_url} 
@@ -174,18 +258,6 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
             </div>
-          </button>
-        )}
-
-        {/* Quick Log Out Icon Button if Logged In */}
-        {!isGuest && onLogout && (
-          <button
-            id="btn-quick-logout-header"
-            onClick={onLogout}
-            title="Log Out"
-            className="p-2 rounded-full bg-red-950/40 hover:bg-red-900/60 border border-red-500/30 text-red-400 hover:text-red-300 text-xs transition-all shadow-sm"
-          >
-            <LogOut className="w-3.5 h-3.5" />
           </button>
         )}
 

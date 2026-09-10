@@ -29,9 +29,14 @@ import {
   ChevronDown,
   Download,
   Award,
-  MessageCircle
+  MessageCircle,
+  Lock,
+  X,
+  Bell,
+  Radio,
+  HeartHandshake
 } from 'lucide-react';
-import { User, Sermon } from '../../types';
+import { User, Sermon, NotificationSettings } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { PaynowService } from '../../services/paynowService';
 import { INITIAL_USERS, MOCK_SERMONS } from '../../data/mockData';
@@ -41,6 +46,7 @@ import { PaynowConfigModal } from '../modals/PaynowConfigModal';
 import { DownloadedSermonsModal } from '../modals/DownloadedSermonsModal';
 import { ProfileBadgesModal } from '../modals/ProfileBadgesModal';
 import { ChatDevModal } from '../modals/ChatDevModal';
+import { ChangePasswordModal } from '../modals/ChangePasswordModal';
 import { VerifiedBadge } from '../common/VerifiedBadge';
 import confetti from 'canvas-confetti';
 
@@ -56,6 +62,7 @@ interface MeTabProps {
   onUpdateUser?: (user: User) => void;
   onOpenLogin?: () => void;
   onOpenSignUp?: () => void;
+  onOpenDirectChat?: () => void;
 }
 
 export const MeTab: React.FC<MeTabProps> = ({
@@ -69,13 +76,15 @@ export const MeTab: React.FC<MeTabProps> = ({
   onLogout,
   onUpdateUser,
   onOpenLogin,
-  onOpenSignUp
+  onOpenSignUp,
+  onOpenDirectChat
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'videos' | 'downloads' | 'saved' | 'settings'>('videos');
   const [showPhotoPicker, setShowPhotoPicker] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showPaynowModal, setShowPaynowModal] = useState(false);
   const [showDownloadsModal, setShowDownloadsModal] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [showBadgesModal, setShowBadgesModal] = useState(false);
   const [showChatDevModal, setShowChatDevModal] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
@@ -83,10 +92,31 @@ export const MeTab: React.FC<MeTabProps> = ({
   const [bioText, setBioText] = useState(
     currentUser.bio || 'Walking in supernatural dominion & apostolic grace • Gateway Church Harare'
   );
-  const [cachedCount, setCachedCount] = useState(12);
-  const [autoCacheEnabled, setAutoCacheEnabled] = useState(true);
-  const [showAccountSwitcherModal, setShowAccountSwitcherModal] = useState(false);
   const [downloadedSermons, setDownloadedSermons] = useState<Sermon[]>(StorageService.getDownloadedSermons());
+  const [playingOfflineSermon, setPlayingOfflineSermon] = useState<Sermon | null>(null);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(() =>
+    StorageService.getNotificationSettings(currentUser.id)
+  );
+  const [notificationSavedToast, setNotificationSavedToast] = useState(false);
+
+  useEffect(() => {
+    setNotificationSettings(StorageService.getNotificationSettings(currentUser.id));
+  }, [currentUser.id]);
+
+  const handleToggleNotification = (key: keyof NotificationSettings) => {
+    const updated: NotificationSettings = {
+      ...notificationSettings,
+      [key]: !notificationSettings[key]
+    };
+    setNotificationSettings(updated);
+    StorageService.setNotificationSettings(updated, currentUser.id);
+    setNotificationSavedToast(true);
+    setTimeout(() => setNotificationSavedToast(false), 2000);
+  };
+
+  useEffect(() => {
+    setBioText(currentUser.bio || 'Walking in supernatural dominion & apostolic grace • Gateway Church Harare');
+  }, [currentUser.bio]);
 
   const isGuest = currentUser.role === 'guest';
   const isSuperAdmin = currentUser.role === 'super_admin';
@@ -182,21 +212,20 @@ export const MeTab: React.FC<MeTabProps> = ({
       {/* Instagram-Style Profile Top Card */}
       <div className="bg-[#001F3F]/90 backdrop-blur-md border border-white/10 rounded-3xl p-4 sm:p-6 shadow-2xl space-y-4">
         
-        {/* Top Handle / Account Switcher Bar */}
+        {/* Top Handle / Account Identity Bar */}
         <div className="flex items-center justify-between text-xs text-white/70 pb-2 border-b border-white/10">
-          <button
-            onClick={() => setShowAccountSwitcherModal(true)}
-            className="flex items-center gap-1.5 hover:text-white transition-colors group"
-            title="Switch Account"
-          >
+          <div className="flex items-center gap-1.5">
             <span className="font-bold text-white text-sm">
               @{currentUser.handle || currentUser.full_name.toLowerCase().replace(/\s+/g, '_')}
             </span>
             {currentUser.verified_badge && (
               <VerifiedBadge type={currentUser.verified_badge} size="xs" />
             )}
-            <ChevronDown className="w-3.5 h-3.5 text-white/60 group-hover:text-white transition-transform" />
-          </button>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 ml-1 font-semibold">
+              <Lock className="w-2.5 h-2.5" />
+              <span>Private Account</span>
+            </span>
+          </div>
 
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 font-mono text-[11px] text-white/50">
@@ -213,17 +242,21 @@ export const MeTab: React.FC<MeTabProps> = ({
             {isSuperAdmin && (
               <button
                 onClick={onOpenAdminPanel}
-                className="px-2 py-0.5 rounded-full bg-[#D4AF37] text-[#001F3F] font-bold text-[10px]"
+                className="p-1 px-2 rounded-full bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] font-bold text-[10px] flex items-center gap-1 shadow-sm transition-transform hover:scale-105"
+                title="Admin Panel"
               >
-                Admin
+                <ShieldCheck className="w-3 h-3" />
+                <span>Admin</span>
               </button>
             )}
             {isDeveloper && (
               <button
                 onClick={onOpenDevConsole}
-                className="px-2 py-0.5 rounded-full bg-purple-600 text-white font-bold text-[10px]"
+                className="p-1 px-2 rounded-full bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] flex items-center gap-1 shadow-sm transition-transform hover:scale-105"
+                title="Developer Console (mr_juice7)"
               >
-                Dev Console
+                <Code2 className="w-3 h-3" />
+                <span>Console</span>
               </button>
             )}
             {onLogout && (
@@ -395,13 +428,14 @@ export const MeTab: React.FC<MeTabProps> = ({
             <span className="truncate">Share</span>
           </button>
 
-          {/* Switch Account Button */}
+          {/* Change Password Button */}
           <button
-            onClick={() => setShowAccountSwitcherModal(true)}
+            onClick={() => setShowChangePasswordModal(true)}
             className="py-2.5 px-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/10 transition-colors flex items-center justify-center gap-1"
+            title="Change Account Password"
           >
-            <UserIcon className="w-3.5 h-3.5 text-[#D4AF37]" />
-            <span className="truncate">Accounts</span>
+            <Lock className="w-3.5 h-3.5 text-[#D4AF37]" />
+            <span className="truncate">Password</span>
           </button>
         </div>
 
@@ -455,52 +489,6 @@ export const MeTab: React.FC<MeTabProps> = ({
           </div>
         </button>
 
-      </div>
-
-      {/* Background Video Cache Card (Auto Cache ON) */}
-      <div className="bg-[#001F3F]/70 border border-white/10 rounded-2xl p-3.5 sm:p-4 shadow-lg space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-              <Zap className="w-4 h-4 fill-current" />
-            </div>
-            <div>
-              <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
-                <span>Instant Offline Video Cache</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Active
-                </span>
-              </h4>
-              <p className="text-[11px] text-white/60">
-                Videos and sermons automatically pre-buffer in the background for instant offline playback.
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setAutoCacheEnabled(!autoCacheEnabled)}
-            className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${
-              autoCacheEnabled 
-                ? 'bg-emerald-500 text-slate-950' 
-                : 'bg-white/10 text-white/60'
-            }`}
-          >
-            {autoCacheEnabled ? 'Auto-Cache ON' : 'Paused'}
-          </button>
-        </div>
-
-        <div className="flex items-center justify-between text-[11px] text-white/70 pt-1 border-t border-white/5">
-          <span>{cachedCount} Sermons Cached (Ready for offline travel)</span>
-          <button
-            onClick={() => {
-              setCachedCount(0);
-              localStorage.setItem('gcz_cached_sermons_count', '0');
-            }}
-            className="text-white/40 hover:text-red-400 transition-colors"
-          >
-            Clear Cache
-          </button>
-        </div>
       </div>
 
       {/* Instagram-Style Profile Navigation Tabs */}
@@ -632,6 +620,44 @@ export const MeTab: React.FC<MeTabProps> = ({
             </div>
           </div>
 
+          {/* Inline Active Offline Sermon Player */}
+          {playingOfflineSermon && (
+            <div className="p-4 bg-[#00172e] border border-[#D4AF37]/50 rounded-2xl space-y-3 shadow-xl animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 truncate">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                  <span className="text-xs font-bold text-white truncate">
+                    Offline Player: {playingOfflineSermon.title}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setPlayingOfflineSermon(null)}
+                  className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors"
+                  title="Close Player"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="aspect-video w-full rounded-xl overflow-hidden bg-black border border-white/10 shadow-lg">
+                <iframe
+                  title={playingOfflineSermon.title}
+                  src={`https://www.youtube-nocookie.com/embed/${StorageService.extractYoutubeId(playingOfflineSermon.youtube_id || playingOfflineSermon.video_url)}?autoplay=1&controls=1&rel=0&playsinline=1`}
+                  className="w-full h-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-white/60">
+                <span>{playingOfflineSermon.speaker} • {playingOfflineSermon.series || 'Apostolic Series'}</span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold text-[10px]">
+                  Zero-Data Offline Vault
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Downloaded Sermons List */}
           {downloadedSermons.length === 0 ? (
             <div className="p-8 text-center bg-[#001F3F]/40 rounded-2xl border border-white/10 text-xs text-white/60 space-y-2">
@@ -673,17 +699,19 @@ export const MeTab: React.FC<MeTabProps> = ({
 
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
-                      onClick={() => {
-                        window.location.href = s.audio_url || `https://www.youtube.com/watch?v=${s.youtube_id}`;
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-[#D4AF37] text-[#001F3F] font-bold text-[11px] hover:bg-[#c29e2e] transition-colors"
+                      onClick={() => setPlayingOfflineSermon(s)}
+                      className="px-3 py-1.5 rounded-xl bg-[#D4AF37] text-[#001F3F] font-bold text-[11px] hover:bg-[#c29e2e] transition-colors flex items-center gap-1"
                     >
-                      Play
+                      <Play className="w-3 h-3 fill-current" />
+                      <span>Play</span>
                     </button>
                     <button
                       onClick={() => {
                         StorageService.deleteDownloadedSermon(s.id);
                         setDownloadedSermons(StorageService.getDownloadedSermons());
+                        if (playingOfflineSermon?.id === s.id) {
+                          setPlayingOfflineSermon(null);
+                        }
                       }}
                       className="p-1.5 rounded-xl text-white/40 hover:text-red-400 transition-colors"
                       title="Delete offline copy"
@@ -733,6 +761,116 @@ export const MeTab: React.FC<MeTabProps> = ({
       {activeSubTab === 'settings' && (
         <div className="space-y-3">
           
+          {/* Notification Settings Panel */}
+          <div className="p-4 bg-[#001F3F] border border-white/10 rounded-2xl space-y-3.5 shadow-md">
+            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#D4AF37]/15 text-[#D4AF37] flex items-center justify-center border border-[#D4AF37]/30">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-white text-xs">Notification Settings</h4>
+                  <p className="text-[11px] text-white/60">Configure real-time push & in-app ministry alerts</p>
+                </div>
+              </div>
+              {notificationSavedToast ? (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-fade-in">
+                  Saved
+                </span>
+              ) : (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/5 text-[#D4AF37] border border-[#D4AF37]/20">
+                  Active
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-3 pt-1">
+              {/* 1. Live Streams Toggle */}
+              <div className="flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-red-500/15 text-red-400 flex items-center justify-center shrink-0 mt-0.5 border border-red-500/30">
+                    <Radio className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white">Live Streams</p>
+                    <p className="text-[11px] text-white/60 leading-tight">Instant alerts when Apostle Joe Daniels goes live in the sanctuary</p>
+                  </div>
+                </div>
+                <button
+                  id="btn-toggle-notif-livestreams"
+                  type="button"
+                  onClick={() => handleToggleNotification('liveStreams')}
+                  className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-200 ease-in-out shrink-0 ${
+                    notificationSettings.liveStreams ? 'bg-[#D4AF37]' : 'bg-white/15'
+                  }`}
+                  aria-label="Toggle Live Stream Notifications"
+                >
+                  <div
+                    className={`bg-[#001F3F] w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                      notificationSettings.liveStreams ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* 2. New Prayer Requests Toggle */}
+              <div className="flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-[#D4AF37] flex items-center justify-center shrink-0 mt-0.5 border border-[#D4AF37]/30">
+                    <HeartHandshake className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white">New Prayer Requests</p>
+                    <p className="text-[11px] text-white/60 leading-tight">Alerts when new prayer petitions or answered testimonies are posted</p>
+                  </div>
+                </div>
+                <button
+                  id="btn-toggle-notif-prayer"
+                  type="button"
+                  onClick={() => handleToggleNotification('prayerRequests')}
+                  className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-200 ease-in-out shrink-0 ${
+                    notificationSettings.prayerRequests ? 'bg-[#D4AF37]' : 'bg-white/15'
+                  }`}
+                  aria-label="Toggle Prayer Request Notifications"
+                >
+                  <div
+                    className={`bg-[#001F3F] w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                      notificationSettings.prayerRequests ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* 3. Direct Messages Toggle */}
+              <div className="flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0 mt-0.5 border border-blue-500/30">
+                    <MessageCircle className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white">Direct Messages</p>
+                    <p className="text-[11px] text-white/60 leading-tight">Notifications for private pastoral messages and covenant partner chats</p>
+                  </div>
+                </div>
+                <button
+                  id="btn-toggle-notif-dms"
+                  type="button"
+                  onClick={() => handleToggleNotification('directMessages')}
+                  className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-200 ease-in-out shrink-0 ${
+                    notificationSettings.directMessages ? 'bg-[#D4AF37]' : 'bg-white/15'
+                  }`}
+                  aria-label="Toggle Direct Message Notifications"
+                >
+                  <div
+                    className={`bg-[#001F3F] w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                      notificationSettings.directMessages ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Low-Data Saver */}
           <div className="p-4 bg-[#001F3F] border border-white/10 rounded-2xl flex items-center justify-between text-xs">
             <div className="flex items-center gap-2.5">
@@ -801,7 +939,7 @@ export const MeTab: React.FC<MeTabProps> = ({
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   {INITIAL_USERS.map(u => (
                     <button
-                      key={u.phone}
+                      key={u.id}
                       onClick={() => {
                         StorageService.setCurrentUser(u);
                         onSwitchUser(u);
@@ -878,6 +1016,7 @@ export const MeTab: React.FC<MeTabProps> = ({
         }}
         onLogout={onLogout}
         onEditProfile={() => setIsEditingBio(true)}
+        onOpenDirectChat={onOpenDirectChat}
         onRefreshUser={() => {
           if (onUpdateUser) onUpdateUser(StorageService.getCurrentUser() || currentUser);
         }}
@@ -905,80 +1044,12 @@ export const MeTab: React.FC<MeTabProps> = ({
         </button>
       </div>
 
-      {/* INSTAGRAM-STYLE SWITCH ACCOUNT MODAL */}
-      {showAccountSwitcherModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-[#001F3F] border border-[#D4AF37]/40 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl space-y-3 p-5">
-            <div className="flex items-center justify-between pb-2 border-b border-white/10">
-              <div>
-                <h3 className="font-bold text-sm text-white">Switch Church Account</h3>
-                <p className="text-[11px] text-white/60">Choose from 10 active ministry and fellowship accounts</p>
-              </div>
-              <button
-                onClick={() => setShowAccountSwitcherModal(false)}
-                className="p-1 rounded-lg text-white/60 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-              {INITIAL_USERS.map((user) => {
-                const isActive = currentUser.phone === user.phone;
-                return (
-                  <button
-                    key={user.phone}
-                    onClick={() => {
-                      StorageService.setCurrentUser(user);
-                      onSwitchUser(user);
-                      setShowAccountSwitcherModal(false);
-                      confetti({ particleCount: 25, spread: 50, origin: { y: 0.7 } });
-                    }}
-                    className={`w-full p-2.5 rounded-2xl flex items-center justify-between gap-3 text-left transition-all ${
-                      isActive
-                        ? 'bg-[#D4AF37]/20 border border-[#D4AF37]'
-                        : 'bg-white/5 border border-white/10 hover:bg-white/10'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-white/20">
-                        {user.avatar_url ? (
-                          <img src={user.avatar_url} alt={user.full_name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full bg-[#001122] flex items-center justify-center font-bold text-[#D4AF37]">
-                            {user.full_name[0]}
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1">
-                          <span className="font-bold text-xs text-white truncate">{user.full_name}</span>
-                          {user.verified_badge && <VerifiedBadge type={user.verified_badge} size="xs" />}
-                        </div>
-                        <p className="text-[11px] text-white/60 truncate">@{user.handle || 'user'} • {user.role}</p>
-                      </div>
-                    </div>
-
-                    <div className="shrink-0 flex items-center gap-1.5">
-                      {isActive && (
-                        <span className="w-6 h-6 rounded-full bg-[#D4AF37] text-[#001F3F] flex items-center justify-center font-bold text-xs">
-                          ✓
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={() => setShowAccountSwitcherModal(false)}
-              className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+      {/* USER CHANGE PASSWORD MODAL */}
+      {showChangePasswordModal && (
+        <ChangePasswordModal
+          currentUser={currentUser}
+          onClose={() => setShowChangePasswordModal(false)}
+        />
       )}
 
     </div>

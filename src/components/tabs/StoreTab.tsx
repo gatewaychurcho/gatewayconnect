@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShoppingBag, 
   Heart, 
@@ -17,13 +17,19 @@ import {
   MessageCircle, 
   Clock, 
   User, 
-  Mail,
-  ArrowRight,
-  Globe,
-  Receipt,
-  Zap,
-  Copy,
-  Smartphone
+  Mail, 
+  ArrowRight, 
+  Globe, 
+  Receipt, 
+  Zap, 
+  Copy, 
+  Smartphone,
+  Truck,
+  MapPin,
+  X,
+  Eye,
+  Check,
+  Tag
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Product, CartItem, DonationFund, PaymentGateway, Donation, ServiceBooking } from '../../types';
@@ -40,10 +46,40 @@ interface StoreTabProps {
 export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess }) => {
   const [subTab, setSubTab] = useState<'store' | 'give' | 'booking'>('store');
   const [currency, setCurrency] = useState<'USD' | 'ZiG' | 'GBP' | 'ZAR'>('USD');
+  const currentUser = StorageService.getCurrentUser();
   
-  // Cart State
-  const [cart, setCart] = useState<CartItem[]>([]);
+  // Cart State (Persisted in StorageService & Supabase database)
+  const [cart, setCart] = useState<CartItem[]>(() => StorageService.getCart(currentUser?.id));
   const [showCartModal, setShowCartModal] = useState<boolean>(false);
+  const [cartToast, setCartToast] = useState<string | null>(null);
+  const [selectedSizes, setSelectedSizes] = useState<Record<string, string>>({});
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
+
+  // Cart Checkout & Delivery State
+  const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'courier'>('pickup');
+  const [deliveryAddress, setDeliveryAddress] = useState<string>('');
+  const [orderName, setOrderName] = useState<string>(currentUser?.full_name || 'Church Member');
+  const [orderPhone, setOrderPhone] = useState<string>(currentUser?.phone || '0772123456');
+  const [orderPaymentMethod, setOrderPaymentMethod] = useState<PaymentGateway>('EcoCash');
+  const [confirmedOrder, setConfirmedOrder] = useState<any | null>(null);
+
+  // Hydrate cart from Supabase and listen for external updates
+  useEffect(() => {
+    if (currentUser?.id) {
+      StorageService.hydrateCartFromSupabase(currentUser.id).then(remoteCart => {
+        if (remoteCart && remoteCart.length > 0) {
+          setCart(remoteCart);
+        }
+      });
+    }
+
+    const handleCartUpdated = () => {
+      setCart(StorageService.getCart(currentUser?.id));
+    };
+    window.addEventListener('gcz_cart_updated', handleCartUpdated);
+    return () => window.removeEventListener('gcz_cart_updated', handleCartUpdated);
+  }, [currentUser?.id]);
 
   // Giving Form State
   const [giveFund, setGiveFund] = useState<DonationFund>('Tithe');
@@ -77,19 +113,28 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
     if (currency === 'ZiG') return `${Math.round(usd * 14.8)} ZiG`;
     if (currency === 'GBP') return `£${Math.round(usd * 0.78)}`;
     if (currency === 'ZAR') return `R${Math.round(usd * 18.5)}`;
-    return `$${usd} USD`;
+    return `$${usd.toFixed(2)} USD`;
   };
 
-  const handleAddToCart = (product: Product) => {
+  const handleAddToCart = (product: Product, size?: string) => {
+    const chosenSize = size || selectedSizes[product.id] || (product.available_sizes ? product.available_sizes[0] : 'M');
     setCart(prev => {
-      const existing = prev.find(item => item.product.id === product.id);
+      const existing = prev.find(item => item.product.id === product.id && item.selectedSize === chosenSize);
+      let updated: CartItem[];
       if (existing) {
-        return prev.map(item => 
-          item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+        updated = prev.map(item => 
+          (item.product.id === product.id && item.selectedSize === chosenSize)
+            ? { ...item, quantity: item.quantity + 1 } 
+            : item
         );
+      } else {
+        updated = [...prev, { product, quantity: 1, selectedSize: chosenSize }];
       }
-      return [...prev, { product, quantity: 1, selectedSize: 'M' }];
+      StorageService.setCart(updated, currentUser?.id);
+      return updated;
     });
+    setCartToast(`Added "${product.name}" (${chosenSize}) to cart`);
+    setTimeout(() => setCartToast(null), 3000);
     confetti({
       particleCount: 15,
       spread: 40,
@@ -97,7 +142,37 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
     });
   };
 
-  const totalCartUsd = cart.reduce((sum, item) => sum + (item.product.price_usd * item.quantity), 0);
+  const updateCartQuantity = (productId: string, delta: number, size?: string) => {
+    setCart(prev => {
+      const updated = prev.map(item => {
+        if (item.product.id === productId && (!size || item.selectedSize === size)) {
+          const newQty = item.quantity + delta;
+          return newQty > 0 ? { ...item, quantity: newQty } : null;
+        }
+        return item;
+      }).filter((item): item is CartItem => item !== null);
+      StorageService.setCart(updated, currentUser?.id);
+      return updated;
+    });
+  };
+
+  const removeFromCart = (productId: string, size?: string) => {
+    setCart(prev => {
+      const updated = prev.filter(item => !(item.product.id === productId && (!size || item.selectedSize === size)));
+      StorageService.setCart(updated, currentUser?.id);
+      return updated;
+    });
+  };
+
+  const clearCart = () => {
+    setCart([]);
+    StorageService.setCart([], currentUser?.id);
+  };
+
+  const cartSubtotalUsd = cart.reduce((sum, item) => sum + (item.product.price_usd * item.quantity), 0);
+  const deliveryFeeUsd = deliveryMethod === 'courier' ? 3.00 : 0.00;
+  const totalCartUsd = cartSubtotalUsd + deliveryFeeUsd;
+  const totalCartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleProcessDonation = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,7 +192,8 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
       'Seed Faith': 'Harare Evangelistic Crusade & Souls outreach',
       'Building Foundation': 'Cathedral Roofing Phase 2 Construction in Belvedere',
       'Missions & Evangelism': 'Rural Mashonaland & Matabeleland church plants',
-      'Apostolic Honorarium': 'Direct apostolic blessing and prophetic mantle honoring'
+      'Apostolic Honorarium': 'Direct apostolic blessing and prophetic mantle honoring',
+      'Altar Seed': 'Direct altar seed covenant offering & prophetic connection'
     };
 
     const refNumber = `GCZ-PAYNOW-${Date.now().toString().slice(-6)}`;
@@ -188,23 +264,29 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
     });
   };
 
-  const handleProcessOrderCheckout = () => {
+  const handleProcessOrderCheckout = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (cart.length === 0) return;
-    const user = StorageService.getCurrentUser();
-    StorageService.createOrder({
-      user_name: user.full_name,
-      user_phone: user.phone,
-      items: cart,
+    const finalAddress = deliveryMethod === 'courier' 
+      ? (deliveryAddress.trim() || 'Harare Residential Delivery') 
+      : 'Main Church Pick-up Desk / Belvedere Cathedral Hub';
+      
+    const newOrder = StorageService.createOrder({
+      user_name: orderName.trim() || 'Church Member',
+      user_phone: orderPhone.trim() || '+263772123456',
+      items: [...cart],
       total_usd: totalCartUsd,
-      payment_method: paymentGateway,
-      delivery_address: 'Main Church Pick-up Desk / Belvedere Cathedral Hub'
+      payment_method: orderPaymentMethod,
+      delivery_address: finalAddress
     });
 
+    setConfirmedOrder(newOrder);
     setCart([]);
     setShowCartModal(false);
     confetti({
-      particleCount: 40,
-      spread: 70
+      particleCount: 50,
+      spread: 80,
+      origin: { y: 0.5 }
     });
   };
 
@@ -321,7 +403,7 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
               className="px-4 py-2.5 rounded-xl bg-[#D4AF37] hover:bg-[#c49f2f] text-[#001F3F] font-bold text-xs flex items-center justify-center gap-1.5 shadow transition-all shrink-0 active:scale-[0.98]"
             >
               <Zap className="w-3.5 h-3.5 fill-[#001F3F]" />
-              <span>Instant EcoCash Push</span>
+              <span>Direct EcoCash Push</span>
             </button>
           </div>
 
@@ -347,7 +429,7 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
                     Select Giving Fund
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                    {(['Tithe', 'Firstfruits', 'Seed Faith', 'Building Foundation', 'Missions & Evangelism', 'Apostolic Honorarium'] as DonationFund[]).map(fund => (
+                    {(['Tithe', 'Firstfruits', 'Seed Faith', 'Building Foundation', 'Missions & Evangelism', 'Apostolic Honorarium', 'Altar Seed'] as DonationFund[]).map(fund => (
                       <button
                         type="button"
                         key={fund}
@@ -759,76 +841,196 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
           
           {/* Cart Header trigger if items exist */}
           {cart.length > 0 && (
-            <div className="bg-amber-500 text-slate-950 p-3 rounded-2xl flex items-center justify-between font-bold shadow-lg">
-              <div className="flex items-center gap-2">
-                <ShoppingBag className="w-5 h-5" />
-                <span>{cart.length} item(s) in Cart: {getPrice(totalCartUsd)}</span>
+            <div className="bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 p-3.5 rounded-2xl flex items-center justify-between font-bold shadow-xl border border-amber-300">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-slate-950 text-amber-400 flex items-center justify-center shrink-0 shadow">
+                  <ShoppingBag className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="block text-xs uppercase tracking-wider text-slate-900 font-extrabold">Active Cart</span>
+                  <span className="text-sm font-black">{totalCartItemCount} item(s) • {getPrice(totalCartUsd)}</span>
+                </div>
               </div>
               <button
                 id="btn-view-cart-checkout"
                 onClick={() => setShowCartModal(true)}
-                className="px-4 py-1.5 bg-slate-950 text-amber-300 rounded-xl text-xs font-bold hover:bg-slate-900"
+                className="px-4 py-2 bg-slate-950 text-amber-300 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-900 shadow-md transition-all active:scale-95"
               >
-                Checkout Now
+                View Cart / Checkout →
               </button>
             </div>
           )}
 
-          {/* Products Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {products.map(prod => (
-              <div
-                key={prod.id}
-                className="bg-[#001F3F] border border-white/10 hover:border-[#D4AF37]/50 rounded-2xl overflow-hidden flex flex-col justify-between transition-all shadow-md"
-              >
-                <div>
-                  <div className="relative aspect-square bg-[#001122] overflow-hidden">
-                    <img
-                      src={prod.image_url}
-                      alt={prod.name}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                    <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-[#001F3F]/90 text-[10px] font-bold text-[#D4AF37] border border-[#D4AF37]/30">
-                      {prod.category}
-                    </span>
-                    {prod.is_bestseller && (
-                      <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-[#D4AF37] text-[#001F3F] text-[10px] font-black uppercase">
-                        Bestseller
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="p-3.5 space-y-1">
-                    <h4 className="font-bold text-sm text-white line-clamp-1">
-                      {prod.name}
-                    </h4>
-                    <p className="text-[11px] text-white/60 line-clamp-2 leading-relaxed">
-                      {prod.description}
-                    </p>
-                    <div className="pt-2 flex items-baseline gap-2">
-                      <span className="text-base font-black text-[#D4AF37]">
-                        {getPrice(prod.price_usd)}
-                      </span>
-                      <span className="text-[10px] text-white/50 font-medium">
-                        ({prod.price_zig} ZiG)
-                      </span>
-                    </div>
-                  </div>
+          {/* JD Collection Official Store Banner */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-[#001830] via-[#001F3F] to-[#0a284e] border border-[#D4AF37]/30 shadow-lg relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#D4AF37]/5 rounded-full blur-2xl pointer-events-none" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#D4AF37]/20 text-[#D4AF37] text-[10px] font-mono font-bold tracking-wider uppercase border border-[#D4AF37]/30">
+                    Official Release 2026
+                  </span>
+                  <span className="text-[11px] text-white/50">• Worldwide Dispatch</span>
                 </div>
+                <h3 className="font-serif-church text-base sm:text-lg font-bold text-white tracking-wide">
+                  Joe Daniels Collection & Kingdom Resources
+                </h3>
+                <p className="text-xs text-slate-300 max-w-xl leading-relaxed">
+                  Faith-inspired apparel, bestselling prophetic literature, and consecrated media. Wear the message, represent the Kingdom.
+                </p>
+              </div>
 
-                <div className="p-3 bg-[#001122]/60 border-t border-white/5">
-                  <button
-                    id={`btn-add-product-${prod.id}`}
-                    onClick={() => handleAddToCart(prod)}
-                    className="w-full py-2 bg-[#D4AF37] hover:bg-[#c49f2f] text-[#001F3F] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
-                  >
-                    <ShoppingBag className="w-3.5 h-3.5" />
-                    <span>Add to Cart</span>
-                  </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-right">
+                  <p className="text-[10px] text-white/60 font-medium uppercase">Collection Pricing</p>
+                  <p className="text-xs font-black text-[#D4AF37]">$34.99 USD <span className="text-white/60 font-normal">|</span> R699 ZAR</p>
                 </div>
               </div>
-            ))}
+            </div>
+
+            {/* Category Filter Pills */}
+            <div className="flex items-center gap-2 pt-3 mt-3 border-t border-white/10 overflow-x-auto no-scrollbar">
+              {[
+                { id: 'All', label: 'All Items' },
+                { id: 'Apparel', label: '👕 Kingdom Apparel (JD Collection)' },
+                { id: 'Books', label: '📖 Apostolic Books' },
+                { id: 'Media', label: '💿 Anointing Oil & Media' }
+              ].map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                    selectedCategory === cat.id
+                      ? 'bg-[#D4AF37] text-[#001F3F] shadow-md shadow-[#D4AF37]/20'
+                      : 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Products Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {products
+              .filter(p => {
+                if (selectedCategory === 'All') return true;
+                if (selectedCategory === 'Apparel') return p.category === 'Kingdom Apparel';
+                if (selectedCategory === 'Books') return p.category === 'Books';
+                if (selectedCategory === 'Media') return p.category === 'Anointing Oil & Media' || p.category === 'Conference Passes';
+                return true;
+              })
+              .map(prod => {
+                const isApparel = prod.category === 'Kingdom Apparel';
+                const currentSize = selectedSizes[prod.id] || (prod.available_sizes ? prod.available_sizes[1] || prod.available_sizes[0] : 'M');
+
+                return (
+                  <div
+                    key={prod.id}
+                    className="bg-[#001F3F] border border-white/10 hover:border-[#D4AF37]/50 rounded-2xl overflow-hidden flex flex-col justify-between transition-all shadow-md group"
+                  >
+                    <div>
+                      {/* Product Image Box */}
+                      <div className="relative aspect-square bg-[#001122] overflow-hidden flex items-center justify-center p-3">
+                        <img
+                          src={prod.image_url}
+                          alt={prod.name}
+                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                        />
+                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-[#001F3F]/90 text-[10px] font-bold text-[#D4AF37] border border-[#D4AF37]/30 backdrop-blur-sm">
+                          {prod.category}
+                        </span>
+                        {prod.is_bestseller && (
+                          <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-[#D4AF37] text-[#001F3F] text-[10px] font-black uppercase shadow">
+                            Bestseller
+                          </span>
+                        )}
+                        {/* Quick Details Button */}
+                        <button
+                          type="button"
+                          onClick={() => setPreviewProduct(prod)}
+                          className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-black/70 hover:bg-black/90 text-white text-[10px] font-bold backdrop-blur-sm border border-white/20 flex items-center gap-1 transition-all opacity-90 hover:opacity-100"
+                          title="View Product Details"
+                        >
+                          <Eye className="w-3 h-3 text-[#D4AF37]" />
+                          <span>Details</span>
+                        </button>
+                      </div>
+
+                      <div className="p-3.5 space-y-2">
+                        {/* Color / Theme Badge */}
+                        {prod.color_theme && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-[#D4AF37]" />
+                            <span className="text-[10px] font-bold text-[#D4AF37] tracking-wider uppercase truncate">
+                              {prod.color_theme}
+                            </span>
+                          </div>
+                        )}
+
+                        <h4 className="font-bold text-sm text-white line-clamp-2 leading-snug">
+                          {prod.name}
+                        </h4>
+
+                        <p className="text-[11px] text-white/60 line-clamp-2 leading-relaxed">
+                          {prod.description}
+                        </p>
+
+                        {/* Size Selection for Apparel */}
+                        {isApparel && prod.available_sizes && (
+                          <div className="pt-1">
+                            <p className="text-[10px] text-white/50 font-semibold mb-1 uppercase tracking-wider">Select Size:</p>
+                            <div className="flex items-center gap-1.5">
+                              {prod.available_sizes.map(size => (
+                                <button
+                                  key={size}
+                                  type="button"
+                                  onClick={() => setSelectedSizes(prev => ({ ...prev, [prod.id]: size }))}
+                                  className={`w-7 h-7 rounded-lg text-xs font-bold transition-all border ${
+                                    currentSize === size
+                                      ? 'bg-[#D4AF37] text-[#001F3F] border-[#D4AF37] shadow-sm'
+                                      : 'bg-white/5 text-white/80 border-white/10 hover:border-white/30'
+                                  }`}
+                                >
+                                  {size}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Price Display with exact USD & ZAR prices */}
+                        <div className="pt-2 flex items-baseline flex-wrap gap-x-2 gap-y-0.5 border-t border-white/5">
+                          <span className="text-base font-black text-[#D4AF37]">
+                            {getPrice(prod.price_usd)}
+                          </span>
+                          {prod.price_zar && (
+                            <span className="text-xs font-bold text-amber-200/90">
+                              | R{prod.price_zar}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-white/50 font-medium">
+                            ({prod.price_zig} ZiG)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-[#001122]/60 border-t border-white/5">
+                      <button
+                        id={`btn-add-product-${prod.id}`}
+                        onClick={() => handleAddToCart(prod, isApparel ? currentSize : undefined)}
+                        className="w-full py-2 bg-[#D4AF37] hover:bg-[#c49f2f] text-[#001F3F] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] shadow"
+                      >
+                        <ShoppingBag className="w-3.5 h-3.5" />
+                        <span>Add to Cart {isApparel && currentSize ? `(${currentSize})` : ''}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
 
         </div>
@@ -906,45 +1108,477 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
         </div>
       )}
 
-      {/* 6. Cart & Checkout Modal */}
+      {/* 6. Fixed Kingdom Store Cart & Checkout Modal */}
       {showCartModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3">
-          <div className="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-              <h3 className="font-serif-church font-bold text-amber-400 text-base">
-                Your Kingdom Store Cart
-              </h3>
-              <button onClick={() => setShowCartModal(false)} className="text-xs text-slate-400">✕</button>
-            </div>
-
-            <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
-              {cart.map((item, i) => (
-                <div key={i} className="flex items-center justify-between p-2.5 bg-slate-950 rounded-xl border border-slate-800 text-xs">
-                  <div>
-                    <p className="font-bold text-white">{item.product.name}</p>
-                    <p className="text-slate-400">{getPrice(item.product.price_usd)} × {item.quantity}</p>
-                  </div>
-                  <button
-                    onClick={() => setCart(prev => prev.filter((_, idx) => idx !== i))}
-                    className="text-red-400 hover:text-red-300 p-1"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 animate-in fade-in">
+          <div className="bg-slate-900 border border-amber-500/40 rounded-3xl max-w-lg w-full p-5 sm:p-6 space-y-4 shadow-2xl max-h-[90vh] flex flex-col text-white">
+            
+            {/* Modal Header */}
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                  <ShoppingBag className="w-4 h-4" />
                 </div>
-              ))}
+                <div>
+                  <h3 className="font-serif-church font-bold text-amber-400 text-base">
+                    Kingdom Store Cart
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {totalCartItemCount} item{totalCartItemCount !== 1 ? 's' : ''} in cart
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {cart.length > 0 && (
+                  <button
+                    onClick={clearCart}
+                    className="text-[11px] text-red-400 hover:text-red-300 font-semibold px-2 py-1 rounded-lg hover:bg-red-500/10 transition-colors"
+                  >
+                    Clear All
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowCartModal(false)}
+                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            <div className="border-t border-slate-800 pt-2 flex justify-between text-sm font-bold text-white">
-              <span>Total Payable:</span>
-              <span className="text-amber-400">{getPrice(totalCartUsd)}</span>
+            {/* Cart Content: Empty State or Items List */}
+            {cart.length === 0 ? (
+              <div className="py-10 text-center space-y-3.5 my-auto">
+                <div className="w-16 h-16 rounded-full bg-slate-800 border border-slate-700 mx-auto flex items-center justify-center text-slate-500">
+                  <ShoppingBag className="w-8 h-8 stroke-[1.5]" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-bold text-white text-base">Your Cart is Currently Empty</h4>
+                  <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
+                    Browse our collection of ministry books, holy communion sets, anointed audio teachings, and apparel.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowCartModal(false)}
+                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-lg uppercase tracking-wider transition-transform active:scale-95"
+                >
+                  Explore Store Items
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                {/* Items List */}
+                <div className="space-y-2.5">
+                  {cart.map((item) => (
+                    <div
+                      key={`${item.product.id}_${item.selectedSize || 'std'}`}
+                      className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800/80 flex items-center justify-between gap-3 text-xs"
+                    >
+                      {/* Product Thumbnail */}
+                      <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center text-amber-400 font-bold p-1">
+                        {item.product.image_url ? (
+                          <img
+                            src={item.product.image_url}
+                            alt={item.product.name}
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <ShoppingBag className="w-5 h-5 opacity-60" />
+                        )}
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-white truncate text-xs">{item.product.name}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-[11px] text-amber-400 font-semibold">{getPrice(item.product.price_usd)} each</p>
+                          {item.selectedSize && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              Size: {item.selectedSize}
+                            </span>
+                          )}
+                        </div>
+                        <span className="inline-block text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 mt-0.5">
+                          {item.product.category}
+                        </span>
+                      </div>
+
+                      {/* Quantity Controls & Line Total */}
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-xl p-1">
+                          <button
+                            type="button"
+                            onClick={() => updateCartQuantity(item.product.id, -1, item.selectedSize)}
+                            className="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs transition-colors"
+                            title="Decrease quantity"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="w-5 text-center font-bold text-white text-xs">{item.quantity}</span>
+                          <button
+                            type="button"
+                            onClick={() => updateCartQuantity(item.product.id, 1, item.selectedSize)}
+                            className="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs transition-colors"
+                            title="Increase quantity"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        <div className="text-right min-w-[50px]">
+                          <span className="font-bold text-white text-xs block">
+                            {getPrice(item.product.price_usd * item.quantity)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeFromCart(item.product.id, item.selectedSize)}
+                            className="text-red-400 hover:text-red-300 text-[10px] mt-0.5 inline-flex items-center gap-0.5"
+                          >
+                            <Trash2 className="w-2.5 h-2.5" /> Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Fulfillment & Delivery Selection */}
+                <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800 space-y-2 text-xs">
+                  <span className="block text-[10px] uppercase font-bold text-amber-400 tracking-wider">
+                    Fulfillment Method
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryMethod('pickup')}
+                      className={`p-2.5 rounded-xl border text-left transition-all ${
+                        deliveryMethod === 'pickup'
+                          ? 'bg-amber-500/20 border-amber-400 text-amber-300'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs">
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span>Cathedral Hub</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">Belvedere Hub • FREE</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryMethod('courier')}
+                      className={`p-2.5 rounded-xl border text-left transition-all ${
+                        deliveryMethod === 'courier'
+                          ? 'bg-amber-500/20 border-amber-400 text-amber-300'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs">
+                        <Truck className="w-3.5 h-3.5" />
+                        <span>Express Courier</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">Harare & Nationwide • + $3.00</p>
+                    </button>
+                  </div>
+
+                  {deliveryMethod === 'courier' && (
+                    <div className="pt-2 animate-in fade-in">
+                      <label className="block text-[10px] font-semibold text-slate-400 mb-1">
+                        Delivery Residential / Office Address:
+                      </label>
+                      <input
+                        type="text"
+                        value={deliveryAddress}
+                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                        placeholder="e.g. 14 Samora Machel Ave, Harare"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Recipient Details */}
+                <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800 space-y-2 text-xs">
+                  <span className="block text-[10px] uppercase font-bold text-amber-400 tracking-wider">
+                    Recipient Contact
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-0.5">Full Name</label>
+                      <input
+                        type="text"
+                        value={orderName}
+                        onChange={(e) => setOrderName(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-0.5">Mobile Phone (EcoCash / WhatsApp)</label>
+                      <input
+                        type="tel"
+                        value={orderPhone}
+                        onChange={(e) => setOrderPhone(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment Gateway Selector */}
+                <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800 space-y-2 text-xs">
+                  <span className="block text-[10px] uppercase font-bold text-amber-400 tracking-wider">
+                    Payment Method
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    {(['EcoCash', 'OneMoney', 'InnBucks', 'Paynow'] as PaymentGateway[]).map(gw => (
+                      <button
+                        key={gw}
+                        type="button"
+                        onClick={() => setOrderPaymentMethod(gw)}
+                        className={`p-2 rounded-xl text-center font-bold text-[11px] border transition-all ${
+                          orderPaymentMethod === gw
+                            ? 'bg-amber-500 text-slate-950 border-amber-400 shadow'
+                            : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {gw}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Financial Summary */}
+                <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-slate-400">
+                    <span>Items Subtotal:</span>
+                    <span>{getPrice(cartSubtotalUsd)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>Fulfillment Delivery:</span>
+                    <span>{deliveryMethod === 'courier' ? getPrice(deliveryFeeUsd) : 'FREE (Church Pickup)'}</span>
+                  </div>
+                  <div className="border-t border-slate-800 pt-2 flex justify-between text-sm font-black text-white">
+                    <span>Total Amount:</span>
+                    <span className="text-amber-400 text-base">{getPrice(totalCartUsd)}</span>
+                  </div>
+                </div>
+
+                {/* Confirm Order Button */}
+                <button
+                  type="button"
+                  onClick={handleProcessOrderCheckout}
+                  className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black rounded-2xl text-xs uppercase tracking-wider shadow-xl transition-all active:scale-98 flex items-center justify-center gap-2"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Place Order • {getPrice(totalCartUsd)} ({orderPaymentMethod})</span>
+                </button>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* Confirmed Order Digital Receipt Modal */}
+      {confirmedOrder && (
+        <div className="fixed inset-0 z-60 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 animate-in zoom-in-95">
+          <div className="bg-slate-900 border border-amber-500/50 rounded-3xl max-w-md w-full p-5 space-y-4 shadow-2xl text-white">
+            <div className="text-center space-y-1.5 border-b border-slate-800 pb-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto shadow-inner">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <h3 className="font-serif-church font-bold text-amber-400 text-base">
+                Kingdom Order Confirmed!
+              </h3>
+              <p className="text-xs text-slate-400">
+                Your order has been recorded in the Cathedral Fulfillment Desk.
+              </p>
             </div>
 
-            <button
-              onClick={handleProcessOrderCheckout}
-              className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider shadow"
-            >
-              Confirm Purchase & Pay via {paymentGateway}
-            </button>
+            <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800 space-y-2 text-xs font-mono">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Order Ref:</span>
+                <span className="text-amber-400 font-bold">{confirmedOrder.id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Recipient:</span>
+                <span className="text-white">{confirmedOrder.user_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Phone:</span>
+                <span className="text-white">{confirmedOrder.user_phone}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Fulfillment:</span>
+                <span className="text-white truncate max-w-[200px]">{confirmedOrder.delivery_address}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Payment:</span>
+                <span className="text-white">{confirmedOrder.payment_method}</span>
+              </div>
+              <div className="border-t border-slate-800 pt-1.5 flex justify-between text-sm font-bold text-amber-400 font-sans">
+                <span>Total Paid:</span>
+                <span>{getPrice(confirmedOrder.total_usd)}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => window.print()}
+                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Save Receipt</span>
+              </button>
+              <button
+                onClick={() => setConfirmedOrder(null)}
+                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Cart Button for Store Browsing */}
+      {subTab === 'store' && cart.length > 0 && !showCartModal && (
+        <button
+          onClick={() => setShowCartModal(true)}
+          className="fixed bottom-20 right-4 sm:right-6 z-40 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 px-4 py-2.5 rounded-full font-black text-xs shadow-2xl flex items-center gap-2.5 border border-amber-300 animate-bounce active:scale-95 transition-transform"
+        >
+          <ShoppingBag className="w-4 h-4" />
+          <span>Cart ({totalCartItemCount}) • {getPrice(totalCartUsd)}</span>
+        </button>
+      )}
+
+      {/* Toast Notification */}
+      {cartToast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-slate-950 px-4 py-2 rounded-full font-bold text-xs shadow-2xl flex items-center gap-2 animate-in slide-in-from-top-2 border border-amber-300">
+          <CheckCircle2 className="w-4 h-4" />
+          <span>{cartToast}</span>
+        </div>
+      )}
+
+      {/* Product Quick View / Details Modal */}
+      {previewProduct && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 animate-in fade-in">
+          <div className="bg-slate-900 border border-amber-500/40 rounded-3xl max-w-lg w-full p-5 sm:p-6 space-y-4 shadow-2xl max-h-[90vh] flex flex-col text-white overflow-y-auto">
+            <div className="flex justify-between items-start border-b border-slate-800 pb-3">
+              <div>
+                <span className="text-[10px] font-bold tracking-wider text-amber-400 uppercase">
+                  {previewProduct.category}
+                </span>
+                <h3 className="font-serif-church font-bold text-white text-lg">
+                  {previewProduct.name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewProduct(null)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Stage */}
+            <div className="relative aspect-square max-h-72 w-full bg-[#001122] rounded-2xl overflow-hidden flex items-center justify-center p-4 border border-white/10">
+              <img
+                src={previewProduct.image_url}
+                alt={previewProduct.name}
+                className="w-full h-full object-contain"
+              />
+              {previewProduct.color_theme && (
+                <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-full bg-black/80 text-amber-300 text-xs font-bold border border-amber-400/40 backdrop-blur-sm">
+                  {previewProduct.color_theme}
+                </span>
+              )}
+            </div>
+
+            {/* Description & Specs */}
+            <div className="space-y-2.5 text-xs text-slate-300">
+              <p className="leading-relaxed">{previewProduct.description}</p>
+              {previewProduct.fabric && (
+                <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1">
+                  <p className="text-amber-400 font-bold">Fabric & Quality:</p>
+                  <p>{previewProduct.fabric}</p>
+                </div>
+              )}
+              {previewProduct.features && previewProduct.features.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Highlights:</p>
+                  <ul className="grid grid-cols-2 gap-1.5 text-[11px]">
+                    {previewProduct.features.map((feat, idx) => (
+                      <li key={idx} className="flex items-center gap-1.5 text-slate-300">
+                        <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>{feat}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Size selection in modal if apparel */}
+            {previewProduct.available_sizes && (
+              <div className="pt-2 border-t border-slate-800">
+                <p className="text-xs text-slate-300 font-bold mb-1.5">Select Size:</p>
+                <div className="flex items-center gap-2">
+                  {previewProduct.available_sizes.map(size => {
+                    const chosen = selectedSizes[previewProduct.id] || (previewProduct.available_sizes ? previewProduct.available_sizes[1] || previewProduct.available_sizes[0] : 'M');
+                    return (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() => setSelectedSizes(prev => ({ ...prev, [previewProduct.id]: size }))}
+                        className={`w-9 h-9 rounded-xl text-xs font-bold transition-all border ${
+                          chosen === size
+                            ? 'bg-amber-500 text-slate-950 border-amber-400 font-black'
+                            : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-600'
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Worldwide Order & Dispatch Line */}
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-400/20 text-xs space-y-1">
+              <p className="font-bold text-amber-400">Direct Order & Dispatch Lines:</p>
+              <p className="text-[11px] text-slate-300 font-mono">
+                USA: +1 214-412-4864 • UK: +44 7878 760868 • ZIM: +263 772 235 795
+              </p>
+            </div>
+
+            {/* Action Bar */}
+            <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] text-slate-400 uppercase font-bold">Price</p>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-lg font-black text-amber-400">{getPrice(previewProduct.price_usd)}</span>
+                  {previewProduct.price_zar && (
+                    <span className="text-xs text-amber-200">| R{previewProduct.price_zar}</span>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const size = previewProduct.available_sizes ? (selectedSizes[previewProduct.id] || previewProduct.available_sizes[0]) : undefined;
+                  handleAddToCart(previewProduct, size);
+                  setPreviewProduct(null);
+                }}
+                className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow flex items-center gap-2 active:scale-95 transition-all"
+              >
+                <ShoppingBag className="w-4 h-4" />
+                <span>Add to Cart</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

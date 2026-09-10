@@ -45,23 +45,16 @@ export const ChatDevModal: React.FC<ChatDevModalProps> = ({ isOpen, onClose }) =
     setMessages(prev => [...prev, userMsg]);
     setInputText('');
 
-    // Instant simulated developer response
-    setTimeout(() => {
-      const devReplies = [
-        "Thank you for your feedback! The system telemetry is logging this request directly into our Harare dev server.",
-        "Got it! We've optimized the Econet 2G low-data streaming engine and YouTube offline sync for this exact use-case.",
-        "Noted with thanks! If you need urgent live support, you can also reach my direct WhatsApp on +263780699988.",
-        "Awesome! Gateway Connect is built on high-performance Supabase PostgreSQL & Edge caching to serve church members worldwide."
-      ];
-      const replyText = devReplies[Math.floor(Math.random() * devReplies.length)];
-      const devMsg: ChatMsg = {
-        id: `dev_${Date.now()}`,
-        sender: 'dev',
-        text: replyText,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setMessages(prev => [...prev, devMsg]);
-    }, 900);
+    // Dispatch message to developer's inbox and trigger real notification on his bell
+    StorageService.sendDirectMessage(currentUser.id, 'usr_developer', inputText.trim());
+    StorageService.addAppNotification({
+      type: 'chat',
+      actor_id: currentUser.id,
+      actor_name: currentUser.full_name,
+      actor_avatar: currentUser.avatar_url,
+      title: `Message from ${currentUser.full_name}`,
+      message: inputText.trim()
+    });
   };
 
   const handleWhatsAppDev = () => {

@@ -18,7 +18,27 @@ import {
   BadgeType,
   PaynowConfig,
   UnbanAppeal,
-  PasswordResetRequest
+  PasswordResetRequest,
+  CommunityStory,
+  DirectMessage,
+  LiveStreamViewer,
+  CongregationUnit,
+  DmThread,
+  SUPPORTED_CITIES,
+  SupportedCity,
+  StreamAttendanceRecord,
+  AppNotification,
+  ChatGroup,
+  ChatGroupMessage,
+  GroupMembership,
+  GroupInvite,
+  StreamPlatform,
+  StreamEmbedInfo,
+  PastorLocationRequest,
+  CartItem,
+  MessageReaction,
+  GroupMediaItem,
+  NotificationSettings
 } from '../types';
 
 import { 
@@ -35,9 +55,23 @@ import {
   MOCK_JOE_VIBES, 
   MOCK_PUSH_NOTIFICATIONS, 
   MOCK_TESTIMONIES,
-  DEFAULT_PREMIUM_PLANS
+  DEFAULT_PREMIUM_PLANS,
+  INITIAL_CHAT_GROUPS,
+  INITIAL_CHAT_GROUP_MESSAGES
 } from '../data/mockData';
 import { SupabaseSyncService } from './supabaseSyncService';
+
+export function arePhoneNumbersEqual(phone1?: string, phone2?: string): boolean {
+  if (!phone1 || !phone2) return false;
+  const p1 = phone1.replace(/[^0-9]/g, '');
+  const p2 = phone2.replace(/[^0-9]/g, '');
+  if (!p1 || !p2) return false;
+  if (p1 === p2) return true;
+  // Normalize Zimbabwe prefix 263 <-> 0
+  const norm1 = p1.startsWith('263') ? '0' + p1.slice(3) : p1;
+  const norm2 = p2.startsWith('263') ? '0' + p2.slice(3) : p2;
+  return norm1 === norm2;
+}
 
 const KEYS = {
   CURRENT_USER: 'gcz_current_user',
@@ -62,7 +96,25 @@ const KEYS = {
   PREMIUM_PLANS: 'gcz_premium_plans',
   BANNED_USERS: 'gcz_banned_users',
   UNBAN_APPEALS: 'gcz_unban_appeals',
-  PASSWORD_RESETS: 'gcz_password_resets'
+  PASSWORD_RESETS: 'gcz_password_resets',
+  COMMUNITY_STORIES: 'gcz_community_stories',
+  USER_FOLLOWS: 'gcz_user_follows',
+  DIRECT_MESSAGES: 'gcz_direct_messages',
+  LIVE_SERMON: 'gcz_live_sermon',
+  STREAM_VIEWERS: 'gcz_stream_viewers',
+  STREAM_ATTENDANCE_HISTORY: 'gcz_stream_attendance_history_v1',
+  APP_NOTIFICATIONS: 'gcz_app_notifications_v1',
+  CHAT_GROUPS: 'gcz_chat_groups_v1',
+  CHAT_GROUP_MESSAGES: 'gcz_chat_group_messages_v1',
+  GROUP_INVITES: 'gcz_group_invites_v1',
+  GROUP_MEMBERSHIPS: 'gcz_group_memberships_v1',
+  USER_FOLLOWS_TABLE: 'gcz_user_follows_table_v2',
+  POST_LIKES_TABLE: 'gcz_post_likes_table_v2',
+  LIVE_STREAM_URL: 'gcz_live_stream_url_v1',
+  PASTOR_LOCATION_REQUESTS: 'gcz_pastor_location_requests_v1',
+  KINGDOM_STORE_CART: 'gcz_kingdom_store_cart_v1',
+  GROUP_MEDIA: 'gcz_group_media_v1',
+  NOTIFICATION_SETTINGS: 'gcz_notification_settings_v1'
 };
 
 // In-memory fallback dictionary for when third-party cookies or localStorage are restricted/blocked
@@ -109,9 +161,59 @@ function setLocal<T>(key: string, data: T): void {
 }
 
 export class StorageService {
+  // Permanent Custom User Avatars store
+  static getPermanentCustomAvatars(): Record<string, string> {
+    return getLocal<Record<string, string>>('gcz_permanent_custom_avatars', {});
+  }
+
+  static setPermanentCustomAvatar(userId: string, phone: string, avatarUrl: string): void {
+    const avatars = this.getPermanentCustomAvatars();
+    if (userId) avatars[userId] = avatarUrl;
+    if (phone) avatars[phone] = avatarUrl;
+    setLocal('gcz_permanent_custom_avatars', avatars);
+    // Sync to Supabase profile_pictures table
+    if (userId) {
+      SupabaseSyncService.syncProfilePicture(userId, avatarUrl).catch(() => {});
+    }
+  }
+
+  static async hydrateProfilePictureFromSupabase(userId: string): Promise<string | null> {
+    if (!userId) return null;
+    try {
+      const remoteAvatar = await SupabaseSyncService.fetchProfilePicture(userId);
+      if (remoteAvatar) {
+        const avatars = this.getPermanentCustomAvatars();
+        avatars[userId] = remoteAvatar;
+        setLocal('gcz_permanent_custom_avatars', avatars);
+        const curr = this.getCurrentUser();
+        if (curr && curr.id === userId && curr.avatar_url !== remoteAvatar) {
+          curr.avatar_url = remoteAvatar;
+          setLocal(KEYS.CURRENT_USER, curr);
+        }
+        return remoteAvatar;
+      }
+    } catch {
+      // Ignore network errors
+    }
+    return null;
+  }
+
   // Current User (returns null on first launch or when logged out)
   static getCurrentUser(): User | null {
     const saved = getLocal<User | null>(KEYS.CURRENT_USER, null);
+    if (saved) {
+      if (saved.id === 'usr_developer' || saved.role === 'developer' || saved.phone === '0780699988') {
+        if (saved.full_name !== 'mr_juice7' || saved.handle !== '@mr_juice7') {
+          saved.full_name = 'mr_juice7';
+          saved.handle = '@mr_juice7';
+          setLocal(KEYS.CURRENT_USER, saved);
+        }
+      }
+      const customAvatars = this.getPermanentCustomAvatars();
+      if (customAvatars[saved.id] || customAvatars[saved.phone]) {
+        saved.avatar_url = customAvatars[saved.id] || customAvatars[saved.phone];
+      }
+    }
     return saved;
   }
 
@@ -119,13 +221,16 @@ export class StorageService {
     if (user === null) {
       this.logout();
     } else {
+      if (user.avatar_url) {
+        this.setPermanentCustomAvatar(user.id, user.phone, user.avatar_url);
+      }
       setLocal(KEYS.CURRENT_USER, user);
     }
   }
 
   static getAllUsers(): User[] {
     const saved = getLocal<User[]>(KEYS.ALL_USERS, INITIAL_USERS);
-    // Ensure all 10 registered accounts exist in the storage pool & normalize any old inflated counts
+    // Ensure all registered accounts exist in the storage pool & normalize developer credentials
     const existingIds = new Set(saved.map(u => u.id));
     let changed = false;
     for (const initUser of INITIAL_USERS) {
@@ -134,19 +239,36 @@ export class StorageService {
         changed = true;
       }
     }
-    for (const u of saved) {
-      // Fix unrealistic follower counts if stored from older versions
-      if (u.followers_count && u.followers_count > 10) {
-        const matchingInit = INITIAL_USERS.find(iu => iu.id === u.id);
-        u.followers_count = matchingInit ? matchingInit.followers_count : 4;
-        changed = true;
-      }
-      if (u.following_count && u.following_count > 10) {
-        const matchingInit = INITIAL_USERS.find(iu => iu.id === u.id);
-        u.following_count = matchingInit ? matchingInit.following_count : 3;
+    // Strictly enforce single developer account: phone 0780699988, password juice2026, handle @mr_juice7, username mr_juice7
+    const devUsers = saved.filter(u => u.role === 'developer' || u.phone === '0780699988' || u.handle === '@mr_juice7');
+    if (devUsers.length > 1) {
+      const primary = devUsers.find(u => u.id === 'usr_developer') || devUsers[0];
+      const dupes = new Set(devUsers.filter(u => u !== primary).map(u => u.id));
+      const remaining = saved.filter(u => !dupes.has(u.id));
+      saved.length = 0;
+      saved.push(...remaining);
+      changed = true;
+    }
+    const devUser = saved.find(u => u.id === 'usr_developer' || u.role === 'developer' || u.phone === '0780699988');
+    if (devUser) {
+      if (devUser.phone !== '0780699988' || devUser.password !== 'juice2026' || devUser.handle !== '@mr_juice7' || devUser.full_name !== 'mr_juice7') {
+        devUser.phone = '0780699988';
+        devUser.password = 'juice2026';
+        devUser.handle = '@mr_juice7';
+        devUser.full_name = 'mr_juice7';
+        devUser.role = 'developer';
         changed = true;
       }
     }
+
+    // Apply permanent custom avatars so profile photos stay forever
+    const customAvatars = this.getPermanentCustomAvatars();
+    saved.forEach(u => {
+      if (customAvatars[u.id] || customAvatars[u.phone]) {
+        u.avatar_url = customAvatars[u.id] || customAvatars[u.phone];
+      }
+    });
+
     if (changed) {
       setLocal(KEYS.ALL_USERS, saved);
     }
@@ -155,16 +277,17 @@ export class StorageService {
 
   static saveUser(user: User): void {
     const users = this.getAllUsers();
-    const idx = users.findIndex(u => u.id === user.id || u.phone === user.phone);
+    const idx = users.findIndex(u => u.id === user.id || arePhoneNumbersEqual(u.phone, user.phone));
     if (idx >= 0) {
       users[idx] = { ...users[idx], ...user };
     } else {
       users.push(user);
     }
     setLocal(KEYS.ALL_USERS, users);
-    const curr = this.getCurrentUser();
-    if (curr && curr.id === user.id) {
-      this.setCurrentUser(user);
+    // If saving the active user, update currentUser as well
+    const cur = this.getCurrentUser();
+    if (cur && (cur.id === user.id || arePhoneNumbersEqual(cur.phone, user.phone))) {
+      setLocal(KEYS.CURRENT_USER, { ...cur, ...user });
     }
   }
 
@@ -184,6 +307,9 @@ export class StorageService {
   static updateUserProfile(updates: Partial<User>): User | null {
     const curr = this.getCurrentUser();
     if (!curr) return null;
+    if (updates.avatar_url) {
+      this.setPermanentCustomAvatar(curr.id, curr.phone, updates.avatar_url);
+    }
     const updated: User = { ...curr, ...updates };
     this.setCurrentUser(updated);
     this.saveUser(updated);
@@ -264,38 +390,92 @@ export class StorageService {
     };
   }
 
-  static toggleFollowUser(targetUserId: string): { isFollowing: boolean; targetUserFollowers: number } {
-    const currentUser = this.getCurrentUser();
-    const allUsers = this.getAllUsers();
-    const followingKey = `following_list_${currentUser?.id || 'guest'}`;
-    const followingList = getLocal<string[]>(followingKey, ['usr_apostle_joe', 'usr_developer']);
-    const isCurrentlyFollowing = followingList.includes(targetUserId);
+  // DEDICATED USER FOLLOWS TABLE PERSISTENCE
+  static getUserFollowsRecords(): { follower_id: string; following_id: string; created_at: string }[] {
+    const defaultFollows = [
+      { follower_id: 'usr_tinashe', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_tinashe', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_developer', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_pastor_tendai', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_pastor_tendai', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_pastor_grace', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_pastor_grace', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_chipo', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_chipo', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_kuda', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_kuda', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_tatenda', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_tatenda', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_nyasha', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_nyasha', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_farai', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_farai', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_apostle_joe', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_apostle_joe', following_id: 'usr_prophetess_melinda', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_prophetess_melinda', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_prophetess_melinda', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_pastor_easter', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_pastor_easter', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' }
+    ];
+    let records = getLocal<{ follower_id: string; following_id: string; created_at: string }[] | null>(KEYS.USER_FOLLOWS_TABLE, null);
+    if (!records) {
+      records = [...defaultFollows];
+      setLocal(KEYS.USER_FOLLOWS_TABLE, records);
+    }
+    return records;
+  }
 
-    let updatedList: string[];
-    const targetUser = allUsers.find(u => u.id === targetUserId);
+  static toggleFollowUser(targetUserId: string, explicitFollowerId?: string): { isFollowing: boolean; targetUserFollowers: number } {
+    const currentUser = this.getCurrentUser();
+    const followerId = explicitFollowerId || currentUser?.id || 'guest';
+    const allUsers = this.getAllUsers();
+    
+    // Normalize aliases
+    const effectiveTargetId = (targetUserId === 'usr_daniels' || targetUserId === 'usr_pastor_joe') ? 'usr_apostle_joe' : targetUserId;
+    const effectiveFollowerId = (followerId === 'usr_daniels' || followerId === 'usr_pastor_joe') ? 'usr_apostle_joe' : followerId;
+
+    const records = this.getUserFollowsRecords();
+    const existingIndex = records.findIndex(
+      r => r.follower_id === effectiveFollowerId && (r.following_id === effectiveTargetId || r.following_id === targetUserId)
+    );
+    const isCurrentlyFollowing = existingIndex >= 0;
 
     if (isCurrentlyFollowing) {
-      updatedList = followingList.filter(id => id !== targetUserId);
-      if (targetUser && targetUser.followers_count && targetUser.followers_count > 0) {
-        targetUser.followers_count = Math.max(0, targetUser.followers_count - 1);
-      }
-      if (currentUser && currentUser.following_count && currentUser.following_count > 0) {
-        currentUser.following_count = Math.max(0, currentUser.following_count - 1);
-      }
+      records.splice(existingIndex, 1);
     } else {
-      updatedList = [...followingList, targetUserId];
-      if (targetUser) {
-        targetUser.followers_count = (targetUser.followers_count || 0) + 1;
-      }
-      if (currentUser) {
-        currentUser.following_count = (currentUser.following_count || 0) + 1;
-      }
+      records.push({
+        follower_id: effectiveFollowerId,
+        following_id: effectiveTargetId,
+        created_at: new Date().toISOString()
+      });
     }
 
-    setLocal(followingKey, updatedList);
+    setLocal(KEYS.USER_FOLLOWS_TABLE, records);
+
+    // Re-calculate persistent counts strictly in line with actual user activity in the app
+    const targetUser = allUsers.find(u => u.id === effectiveTargetId || u.id === targetUserId);
+    const followerUser = allUsers.find(u => u.id === effectiveFollowerId);
+    
+    if (targetUser) {
+      targetUser.followers_count = records.filter(r => r.following_id === effectiveTargetId || r.following_id === targetUserId).length;
+    }
+    if (followerUser) {
+      followerUser.following_count = records.filter(r => r.follower_id === effectiveFollowerId).length;
+    }
+
     setLocal(KEYS.ALL_USERS, allUsers);
-    if (currentUser) {
-      this.setCurrentUser(currentUser);
+    if (currentUser && currentUser.id === effectiveFollowerId && followerUser) {
+      this.setCurrentUser({ ...currentUser, following_count: followerUser.following_count });
+    }
+
+    // Sync to Supabase table in background
+    SupabaseSyncService.syncFollowState(effectiveFollowerId, effectiveTargetId, !isCurrentlyFollowing).catch(() => {});
+
+    // Dispatch global event for instant UI updates across tabs
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_follow_updated', { 
+        detail: { followerId: effectiveFollowerId, targetUserId: effectiveTargetId, isFollowing: !isCurrentlyFollowing } 
+      }));
     }
 
     return {
@@ -306,7 +486,62 @@ export class StorageService {
 
   static getFollowingList(userId?: string): string[] {
     const uid = userId || this.getCurrentUser()?.id || 'guest';
-    return getLocal<string[]>(`following_list_${uid}`, ['usr_apostle_joe', 'usr_developer']);
+    const effectiveUid = (uid === 'usr_daniels' || uid === 'usr_pastor_joe') ? 'usr_apostle_joe' : uid;
+    const records = this.getUserFollowsRecords();
+    return records.filter(r => r.follower_id === effectiveUid).map(r => r.following_id);
+  }
+
+  static getFollowersList(targetUserId: string): string[] {
+    const effectiveTargetId = (targetUserId === 'usr_daniels' || targetUserId === 'usr_pastor_joe') ? 'usr_apostle_joe' : targetUserId;
+    const records = this.getUserFollowsRecords();
+    return records
+      .filter(r => r.following_id === effectiveTargetId || r.following_id === targetUserId)
+      .map(r => r.follower_id);
+  }
+
+  static getFollowingUsers(userId: string): User[] {
+    const followingIds = this.getFollowingList(userId);
+    const allUsers = this.getAllUsers();
+    return allUsers.filter(u => followingIds.includes(u.id) || (u.role === 'super_admin' && followingIds.includes('usr_apostle_joe')));
+  }
+
+  static getFollowersUsers(userId: string): User[] {
+    const followerIds = this.getFollowersList(userId);
+    const allUsers = this.getAllUsers();
+    return allUsers.filter(u => followerIds.includes(u.id));
+  }
+
+  static async hydrateFollowsFromSupabase(userId: string): Promise<void> {
+    if (!userId || userId === 'guest') return;
+    try {
+      const data = await SupabaseSyncService.fetchFollows(userId);
+      if (data && (data.following.length > 0 || data.followers.length > 0)) {
+        const records = this.getUserFollowsRecords();
+        let modified = false;
+        for (const targetId of data.following) {
+          if (!records.some(r => r.follower_id === userId && r.following_id === targetId)) {
+            records.push({ follower_id: userId, following_id: targetId, created_at: new Date().toISOString() });
+            modified = true;
+          }
+        }
+        for (const followerId of data.followers) {
+          if (!records.some(r => r.follower_id === followerId && r.following_id === userId)) {
+            records.push({ follower_id: followerId, following_id: userId, created_at: new Date().toISOString() });
+            modified = true;
+          }
+        }
+        if (modified) {
+          setLocal(KEYS.USER_FOLLOWS_TABLE, records);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('gcz_follow_updated', {
+              detail: { userId }
+            }));
+          }
+        }
+      }
+    } catch {
+      // Ignore background network error
+    }
   }
 
   // Devotionals
@@ -368,25 +603,121 @@ export class StorageService {
   }
 
   // Groups
-  static getGroups(): CommunityGroup[] {
-    return getLocal<CommunityGroup[]>(KEYS.GROUPS, MOCK_COMMUNITY_GROUPS);
-  }
-
-  static toggleGroupJoin(groupId: string): boolean {
-    const groups = this.getGroups();
-    const g = groups.find(item => item.id === groupId);
-    if (g) {
-      g.joined = !g.joined;
-      g.member_count += g.joined ? 1 : -1;
-      setLocal(KEYS.GROUPS, groups);
-      return g.joined;
+  static getGroups(explicitUserId?: string): CommunityGroup[] {
+    let list = getLocal<CommunityGroup[]>(KEYS.GROUPS, MOCK_COMMUNITY_GROUPS);
+    if (!list || list.length === 0 || !list.some(g => g.id === 'group_ignite_worship')) {
+      list = MOCK_COMMUNITY_GROUPS;
+      setLocal(KEYS.GROUPS, MOCK_COMMUNITY_GROUPS);
     }
-    return false;
+    const chatGroups = this.getChatGroups();
+    const targetUserId = explicitUserId || this.getCurrentUser()?.id;
+
+    // Return mapped copy where joined is computed dynamically for targetUserId ONLY
+    return list.map(group => {
+      const cg = chatGroups.find(c => c.id === group.id);
+      const memberCount = cg ? cg.member_ids.length : (group.member_count || 0);
+      const isMember = (cg && targetUserId) ? cg.member_ids.includes(targetUserId) : false;
+      return {
+        ...group,
+        member_count: memberCount,
+        joined: isMember,
+        member_ids: cg ? cg.member_ids : []
+      };
+    });
   }
 
-  // Events
+  static isUserInChatGroup(groupId: string, userId?: string): boolean {
+    const targetUserId = userId || this.getCurrentUser()?.id;
+    if (!groupId || !targetUserId) return false;
+    const chatGroups = this.getChatGroups();
+    const cg = chatGroups.find(c => c.id === groupId);
+    return cg ? cg.member_ids.includes(targetUserId) : false;
+  }
+
+  static toggleGroupJoin(groupId: string, userId?: string): boolean {
+    const currUser = userId ? this.getAllUsers().find(u => u.id === userId) : this.getCurrentUser();
+    if (!currUser) return false;
+    const currentUserId = currUser.id;
+    const chatGroups = this.getChatGroups();
+    const cg = chatGroups.find(c => c.id === groupId);
+    const isMember = cg ? cg.member_ids.includes(currentUserId) : false;
+
+    if (isMember) {
+      this.leaveChatGroup(groupId, currentUserId);
+      return false;
+    } else {
+      this.joinChatGroup(groupId, currentUserId);
+      return true;
+    }
+  }
+
+  // Events (with 2 Permanent Services that never leave: Sunday 08:00-13:00 & Wednesday 17:00-20:00)
   static getEvents(): ChurchEvent[] {
-    return getLocal<ChurchEvent[]>(KEYS.EVENTS, MOCK_EVENTS);
+    let list = getLocal<ChurchEvent[]>(KEYS.EVENTS, MOCK_EVENTS);
+    if (!list || list.length === 0) {
+      list = [...MOCK_EVENTS];
+    }
+
+    // Ensure Sunday permanent service is present
+    let sundayEvt = list.find(e => e.id === 'evt_sunday');
+    if (!sundayEvt) {
+      sundayEvt = {
+        id: 'evt_sunday',
+        title: 'Sunday Glorious Service',
+        date: 'Every Sunday',
+        time: '08:00 - 13:00 CAT',
+        location: 'Fantasyland Cinema Number 3 / Samora Machel Ave West, Harare',
+        description: 'Atmospheric praise, explosive apostolic revelations, prophetic ministry, and communion with Apostle Joe Daniels.',
+        banner_url: '/assets/apostle_joe_daniels_preach.jpg',
+        category: 'Sunday Service',
+        speaker: 'Apostle Joe Daniels',
+        is_featured: true,
+        is_permanent: true,
+        ticket_required: false
+      };
+    } else {
+      sundayEvt.time = '08:00 - 13:00 CAT';
+      sundayEvt.is_permanent = true;
+    }
+
+    // Ensure Wednesday permanent service is present
+    let wednesdayEvt = list.find(e => e.id === 'evt_wednesday');
+    if (!wednesdayEvt) {
+      wednesdayEvt = {
+        id: 'evt_wednesday',
+        title: 'Wednesday Midweek Dominion Service',
+        date: 'Every Wednesday',
+        time: '17:00 - 20:00 CAT',
+        location: 'Fantasyland Cinema Number 3 / Samora Machel Ave West, Harare',
+        description: 'Deep scriptural study, targeted intercessory warfare, prophetic alignment, and spiritual deliverance.',
+        banner_url: '/assets/apostle_joe_daniels_podcast.jpg',
+        category: 'Wednesday Service',
+        speaker: 'Apostle Joe Daniels',
+        is_featured: true,
+        is_permanent: true,
+        ticket_required: false
+      };
+    } else {
+      wednesdayEvt.time = '17:00 - 20:00 CAT';
+      wednesdayEvt.is_permanent = true;
+    }
+
+    // Keep other events
+    const otherEvents = list.filter(e => e.id !== 'evt_sunday' && e.id !== 'evt_wednesday');
+
+    // Always anchor Sunday and Wednesday at the very top!
+    const guaranteedEvents = [sundayEvt, wednesdayEvt, ...otherEvents];
+    setLocal(KEYS.EVENTS, guaranteedEvents);
+    return guaranteedEvents;
+  }
+
+  static updateEvent(eventId: string, updated: Partial<ChurchEvent>): boolean {
+    const events = this.getEvents();
+    const evt = events.find(e => e.id === eventId);
+    if (!evt) return false;
+    Object.assign(evt, updated);
+    setLocal(KEYS.EVENTS, events);
+    return true;
   }
 
   static toggleEventRsvp(eventId: string): boolean {
@@ -394,7 +725,7 @@ export class StorageService {
     const evt = events.find(e => e.id === eventId);
     if (evt) {
       evt.user_rsvpd = !evt.user_rsvpd;
-      evt.rsvp_count += evt.user_rsvpd ? 1 : -1;
+      evt.rsvp_count = (evt.rsvp_count || 0) + (evt.user_rsvpd ? 1 : -1);
       setLocal(KEYS.EVENTS, events);
       return evt.user_rsvpd;
     }
@@ -403,13 +734,107 @@ export class StorageService {
 
   static addEvent(event: ChurchEvent): void {
     const events = this.getEvents();
-    events.unshift(event);
+    events.push(event);
     setLocal(KEYS.EVENTS, events);
+  }
+
+  // Pastor Location & Church Directions Requests
+  static getPastorLocationRequests(): PastorLocationRequest[] {
+    return getLocal<PastorLocationRequest[]>(KEYS.PASTOR_LOCATION_REQUESTS, [
+      {
+        id: 'req_seed_1',
+        user_id: 'usr_tinashe',
+        user_name: 'Tinashe Chikwava',
+        user_location: 'Bulawayo (Traveling to Harare)',
+        user_phone: '0712345678',
+        event_id: 'evt_sunday',
+        event_title: 'Sunday Glorious Service',
+        event_time: '08:00 - 13:00 CAT',
+        destination: 'Fantasyland Cinema Number 3 / Samora Machel Ave West, Harare',
+        created_at: new Date(Date.now() - 3600000).toISOString(),
+        status: 'pending'
+      }
+    ]);
+  }
+
+  static sendPastorLocationRequest(params: {
+    user: User;
+    eventId: string;
+    eventTitle: string;
+    eventTime: string;
+  }): PastorLocationRequest {
+    const requests = this.getPastorLocationRequests();
+    const newReq: PastorLocationRequest = {
+      id: `req_loc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      user_id: params.user.id,
+      user_name: params.user.full_name,
+      user_location: params.user.location || 'Harare',
+      user_phone: params.user.phone || '0780000000',
+      user_email: (params.user as any).email || undefined,
+      event_id: params.eventId,
+      event_title: params.eventTitle,
+      event_time: params.eventTime,
+      destination: 'Fantasyland Cinema Number 3 / Samora Machel Ave West, Harare',
+      created_at: new Date().toISOString(),
+      status: 'pending'
+    };
+    requests.unshift(newReq);
+    setLocal(KEYS.PASTOR_LOCATION_REQUESTS, requests);
+
+    // Also notify user in App Notifications
+    this.addAppNotification({
+      type: 'broadcast',
+      actor_id: 'pastor_office',
+      actor_name: "Apostle Joe Daniels' Pastoral Office",
+      title: `Directions Request Received: ${params.eventTitle}`,
+      message: `We received your request for directions to ${params.eventTitle} from ${params.user.location || 'your area'}. A pastoral minister will reach out to you at ${params.user.phone || 'your phone number'}.`
+    });
+
+    return newReq;
+  }
+
+  static markPastorLocationRequestDone(reqId: string): void {
+    const requests = this.getPastorLocationRequests();
+    const target = requests.find(r => r.id === reqId);
+    if (target) {
+      target.status = 'directions_sent';
+      setLocal(KEYS.PASTOR_LOCATION_REQUESTS, requests);
+    }
+  }
+
+  // Go Virtual Notification
+  static setEventVirtualReminder(eventTitle: string, user: User): void {
+    this.addAppNotification({
+      type: 'broadcast',
+      actor_id: 'church_media',
+      actor_name: 'Gateway Sanctuary Live',
+      title: `Virtual Stream Reminder: ${eventTitle}`,
+      message: 'When the service starts and is online you can stream the service, The stream will be available on that streaming float.'
+    });
+  }
+
+  // Real Streamers Online Count
+  static getOnlineStreamersCount(): number {
+    const viewers = this.getStreamViewers();
+    return Math.max(1, (viewers ? viewers.length : 0));
   }
 
   // Store & Products
   static getProducts(): Product[] {
-    return getLocal<Product[]>(KEYS.PRODUCTS, MOCK_PRODUCTS);
+    const rawList = getLocal<Product[]>(KEYS.PRODUCTS, MOCK_PRODUCTS);
+    const existingIds = new Set(rawList.map(p => p.id));
+    let updated = false;
+    for (const mockP of MOCK_PRODUCTS) {
+      if (!existingIds.has(mockP.id)) {
+        rawList.push(mockP);
+        existingIds.add(mockP.id);
+        updated = true;
+      }
+    }
+    if (updated) {
+      setLocal(KEYS.PRODUCTS, rawList);
+    }
+    return rawList;
   }
 
   static addProduct(prod: Product): void {
@@ -439,6 +864,23 @@ export class StorageService {
       console.warn('Supabase donation sync deferred:', err);
     });
     return newDonation;
+  }
+
+  static addDonation(donation: any): Donation {
+    const formatted: Omit<Donation, 'id' | 'receipt_number' | 'created_at' | 'status'> = {
+      donor_name: donation.donor_name || 'Anonymous Believer',
+      amount: donation.amount,
+      currency: donation.currency,
+      fund_type: donation.fund_type || donation.category || 'Seed Faith',
+      category: donation.category,
+      method: donation.method,
+      phone: donation.phone,
+      notes: donation.notes,
+      payment_method: donation.payment_method || (donation.method === 'card' ? 'Credit Card' : 'EcoCash Push'),
+      impact_tag: donation.impact_tag || 'Live Broadcast Altar Seed',
+      is_anonymous: donation.is_anonymous ?? false
+    };
+    return this.recordDonation(formatted);
   }
 
   // Bookings
@@ -501,6 +943,65 @@ export class StorageService {
     }
   }
 
+  // Kingdom Store Cart
+  static getCart(userId?: string): CartItem[] {
+    const uid = userId || this.getCurrentUser()?.id || 'guest';
+    const key = `${KEYS.KINGDOM_STORE_CART}_${uid}`;
+    return getLocal<CartItem[]>(key, []);
+  }
+
+  static setCart(items: CartItem[], userId?: string): void;
+  static setCart(userId: string | undefined, items: CartItem[]): void;
+  static setCart(arg1: any, arg2?: any): void {
+    let uid: string;
+    let items: CartItem[];
+
+    if (Array.isArray(arg1)) {
+      items = arg1;
+      uid = arg2 || this.getCurrentUser()?.id || 'guest';
+    } else {
+      uid = arg1 || this.getCurrentUser()?.id || 'guest';
+      items = Array.isArray(arg2) ? arg2 : [];
+    }
+
+    const key = `${KEYS.KINGDOM_STORE_CART}_${uid}`;
+    setLocal(key, items);
+    // Also update generic key
+    setLocal(KEYS.KINGDOM_STORE_CART, items);
+
+    // Sync to Supabase in background
+    if (uid !== 'guest') {
+      SupabaseSyncService.syncCart(uid, items).catch(() => {});
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_cart_updated', { detail: { items, userId: uid } }));
+    }
+  }
+
+  static clearCart(userId?: string): void {
+    this.setCart(userId, []);
+  }
+
+  static async hydrateCartFromSupabase(userId: string): Promise<CartItem[] | null> {
+    if (!userId || userId === 'guest') return null;
+    try {
+      const remoteItems = await SupabaseSyncService.fetchCart(userId);
+      if (remoteItems) {
+        const key = `${KEYS.KINGDOM_STORE_CART}_${userId}`;
+        setLocal(key, remoteItems);
+        setLocal(KEYS.KINGDOM_STORE_CART, remoteItems);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('gcz_cart_updated', { detail: { items: remoteItems, userId } }));
+        }
+        return remoteItems;
+      }
+    } catch {
+      // Ignore background network error
+    }
+    return null;
+  }
+
   // Joe Vibes
   static getJoeVibes(): JoeVibesSubmission[] {
     return getLocal<JoeVibesSubmission[]>(KEYS.JOE_VIBES, MOCK_JOE_VIBES);
@@ -534,6 +1035,25 @@ export class StorageService {
     return getLocal<PushNotification[]>(KEYS.PUSH_NOTIFICATIONS, MOCK_PUSH_NOTIFICATIONS);
   }
 
+  // Notification Preferences (Live Streams, Prayer Requests, Direct Messages)
+  static getNotificationSettings(userId?: string): NotificationSettings {
+    const defaultSettings: NotificationSettings = {
+      liveStreams: true,
+      prayerRequests: true,
+      directMessages: true
+    };
+    const key = userId ? `${KEYS.NOTIFICATION_SETTINGS}_${userId}` : KEYS.NOTIFICATION_SETTINGS;
+    return getLocal<NotificationSettings>(key, defaultSettings);
+  }
+
+  static setNotificationSettings(settings: NotificationSettings, userId?: string): void {
+    const key = userId ? `${KEYS.NOTIFICATION_SETTINGS}_${userId}` : KEYS.NOTIFICATION_SETTINGS;
+    setLocal(key, settings);
+    SupabaseSyncService.syncNotificationSettings(settings, userId).catch(err => {
+      console.warn('Supabase notification settings sync notice:', err);
+    });
+  }
+
   static sendPushNotification(title: string, body: string, target_segment: PushNotification['target_segment']): PushNotification {
     const notifications = this.getPushNotifications();
     const newNotif: PushNotification = {
@@ -562,16 +1082,61 @@ export class StorageService {
     return !exists;
   }
 
+  // DEDICATED POST LIKES TABLE PERSISTENCE
+  static getPostLikesRecords(): { post_id: string; user_id: string; created_at: string }[] {
+    const defaultLikes: { post_id: string; user_id: string; created_at: string }[] = [];
+    MOCK_TESTIMONIES.forEach(t => {
+      (t.liked_user_ids || []).forEach(uid => {
+        defaultLikes.push({ post_id: t.id, user_id: uid, created_at: '2026-01-01T00:00:00Z' });
+      });
+    });
+    const records = getLocal<{ post_id: string; user_id: string; created_at: string }[]>(KEYS.POST_LIKES_TABLE, defaultLikes);
+    if (!records || records.length === 0) {
+      setLocal(KEYS.POST_LIKES_TABLE, defaultLikes);
+      return defaultLikes;
+    }
+    return records;
+  }
+
   // Testimonies & Posts
   static getTestimonies(): Testimony[] {
-    const list = getLocal<Testimony[]>(KEYS.TESTIMONIES, MOCK_TESTIMONIES);
-    // If list is legacy, empty, or lacks liked_user_ids, refresh to the 10 real community accounts
-    const validAccountIds = new Set(INITIAL_USERS.map(u => u.id));
-    const hasLegacyData = !list || list.length < 3 || list.some(t => !Array.isArray(t.liked_user_ids) || (t.user_id && !validAccountIds.has(t.user_id)));
-    if (hasLegacyData) {
-      setLocal(KEYS.TESTIMONIES, MOCK_TESTIMONIES);
-      return MOCK_TESTIMONIES;
+    const rawList = getLocal<Testimony[]>(KEYS.TESTIMONIES, MOCK_TESTIMONIES);
+    
+    // Deduplicate by ID to ensure unique React keys even with stale local storage
+    const seenIds = new Set<string>();
+    const list: Testimony[] = [];
+    let hadDuplicates = false;
+    for (const t of rawList) {
+      if (t && t.id && !seenIds.has(t.id)) {
+        seenIds.add(t.id);
+        list.push(t);
+      } else {
+        hadDuplicates = true;
+      }
     }
+    if (hadDuplicates) {
+      setLocal(KEYS.TESTIMONIES, list);
+    }
+
+    const postLikes = this.getPostLikesRecords();
+    const currentUser = this.getCurrentUser();
+    const curUid = currentUser?.id || 'usr_guest';
+
+    // Synchronize likes from dedicated table onto every testimony so likes never vanish on refresh
+    list.forEach(t => {
+      const likesForThisPost = postLikes.filter(l => l.post_id === t.id).map(l => l.user_id);
+      const combined = Array.from(new Set([...(t.liked_user_ids || []), ...likesForThisPost]));
+      t.liked_user_ids = combined;
+      t.likes_count = combined.length;
+      t.user_liked = combined.includes(curUid);
+      t.comments_count = (t.comments || []).length;
+      if (t.comments) {
+        t.comments.forEach(c => {
+          c.likes_count = (c.liked_user_ids || []).length;
+        });
+      }
+    });
+
     return list;
   }
 
@@ -594,35 +1159,45 @@ export class StorageService {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: newTest }));
     }
+    // Remote database sync
+    SupabaseSyncService.syncPost(newTest).catch(() => {});
     return newTest;
   }
 
   static likeTestimony(id: string, userId?: string): { user_liked: boolean; likes_count: number } {
-    const list = this.getTestimonies();
+    const list = getLocal<Testimony[]>(KEYS.TESTIMONIES, MOCK_TESTIMONIES);
     const target = list.find(t => t.id === id);
     if (!target) return { user_liked: false, likes_count: 0 };
 
     const currUser = this.getCurrentUser();
     const effectiveUserId = userId || currUser?.id || 'usr_guest';
 
-    if (!Array.isArray(target.liked_user_ids)) {
-      target.liked_user_ids = [];
-    }
+    const postLikes = this.getPostLikesRecords();
+    const existingIndex = postLikes.findIndex(l => l.post_id === id && l.user_id === effectiveUserId);
+    const alreadyLiked = existingIndex >= 0;
 
-    const alreadyLiked = target.liked_user_ids.includes(effectiveUserId);
     if (alreadyLiked) {
-      target.liked_user_ids = target.liked_user_ids.filter(uid => uid !== effectiveUserId);
+      postLikes.splice(existingIndex, 1);
     } else {
-      target.liked_user_ids.push(effectiveUserId);
+      postLikes.push({
+        post_id: id,
+        user_id: effectiveUserId,
+        created_at: new Date().toISOString()
+      });
     }
+    setLocal(KEYS.POST_LIKES_TABLE, postLikes);
 
-    target.likes_count = target.liked_user_ids.length;
+    const postLikers = postLikes.filter(l => l.post_id === id).map(l => l.user_id);
+    target.liked_user_ids = postLikers;
+    target.likes_count = postLikers.length;
     target.user_liked = !alreadyLiked;
 
     setLocal(KEYS.TESTIMONIES, list);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: target }));
     }
+    // Remote database reaction sync
+    SupabaseSyncService.syncReaction(id, effectiveUserId, alreadyLiked ? 'unlike' : 'like').catch(() => {});
     return { user_liked: target.user_liked, likes_count: target.likes_count };
   }
 
@@ -657,6 +1232,8 @@ export class StorageService {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: target }));
     }
+    // Remote database comment sync
+    SupabaseSyncService.syncComment(postId, newComment).catch(() => {});
     return newComment;
   }
 
@@ -731,80 +1308,161 @@ export class StorageService {
     delete memoryStore[KEYS.CURRENT_USER];
   }
 
-  // Auth: Login & Signup with credentials verification
-  static login(phone: string, password?: string): { success: boolean; user?: User; error?: string } {
-    const users = this.getAllUsers();
-    // Normalize phone numbers (strip spaces, dashes)
-    const cleanPhone = phone.replace(/[^0-9+]/g, '');
-    const found = users.find(u => u.phone.replace(/[^0-9+]/g, '') === cleanPhone);
+  // Auto-follow Super Admin and Developer on login or registration
+  static autoFollowSuperAdminAndDeveloper(userId: string): void {
+    const superAdminId = 'usr_apostle_joe';
+    const developerId = 'usr_developer';
     
-    if (found) {
-      // Validate password if user has password set
-      if (found.password && password && found.password.trim() !== password.trim()) {
-        return { 
-          success: false, 
-          error: `Incorrect password for ${found.full_name}. Please verify credentials.` 
-        };
-      }
-      this.setCurrentUser(found);
-      return { success: true, user: found };
-    }
+    const followingKey = `following_list_${userId}`;
+    const currentFollowing = getLocal<string[]>(followingKey, []);
+    let changed = false;
 
-    // If not found in users, create as a new covenant member
-    const newUser: User = {
-      id: `usr_${Date.now()}`,
-      phone: phone,
-      password: password || 'Gateway2026!',
-      full_name: phone === '0780699988' ? 'Lead System Developer' : 'Gateway Believer',
-      role: phone === '0780699988' ? 'developer' : 'member',
-      badge_type: phone === '0780699988' ? 'gold' : 'none',
-      member_id: `GCZ-MEM-${Math.floor(1000 + Math.random() * 9000)}`,
-      is_verified: true,
-      created_at: new Date().toISOString()
-    };
-    this.saveUser(newUser);
-    this.setCurrentUser(newUser);
-    return { success: true, user: newUser };
+    const targets = [superAdminId, developerId].filter(id => id !== userId);
+    targets.forEach(targetId => {
+      if (!currentFollowing.includes(targetId)) {
+        currentFollowing.push(targetId);
+        changed = true;
+        // Increment follower count on target user
+        const allUsers = this.getAllUsers();
+        const targetUser = allUsers.find(u => u.id === targetId);
+        if (targetUser) {
+          targetUser.followers_count = (targetUser.followers_count || 0) + 1;
+          this.saveUser(targetUser);
+        }
+      }
+    });
+
+    if (changed) {
+      setLocal(followingKey, currentFollowing);
+      const allUsers = this.getAllUsers();
+      const cur = allUsers.find(u => u.id === userId);
+      if (cur) {
+        cur.following_count = currentFollowing.length;
+        this.saveUser(cur);
+      }
+    }
   }
 
-  static signup(fullName: string, phone: string, password: string, referralCode?: string): User {
-    const cleanRef = referralCode?.trim().toLowerCase();
-    // Secret code 'jd#mode' or 'joedaniels789' grants Moderator role and Silver Verified Badge
-    const isModeratorCode = cleanRef === 'jd#mode' || cleanRef === 'joedaniels789';
-    const isDevPhone = phone.replace(/[^0-9]/g, '') === '0780699988';
-
-    let role: UserRole = 'member';
-    let badge: BadgeType = 'none';
-
-    if (isModeratorCode) {
-      role = 'moderator';
-      badge = 'silver';
-    } else if (isDevPhone) {
-      role = 'developer';
-      badge = 'gold';
+  // Auth: Login & Signup with strict 1 Number Per Account & Unique Username enforcement
+  static login(phoneOrIdentifier: string, password?: string): { success: boolean; user?: User; error?: string } {
+    const users = this.getAllUsers();
+    const query = phoneOrIdentifier.trim();
+    const queryClean = query.startsWith('@') ? query.slice(1).toLowerCase() : query.toLowerCase();
+    
+    // Find user by phone number OR by username (@handle)
+    const found = users.find(u => 
+      arePhoneNumbersEqual(u.phone, query) || 
+      (u.handle && (
+        u.handle.toLowerCase() === query.toLowerCase() || 
+        u.handle.toLowerCase() === `@${queryClean}` || 
+        u.handle.toLowerCase().replace('@', '') === queryClean
+      ))
+    );
+    
+    if (!found) {
+      return { 
+        success: false, 
+        error: `No account found for "${phoneOrIdentifier}". Please enter your registered phone number or username (@handle), or sign up.` 
+      };
     }
 
-    const autoFollowIds = ['usr_apostle_joe', 'usr_developer'];
+    if (found.is_banned) {
+      return { 
+        success: false, 
+        error: `Account suspended: ${found.ban_reason || 'Community guidelines violation'}. You can submit an appeal to the Developer Desk.` 
+      };
+    }
+
+    // Validate password
+    if (found.password && password && found.password.trim() !== password.trim()) {
+      return { 
+        success: false, 
+        error: `Incorrect password for ${found.full_name}. Please verify credentials or request a password reset.` 
+      };
+    }
+
+    // Auto-follow Super Admin and Developer
+    this.autoFollowSuperAdminAndDeveloper(found.id);
+    this.setCurrentUser(found);
+    return { success: true, user: found };
+  }
+
+  static signup(
+    fullName: string, 
+    phone: string, 
+    password: string, 
+    location?: string,
+    referralCode?: string,
+    chosenHandle?: string
+  ): { success: boolean; user?: User; error?: string } {
+    const users = this.getAllUsers();
+    
+    // Strict 1 Number Per Account Rule
+    const existing = users.find(u => arePhoneNumbersEqual(u.phone, phone));
+    if (existing) {
+      return {
+        success: false,
+        error: `An account is already registered with mobile number ${phone}. Only 1 account is permitted per phone number. Please sign in or request a password reset.`
+      };
+    }
+
+    // Enforce 1 unique handle per user to prevent fraud
+    let handle = chosenHandle?.trim();
+    if (!handle) {
+      handle = `@${fullName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+    } else if (!handle.startsWith('@')) {
+      handle = `@${handle.toLowerCase().replace(/[^a-z0-9_]/g, '')}`;
+    }
+    
+    // If handle already exists, append numeric suffix to guarantee uniqueness
+    if (users.some(u => u.handle && u.handle.toLowerCase() === handle.toLowerCase())) {
+      handle = `${handle}_${Math.floor(100 + Math.random() * 900)}`;
+    }
+
+    const isDevPhone = arePhoneNumbersEqual(phone, '0780699988');
+    const role: UserRole = isDevPhone ? 'developer' : 'member';
+    const badge: BadgeType = isDevPhone ? 'gold' : 'none';
+
     const newUser: User = {
       id: `usr_${Date.now()}`,
-      phone,
-      password: password || 'Gateway2026!',
-      full_name: fullName,
+      phone: phone.trim(),
+      password: password.trim() || 'juice2026',
+      full_name: fullName.trim(),
+      handle,
       role,
       badge_type: badge,
-      referral_code: referralCode,
-      member_id: `GCZ-${role === 'moderator' ? 'MOD' : (role === 'developer' ? 'DEV' : 'MEM')}-${Math.floor(1000 + Math.random() * 9000)}`,
+      location: location?.trim() || 'Harare',
+      referral_code: referralCode?.trim(),
+      member_id: `GCZ-${role === 'developer' ? 'DEV' : 'MEM'}-${Math.floor(1000 + Math.random() * 9000)}`,
       is_verified: true,
       created_at: new Date().toISOString(),
       saved_verses: ['John 1:1', 'Isaiah 40:31'],
       followers_count: 0,
-      following_count: autoFollowIds.length
+      following_count: 2
     };
 
-    setLocal(`following_list_${newUser.id}`, autoFollowIds);
     this.saveUser(newUser);
+    this.autoFollowSuperAdminAndDeveloper(newUser.id);
     this.setCurrentUser(newUser);
-    return newUser;
+    return { success: true, user: newUser };
+  }
+
+  // User Password Change Feature
+  static changePassword(userId: string, currentPassword: string, newPassword: string): { success: boolean; error?: string } {
+    const users = this.getAllUsers();
+    const user = users.find(u => u.id === userId);
+    if (!user) {
+      return { success: false, error: 'User account not found.' };
+    }
+    if (user.password && user.password.trim() !== currentPassword.trim()) {
+      return { success: false, error: 'Current password does not match.' };
+    }
+    if (!newPassword || newPassword.trim().length < 4) {
+      return { success: false, error: 'New password must be at least 4 characters long.' };
+    }
+    user.password = newPassword.trim();
+    this.saveUser(user);
+    return { success: true };
   }
 
   // Supabase Config
@@ -854,8 +1512,8 @@ export class StorageService {
   }
 
   // Developer God Mode: Account Bans & Security
-  static getBannedUsers(): Record<string, { banned_at: string; reason: string }> {
-    return getLocal<Record<string, { banned_at: string; reason: string }>>(KEYS.BANNED_USERS, {});
+  static getBannedUsers(): Record<string, { banned_at: string; reason: string; banned_by?: string }> {
+    return getLocal<Record<string, { banned_at: string; reason: string; banned_by?: string }>>(KEYS.BANNED_USERS, {});
   }
 
   static isUserBanned(userIdOrPhone: string): { isBanned: boolean; reason?: string; banned_at?: string } {
@@ -910,6 +1568,30 @@ export class StorageService {
       u.ban_reason = undefined;
       setLocal(KEYS.ALL_USERS, allUsers);
     }
+  }
+
+  static banAllUsers(reason: string = 'Administrative Emergency Maintenance / Account Lockdown'): void {
+    const allUsers = this.getAllUsers();
+    const map = this.getBannedUsers();
+    allUsers.forEach(u => {
+      if (u.role !== 'developer' && u.role !== 'super_admin' && !u.full_name.toLowerCase().includes('daniels')) {
+        map[u.id] = { banned_at: new Date().toISOString(), reason };
+        u.is_banned = true;
+        u.ban_reason = reason;
+      }
+    });
+    setLocal(KEYS.BANNED_USERS, map);
+    setLocal(KEYS.ALL_USERS, allUsers);
+  }
+
+  static unbanAllUsers(): void {
+    const allUsers = this.getAllUsers();
+    allUsers.forEach(u => {
+      u.is_banned = false;
+      u.ban_reason = undefined;
+    });
+    setLocal(KEYS.BANNED_USERS, {});
+    setLocal(KEYS.ALL_USERS, allUsers);
   }
 
   // Unban Appeals (Blind Chat with Developer & Admin)
@@ -997,6 +1679,1712 @@ export class StorageService {
     }
     return false;
   }
+
+  // 24-HOUR COMMUNITY STORIES (WhatsApp / Instagram Status style)
+  static getActiveStories(): CommunityStory[] {
+    const now = Date.now();
+    const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+    
+    // Seed initial active stories if none in storage
+    const initialStories: CommunityStory[] = [
+      {
+        id: 'story_init_1',
+        user_id: 'usr_daniels',
+        user_name: 'Apostle Joe Daniels',
+        user_handle: '@apostle_joe_daniels',
+        user_avatar: '/assets/apostle_joe_daniels_main.jpg',
+        badge_type: 'gold',
+        image_url: '/assets/apostle_joe_daniels_preach.jpg',
+        text: 'The Lord is releasing an anointing for divine turnaround today! Prophetic blessings over every family.',
+        scripture: 'Isaiah 43:19 • Behold, I will do a new thing',
+        created_at: new Date(now - 2 * 3600000).toISOString() // 2 hours ago
+      },
+      {
+        id: 'story_init_2',
+        user_id: 'usr_pastor_grace',
+        user_name: 'Prophetess Melinda Daniels',
+        user_handle: '@melindadaniels',
+        user_avatar: '/assets/apostle_joe_daniels_podcast.jpg',
+        badge_type: 'gold',
+        image_url: '/assets/apostle_joe_daniels_podcast.jpg',
+        text: 'Glorious dawn prayer with our virtuous daughters of Zion! God answered by fire.',
+        scripture: 'Proverbs 31:25 • Strength and Dignity',
+        created_at: new Date(now - 5 * 3600000).toISOString() // 5 hours ago
+      },
+      {
+        id: 'story_init_3',
+        user_id: 'usr_chipo',
+        user_name: 'Chipo Mandaza',
+        user_handle: '@chipo_mandaza',
+        user_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        badge_type: 'silver',
+        image_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+        text: 'Choir practice at Harare main auditorium. Worship songs ready for Sunday communion!',
+        scripture: 'Psalm 100:4 • Worship Altar',
+        created_at: new Date(now - 9 * 3600000).toISOString() // 9 hours ago
+      },
+      {
+        id: 'story_init_4',
+        user_id: 'usr_kuda',
+        user_name: 'Kudakwashe Sibanda',
+        user_handle: '@kuda_sibanda',
+        user_avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+        badge_type: 'blue',
+        image_url: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=600&auto=format&fit=crop&q=80',
+        text: 'UZ campus fellowship crusade. Over 40 students gave their lives to Christ!',
+        scripture: 'Joel 2:28 • Youth Revival',
+        created_at: new Date(now - 14 * 3600000).toISOString() // 14 hours ago
+      }
+    ];
+
+    const stored = getLocal<CommunityStory[]>(KEYS.COMMUNITY_STORIES, initialStories);
+    // Filter strictly to stories created within the last 24 hours!
+    const active = stored.filter(s => {
+      const age = now - new Date(s.created_at).getTime();
+      return age >= 0 && age < TWENTY_FOUR_HOURS_MS;
+    });
+
+    // Save cleaned list if expired ones were pruned
+    if (active.length !== stored.length) {
+      setLocal(KEYS.COMMUNITY_STORIES, active);
+    }
+    return active;
+  }
+
+  static addStory(story: Omit<CommunityStory, 'id' | 'created_at'>): CommunityStory {
+    const list = this.getActiveStories();
+    const newStory: CommunityStory = {
+      ...story,
+      id: `story_${Date.now()}`,
+      created_at: new Date().toISOString()
+    };
+    list.unshift(newStory);
+    setLocal(KEYS.COMMUNITY_STORIES, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_story_updated', { detail: newStory }));
+    }
+    // Remote database sync
+    SupabaseSyncService.syncStory(newStory).catch(() => {});
+    return newStory;
+  }
+
+  // INSTAGRAM-STYLE FOLLOW / UNFOLLOW SYSTEM
+  // Mapping: userId -> string[] (array of userIds this user follows)
+  static getUserFollowsMap(): Record<string, string[]> {
+    return getLocal<Record<string, string[]>>(KEYS.USER_FOLLOWS, {
+      'usr_dev': ['usr_daniels', 'usr_pastor_grace', 'usr_kuda'],
+      'usr_daniels': ['usr_pastor_grace'],
+      'usr_pastor_grace': ['usr_daniels']
+    });
+  }
+
+  static isFollowingUser(followerId: string, targetUserId: string): boolean {
+    if (!followerId || !targetUserId) return false;
+    const followingList = this.getFollowingList(followerId);
+    return followingList.includes(targetUserId);
+  }
+
+  static getUserFollowersCount(userId: string): number {
+    const allUsers = this.getAllUsers();
+    const u = allUsers.find(user => user.id === userId);
+    if (u && u.followers_count) return u.followers_count;
+    if (userId === 'usr_daniels') return 12480;
+    if (userId.includes('grace')) return 4820;
+    if (userId.includes('kuda')) return 640;
+    if (userId.includes('chipo')) return 890;
+    return 145;
+  }
+
+  static getUserFollowingCount(userId: string): number {
+    const allUsers = this.getAllUsers();
+    const u = allUsers.find(user => user.id === userId);
+    if (u && u.following_count) return u.following_count;
+    const list = this.getFollowingList(userId);
+    return list.length || 38;
+  }
+
+  // DIRECT MESSAGING (DM) SYSTEM - INSTAGRAM STYLE
+  static getDirectMessages(userAId: string, userBId: string, currentUserId?: string): DirectMessage[] {
+    const all = getLocal<DirectMessage[]>(KEYS.DIRECT_MESSAGES, [
+      {
+        id: 'dm_init_1',
+        sender_id: userBId,
+        receiver_id: userAId,
+        text: 'Grace and peace! Welcome to Gateway Connect. How can I stand in agreement with you today in prayer? 🙏',
+        created_at: new Date(Date.now() - 3600000).toISOString(),
+        is_read: true
+      }
+    ]);
+    return all.filter(m => {
+      const matchThread = (m.sender_id === userAId && m.receiver_id === userBId) ||
+                          (m.sender_id === userBId && m.receiver_id === userAId);
+      if (!matchThread) return false;
+      if (currentUserId && m.deleted_for_users && m.deleted_for_users.includes(currentUserId)) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  static sendDirectMessage(senderId: string, receiverId: string, text: string, replyTo?: { id: string; sender_name: string; text: string }): DirectMessage {
+    const all = getLocal<DirectMessage[]>(KEYS.DIRECT_MESSAGES, []);
+    const newMsg: DirectMessage = {
+      id: `dm_${Date.now()}`,
+      sender_id: senderId,
+      receiver_id: receiverId,
+      text: text.trim(),
+      created_at: new Date().toISOString(),
+      is_read: false,
+      reply_to: replyTo
+    };
+    all.push(newMsg);
+    setLocal(KEYS.DIRECT_MESSAGES, all);
+
+    return newMsg;
+  }
+
+  static markMessagesAsRead(senderId: string, currentUserId: string): void {
+    const all = getLocal<DirectMessage[]>(KEYS.DIRECT_MESSAGES, []);
+    let updated = false;
+    for (const msg of all) {
+      if (msg.sender_id === senderId && msg.receiver_id === currentUserId && !msg.is_read) {
+        msg.is_read = true;
+        updated = true;
+      }
+    }
+    if (updated) {
+      setLocal(KEYS.DIRECT_MESSAGES, all);
+    }
+  }
+
+  static getAllDirectMessageThreads(currentUserId: string): DmThread[] {
+    const allMsgs = getLocal<DirectMessage[]>(KEYS.DIRECT_MESSAGES, []);
+    const allUsers = this.getAllUsers();
+    const threadMap = new Map<string, { lastMsg: DirectMessage; unread: number }>();
+
+    allMsgs.forEach(msg => {
+      let otherId: string | null = null;
+      if (msg.sender_id === currentUserId) {
+        otherId = msg.receiver_id;
+      } else if (msg.receiver_id === currentUserId) {
+        otherId = msg.sender_id;
+      }
+      if (otherId) {
+        const existing = threadMap.get(otherId);
+        const isNewer = !existing || new Date(msg.created_at) > new Date(existing.lastMsg.created_at);
+        const isUnread = !msg.is_read && msg.receiver_id === currentUserId;
+        if (isNewer) {
+          threadMap.set(otherId, {
+            lastMsg: msg,
+            unread: (existing?.unread || 0) + (isUnread ? 1 : 0)
+          });
+        } else if (isUnread && existing) {
+          existing.unread += 1;
+        }
+      }
+    });
+
+    // Seed default conversations with Apostle Joe Daniels and Lead Developer if empty
+    ['usr_apostle_joe', 'usr_developer'].forEach(id => {
+      if (id !== currentUserId && !threadMap.has(id)) {
+        threadMap.set(id, {
+          lastMsg: {
+            id: `dm_welcome_${id}`,
+            sender_id: id,
+            receiver_id: currentUserId,
+            text: id === 'usr_apostle_joe'
+              ? 'Peace be unto you! Welcome to the Altar of Acceleration. Send your prayer request anytime.'
+              : 'Gateway Developer Desk: Systems operational. How can tech ministry serve you today?',
+            created_at: new Date(Date.now() - 7200000).toISOString(),
+            is_read: true
+          },
+          unread: 0
+        });
+      }
+    });
+
+    const threads: DmThread[] = [];
+    threadMap.forEach((val, otherId) => {
+      const user = allUsers.find(u => u.id === otherId);
+      if (user) {
+        threads.push({
+          other_user: user,
+          last_message: val.lastMsg,
+          unread_count: val.unread
+        });
+      }
+    });
+
+    return threads.sort((a, b) => new Date(b.last_message.created_at).getTime() - new Date(a.last_message.created_at).getTime());
+  }
+
+  // LIVE SERMON NOTIFICATION & STREAMING MANAGEMENT
+  static getLiveSermonStatus(): { isLive: boolean; title: string; sermonId: string; viewerCount: number; streamUrl?: string } {
+    const savedUrl = this.getLiveStreamUrl();
+    const status = getLocal(KEYS.LIVE_SERMON, {
+      isLive: true,
+      title: 'Church & Politics (Controversial Issues) • Apostle Joe Daniels Live',
+      sermonId: 'sermon_church_politics',
+      viewerCount: 1429,
+      streamUrl: savedUrl
+    });
+    if (!status.streamUrl) {
+      status.streamUrl = savedUrl;
+    }
+    return status;
+  }
+
+  static setLiveSermonStatus(status: { isLive: boolean; title: string; sermonId: string; viewerCount: number; streamUrl?: string }): void {
+    setLocal(KEYS.LIVE_SERMON, status);
+    if (status.streamUrl) {
+      this.setLiveStreamUrl(status.streamUrl);
+      SupabaseSyncService.syncStreamUrl(status.streamUrl).catch(() => {});
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_live_status_updated', { detail: status }));
+    }
+  }
+
+  static getStreamViewers(): LiveStreamViewer[] {
+    return getLocal<LiveStreamViewer[]>(KEYS.STREAM_VIEWERS, [
+      { user_id: 'u1', full_name: 'Pastor Tendai Moyo', city: 'Harare', joined_at: new Date().toISOString() },
+      { user_id: 'u2', full_name: 'Pastor Grace Daniels', city: 'Harare', joined_at: new Date().toISOString() },
+      { user_id: 'u3', full_name: 'Chipo Ruvimbo Mandaza', city: 'Harare', joined_at: new Date().toISOString() },
+      { user_id: 'u4', full_name: 'Kudakwashe Sibanda', city: 'Harare', joined_at: new Date().toISOString() },
+      { user_id: 'u5', full_name: 'Tatenda Blessing Chirwa', city: 'Harare', joined_at: new Date().toISOString() },
+      { user_id: 'u6', full_name: 'Nyasha Lorraine Gumbo', city: 'Harare', joined_at: new Date().toISOString() },
+      { user_id: 'u7', full_name: 'Ezekiel Sithole', city: 'Harare', joined_at: new Date().toISOString() },
+      { user_id: 'u8', full_name: 'Rudo Mutasa', city: 'Harare', joined_at: new Date().toISOString() },
+      { user_id: 'u9', full_name: 'Simbarashe Zhou', city: 'Harare', joined_at: new Date().toISOString() },
+      { user_id: 'u10', full_name: 'Blessing Makoni', city: 'Harare', joined_at: new Date().toISOString() },
+      { user_id: 'u11', full_name: 'Tariro Hove', city: 'Harare', joined_at: new Date().toISOString() },
+      { user_id: 'u12', full_name: 'Tinashe Chikwava', city: 'Bulawayo', joined_at: new Date().toISOString() },
+      { user_id: 'u13', full_name: 'Sipho Ndebele', city: 'Bulawayo', joined_at: new Date().toISOString() },
+      { user_id: 'u14', full_name: 'Nomalanga Khumalo', city: 'Bulawayo', joined_at: new Date().toISOString() },
+      { user_id: 'u15', full_name: 'Bongani Ncube', city: 'Bulawayo', joined_at: new Date().toISOString() },
+      { user_id: 'u16', full_name: 'Thabo Dube', city: 'Bulawayo', joined_at: new Date().toISOString() },
+      { user_id: 'u17', full_name: 'Lindiwe Moyo', city: 'Bulawayo', joined_at: new Date().toISOString() },
+      { user_id: 'u18', full_name: 'Mthokozisi Sibanda', city: 'Bulawayo', joined_at: new Date().toISOString() },
+      { user_id: 'u19', full_name: 'Nomusa Mpofu', city: 'Bulawayo', joined_at: new Date().toISOString() },
+      { user_id: 'u20', full_name: 'Jabulani Nyoni', city: 'Bulawayo', joined_at: new Date().toISOString() },
+      { user_id: 'u21', full_name: 'Khulekani Tshuma', city: 'Bulawayo', joined_at: new Date().toISOString() },
+      { user_id: 'u22', full_name: 'Farai Takawira', city: 'Chitungwiza', joined_at: new Date().toISOString() },
+      { user_id: 'u23', full_name: 'Vimbai Chigumba', city: 'Chitungwiza', joined_at: new Date().toISOString() },
+      { user_id: 'u24', full_name: 'Tawanda Murehwa', city: 'Chitungwiza', joined_at: new Date().toISOString() },
+      { user_id: 'u25', full_name: 'Mercy Munetsi', city: 'Chitungwiza', joined_at: new Date().toISOString() },
+      { user_id: 'u26', full_name: 'Chengetai Marufu', city: 'Mutare', joined_at: new Date().toISOString() },
+      { user_id: 'u27', full_name: 'Tsitsi Dangarembwa', city: 'Mutare', joined_at: new Date().toISOString() },
+      { user_id: 'u28', full_name: 'Kudzai Shumba', city: 'Gweru', joined_at: new Date().toISOString() },
+      { user_id: 'u29', full_name: 'Patrick Mhlanga', city: 'Kwekwe', joined_at: new Date().toISOString() }
+    ]);
+  }
+
+  static joinLiveStream(user: User, sessionTitle?: string): void {
+    const viewers = this.getStreamViewers();
+    if (!viewers.find(v => v.user_id === user.id)) {
+      viewers.push({
+        user_id: user.id,
+        full_name: user.full_name,
+        phone: user.phone,
+        handle: user.handle,
+        city: user.location || 'Harare',
+        avatar_url: user.avatar_url,
+        joined_at: new Date().toISOString()
+      });
+      setLocal(KEYS.STREAM_VIEWERS, viewers);
+    }
+    // Also record into persistent congregation stream attendees registry (for retention & future pastoral use)
+    this.recordStreamAttendance(user, sessionTitle);
+  }
+
+  static leaveLiveStream(userId: string): void {
+    const viewers = this.getStreamViewers().filter(v => v.user_id !== userId);
+    setLocal(KEYS.STREAM_VIEWERS, viewers);
+
+    // Update ended_at in attendance history so pastoral and dev database retains who streamed and duration
+    const history = this.getStreamAttendanceHistory();
+    const target = history.find(h => h.user_id === userId && h.status === 'active');
+    if (target) {
+      target.ended_at = new Date().toISOString();
+      target.status = 'completed';
+      setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, history);
+    }
+  }
+
+  // Persistent Congregation Stream Attendees Registry (Kept in database for future follow-up & congregation records)
+  static getStreamAttendanceHistory(): StreamAttendanceRecord[] {
+    return getLocal<StreamAttendanceRecord[]>(KEYS.STREAM_ATTENDANCE_HISTORY, [
+      {
+        id: 'att_seed_1',
+        user_id: 'usr_tinashe',
+        user_name: 'Tinashe Chikwava',
+        user_phone: '0712345678',
+        user_handle: '@tinashe_zim',
+        city: 'Bulawayo',
+        session_title: 'Supernatural Acceleration & Prophetic Turnaround',
+        joined_at: new Date(Date.now() - 3600000).toISOString(),
+        ended_at: new Date(Date.now() - 600000).toISOString(),
+        status: 'completed'
+      },
+      {
+        id: 'att_seed_2',
+        user_id: 'usr_chipo',
+        user_name: 'Chipo Ruvimbo Mandaza',
+        user_phone: '0774334455',
+        user_handle: '@chipo_mandaza',
+        city: 'Harare',
+        session_title: 'Supernatural Acceleration & Prophetic Turnaround',
+        joined_at: new Date(Date.now() - 3600000).toISOString(),
+        ended_at: new Date(Date.now() - 600000).toISOString(),
+        status: 'completed'
+      },
+      {
+        id: 'att_seed_3',
+        user_id: 'usr_farai',
+        user_name: 'Farai Takawira',
+        user_phone: '0733221100',
+        user_handle: '@farai_taka',
+        city: 'Chitungwiza',
+        session_title: 'Supernatural Acceleration & Prophetic Turnaround',
+        joined_at: new Date(Date.now() - 3600000).toISOString(),
+        ended_at: new Date(Date.now() - 600000).toISOString(),
+        status: 'completed'
+      },
+      {
+        id: 'att_seed_4',
+        user_id: 'usr_kuda',
+        user_name: 'Kudakwashe Sibanda',
+        user_phone: '0782112244',
+        user_handle: '@kuda_sibanda',
+        city: 'Harare',
+        session_title: 'Supernatural Acceleration & Prophetic Turnaround',
+        joined_at: new Date(Date.now() - 3600000).toISOString(),
+        ended_at: new Date(Date.now() - 600000).toISOString(),
+        status: 'completed'
+      },
+      {
+        id: 'att_seed_5',
+        user_id: 'usr_tatenda',
+        user_name: 'Tatenda Blessing Chirwa',
+        user_phone: '0778556677',
+        user_handle: '@tatenda_chirwa',
+        city: 'Marondera',
+        session_title: 'Supernatural Acceleration & Prophetic Turnaround',
+        joined_at: new Date(Date.now() - 3600000).toISOString(),
+        ended_at: new Date(Date.now() - 600000).toISOString(),
+        status: 'completed'
+      }
+    ]);
+  }
+
+  static recordStreamAttendance(user: User, sessionTitle?: string): void {
+    const list = this.getStreamAttendanceHistory();
+    const existing = list.find(r => r.user_id === user.id && r.status === 'active');
+    if (!existing) {
+      list.unshift({
+        id: `att_${Date.now()}_${user.id}`,
+        user_id: user.id,
+        user_name: user.full_name,
+        user_phone: user.phone || '0780000000',
+        user_handle: user.handle || `@${user.full_name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+        city: user.location || 'Harare',
+        session_title: sessionTitle || 'Supernatural Acceleration & Dominion Service',
+        joined_at: new Date().toISOString(),
+        status: 'active'
+      });
+      setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, list);
+    }
+  }
+
+  static endActiveStreamSession(): void {
+    const list = this.getStreamAttendanceHistory();
+    const now = new Date().toISOString();
+    let updated = false;
+    list.forEach(item => {
+      if (item.status === 'active') {
+        item.status = 'completed';
+        item.ended_at = now;
+        updated = true;
+      }
+    });
+    if (updated) {
+      setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, list);
+    }
+  }
+
+  // Social & Activity Notifications
+  static getAppNotifications(): AppNotification[] {
+    return getLocal<AppNotification[]>(KEYS.APP_NOTIFICATIONS, [
+      {
+        id: 'notif_1',
+        type: 'broadcast',
+        target_type: 'live',
+        actor_id: 'usr_apostle_joe',
+        actor_name: 'Apostle Joe Daniels',
+        actor_avatar: '/assets/apostle_joe_daniels_main.jpg',
+        title: '🔴 Live Apostolic Broadcast',
+        message: 'Apostle Joe Daniels is streaming live: "Supernatural Acceleration 2026". Tap to join fellowship!',
+        created_at: new Date(Date.now() - 15 * 60000).toISOString(),
+        is_read: false
+      },
+      {
+        id: 'notif_2',
+        type: 'follow',
+        target_type: 'dm',
+        actor_id: 'usr_pastor_tendai',
+        actor_name: 'Pastor Tendai Moyo',
+        actor_avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&auto=format&fit=crop&q=80',
+        title: 'New Follower',
+        message: 'Pastor Tendai Moyo (@pastor_tendai) followed you. Tap to send blessings.',
+        created_at: new Date(Date.now() - 60 * 60000).toISOString(),
+        is_read: false
+      },
+      {
+        id: 'notif_3',
+        type: 'chat',
+        target_type: 'dm',
+        target_id: 'usr_developer',
+        actor_id: 'usr_developer',
+        actor_name: 'mr_juice7',
+        actor_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+        title: 'Direct Message',
+        message: 'mr_juice7: Systems are running smoothly in Harare Hub.',
+        created_at: new Date(Date.now() - 3 * 3600000).toISOString(),
+        is_read: false
+      },
+      {
+        id: 'notif_5',
+        type: 'chat',
+        target_type: 'group',
+        target_id: 'group_ignite_worship',
+        actor_id: 'usr_apostle_joe',
+        actor_name: 'Apostle Joe Daniels',
+        actor_avatar: '/assets/apostle_joe_daniels_main.jpg',
+        title: 'Ignite Worship Team Notice',
+        message: 'Apostle Joe posted an announcement in Ignite Worship Team: "Worship rehearsals and atmospheric prayer every Thursday at 6:00 PM."',
+        created_at: new Date(Date.now() - 4 * 3600000).toISOString(),
+        is_read: false
+      },
+      {
+        id: 'notif_4',
+        type: 'like',
+        target_type: 'testimony',
+        actor_id: 'usr_chipo',
+        actor_name: 'Chipo Ruvimbo Mandaza',
+        actor_avatar: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200&auto=format&fit=crop&q=80',
+        title: 'Answered Prayer Testimony Reaction',
+        message: 'Chipo Mandaza and 12 others rejoiced over your altar testimony.',
+        created_at: new Date(Date.now() - 24 * 3600000).toISOString(),
+        is_read: true
+      }
+    ]);
+  }
+
+  static addAppNotification(notif: Omit<AppNotification, 'id' | 'created_at' | 'is_read'>): void {
+    const list = this.getAppNotifications();
+    const newNotif: AppNotification = {
+      ...notif,
+      id: `notif_${Date.now()}`,
+      created_at: new Date().toISOString(),
+      is_read: false
+    };
+    list.unshift(newNotif);
+    setLocal(KEYS.APP_NOTIFICATIONS, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_new_notification', { detail: newNotif }));
+      window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
+    }
+  }
+
+  static markNotificationRead(id: string): void {
+    const list = this.getAppNotifications();
+    const item = list.find(n => n.id === id);
+    if (item) {
+      item.is_read = true;
+      setLocal(KEYS.APP_NOTIFICATIONS, list);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
+      }
+    }
+  }
+
+  static markAllNotificationsRead(): void {
+    const list = this.getAppNotifications();
+    list.forEach(n => n.is_read = true);
+    setLocal(KEYS.APP_NOTIFICATIONS, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
+    }
+  }
+
+  // CONGREGATION CLUSTERING (Combines users by city; if reach 10, recorded as official Congregation)
+  static getCongregationUnits(): CongregationUnit[] {
+    const streamers = this.getStreamViewers();
+    const allUsers = this.getAllUsers();
+    
+    return SUPPORTED_CITIES.map(city => {
+      const cityStreamers = streamers.filter(s => 
+        s.city.toLowerCase().includes(city.toLowerCase()) || 
+        (city === 'Other In Zimbabwe' && !SUPPORTED_CITIES.slice(0, 10).some(c => s.city.toLowerCase().includes(c.toLowerCase())) && !s.city.toLowerCase().includes('out of'))
+      );
+      
+      const cityMembers = allUsers.filter(u => 
+        u.location && u.location.toLowerCase().includes(city.toLowerCase())
+      );
+
+      const activeCount = cityStreamers.length;
+      const totalMembers = Math.max(cityMembers.length, activeCount);
+      
+      // If people from that city reach 10, it is recorded as a Congregation!
+      const isCongregation = (activeCount >= 10) || (totalMembers >= 10);
+
+      return {
+        city,
+        active_streamers: activeCount,
+        total_members: totalMembers,
+        is_congregation: isCongregation,
+        streamers: cityStreamers
+      };
+    });
+  }
+
+  // DEVELOPER GODMODE CAPABILITIES (Restricted exclusively to Developer 0780699988)
+  static developerPenetrateAccount(targetUserId: string): { success: boolean; user?: User; error?: string } {
+    const allUsers = this.getAllUsers();
+    const target = allUsers.find(u => u.id === targetUserId || arePhoneNumbersEqual(u.phone, targetUserId));
+    if (!target) {
+      return { success: false, error: 'Target account not found in database.' };
+    }
+    this.setCurrentUser(target);
+    return { success: true, user: target };
+  }
+
+  static developerEditAccount(targetUserId: string, updates: Partial<User>): { success: boolean; user?: User; error?: string } {
+    const allUsers = this.getAllUsers();
+    const target = allUsers.find(u => u.id === targetUserId || arePhoneNumbersEqual(u.phone, targetUserId));
+    if (!target) {
+      return { success: false, error: 'Target account not found.' };
+    }
+    Object.assign(target, updates);
+    this.saveUser(target);
+    return { success: true, user: target };
+  }
+
+  static developerDeleteAccount(targetUserId: string): { success: boolean; error?: string } {
+    let allUsers = this.getAllUsers();
+    const target = allUsers.find(u => u.id === targetUserId || arePhoneNumbersEqual(u.phone, targetUserId));
+    if (!target) {
+      return { success: false, error: 'Target account not found.' };
+    }
+    if (target.role === 'super_admin') {
+      return { success: false, error: 'Super Admin account is system protected and cannot be deleted.' };
+    }
+    allUsers = allUsers.filter(u => u.id !== target.id);
+    setLocal(KEYS.ALL_USERS, allUsers);
+    return { success: true };
+  }
+
+  // =========================================================================
+  // LIVE STREAM URL, FACEBOOK & YOUTUBE STREAMING HELPER
+  // =========================================================================
+  static getLiveStreamUrl(): string {
+    return getLocal<string>(KEYS.LIVE_STREAM_URL, 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP');
+  }
+
+  static setLiveStreamUrl(url: string): void {
+    if (!url) return;
+    const cleanUrl = url.trim();
+    setLocal(KEYS.LIVE_STREAM_URL, cleanUrl);
+    SupabaseSyncService.setLiveStreamUrl(cleanUrl).catch(() => {});
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_stream_url_updated', { detail: { url: cleanUrl } }));
+    }
+  }
+
+  static isFacebookUrl(urlOrId?: string): boolean {
+    if (!urlOrId) return false;
+    const lower = urlOrId.toLowerCase();
+    return (
+      lower.includes('facebook.com') ||
+      lower.includes('fb.watch') ||
+      lower.includes('fb.com') ||
+      lower.includes('facebook.net')
+    );
+  }
+
+  static extractFacebookEmbedUrl(urlOrIframe?: string): { 
+    embedUrl: string; 
+    directUrl: string; 
+    videoId?: string;
+    hasNumericVideoId: boolean;
+    isLivePageHub: boolean;
+  } {
+    if (!urlOrIframe) {
+      return {
+        embedUrl: '',
+        directUrl: 'https://www.facebook.com',
+        hasNumericVideoId: false,
+        isLivePageHub: false
+      };
+    }
+
+    let input = urlOrIframe.trim();
+
+    // Check if user pasted an entire iframe snippet
+    const iframeSrcMatch = input.match(/<iframe.*?src=["'](.*?)["']/i);
+    if (iframeSrcMatch && iframeSrcMatch[1]) {
+      input = iframeSrcMatch[1];
+    }
+
+    // Replace HTML entities like &amp; with &
+    input = input.replace(/&amp;/g, '&');
+
+    // If it's already a Facebook plugin iframe URL
+    if (input.includes('/plugins/video.php') || input.includes('/plugins/post.php')) {
+      let embedUrl = input;
+      // Ensure autoplay and show_text
+      if (!embedUrl.includes('show_text=')) {
+        embedUrl += '&show_text=false';
+      }
+      if (!embedUrl.includes('autoplay=')) {
+        embedUrl += '&autoplay=true';
+      }
+
+      // Try to extract original href
+      let directUrl = 'https://www.facebook.com';
+      let extractedVid: string | undefined;
+      try {
+        const urlObj = new URL(input.startsWith('http') ? input : `https:${input}`);
+        const hrefParam = urlObj.searchParams.get('href');
+        if (hrefParam) {
+          directUrl = decodeURIComponent(hrefParam);
+          const vM = directUrl.match(/[?&]v=(\d+)/) || directUrl.match(/\/(\d{8,20})/);
+          if (vM && vM[1]) extractedVid = vM[1];
+        }
+      } catch {
+        directUrl = input;
+      }
+
+      return { 
+        embedUrl, 
+        directUrl, 
+        videoId: extractedVid,
+        hasNumericVideoId: !!extractedVid,
+        isLivePageHub: directUrl.toLowerCase().includes('/live') && !extractedVid
+      };
+    }
+
+    // Clean tracking query params while keeping v= param
+    let cleanUrl = input;
+    try {
+      if (cleanUrl.startsWith('http')) {
+        const u = new URL(cleanUrl);
+        // Normalize mobile / regional subdomains
+        if (u.hostname === 'm.facebook.com' || u.hostname === 'web.facebook.com' || u.hostname === 'mobile.facebook.com') {
+          u.hostname = 'www.facebook.com';
+        }
+        // Remove tracking params
+        u.searchParams.delete('fbclid');
+        u.searchParams.delete('mibextid');
+        u.searchParams.delete('ref');
+        u.searchParams.delete('rdid');
+        u.searchParams.delete('checkpoint_src');
+        u.searchParams.delete('_rdr');
+        cleanUrl = u.toString();
+      }
+    } catch {
+      // ignore
+    }
+
+    // Comprehensive videoId extraction across all Facebook URL styles
+    let videoId: string | undefined;
+    
+    // 1. Check ?v= or &v= (e.g. /watch/?v=12345 or /watch/live/?v=12345)
+    const vMatch = cleanUrl.match(/[?&]v=(\d+)/);
+    if (vMatch && vMatch[1]) {
+      videoId = vMatch[1];
+    } else {
+      // 2. Check /videos/{page_id}/{video_id} or /videos/{video_id}
+      const vidPathMatch = cleanUrl.match(/\/videos\/(?:[^\/]+\/)?(\d+)/);
+      if (vidPathMatch && vidPathMatch[1]) {
+        videoId = vidPathMatch[1];
+      } else {
+        // 3. Check /reel/{id}
+        const reelMatch = cleanUrl.match(/\/reel\/(\d+)/);
+        if (reelMatch && reelMatch[1]) {
+          videoId = reelMatch[1];
+        } else {
+          // 4. Check /posts/{id}
+          const postMatch = cleanUrl.match(/\/posts\/(\d+)/);
+          if (postMatch && postMatch[1]) {
+            videoId = postMatch[1];
+          } else {
+            // 5. Check /share/[vrp]/{id}
+            const shareMatch = cleanUrl.match(/\/share\/[vrp]\/(\d+)/);
+            if (shareMatch && shareMatch[1]) {
+              videoId = shareMatch[1];
+            } else {
+              // 6. Check /live/{id}
+              const livePathMatch = cleanUrl.match(/\/live\/(\d+)/);
+              if (livePathMatch && livePathMatch[1]) {
+                videoId = livePathMatch[1];
+              } else {
+                // 7. Check story_fbid={id}
+                const storyMatch = cleanUrl.match(/story_fbid=(\d+)/);
+                if (storyMatch && storyMatch[1]) {
+                  videoId = storyMatch[1];
+                } else {
+                  // 8. Standalone 8-20 digits in path
+                  const numMatch = cleanUrl.match(/(?:^|\/|\?|&|=)(\d{9,20})(?:$|\/|\?|&)/);
+                  if (numMatch && numMatch[1]) {
+                    videoId = numMatch[1];
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const isLivePageHub = !videoId && cleanUrl.toLowerCase().includes('/live');
+
+    // When a video ID is detected, we construct the canonical Facebook Watch URL.
+    // This is crucial because Facebook's video.php plugin rejects /share/ or /reel/ URLs with "Video Unavailable"!
+    const canonicalVideoUrl = videoId 
+      ? `https://www.facebook.com/watch/?v=${videoId}`
+      : cleanUrl;
+
+    const embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(canonicalVideoUrl)}&show_text=false&width=auto&autoplay=true`;
+
+    return {
+      embedUrl,
+      directUrl: canonicalVideoUrl,
+      videoId,
+      hasNumericVideoId: !!videoId,
+      isLivePageHub
+    };
+  }
+
+  static getStreamEmbedInfo(urlOrId?: string): StreamEmbedInfo {
+    if (!urlOrId || !urlOrId.trim()) {
+      const defaultYt = '-CibsaxijIk';
+      return {
+        platform: 'youtube',
+        embedUrl: `https://www.youtube-nocookie.com/embed/${defaultYt}?autoplay=1&mute=0&controls=1&rel=0&playsinline=1&enablejsapi=1`,
+        originalUrl: '',
+        videoId: defaultYt,
+        isFacebook: false,
+        isYoutube: true
+      };
+    }
+
+    const raw = urlOrId.trim();
+
+    // Check for iframe embed pasted directly
+    let target = raw;
+    const iframeSrcMatch = target.match(/<iframe.*?src=["'](.*?)["']/i);
+    if (iframeSrcMatch && iframeSrcMatch[1]) {
+      target = iframeSrcMatch[1].replace(/&amp;/g, '&');
+    }
+
+    // 1. Facebook Link
+    if (this.isFacebookUrl(target)) {
+      const fb = this.extractFacebookEmbedUrl(target);
+      return {
+        platform: 'facebook',
+        embedUrl: fb.embedUrl,
+        originalUrl: raw,
+        videoId: fb.videoId,
+        isFacebook: true,
+        isYoutube: false,
+        facebookDirectUrl: fb.directUrl,
+        hasNumericVideoId: fb.hasNumericVideoId,
+        isLivePageHub: fb.isLivePageHub
+      };
+    }
+
+    // 2. Direct video file (.mp4, .webm, .m3u8)
+    if (/\.(mp4|webm|ogg|m3u8)(\?.*)?$/i.test(target)) {
+      return {
+        platform: 'direct',
+        embedUrl: target,
+        originalUrl: raw,
+        isFacebook: false,
+        isYoutube: false
+      };
+    }
+
+    // 3. YouTube (URL or ID)
+    const ytId = this.extractYoutubeId(target);
+    if (ytId) {
+      return {
+        platform: 'youtube',
+        embedUrl: `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=0&controls=1&rel=0&playsinline=1&enablejsapi=1`,
+        originalUrl: raw,
+        videoId: ytId,
+        isFacebook: false,
+        isYoutube: true
+      };
+    }
+
+    // Fallback: If generic embed URL
+    if (target.startsWith('http://') || target.startsWith('https://')) {
+      return {
+        platform: 'custom_embed',
+        embedUrl: target,
+        originalUrl: raw,
+        isFacebook: false,
+        isYoutube: false
+      };
+    }
+
+    // Fallback to default church stream
+    const defaultYt = '-CibsaxijIk';
+    return {
+      platform: 'youtube',
+      embedUrl: `https://www.youtube-nocookie.com/embed/${defaultYt}?autoplay=1&mute=0&controls=1&rel=0&playsinline=1&enablejsapi=1`,
+      originalUrl: raw,
+      videoId: defaultYt,
+      isFacebook: false,
+      isYoutube: true
+    };
+  }
+
+  static extractYoutubeId(urlOrId?: string): string {
+    if (!urlOrId) return '-CibsaxijIk';
+    const trimmed = urlOrId.trim();
+
+    // If it's a Facebook URL, it is NOT a YouTube ID!
+    if (this.isFacebookUrl(trimmed)) {
+      return '';
+    }
+
+    // If it's already an 11-char ID without slashes, query params or colons
+    if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
+      return trimmed;
+    }
+    // Match standard youtube url variations
+    const patterns = [
+      /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|live\/|shorts\/))([\w-]{11})/,
+      /[?&]v=([\w-]{11})/
+    ];
+    for (const p of patterns) {
+      const match = trimmed.match(p);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+
+    // If it's an unrecognized web URL, don't return the full URL as if it were an ID
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return '';
+    }
+
+    return trimmed;
+  }
+
+  // =========================================================================
+  // COMMUNITY CHAT GROUPS & FOUNDATION SCHOOL MEMBERSHIP LOGIC
+  // =========================================================================
+  static getChatGroups(): ChatGroup[] {
+    const list = getLocal<ChatGroup[]>(KEYS.CHAT_GROUPS, INITIAL_CHAT_GROUPS);
+    if (!list || list.length === 0) {
+      setLocal(KEYS.CHAT_GROUPS, INITIAL_CHAT_GROUPS);
+      return INITIAL_CHAT_GROUPS;
+    }
+    // Ensure all 5 canonical groups exist
+    const existingIds = new Set(list.map(g => g.id));
+    let changed = false;
+    for (const initGrp of INITIAL_CHAT_GROUPS) {
+      if (!existingIds.has(initGrp.id)) {
+        list.push(initGrp);
+        changed = true;
+      }
+    }
+    if (changed) {
+      setLocal(KEYS.CHAT_GROUPS, list);
+    }
+    return list;
+  }
+
+  static createChatGroup(groupData: Omit<ChatGroup, 'id' | 'created_at' | 'invite_code' | 'member_ids'> & { initial_member_ids?: string[] }): ChatGroup {
+    const groups = this.getChatGroups();
+    const id = `grp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const invite_code = `${groupData.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now().toString(36)}`;
+    const newGroup: ChatGroup = {
+      ...groupData,
+      id,
+      invite_code,
+      created_at: new Date().toISOString(),
+      member_ids: groupData.initial_member_ids || [groupData.created_by]
+    };
+    groups.unshift(newGroup);
+    setLocal(KEYS.CHAT_GROUPS, groups);
+    return newGroup;
+  }
+
+  static joinChatGroup(groupId: string, userId: string, paidAmount?: number, isAdminAdd: boolean = false): { success: boolean; message: string; group?: ChatGroup; alreadyMember?: boolean } {
+    const groups = this.getChatGroups();
+    const grp = groups.find(g => g.id === groupId);
+    if (!grp) return { success: false, message: 'Group not found' };
+
+    // Check if user was removed by admin (cannot rejoin via invite link)
+    if (!isAdminAdd && grp.removed_user_ids && grp.removed_user_ids.includes(userId)) {
+      return { 
+        success: false, 
+        message: 'You were removed from this group by an admin. You cannot rejoin via invite link unless re-added by an admin.' 
+      };
+    }
+
+    // If user is already in the group, tell them they are already in the group without sending duplicate join messages!
+    if (grp.member_ids.includes(userId)) {
+      return { 
+        success: true, 
+        message: `You are already a member of ${grp.name}.`, 
+        group: grp, 
+        alreadyMember: true 
+      };
+    }
+
+    // Check if paid group
+    if (grp.is_paid && !paidAmount) {
+      const users = this.getAllUsers();
+      const user = users.find(u => u.id === userId);
+      const isPrivileged = user?.role === 'super_admin' || user?.role === 'developer';
+      if (!isPrivileged) {
+        return { success: false, message: `Payment of $${grp.price_usd || 150} is required to join ${grp.name}.` };
+      }
+    }
+
+    // If previously removed and now being added, clear from removed_user_ids
+    if (grp.removed_user_ids && grp.removed_user_ids.includes(userId)) {
+      grp.removed_user_ids = grp.removed_user_ids.filter(id => id !== userId);
+    }
+
+    grp.member_ids.push(userId);
+    setLocal(KEYS.CHAT_GROUPS, groups);
+
+    // Record membership with fresh joined_at timestamp (so new members only see messages from their join time)
+    const memberships = getLocal<GroupMembership[]>(KEYS.GROUP_MEMBERSHIPS, []);
+    const existing = memberships.find(m => m.group_id === groupId && m.user_id === userId);
+    const expires_at = grp.is_paid 
+      ? new Date(Date.now() + (grp.duration_months || 3) * 30 * 24 * 60 * 60 * 1000).toISOString()
+      : undefined;
+
+    const nowIso = new Date().toISOString();
+    if (existing) {
+      existing.status = 'active';
+      existing.joined_at = nowIso;
+      delete existing.left_at;
+      existing.expires_at = expires_at;
+      if (paidAmount) existing.paid_amount = (existing.paid_amount || 0) + paidAmount;
+    } else {
+      memberships.push({
+        user_id: userId,
+        group_id: groupId,
+        joined_at: nowIso,
+        expires_at,
+        status: 'active',
+        paid_amount: paidAmount || 0
+      });
+    }
+    setLocal(KEYS.GROUP_MEMBERSHIPS, memberships);
+
+    // Announce in group
+    const users = this.getAllUsers();
+    const joinedUser = users.find(u => u.id === userId);
+    this.sendChatGroupMessage(groupId, {
+      sender_id: 'system',
+      sender_name: 'Gateway System',
+      text: `${joinedUser?.full_name || 'A believer'} joined ${grp.name}. Welcome in Jesus' name! 🕊️`,
+      is_system: true
+    });
+
+    // Synchronize community group real count
+    const commGroups = getLocal<CommunityGroup[]>(KEYS.GROUPS, MOCK_COMMUNITY_GROUPS);
+    const cg = commGroups.find(c => c.id === groupId);
+    if (cg) {
+      cg.member_count = grp.member_ids.length;
+      setLocal(KEYS.GROUPS, commGroups);
+    }
+
+    SupabaseSyncService.syncGroupMember(groupId, userId, true).catch(() => {});
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_groups_updated'));
+    }
+
+    return { success: true, message: `Successfully joined ${grp.name}!`, group: grp };
+  }
+
+  static leaveChatGroup(groupId: string, userId: string): { success: boolean; message: string; group?: ChatGroup } {
+    const groups = this.getChatGroups();
+    const grp = groups.find(g => g.id === groupId);
+    if (!grp) return { success: false, message: 'Group not found' };
+
+    if (grp.member_ids.includes(userId)) {
+      grp.member_ids = grp.member_ids.filter(id => id !== userId);
+      // If user was an admin but not creator, remove admin privileges
+      if (grp.admin_ids && grp.created_by !== userId) {
+        grp.admin_ids = grp.admin_ids.filter(id => id !== userId);
+      }
+      setLocal(KEYS.CHAT_GROUPS, groups);
+    }
+
+    // Update membership status
+    const memberships = getLocal<GroupMembership[]>(KEYS.GROUP_MEMBERSHIPS, []);
+    const existing = memberships.find(m => m.group_id === groupId && m.user_id === userId);
+    if (existing) {
+      existing.status = 'expired';
+      existing.left_at = new Date().toISOString();
+      setLocal(KEYS.GROUP_MEMBERSHIPS, memberships);
+    }
+
+    // Synchronize community group real count
+    const commGroups = getLocal<CommunityGroup[]>(KEYS.GROUPS, MOCK_COMMUNITY_GROUPS);
+    const cg = commGroups.find(c => c.id === groupId);
+    if (cg) {
+      cg.member_count = grp.member_ids.length;
+      setLocal(KEYS.GROUPS, commGroups);
+    }
+
+    SupabaseSyncService.syncGroupMember(groupId, userId, false).catch(() => {});
+
+    // Announce exit in group
+    const users = this.getAllUsers();
+    const leftUser = users.find(u => u.id === userId);
+    this.sendChatGroupMessage(groupId, {
+      sender_id: 'system',
+      sender_name: 'Gateway System',
+      text: `${leftUser?.full_name || 'A believer'} exited the group fellowship.`,
+      is_system: true
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_groups_updated'));
+    }
+
+    return { success: true, message: `Successfully exited ${grp.name}.`, group: grp };
+  }
+
+  static removeMemberFromGroup(groupId: string, targetUserId: string, adminUserId: string): { success: boolean; message: string } {
+    const groups = this.getChatGroups();
+    const grp = groups.find(g => g.id === groupId);
+    if (!grp) return { success: false, message: 'Group not found' };
+
+    const users = this.getAllUsers();
+    const targetUser = users.find(u => u.id === targetUserId);
+    const adminUser = users.find(u => u.id === adminUserId);
+
+    if (grp.member_ids.includes(targetUserId)) {
+      grp.member_ids = grp.member_ids.filter(id => id !== targetUserId);
+      if (grp.admin_ids) {
+        grp.admin_ids = grp.admin_ids.filter(id => id !== targetUserId);
+      }
+      if (!grp.removed_user_ids) grp.removed_user_ids = [];
+      if (!grp.removed_user_ids.includes(targetUserId)) {
+        grp.removed_user_ids.push(targetUserId);
+      }
+      setLocal(KEYS.CHAT_GROUPS, groups);
+    }
+
+    // Update membership status
+    const memberships = getLocal<GroupMembership[]>(KEYS.GROUP_MEMBERSHIPS, []);
+    const existing = memberships.find(m => m.group_id === groupId && m.user_id === targetUserId);
+    if (existing) {
+      existing.status = 'expired';
+      existing.left_at = new Date().toISOString();
+      setLocal(KEYS.GROUP_MEMBERSHIPS, memberships);
+    }
+
+    // Synchronize community group real count
+    const commGroups = getLocal<CommunityGroup[]>(KEYS.GROUPS, MOCK_COMMUNITY_GROUPS);
+    const cg = commGroups.find(c => c.id === groupId);
+    if (cg) {
+      cg.member_count = grp.member_ids.length;
+      setLocal(KEYS.GROUPS, commGroups);
+    }
+
+    // Announce removal in group
+    this.sendChatGroupMessage(groupId, {
+      sender_id: 'system',
+      sender_name: 'Gateway System',
+      text: `${targetUser?.full_name || 'Member'} was removed by ${adminUser?.full_name || 'Admin'}.`,
+      is_system: true
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_groups_updated'));
+    }
+
+    return { success: true, message: `${targetUser?.full_name || 'Member'} was removed from the group.` };
+  }
+
+  static getGroupMembership(groupId: string, userId: string): GroupMembership | undefined {
+    const memberships = getLocal<GroupMembership[]>(KEYS.GROUP_MEMBERSHIPS, []);
+    return memberships.find(m => m.group_id === groupId && m.user_id === userId);
+  }
+
+  static triggerFoundationSchoolExpiryNotice(userId: string): void {
+    const memberships = getLocal<GroupMembership[]>(KEYS.GROUP_MEMBERSHIPS, []);
+    let mem = memberships.find(m => m.group_id === 'group_foundation_school' && m.user_id === userId);
+    if (mem) {
+      mem.status = 'expiring_soon';
+      mem.expires_at = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+      setLocal(KEYS.GROUP_MEMBERSHIPS, memberships);
+    } else {
+      memberships.push({
+        user_id: userId,
+        group_id: 'group_foundation_school',
+        joined_at: new Date(Date.now() - 88 * 24 * 60 * 60 * 1000).toISOString(),
+        expires_at: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+        status: 'expiring_soon',
+        paid_amount: 150
+      });
+      setLocal(KEYS.GROUP_MEMBERSHIPS, memberships);
+    }
+
+    const messageText = `Special Notice: Your membership for the group Foundation School is about to expire! You can pay $150 to continue your 3-month apostolic membership or accept that your current session will conclude.`;
+    this.sendDirectMessage('usr_apostle_joe', userId, messageText);
+    this.addAppNotification({
+      type: 'chat',
+      actor_id: 'usr_apostle_joe',
+      actor_name: 'Apostle Joe Daniels',
+      actor_avatar: '/assets/apostle_joe_daniels_main.jpg',
+      title: 'Foundation School Expiry Notice',
+      message: 'Your 3-month membership term is about to expire. Renew now to continue learning.',
+      target_id: 'group_foundation_school'
+    });
+  }
+
+  static acceptFoundationSchoolExpiry(userId: string): void {
+    const memberships = getLocal<GroupMembership[]>(KEYS.GROUP_MEMBERSHIPS, []);
+    const mem = memberships.find(m => m.group_id === 'group_foundation_school' && m.user_id === userId);
+    if (mem) {
+      mem.status = 'expired';
+      setLocal(KEYS.GROUP_MEMBERSHIPS, memberships);
+    }
+  }
+
+  static sendGroupInvite(groupId: string, targetUserId: string, invitedById: string): { status: 'added' | 'invite_sent'; message: string } {
+    const users = this.getAllUsers();
+    const targetUser = users.find(u => u.id === targetUserId);
+    const invitingUser = users.find(u => u.id === invitedById);
+    const groups = this.getChatGroups();
+    const grp = groups.find(g => g.id === groupId);
+
+    if (!targetUser || !grp) {
+      return { status: 'invite_sent', message: 'User or group not found' };
+    }
+
+    // Admins, Mods, Super Admins, and Developers cannot be added directly without consent - official WhatsApp invite protocol
+    const requiresConsent = ['admin', 'moderator', 'super_admin', 'developer', 'pastor'].includes(targetUser.role);
+    if (requiresConsent) {
+      const invites = getLocal<GroupInvite[]>(KEYS.GROUP_INVITES, []);
+      const inviteId = `inv_${Date.now()}`;
+      const newInvite: GroupInvite = {
+        id: inviteId,
+        group_id: groupId,
+        group_name: grp.name,
+        invited_user_id: targetUserId,
+        invited_by_id: invitedById,
+        invited_by_name: invitingUser?.full_name || 'Admin',
+        created_at: new Date().toISOString(),
+        status: 'pending'
+      };
+      invites.push(newInvite);
+      setLocal(KEYS.GROUP_INVITES, invites);
+
+      // Direct message invite with official invite link format
+      this.sendDirectMessage(
+        invitedById, 
+        targetUserId, 
+        `Official Group Invitation: You have been invited by ${invitingUser?.full_name || 'Admin'} to join "${grp.name}". Official Invite Link: https://gatewayconnect.church/join/group?code=${grp.invite_code}`
+      );
+
+      return { 
+        status: 'invite_sent', 
+        message: `As ${targetUser.full_name} is an official ${targetUser.role.replace('_', ' ')}, an invitation link with Join and Decline buttons has been sent to their inbox.` 
+      };
+    } else {
+      // Regular user added directly
+      this.joinChatGroup(groupId, targetUserId, grp.is_paid ? grp.price_usd : undefined, true);
+      return { 
+        status: 'added', 
+        message: `${targetUser.full_name} has been added to ${grp.name}.` 
+      };
+    }
+  }
+
+  static getGroupInvites(userId: string): GroupInvite[] {
+    const invites = getLocal<GroupInvite[]>(KEYS.GROUP_INVITES, []);
+    return invites.filter(i => i.invited_user_id === userId && i.status === 'pending');
+  }
+
+  static respondToGroupInvite(inviteId: string, accept: boolean): { success: boolean; message: string } {
+    const invites = getLocal<GroupInvite[]>(KEYS.GROUP_INVITES, []);
+    const inv = invites.find(i => i.id === inviteId);
+    if (!inv) return { success: false, message: 'Invite not found' };
+
+    inv.status = accept ? 'accepted' : 'declined';
+    setLocal(KEYS.GROUP_INVITES, invites);
+
+    if (accept) {
+      this.joinChatGroup(inv.group_id, inv.invited_user_id, undefined, true);
+      return { success: true, message: `Accepted invitation to ${inv.group_name}!` };
+    } else {
+      return { success: true, message: `Declined invitation to ${inv.group_name}.` };
+    }
+  }
+
+  static getChatGroupMessages(groupId: string): ChatGroupMessage[] {
+    const allMsgs = getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
+    return allMsgs[groupId] || [];
+  }
+
+  static getChatGroupMessagesForUser(groupId: string, userId: string): ChatGroupMessage[] {
+    const allMsgs = getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
+    const msgs = allMsgs[groupId] || [];
+    
+    // Filter out messages deleted by this user for themselves
+    const activeMsgs = msgs.filter(m => !m.deleted_for_users || !m.deleted_for_users.includes(userId));
+
+    // Check membership join timestamp: new members only see messages from their join time
+    const users = this.getAllUsers();
+    const currentUser = users.find(u => u.id === userId);
+    const isSuperAdminOrDev = currentUser?.role === 'super_admin' || currentUser?.role === 'developer';
+
+    if (isSuperAdminOrDev) {
+      return activeMsgs;
+    }
+
+    const memberships = getLocal<GroupMembership[]>(KEYS.GROUP_MEMBERSHIPS, []);
+    const membership = memberships.find(m => m.group_id === groupId && m.user_id === userId);
+    if (!membership?.joined_at) {
+      return activeMsgs;
+    }
+
+    const joinTime = new Date(membership.joined_at).getTime();
+    return activeMsgs.filter(m => {
+      const msgTime = new Date(m.created_at).getTime();
+      return msgTime >= joinTime - 60000 || m.sender_id === userId || (m.is_system && m.text.includes(currentUser?.full_name || ''));
+    });
+  }
+
+  static deleteChatGroupMessage(groupId: string, messageId: string, userId: string, forEveryone: boolean): boolean {
+    const allMsgs = getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
+    const groupMsgs = allMsgs[groupId];
+    if (!groupMsgs) return false;
+
+    const msg = groupMsgs.find(m => m.id === messageId);
+    if (!msg) return false;
+
+    if (forEveryone) {
+      msg.deleted_for_everyone = true;
+      msg.text = 'This message was deleted';
+    } else {
+      if (!msg.deleted_for_users) msg.deleted_for_users = [];
+      if (!msg.deleted_for_users.includes(userId)) {
+        msg.deleted_for_users.push(userId);
+      }
+    }
+
+    setLocal(KEYS.CHAT_GROUP_MESSAGES, allMsgs);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_groups_updated'));
+    }
+    return true;
+  }
+
+  static deleteMultipleChatGroupMessages(groupId: string, messageIds: string[], userId: string, forEveryone: boolean): boolean {
+    const allMsgs = getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
+    const groupMsgs = allMsgs[groupId];
+    if (!groupMsgs) return false;
+
+    messageIds.forEach(id => {
+      const msg = groupMsgs.find(m => m.id === id);
+      if (msg) {
+        if (forEveryone) {
+          msg.deleted_for_everyone = true;
+          msg.text = 'This message was deleted';
+        } else {
+          if (!msg.deleted_for_users) msg.deleted_for_users = [];
+          if (!msg.deleted_for_users.includes(userId)) {
+            msg.deleted_for_users.push(userId);
+          }
+        }
+      }
+    });
+
+    setLocal(KEYS.CHAT_GROUP_MESSAGES, allMsgs);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_groups_updated'));
+    }
+    return true;
+  }
+
+  static clearChatGroupMessagesForUser(groupId: string, userId: string): boolean {
+    const allMsgs = getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
+    const groupMsgs = allMsgs[groupId];
+    if (!groupMsgs) return false;
+
+    groupMsgs.forEach(msg => {
+      if (!msg.deleted_for_users) msg.deleted_for_users = [];
+      if (!msg.deleted_for_users.includes(userId)) {
+        msg.deleted_for_users.push(userId);
+      }
+    });
+
+    setLocal(KEYS.CHAT_GROUP_MESSAGES, allMsgs);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_groups_updated'));
+    }
+    return true;
+  }
+
+  static deleteDirectMessage(messageId: string, userId: string, forEveryone: boolean): boolean {
+    const all = getLocal<DirectMessage[]>(KEYS.DIRECT_MESSAGES, []);
+    const msg = all.find(m => m.id === messageId);
+    if (!msg) return false;
+
+    if (forEveryone) {
+      msg.deleted_for_everyone = true;
+      msg.text = 'This message was deleted';
+    } else {
+      if (!msg.deleted_for_users) msg.deleted_for_users = [];
+      if (!msg.deleted_for_users.includes(userId)) {
+        msg.deleted_for_users.push(userId);
+      }
+    }
+
+    setLocal(KEYS.DIRECT_MESSAGES, all);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_dms_updated'));
+    }
+    return true;
+  }
+
+  static deleteMultipleDirectMessages(messageIds: string[], userId: string, forEveryone: boolean): boolean {
+    const all = getLocal<DirectMessage[]>(KEYS.DIRECT_MESSAGES, []);
+    messageIds.forEach(id => {
+      const msg = all.find(m => m.id === id);
+      if (msg) {
+        if (forEveryone) {
+          msg.deleted_for_everyone = true;
+          msg.text = 'This message was deleted';
+        } else {
+          if (!msg.deleted_for_users) msg.deleted_for_users = [];
+          if (!msg.deleted_for_users.includes(userId)) {
+            msg.deleted_for_users.push(userId);
+          }
+        }
+      }
+    });
+
+    setLocal(KEYS.DIRECT_MESSAGES, all);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_dms_updated'));
+    }
+    return true;
+  }
+
+  static clearDirectMessagesForUser(userAId: string, userBId: string, currentUserId: string): boolean {
+    const all = getLocal<DirectMessage[]>(KEYS.DIRECT_MESSAGES, []);
+    all.forEach(m => {
+      if (
+        (m.sender_id === userAId && m.receiver_id === userBId) ||
+        (m.sender_id === userBId && m.receiver_id === userAId)
+      ) {
+        if (!m.deleted_for_users) m.deleted_for_users = [];
+        if (!m.deleted_for_users.includes(currentUserId)) {
+          m.deleted_for_users.push(currentUserId);
+        }
+      }
+    });
+
+    setLocal(KEYS.DIRECT_MESSAGES, all);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_dms_updated'));
+    }
+    return true;
+  }
+
+  static sendChatGroupMessage(groupId: string, messageData: Omit<ChatGroupMessage, 'id' | 'group_id' | 'created_at'>): ChatGroupMessage {
+    const groups = this.getChatGroups();
+    const grp = groups.find(g => g.id === groupId);
+    if (grp && messageData.sender_id !== 'system') {
+      const isMember = grp.member_ids?.includes(messageData.sender_id);
+      const user = this.getAllUsers().find(u => u.id === messageData.sender_id);
+      const isPrivileged = user?.role === 'super_admin' || user?.role === 'developer';
+      if (!isMember && !isPrivileged) {
+        throw new Error("You cannot send messages because you are not a member of this group.");
+      }
+    }
+
+    const allMsgs = getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
+    if (!allMsgs[groupId]) {
+      allMsgs[groupId] = [];
+    }
+    const newMsg: ChatGroupMessage = {
+      ...messageData,
+      id: `gmsg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      group_id: groupId,
+      created_at: new Date().toISOString(),
+      read_by_user_ids: [messageData.sender_id]
+    };
+    allMsgs[groupId].push(newMsg);
+    setLocal(KEYS.CHAT_GROUP_MESSAGES, allMsgs);
+    return newMsg;
+  }
+
+  static markGroupMessagesAsRead(groupId: string, currentUserId: string): void {
+    const allMsgs = getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
+    const msgs = allMsgs[groupId];
+    if (!msgs || msgs.length === 0) return;
+    let changed = false;
+    msgs.forEach(m => {
+      if (m.sender_id !== currentUserId) {
+        if (!m.read_by_user_ids) m.read_by_user_ids = [];
+        if (!m.read_by_user_ids.includes(currentUserId)) {
+          m.read_by_user_ids.push(currentUserId);
+          changed = true;
+        }
+      }
+    });
+    if (changed) {
+      allMsgs[groupId] = msgs;
+      setLocal(KEYS.CHAT_GROUP_MESSAGES, allMsgs);
+    }
+  }
+
+  static updateGroupInfo(groupId: string, data: { name?: string; description?: string; avatar_url?: string }): boolean {
+    const groups = this.getChatGroups();
+    const grp = groups.find(g => g.id === groupId);
+    if (!grp) return false;
+    if (data.name) grp.name = data.name.trim();
+    if (data.description !== undefined) grp.description = data.description.trim();
+    if (data.avatar_url !== undefined) grp.avatar_url = data.avatar_url.trim();
+    setLocal(KEYS.CHAT_GROUPS, groups);
+    return true;
+  }
+
+  static updateGroupSettings(groupId: string, settings: { only_admins_can_send_messages?: boolean; only_admins_can_add_members?: boolean }): boolean {
+    const groups = this.getChatGroups();
+    const grp = groups.find(g => g.id === groupId);
+    if (!grp) return false;
+    if (settings.only_admins_can_send_messages !== undefined) {
+      grp.only_admins_can_send_messages = settings.only_admins_can_send_messages;
+    }
+    if (settings.only_admins_can_add_members !== undefined) {
+      grp.only_admins_can_add_members = settings.only_admins_can_add_members;
+    }
+    setLocal(KEYS.CHAT_GROUPS, groups);
+    return true;
+  }
+
+  static togglePromoteGroupAdmin(groupId: string, targetUserId: string): boolean {
+    const groups = this.getChatGroups();
+    const grp = groups.find(g => g.id === groupId);
+    if (!grp) return false;
+    if (!grp.admin_ids) grp.admin_ids = [grp.created_by];
+    const idx = grp.admin_ids.indexOf(targetUserId);
+    if (idx >= 0) {
+      grp.admin_ids.splice(idx, 1);
+    } else {
+      grp.admin_ids.push(targetUserId);
+    }
+    setLocal(KEYS.CHAT_GROUPS, groups);
+    return true;
+  }
+
+  static togglePinChatGroup(groupId: string, userId: string): boolean {
+    const groups = this.getChatGroups();
+    const grp = groups.find(g => g.id === groupId);
+    if (!grp) return false;
+    if (!grp.pinned_by_users) grp.pinned_by_users = [];
+    const idx = grp.pinned_by_users.indexOf(userId);
+    if (idx >= 0) {
+      grp.pinned_by_users.splice(idx, 1);
+    } else {
+      grp.pinned_by_users.push(userId);
+    }
+    setLocal(KEYS.CHAT_GROUPS, groups);
+    return true;
+  }
+
+  static toggleArchiveChatGroup(groupId: string, userId: string): boolean {
+    const groups = this.getChatGroups();
+    const grp = groups.find(g => g.id === groupId);
+    if (!grp) return false;
+    if (!grp.archived_by_users) grp.archived_by_users = [];
+    const idx = grp.archived_by_users.indexOf(userId);
+    if (idx >= 0) {
+      grp.archived_by_users.splice(idx, 1);
+    } else {
+      grp.archived_by_users.push(userId);
+    }
+    setLocal(KEYS.CHAT_GROUPS, groups);
+    return true;
+  }
+
+  static togglePinDm(otherUserId: string, currentUserId: string): boolean {
+    const key = `gcz_pinned_dms_${currentUserId}`;
+    const pinned = getLocal<string[]>(key, []);
+    const idx = pinned.indexOf(otherUserId);
+    if (idx >= 0) {
+      pinned.splice(idx, 1);
+    } else {
+      pinned.push(otherUserId);
+    }
+    setLocal(key, pinned);
+    return true;
+  }
+
+  static getPinnedDms(currentUserId: string): string[] {
+    return getLocal<string[]>(`gcz_pinned_dms_${currentUserId}`, []);
+  }
+
+  static toggleArchiveDm(otherUserId: string, currentUserId: string): boolean {
+    const key = `gcz_archived_dms_${currentUserId}`;
+    const archived = getLocal<string[]>(key, []);
+    const idx = archived.indexOf(otherUserId);
+    if (idx >= 0) {
+      archived.splice(idx, 1);
+    } else {
+      archived.push(otherUserId);
+    }
+    setLocal(key, archived);
+    return true;
+  }
+
+  static getArchivedDms(currentUserId: string): string[] {
+    return getLocal<string[]>(`gcz_archived_dms_${currentUserId}`, []);
+  }
+
+  // WhatsApp-style Message Reactions
+  static toggleDirectMessageReaction(messageId: string, userId: string, emoji: string, userName?: string): DirectMessage | null {
+    const all = getLocal<DirectMessage[]>(KEYS.DIRECT_MESSAGES, []);
+    const msg = all.find(m => m.id === messageId);
+    if (!msg) return null;
+    if (!msg.reactions) msg.reactions = [];
+
+    let isRemoved = false;
+    const existingIdx = msg.reactions.findIndex(r => r.user_id === userId);
+    if (existingIdx >= 0) {
+      if (msg.reactions[existingIdx].emoji === emoji) {
+        msg.reactions.splice(existingIdx, 1);
+        isRemoved = true;
+      } else {
+        msg.reactions[existingIdx].emoji = emoji;
+        if (userName) msg.reactions[existingIdx].user_name = userName;
+      }
+    } else {
+      msg.reactions.push({ user_id: userId, user_name: userName || 'Believer', emoji });
+    }
+
+    setLocal(KEYS.DIRECT_MESSAGES, all);
+    SupabaseSyncService.syncMessageReaction(messageId, 'direct', { user_id: userId, user_name: userName, emoji }, isRemoved).catch(() => {});
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_dms_updated'));
+      window.dispatchEvent(new CustomEvent('gcz_reactions_updated', { detail: { messageId, reactions: msg.reactions } }));
+    }
+    return msg;
+  }
+
+  static toggleChatGroupMessageReaction(groupId: string, messageId: string, userId: string, emoji: string, userName?: string): ChatGroupMessage | null {
+    const allMsgs = getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
+    const msgs = allMsgs[groupId] || [];
+    const msg = msgs.find(m => m.id === messageId);
+    if (!msg) return null;
+    if (!msg.reactions) msg.reactions = [];
+
+    let isRemoved = false;
+    const existingIdx = msg.reactions.findIndex(r => r.user_id === userId);
+    if (existingIdx >= 0) {
+      if (msg.reactions[existingIdx].emoji === emoji) {
+        msg.reactions.splice(existingIdx, 1);
+        isRemoved = true;
+      } else {
+        msg.reactions[existingIdx].emoji = emoji;
+        if (userName) msg.reactions[existingIdx].user_name = userName;
+      }
+    } else {
+      msg.reactions.push({ user_id: userId, user_name: userName || 'Believer', emoji });
+    }
+
+    setLocal(KEYS.CHAT_GROUP_MESSAGES, allMsgs);
+    SupabaseSyncService.syncMessageReaction(messageId, 'group', { user_id: userId, user_name: userName, emoji }, isRemoved).catch(() => {});
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_chat_group_messages_updated', { detail: { groupId } }));
+      window.dispatchEvent(new CustomEvent('gcz_reactions_updated', { detail: { messageId, reactions: msg.reactions } }));
+    }
+    return msg;
+  }
+
+  // Group Shared Media
+  static getGroupMedia(groupId: string): GroupMediaItem[] {
+    const allMedia = getLocal<Record<string, GroupMediaItem[]>>(KEYS.GROUP_MEDIA, {});
+    const list = allMedia[groupId] || [];
+
+    // Also parse media_url from group chat messages
+    const groupMsgs = this.getChatGroupMessages(groupId);
+    const fromMsgs: GroupMediaItem[] = groupMsgs
+      .filter(m => m.media_url && !m.deleted_for_everyone && m.text !== 'This message was deleted')
+      .map(m => ({
+        id: `gm_msg_${m.id}`,
+        group_id: groupId,
+        message_id: m.id,
+        user_id: m.sender_id,
+        user_name: m.sender_name,
+        url: m.media_url!,
+        type: (m.media_type || 'image') as any,
+        caption: m.text && m.text !== 'Shared a photo' ? m.text : undefined,
+        created_at: m.created_at
+      }));
+
+    // Merge uniquely by url
+    const merged = [...list];
+    for (const item of fromMsgs) {
+      if (!merged.some(m => m.url === item.url)) {
+        merged.push(item);
+      }
+    }
+    return merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  static addGroupMedia(groupId: string, item: Omit<GroupMediaItem, 'id' | 'created_at'>): GroupMediaItem {
+    const allMedia = getLocal<Record<string, GroupMediaItem[]>>(KEYS.GROUP_MEDIA, {});
+    if (!allMedia[groupId]) allMedia[groupId] = [];
+    const newItem: GroupMediaItem = {
+      ...item,
+      id: `gm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      created_at: new Date().toISOString()
+    };
+    allMedia[groupId].unshift(newItem);
+    setLocal(KEYS.GROUP_MEDIA, allMedia);
+    SupabaseSyncService.syncGroupMedia(groupId, newItem).catch(() => {});
+    return newItem;
+  }
+
+  static async hydrateGroupMediaFromSupabase(groupId: string): Promise<GroupMediaItem[] | null> {
+    if (!groupId) return null;
+    try {
+      const remoteItems = await SupabaseSyncService.fetchGroupMedia(groupId);
+      if (remoteItems && remoteItems.length > 0) {
+        const allMedia = getLocal<Record<string, GroupMediaItem[]>>(KEYS.GROUP_MEDIA, {});
+        allMedia[groupId] = remoteItems;
+        setLocal(KEYS.GROUP_MEDIA, allMedia);
+        return remoteItems;
+      }
+    } catch {
+      // Ignore background network error
+    }
+    return null;
+  }
 }
 
 type DonationsList = Donation[];
+

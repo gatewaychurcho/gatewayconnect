@@ -49,7 +49,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#00172e]/95 backdrop-blur-xl border-t border-white/10 py-1.5 px-2 safe-area-bottom shadow-2xl">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#00172e]/95 backdrop-blur-xl border-t border-white/10 py-1.5 px-2 safe-area-bottom shadow-2xl">
       <div className="max-w-md mx-auto grid grid-cols-5 gap-1">
         {tabs.map(tab => {
           const Icon = tab.icon;

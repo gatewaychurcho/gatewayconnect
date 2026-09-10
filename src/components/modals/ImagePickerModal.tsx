@@ -33,7 +33,7 @@ export const MINISTRY_GALLERY_PRESETS = [
     id: 'grad',
     url: '/assets/apostle_joe_daniels_grad.jpg',
     label: 'Academic Gown',
-    category: 'Leadership & Degree Milestone'
+    category: 'Leadership & Academic Consecration'
   },
   {
     id: 'podcast',
@@ -79,8 +79,43 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
-          const resultUrl = event.target.result as string;
-          setSelectedImage(resultUrl);
+          const rawUrl = event.target.result as string;
+          // Downscale via canvas to ensure safe LocalStorage persistence without quota limits
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_DIM = 320;
+            let width = img.width;
+            let height = img.height;
+            if (width > height) {
+              if (width > MAX_DIM) {
+                height = Math.round((height * MAX_DIM) / width);
+                width = MAX_DIM;
+              }
+            } else {
+              if (height > MAX_DIM) {
+                width = Math.round((width * MAX_DIM) / height);
+                height = MAX_DIM;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.8);
+            setSelectedImage(compressed);
+
+            // Persist to local storage recent uploads
+            try {
+              const recent = JSON.parse(localStorage.getItem('gcz_recent_local_uploads') || '[]');
+              const updated = [compressed, ...recent.filter((u: string) => u !== compressed)].slice(0, 6);
+              localStorage.setItem('gcz_recent_local_uploads', JSON.stringify(updated));
+            } catch {
+              // Ignore storage errors
+            }
+          };
+          img.onerror = () => setSelectedImage(rawUrl);
+          img.src = rawUrl;
         }
       };
       reader.readAsDataURL(file);

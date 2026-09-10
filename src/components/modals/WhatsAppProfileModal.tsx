@@ -77,8 +77,14 @@ export const WhatsAppProfileModal: React.FC<WhatsAppProfileModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-fade-in">
-      <div className="bg-[#0b141a] text-[#e9edef] border border-[#222e35] rounded-3xl max-w-md w-full overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
+    <div 
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-fade-in"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-[#0b141a] text-[#e9edef] border border-[#222e35] rounded-3xl max-w-md w-full overflow-hidden shadow-2xl flex flex-col max-h-[85vh] my-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* WhatsApp Top App Bar */}
         <div className="bg-[#202c33] px-4 py-3.5 flex items-center justify-between border-b border-[#2a3942]">

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Users, 
   MapPin, 
@@ -9,7 +9,6 @@ import {
   Heart, 
   CheckCircle2, 
   Plus, 
-  QrCode, 
   Share2, 
   MessageSquare, 
   Send, 
@@ -26,7 +25,14 @@ import {
   Camera,
   MessageCircle,
   MoreHorizontal,
-  Smile
+  Smile,
+  Loader2,
+  Check,
+  LogOut,
+  UserPlus,
+  Radio,
+  Timer,
+  Compass
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { CommunityGroup, PrayerRequest, ChurchEvent, Testimony, User } from '../../types';
@@ -34,7 +40,10 @@ import { StorageService } from '../../services/storageService';
 import { INITIAL_USERS } from '../../data/mockData';
 import { ImagePickerModal } from '../modals/ImagePickerModal';
 import { VerifiedBadge } from '../common/VerifiedBadge';
+import { InstagramProfileModal } from '../modals/InstagramProfileModal';
+import { WhatsAppShareModal } from '../modals/WhatsAppShareModal';
 import { formatTimeAgo } from '../../utils/timeAgo';
+import { getEventCountdown } from '../../utils/eventCountdown';
 
 interface CommunityTabProps {
   groups: CommunityGroup[];
@@ -44,6 +53,9 @@ interface CommunityTabProps {
   currentUser?: User;
   onRequireAuth?: () => void;
   onRefreshData?: () => void;
+  onOpenGroupChat?: (groupId: string) => void;
+  onOpenDirectChat?: (recipientId: string) => void;
+  onOpenLiveSermon?: () => void;
 }
 
 export const CommunityTab: React.FC<CommunityTabProps> = ({
@@ -53,7 +65,10 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   testimonies: initialTestimonies,
   currentUser = StorageService.getCurrentUser(),
   onRequireAuth = () => {},
-  onRefreshData
+  onRefreshData,
+  onOpenGroupChat,
+  onOpenDirectChat,
+  onOpenLiveSermon
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'feed' | 'prayers' | 'groups' | 'events'>('feed');
   const [testimonyList, setTestimonyList] = useState<Testimony[]>(
@@ -62,8 +77,45 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       : StorageService.getTestimonies()
   );
   const [prayerList, setPrayerList] = useState<PrayerRequest[]>(prayers);
-  const [groupList, setGroupList] = useState<CommunityGroup[]>(groups);
+  const [groupList, setGroupList] = useState<CommunityGroup[]>(StorageService.getGroups(currentUser?.id));
   const [eventList, setEventList] = useState<ChurchEvent[]>(events);
+  
+  // WhatsApp-style Group Join & Exit States
+  const [joiningGroupId, setJoiningGroupId] = useState<string | null>(null);
+  const [joiningStep, setJoiningStep] = useState<'joining' | 'joined'>('joining');
+  const [exitingGroupId, setExitingGroupId] = useState<string | null>(null);
+
+  // Global Congregation Member Search Feature
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [showMemberDirectory, setShowMemberDirectory] = useState(false);
+
+  useEffect(() => {
+    const handleGroupsUpdated = () => {
+      setGroupList(StorageService.getGroups(currentUser?.id));
+    };
+    window.addEventListener('gcz_groups_updated', handleGroupsUpdated);
+    return () => window.removeEventListener('gcz_groups_updated', handleGroupsUpdated);
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    setGroupList(StorageService.getGroups(currentUser?.id));
+  }, [groups, currentUser?.id]);
+
+  useEffect(() => {
+    const list = StorageService.getFollowingList(currentUser?.id);
+    const map: Record<string, boolean> = {};
+    list.forEach(id => { map[id] = true; });
+    setFollowingUsers(map);
+
+    const handleFollowsChanged = () => {
+      const updatedList = StorageService.getFollowingList(currentUser?.id);
+      const updatedMap: Record<string, boolean> = {};
+      updatedList.forEach(id => { updatedMap[id] = true; });
+      setFollowingUsers(updatedMap);
+    };
+    window.addEventListener('gcz_follow_updated', handleFollowsChanged);
+    return () => window.removeEventListener('gcz_follow_updated', handleFollowsChanged);
+  }, [currentUser?.id]);
   
   const isMrDaniels = 
     currentUser.role === 'super_admin' || 
@@ -86,13 +138,27 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     imageUrl: string;
   } | null>(null);
   const [activeLikesModalPost, setActiveLikesModalPost] = useState<Testimony | null>(null);
-  const [followingUsers, setFollowingUsers] = useState<Record<string, boolean>>({
-    usr_apostle_joe: true,
-    usr_pastor_tendai: true,
-    usr_pastor_grace: true
+  const [followingUsers, setFollowingUsers] = useState<Record<string, boolean>>(() => {
+    const list = StorageService.getFollowingList(currentUser?.id);
+    const map: Record<string, boolean> = {};
+    list.forEach(id => { map[id] = true; });
+    return map;
   });
   const [savedPosts, setSavedPosts] = useState<Record<string, boolean>>({});
   const [selectedPostOptions, setSelectedPostOptions] = useState<Testimony | null>(null);
+
+  // Instagram Profile View Modal State
+  const [profileModalUserId, setProfileModalUserId] = useState<string | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
+
+  // WhatsApp Mobile Share Modal State (No screen overlap)
+  const [shareModalPost, setShareModalPost] = useState<Testimony | null>(null);
+
+  const handleOpenUserProfile = (userIdentifier: string) => {
+    if (!userIdentifier) return;
+    setProfileModalUserId(userIdentifier);
+    setShowProfileModal(true);
+  };
   
   // Per-post Comments state
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
@@ -120,8 +186,16 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   const [isAnonymous, setIsAnonymous] = useState<boolean>(false);
   const [isPublic, setIsPublic] = useState<boolean>(true);
 
-  // QR Code Pass Modal for Events
-  const [activeEventQr, setActiveEventQr] = useState<ChurchEvent | null>(null);
+  // Countdown Timer & Event Interaction States
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [eventFeedbackToast, setEventFeedbackToast] = useState<{ title: string; message: string } | null>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Group filter
   const [selectedGroupCategory, setSelectedGroupCategory] = useState<string>('All');
@@ -265,9 +339,17 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   };
 
   const handleToggleFollow = (userId: string) => {
+    if (isGuest) {
+      onRequireAuth();
+      return;
+    }
+    const res = StorageService.toggleFollowUser(userId, currentUser?.id);
     setFollowingUsers(prev => ({
       ...prev,
-      [userId]: !prev[userId]
+      [userId]: res.isFollowing
+    }));
+    window.dispatchEvent(new CustomEvent('gcz_follow_updated', {
+      detail: { followerId: currentUser?.id, targetUserId: userId, isFollowing: res.isFollowing }
     }));
   };
 
@@ -324,26 +406,108 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       onRequireAuth();
       return;
     }
-    StorageService.toggleGroupJoin(groupId);
+    StorageService.toggleGroupJoin(groupId, currentUser.id);
     setGroupList(StorageService.getGroups());
   };
 
-  const handleToggleRsvp = (eventId: string) => {
+  const handleInitiateJoinGroup = (group: CommunityGroup) => {
     if (isGuest) {
       onRequireAuth();
       return;
     }
-    StorageService.toggleEventRsvp(eventId);
-    setEventList(StorageService.getEvents());
-    confetti({
-      particleCount: 25,
-      spread: 60
+
+    // If user is already in the group, do not run joining animation - immediately open group chat
+    if (group.joined) {
+      if (onOpenGroupChat) {
+        onOpenGroupChat(group.id);
+      }
+      return;
+    }
+
+    // Check if user was removed from group by admin
+    const chatGrps = StorageService.getChatGroups();
+    const targetChatGrp = chatGrps.find(g => g.id === group.id);
+    if (targetChatGrp?.removed_user_ids?.includes(currentUser.id)) {
+      alert(`You were removed from ${group.name} by an admin. You cannot rejoin via invite.`);
+      return;
+    }
+
+    setJoiningGroupId(group.id);
+    setJoiningStep('joining');
+
+    // WhatsApp-style sequence:
+    // 1. Shows "Joining group..." with spinning loader and group preview
+    setTimeout(() => {
+      // 2. Persist join in StorageService
+      StorageService.joinChatGroup(group.id, currentUser.id);
+      setGroupList(StorageService.getGroups(currentUser?.id));
+      setJoiningStep('joined');
+      confetti({ particleCount: 35, spread: 70 });
+
+      // 3. After confirming joined, redirect right into the group conversation!
+      setTimeout(() => {
+        setJoiningGroupId(null);
+        if (onOpenGroupChat) {
+          onOpenGroupChat(group.id);
+        }
+      }, 650);
+    }, 950);
+  };
+
+  const handleExitGroup = (group: CommunityGroup) => {
+    if (isGuest) {
+      onRequireAuth();
+      return;
+    }
+    setExitingGroupId(group.id);
+  };
+
+  const handleConfirmExitGroup = (groupId: string) => {
+    StorageService.leaveChatGroup(groupId, currentUser.id);
+    setGroupList(StorageService.getGroups(currentUser?.id));
+    setExitingGroupId(null);
+  };
+
+  const handleRequestLocation = (event: ChurchEvent) => {
+    if (isGuest) {
+      onRequireAuth();
+      return;
+    }
+    StorageService.sendPastorLocationRequest({
+      user: currentUser,
+      eventId: event.id,
+      eventTitle: event.title,
+      eventTime: event.time
+    });
+    setEventFeedbackToast({
+      title: '📍 Request Sent to Pastor\'s Office',
+      message: `Your name (${currentUser.full_name}) and location (${currentUser.location || 'Harare'}) have been sent to Apostle Joe Daniels' office for ${event.title} at Fantasyland Cinema Samora Machel Ave. A minister will assist you with directions!`
     });
   };
 
+  const handleGoVirtual = (event: ChurchEvent) => {
+    if (isGuest) {
+      onRequireAuth();
+      return;
+    }
+    StorageService.setEventVirtualReminder(event.title, currentUser);
+    setEventFeedbackToast({
+      title: '📡 Virtual Stream Reminder Set',
+      message: 'When the service starts and is online you can stream the service, The stream will be available on that streaming float.'
+    });
+  };
+
+  const handleJoinStream = (event: ChurchEvent) => {
+    if (currentUser) {
+      StorageService.joinLiveStream(currentUser, event.title);
+    }
+    if (onOpenLiveSermon) {
+      onOpenLiveSermon();
+    }
+  };
+
   const handleSharePostWhatsApp = (item: Testimony) => {
-    const text = `🙏 *Gateway Church Zimbabwe - Kingdom Post*\n*${item.title}*\n"${item.content}"\n\nRead more on the Gateway Connect App!`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    setShareModalPost(item);
   };
 
   const handleSharePrayerWhatsApp = (prayer: PrayerRequest) => {
@@ -417,7 +581,120 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
         </div>
       </div>
 
-      {/* 2. SUB-TAB: INSTAGRAM STYLE FEED & POSTS */}
+      {/* Global Congregation Search Feature */}
+      <div className="bg-[#00172D] border border-[#D4AF37]/30 rounded-2xl p-3 shadow-md space-y-2.5">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#D4AF37]" />
+            <input
+              type="text"
+              value={memberSearchQuery}
+              onChange={(e) => setMemberSearchQuery(e.target.value)}
+              placeholder="Find and connect with congregation members by name..."
+              className="w-full bg-[#001122] border border-white/15 rounded-xl pl-10 pr-9 py-2 text-xs sm:text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[#D4AF37] transition-all"
+            />
+            {memberSearchQuery && (
+              <button
+                onClick={() => setMemberSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white p-0.5"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => setShowMemberDirectory(prev => !prev)}
+            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+              showMemberDirectory
+                ? 'bg-[#D4AF37] text-[#001F3F] border-[#D4AF37] shadow'
+                : 'bg-[#001F3F] text-white/80 border-white/20 hover:text-white'
+            }`}
+            title="Toggle Member Directory"
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Directory ({StorageService.getAllUsers().length})</span>
+          </button>
+        </div>
+
+        {/* Search Results Dropdown or Directory View */}
+        {(memberSearchQuery.trim() || showMemberDirectory) && (() => {
+          const allMembers = StorageService.getAllUsers();
+          const filteredMembers = memberSearchQuery.trim()
+            ? allMembers.filter(m => 
+                m.full_name.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
+                (m.handle && m.handle.toLowerCase().includes(memberSearchQuery.toLowerCase())) ||
+                (m.role && m.role.toLowerCase().includes(memberSearchQuery.toLowerCase()))
+              )
+            : allMembers;
+
+          return (
+            <div className="pt-2 border-t border-white/10 max-h-72 overflow-y-auto space-y-1.5 divide-y divide-white/5">
+              <div className="flex items-center justify-between px-1 pb-1 text-[11px] text-white/60">
+                <span className="font-semibold text-[#D4AF37]">
+                  {memberSearchQuery.trim() ? `Search Results (${filteredMembers.length})` : `All Congregation Members (${allMembers.length})`}
+                </span>
+                {memberSearchQuery.trim() && (
+                  <button
+                    onClick={() => setMemberSearchQuery('')}
+                    className="text-[10px] text-white/50 hover:text-white"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {filteredMembers.length === 0 ? (
+                <p className="text-center py-4 text-xs text-white/50">No congregation members found matching "{memberSearchQuery}".</p>
+              ) : (
+                filteredMembers.map((member) => (
+                  <div
+                    key={member.id}
+                    className="pt-1.5 flex items-center justify-between gap-2 hover:bg-white/5 p-1.5 rounded-xl transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-full border border-[#D4AF37]/50 overflow-hidden bg-[#001F3F] flex items-center justify-center text-xs font-bold text-[#D4AF37] shrink-0">
+                        {member.avatar_url ? (
+                          <img src={member.avatar_url} alt={member.full_name} className="w-full h-full object-cover" />
+                        ) : (
+                          member.full_name.slice(0, 2).toUpperCase()
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-xs text-white flex items-center gap-1 truncate">
+                          <span className="truncate">{member.full_name}</span>
+                          {member.id === currentUser.id && (
+                            <span className="text-[10px] text-[#D4AF37]">(You)</span>
+                          )}
+                          {member.role === 'super_admin' && (
+                            <span className="text-[9px] px-1 py-0.2 rounded bg-[#D4AF37]/20 text-[#D4AF37] font-bold shrink-0">Apostle</span>
+                          )}
+                        </h4>
+                        <p className="text-[10px] text-white/50 truncate font-mono">
+                          {member.handle || `@${member.full_name.toLowerCase().replace(/\s+/g, '_')}`} • {member.location || 'Harare'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {member.id !== currentUser.id && onOpenDirectChat && (
+                      <button
+                        onClick={() => {
+                          onOpenDirectChat(member.id);
+                          setMemberSearchQuery('');
+                          setShowMemberDirectory(false);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] text-xs font-bold transition-transform hover:scale-105 flex items-center gap-1 shrink-0 cursor-pointer shadow"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>Message</span>
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          );
+        })()}
+      </div>
       {activeSubTab === 'feed' && (
         <div className="space-y-4">
           
@@ -703,8 +980,12 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 >
                   {/* Instagram Post Header */}
                   <div className="p-3.5 flex items-center justify-between border-b border-white/5">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-full p-[1.5px] bg-gradient-to-tr from-amber-500 to-rose-500">
+                    <div 
+                      onClick={() => handleOpenUserProfile(post.user_id || post.user_handle || post.user_name)}
+                      className="flex items-center gap-2.5 cursor-pointer group"
+                      title="View user profile"
+                    >
+                      <div className="w-10 h-10 rounded-full p-[1.5px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 transition-transform group-hover:scale-105 shrink-0">
                         <img
                           src={post.user_avatar || '/assets/apostle_joe_daniels_main.jpg'}
                           alt={post.user_name}
@@ -713,28 +994,24 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-xs sm:text-sm text-white">{post.user_name}</span>
+                          <span className="font-bold text-xs sm:text-sm text-white group-hover:text-[#D4AF37] transition-colors">
+                            {post.user_name}
+                          </span>
                           {(post.verified_by_church || isApostlePost) && (
                             <VerifiedBadge type="gold" size="xs" />
                           )}
                         </div>
                         <div className="flex items-center gap-1.5 text-[11px] text-white/50">
-                          <span>{post.user_handle || `@${post.user_name.toLowerCase().replace(/\s+/g, '_')}`}</span>
+                          <span className="text-white/70 font-medium">
+                            {post.user_handle || `@${post.user_name.toLowerCase().replace(/\s+/g, '_')}`}
+                          </span>
                           <span>•</span>
                           <span>{formatTimeAgo(post.created_at || post.date, 'short')}</span>
-                          <span>•</span>
-                          <span className="text-[#D4AF37] font-medium">{post.category}</span>
                         </div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {post.scripture_tag && (
-                        <span className="px-2 py-0.5 rounded-full bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/30 text-[10px] font-bold">
-                          {post.scripture_tag}
-                        </span>
-                      )}
-
                       {/* Photo Update button - STRICTLY for Mr. Daniels account only */}
                       {isMrDaniels && (
                         <button
@@ -743,7 +1020,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                           title="Apostle Joe Daniels: Update post photo"
                         >
                           <Camera className="w-3.5 h-3.5" />
-                          <span>{post.image_url ? 'Change Photo' : '+ Add Photo'}</span>
+                          <span className="hidden sm:inline">{post.image_url ? 'Change Photo' : '+ Photo'}</span>
                         </button>
                       )}
 
@@ -870,13 +1147,62 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                       )}
                     </div>
 
-                    {/* Post Caption (Handle + Title + Content) */}
-                    <div className="text-xs text-white/90 leading-relaxed">
-                      <span className="font-bold text-white mr-1.5">
-                        {post.user_handle || `@${post.user_name.toLowerCase().replace(/\s+/g, '_')}`}
-                      </span>
-                      {post.title && <span className="font-semibold text-[#D4AF37] mr-1">{post.title} —</span>}
-                      <span>{post.content}</span>
+                    {/* Smart Scripture Quote Ribbon */}
+                    {post.scripture_tag && (
+                      <div className="p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-[#001122] to-amber-500/5 border border-[#D4AF37]/30 flex items-center justify-between gap-2 shadow-sm">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <div className="w-6 h-6 rounded-lg bg-[#D4AF37]/20 text-[#D4AF37] flex items-center justify-center shrink-0">
+                            <BookOpen className="w-3.5 h-3.5" />
+                          </div>
+                          <div className="truncate">
+                            <span className="text-[11px] font-bold text-[#D4AF37] block truncate">
+                              {post.scripture_tag}
+                            </span>
+                            <span className="text-[10px] text-white/60 truncate block">
+                              Prophetic Scripture Anchor
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleSharePostWhatsApp(post)}
+                          className="text-[10px] font-bold text-[#D4AF37] hover:underline shrink-0 flex items-center gap-1 bg-[#D4AF37]/10 px-2.5 py-1 rounded-lg border border-[#D4AF37]/20"
+                        >
+                          <span>Share Verse</span>
+                          <Share2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Post Caption (Handle + Title + Content + Smart Hashtags) */}
+                    <div className="text-xs text-white/90 leading-relaxed space-y-1.5">
+                      <div>
+                        <span 
+                          onClick={() => handleOpenUserProfile(post.user_id || post.user_handle || post.user_name)}
+                          className="font-bold text-white hover:text-[#D4AF37] cursor-pointer mr-1.5 transition-colors"
+                        >
+                          {post.user_handle || `@${post.user_name.toLowerCase().replace(/\s+/g, '_')}`}
+                        </span>
+                        {post.title && <strong className="font-semibold text-[#D4AF37] mr-1">{post.title} — </strong>}
+                        <span>{post.content}</span>
+                      </div>
+
+                      {/* Smart Category & Aesthetic Hashtags */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        <span className="px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 text-[10px] font-semibold">
+                          #{post.category.replace(/[^a-zA-Z0-9]/g, '')}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-white/5 text-white/60 text-[10px] font-medium">
+                          #GatewayHarare
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-white/5 text-white/60 text-[10px] font-medium">
+                          #ApostleJoeDaniels
+                        </span>
+                        {post.scripture_tag && (
+                          <span className="px-2 py-0.5 rounded-md bg-[#D4AF37]/15 text-[#D4AF37] text-[10px] font-semibold">
+                            #{post.scripture_tag.replace(/[^a-zA-Z0-9]/g, '')}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Real Post Timestamp (Relative, e.g. '10 minutes ago') */}
@@ -1156,88 +1482,285 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-white/5 flex items-center justify-between">
-                  <div className="text-xs text-white/60">
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
+                  <div className="text-xs text-white/60 truncate">
                     Leader: <strong className="text-white">{group.leader_name}</strong>
                   </div>
-                  <button
-                    onClick={() => handleToggleGroup(group.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      group.joined
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-[#D4AF37] text-[#001F3F]'
-                    }`}
-                  >
-                    {group.joined ? '✓ Joined Group' : 'Join Group'}
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {group.joined ? (
+                      <>
+                        <button
+                          id={`btn-open-chat-${group.id}`}
+                          onClick={() => {
+                            if (onOpenGroupChat) {
+                              onOpenGroupChat(group.id);
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all flex items-center gap-1"
+                          title="Open Group Chat"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          <span>Open Chat</span>
+                        </button>
+                        <button
+                          id={`btn-exit-group-${group.id}`}
+                          onClick={() => handleExitGroup(group)}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-300 hover:text-rose-100 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 flex items-center gap-1 transition-all"
+                          title="Exit Group"
+                        >
+                          <LogOut className="w-3.5 h-3.5" />
+                          <span>Exit</span>
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        id={`btn-join-group-${group.id}`}
+                        onClick={() => handleInitiateJoinGroup(group)}
+                        className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#D4AF37] hover:bg-[#c49f2e] text-[#001F3F] shadow-sm hover:scale-105 active:scale-95 transition-all flex items-center gap-1"
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        <span>Join Group</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
 
-      {/* 5. SUB-TAB: EVENTS & RSVP */}
-      {activeSubTab === 'events' && (
-        <div className="space-y-3">
-          {eventList.map(event => (
-            <div
-              key={event.id}
-              className="bg-[#001F3F] border border-white/10 rounded-2xl overflow-hidden shadow-sm flex flex-col md:flex-row"
-            >
-              <img
-                src={event.banner_url}
-                alt={event.title}
-                className="w-full md:w-48 h-36 object-cover"
-              />
-              <div className="p-4 flex-1 flex flex-col justify-between space-y-2">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-[#D4AF37] uppercase">{event.category}</span>
-                    <span className="text-[11px] text-white/50">{event.rsvp_count} Attending</span>
+          {/* WHATSAPP-STYLE JOINING OVERLAY */}
+          {joiningGroupId && (() => {
+            const grp = groupList.find(g => g.id === joiningGroupId);
+            if (!grp) return null;
+            return (
+              <div className="fixed inset-0 z-50 bg-[#000d1a]/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+                <div className="bg-[#00172e] border border-[#D4AF37]/50 rounded-3xl p-5 sm:p-7 max-w-sm w-[92vw] max-h-[85vh] overflow-y-auto text-center space-y-4 shadow-2xl relative animate-in zoom-in-95 duration-200">
+                  <button
+                    onClick={() => setJoiningGroupId(null)}
+                    className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                    title="Close"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                  <div className="relative mx-auto w-20 h-20 pt-2">
+                    {grp.image_url ? (
+                      <img
+                        src={grp.image_url}
+                        alt={grp.name}
+                        className="w-20 h-20 rounded-full object-cover border-2 border-[#D4AF37] shadow-lg mx-auto"
+                      />
+                    ) : (
+                      <div className="w-20 h-20 rounded-full bg-[#002244] border-2 border-[#D4AF37] flex items-center justify-center text-[#D4AF37] mx-auto text-xl font-bold">
+                        {grp.name.charAt(0)}
+                      </div>
+                    )}
+                    {joiningStep === 'joining' ? (
+                      <div className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-[#00172e] border border-[#D4AF37] flex items-center justify-center shadow-md">
+                        <Loader2 className="w-4 h-4 text-[#D4AF37] animate-spin" />
+                      </div>
+                    ) : (
+                      <div className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md animate-in zoom-in">
+                        <Check className="w-4 h-4" />
+                      </div>
+                    )}
                   </div>
-                  <h4 className="font-bold text-sm text-white mt-1">{event.title}</h4>
-                  <p className="text-xs text-white/70 line-clamp-2 mt-1">{event.description}</p>
-                  
-                  <div className="flex items-center gap-3 text-xs text-white/60 mt-2">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-[#D4AF37]" />
-                      {event.date} • {event.time}
+
+                  <div className="space-y-1">
+                    <span className="px-2.5 py-0.5 rounded-full bg-[#D4AF37]/20 text-[#D4AF37] text-[10px] font-bold tracking-wide uppercase">
+                      {grp.category}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-[#D4AF37]" />
-                      {event.location}
-                    </span>
+                    <h3 className="text-base font-bold text-white">{grp.name}</h3>
+                    <p className="text-xs text-white/60 line-clamp-2">{grp.description}</p>
+                  </div>
+
+                  <div className="bg-[#001222] border border-white/5 rounded-2xl p-3.5 flex items-center justify-center gap-2.5">
+                    {joiningStep === 'joining' ? (
+                      <div className="flex items-center gap-2 text-xs text-[#D4AF37] font-semibold">
+                        <Loader2 className="w-4 h-4 animate-spin text-[#D4AF37]" />
+                        <span>Joining group...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-xs text-emerald-400 font-bold">
+                        <Check className="w-4 h-4" />
+                        <span>Joined! Redirecting to group chat...</span>
+                      </div>
+                    )}
                   </div>
                 </div>
+              </div>
+            );
+          })()}
 
-                <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                  <span className="text-xs text-white/60">Minister: <strong className="text-white">{event.speaker}</strong></span>
-                  <div className="flex items-center gap-2">
-                    {event.user_rsvpd && (
-                      <button
-                        onClick={() => setActiveEventQr(event)}
-                        className="p-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20"
-                        title="View Gate Pass"
-                      >
-                        <QrCode className="w-4 h-4" />
-                      </button>
-                    )}
+          {/* EXIT GROUP CONFIRMATION MODAL */}
+          {exitingGroupId && (() => {
+            const grp = groupList.find(g => g.id === exitingGroupId);
+            if (!grp) return null;
+            return (
+              <div className="fixed inset-0 z-50 bg-[#000d1a]/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+                <div className="bg-[#00172e] border border-rose-500/40 rounded-3xl p-5 sm:p-6 max-w-sm w-[92vw] max-h-[85vh] overflow-y-auto space-y-4 shadow-2xl relative animate-in zoom-in-95 duration-150">
+                  <button
+                    onClick={() => setExitingGroupId(null)}
+                    className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                    title="Close"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                  <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center mx-auto mt-1">
+                    <LogOut className="w-6 h-6" />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <h4 className="font-bold text-base text-white">Exit {grp.name}?</h4>
+                    <p className="text-xs text-white/60">
+                      You will leave this fellowship group and no longer receive group messages. You can rejoin at any time.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 pt-2">
                     <button
-                      onClick={() => handleToggleRsvp(event.id)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                        event.user_rsvpd
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-[#D4AF37] text-[#001F3F]'
-                      }`}
+                      onClick={() => setExitingGroupId(null)}
+                      className="flex-1 py-2.5 rounded-xl border border-white/10 text-xs font-bold text-white/80 hover:bg-white/10 transition-colors"
                     >
-                      {event.user_rsvpd ? '✓ RSVP Confirmed' : 'RSVP Free Seat'}
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleConfirmExitGroup(grp.id)}
+                      className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white transition-colors"
+                    >
+                      Exit Group
                     </button>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })()}
+        </div>
+      )}
+
+      {/* 5. SUB-TAB: EVENTS & SERVICES */}
+      {activeSubTab === 'events' && (
+        <div className="space-y-4">
+          {eventList.map(event => {
+            const countdown = getEventCountdown(event, currentTime);
+            const isPermanent = event.is_permanent || event.id === 'evt_sunday' || event.id === 'evt_wednesday';
+
+            return (
+              <div
+                key={event.id}
+                className={`bg-[#001F3F] border rounded-2xl overflow-hidden shadow-lg flex flex-col md:flex-row transition-all ${
+                  countdown.isInSession 
+                    ? 'border-emerald-500/70 ring-1 ring-emerald-500/50 shadow-emerald-950/40' 
+                    : 'border-white/10 hover:border-white/20'
+                }`}
+              >
+                <div className="relative w-full md:w-56 h-44 md:h-auto shrink-0 overflow-hidden">
+                  <img
+                    src={event.banner_url}
+                    alt={event.title}
+                    className="w-full h-full object-cover"
+                  />
+                  {/* Status Overlay Badge */}
+                  <div className="absolute top-2.5 left-2.5">
+                    {countdown.isInSession ? (
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-lg animate-pulse">
+                        <Radio className="w-3.5 h-3.5" />
+                        <span>In Session</span>
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-full bg-[#001428]/90 backdrop-blur-md border border-[#D4AF37]/50 text-[#D4AF37] font-bold text-xs flex items-center gap-1.5 shadow-md">
+                        <Clock className="w-3 h-3" />
+                        <span>Upcoming</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {isPermanent && (
+                    <div className="absolute bottom-2.5 left-2.5">
+                      <span className="px-2 py-0.5 rounded-md bg-[#D4AF37] text-[#001F3F] font-black text-[10px] uppercase tracking-wide shadow">
+                        Permanent Service
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-widest">{event.category}</span>
+                      {countdown.isInSession ? (
+                        <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                          <span>Service Live Now</span>
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-black/40 border border-[#D4AF37]/40 text-[#D4AF37] font-mono text-xs font-bold">
+                          <Timer className="w-3.5 h-3.5 text-[#D4AF37]" />
+                          <span>{countdown.formatted}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <h4 className="font-bold text-base text-white mt-1.5">{event.title}</h4>
+                    <p className="text-xs text-white/70 line-clamp-2 mt-1 leading-relaxed">{event.description}</p>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-white/60 mt-3 pt-2 border-t border-white/5">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
+                        <span className="text-white/90 font-medium">{event.date} • {event.time}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
+                        <span className="truncate text-white/90">{event.location}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-white/5 flex flex-wrap items-center justify-between gap-2.5">
+                    <span className="text-xs text-white/60">
+                      Minister: <strong className="text-white">{event.speaker}</strong>
+                    </span>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* If in session, show Join Stream button */}
+                      {countdown.isInSession && (
+                        <button
+                          id={`btn-join-stream-${event.id}`}
+                          onClick={() => handleJoinStream(event)}
+                          className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-600/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 animate-pulse"
+                        >
+                          <Radio className="w-4 h-4" />
+                          <span>Join Stream</span>
+                        </button>
+                      )}
+
+                      {/* For the 2 permanent events (Sunday & Wednesday): Request Location and Go Virtual */}
+                      {isPermanent && (
+                        <>
+                          <button
+                            id={`btn-request-location-${event.id}`}
+                            onClick={() => handleRequestLocation(event)}
+                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 border border-white/15 text-white flex items-center gap-1.5 transition-all hover:border-[#D4AF37]/50 shadow-sm"
+                            title="Request directions from your location to church for this service"
+                          >
+                            <Compass className="w-3.5 h-3.5 text-[#D4AF37]" />
+                            <span>Request Location</span>
+                          </button>
+
+                          <button
+                            id={`btn-go-virtual-${event.id}`}
+                            onClick={() => handleGoVirtual(event)}
+                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#00172e] hover:bg-[#002244] border border-blue-500/40 text-blue-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm"
+                            title="Set reminder to stream online when service starts"
+                          >
+                            <Radio className="w-3.5 h-3.5 text-blue-400" />
+                            <span>Go Virtual</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -1541,21 +2064,20 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
         </div>
       )}
 
-      {/* MODAL: EVENT QR PASS */}
-      {activeEventQr && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-[#001F3F] border border-[#D4AF37]/40 rounded-2xl p-5 w-full max-w-xs text-center space-y-3 shadow-2xl">
-            <h3 className="font-bold text-sm text-[#D4AF37]">{activeEventQr.title}</h3>
-            <p className="text-xs text-white/70">{activeEventQr.date} • {activeEventQr.location}</p>
-            <div className="bg-white p-4 rounded-xl inline-block shadow-inner">
-              <QrCode className="w-36 h-36 text-black" />
+      {/* Event Feedback Toast Dialog */}
+      {eventFeedbackToast && (
+        <div className="fixed inset-0 z-50 bg-[#000d1a]/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-[#00172e] border border-[#D4AF37]/50 rounded-2xl p-5 max-w-sm w-full space-y-3 shadow-2xl text-center">
+            <div className="w-12 h-12 rounded-2xl bg-[#D4AF37]/20 border border-[#D4AF37]/40 text-[#D4AF37] flex items-center justify-center mx-auto">
+              <Sparkles className="w-6 h-6" />
             </div>
-            <p className="text-[11px] text-white/50">Show this QR Gate Pass at entrance.</p>
+            <h4 className="font-bold text-base text-white">{eventFeedbackToast.title}</h4>
+            <p className="text-xs text-white/75 leading-relaxed">{eventFeedbackToast.message}</p>
             <button
-              onClick={() => setActiveEventQr(null)}
-              className="w-full py-2 rounded-xl bg-white/10 text-white text-xs font-bold hover:bg-white/20"
+              onClick={() => setEventFeedbackToast(null)}
+              className="w-full py-2.5 rounded-xl bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] font-bold text-xs transition-colors shadow-md"
             >
-              Close
+              Understood
             </button>
           </div>
         </div>
@@ -1761,6 +2283,20 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* Instagram Profile Modal (Follow, Followers, Following, DMs, 3x3 Grid) */}
+      <InstagramProfileModal
+        userId={profileModalUserId}
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+      />
+
+      {/* WhatsApp Visual Share Modal (Mobile Responsive - Zero Screen Overlap) */}
+      <WhatsAppShareModal
+        post={shareModalPost}
+        isOpen={Boolean(shareModalPost)}
+        onClose={() => setShareModalPost(null)}
+      />
 
     </div>
   );

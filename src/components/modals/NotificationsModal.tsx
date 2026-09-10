@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Bell, 
@@ -7,74 +7,188 @@ import {
   MessageSquare, 
   Heart, 
   UserPlus, 
+  Radio, 
+  ChevronRight,
+  Users,
   Calendar,
-  Radio,
-  ExternalLink
+  HandHeart
 } from 'lucide-react';
 import { StorageService } from '../../services/storageService';
+import { AppNotification } from '../../types';
 
 interface NotificationsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenLiveSermon?: () => void;
+  onOpenDirectChat?: (recipientId: string) => void;
+  onOpenGroupChat?: (groupId: string) => void;
+  onNavigateTab?: (tab: 'home' | 'bible' | 'community' | 'store' | 'me', subTab?: string) => void;
 }
 
-interface NotificationItem {
-  id: string;
-  title: string;
-  body: string;
-  time: string;
-  icon: any;
-  unread: boolean;
-  tag: string;
-}
+export const NotificationsModal: React.FC<NotificationsModalProps> = ({ 
+  isOpen, 
+  onClose,
+  onOpenLiveSermon,
+  onOpenDirectChat,
+  onOpenGroupChat,
+  onNavigateTab
+}) => {
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [allReadCleared, setAllReadCleared] = useState(false);
 
-export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, onClose }) => {
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    {
-      id: 'n_1',
-      title: 'Apostle Joe Daniels Live Prophetic Stream 🔴',
-      body: 'Live now on "Supernatural Acceleration 2026". Tap to connect to the broadcast.',
-      time: '15m ago',
-      icon: Radio,
-      unread: true,
-      tag: 'Live Broadcast'
-    },
-    {
-      id: 'n_2',
-      title: 'Milestone Reward Qualified! 🎁',
-      body: 'Your fellowship activity unlocked the 5,000 Points Free VVIP Pass reward.',
-      time: '1h ago',
-      icon: Sparkles,
-      unread: true,
-      tag: 'Rewards'
-    },
-    {
-      id: 'n_3',
-      title: 'Pastor Tendai Moyo followed you',
-      body: 'Harare Central Hub Overseer is now connected with your Gateway profile.',
-      time: '5h ago',
-      icon: UserPlus,
-      unread: false,
-      tag: 'Community'
-    },
-    {
-      id: 'n_4',
-      title: 'Altar Prayer Request Answered',
-      body: 'Apostle Joe Daniels decreed apostolic breakthrough over your altar petition.',
-      time: '1d ago',
-      icon: Heart,
-      unread: false,
-      tag: 'Prayer'
+  useEffect(() => {
+    if (isOpen) {
+      const list = StorageService.getAppNotifications();
+      // Ensure milestones are purged
+      const cleaned = list.filter(n => !n.title.toLowerCase().includes('milestone') && !n.message.toLowerCase().includes('milestone'));
+      setNotifications(cleaned);
+      setAllReadCleared(false);
     }
-  ]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const handleMarkAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
+    StorageService.markAllNotificationsRead();
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    setAllReadCleared(true);
   };
 
-  const unreadCount = notifications.filter(n => n.unread).length;
+  const unreadCount = notifications.filter(n => !n.is_read).length;
+
+  const handleNotificationClick = (n: AppNotification) => {
+    StorageService.markNotificationRead(n.id);
+    setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, is_read: true } : item));
+    onClose();
+
+    // 1. Live stream / broadcast
+    if (n.target_type === 'live' || n.type === 'broadcast' || n.title.toLowerCase().includes('live')) {
+      if (onOpenLiveSermon) {
+        onOpenLiveSermon();
+        return;
+      }
+    }
+
+    // 2. Group chat / Cell group
+    if (n.target_type === 'group' || (n.target_id && (n.target_id.startsWith('grp_') || n.target_id.startsWith('group_')))) {
+      const groupId = n.target_id || 'group_ignite_worship';
+      if (onOpenGroupChat) {
+        onOpenGroupChat(groupId);
+        return;
+      }
+    }
+
+    // 3. Direct Message / Follower
+    if (n.target_type === 'dm' || n.type === 'chat' || n.type === 'follow') {
+      const targetUserId = n.target_id || n.actor_id;
+      if (targetUserId && onOpenDirectChat) {
+        onOpenDirectChat(targetUserId);
+        return;
+      }
+    }
+
+    // 4. Prayer request
+    if (n.target_type === 'prayer' || n.title.toLowerCase().includes('prayer') || n.message.toLowerCase().includes('prayer')) {
+      if (onNavigateTab) {
+        onNavigateTab('community', 'prayers');
+        return;
+      }
+    }
+
+    // 5. Testimony / Fellowship
+    if (n.target_type === 'testimony' || n.title.toLowerCase().includes('testimony') || n.message.toLowerCase().includes('testimony')) {
+      if (onNavigateTab) {
+        onNavigateTab('community', 'feed');
+        return;
+      }
+    }
+
+    // 6. Events
+    if (n.target_type === 'event' || n.title.toLowerCase().includes('event') || n.message.toLowerCase().includes('event')) {
+      if (onNavigateTab) {
+        onNavigateTab('community', 'events');
+        return;
+      }
+    }
+
+    // 7. Store / Altar seed
+    if (n.target_type === 'store' || n.title.toLowerCase().includes('seed') || n.title.toLowerCase().includes('moors')) {
+      if (onNavigateTab) {
+        onNavigateTab('store');
+        return;
+      }
+    }
+
+    // Fallback: If actor_id is present, open chat with them
+    if (n.actor_id && onOpenDirectChat) {
+      onOpenDirectChat(n.actor_id);
+    }
+  };
+
+  const getRedirectLabel = (n: AppNotification) => {
+    if (n.target_type === 'live' || n.type === 'broadcast' || n.title.toLowerCase().includes('live')) {
+      return 'Join Live Stream';
+    }
+    if (n.target_type === 'group' || (n.target_id && (n.target_id.startsWith('grp_') || n.target_id.startsWith('group_')))) {
+      return 'Open Group Chat';
+    }
+    if (n.type === 'chat' || n.target_type === 'dm') {
+      return 'Reply in Chat';
+    }
+    if (n.type === 'follow') {
+      return 'Send Blessings';
+    }
+    if (n.title.toLowerCase().includes('prayer')) {
+      return 'View Prayers';
+    }
+    if (n.title.toLowerCase().includes('testimony')) {
+      return 'View Testimony';
+    }
+    if (n.title.toLowerCase().includes('event')) {
+      return 'View Event';
+    }
+    return 'Open';
+  };
+
+  const getIcon = (n: AppNotification) => {
+    if (n.target_type === 'group' || (n.target_id && (n.target_id.startsWith('grp_') || n.target_id.startsWith('group_')))) {
+      return Users;
+    }
+    if (n.type === 'broadcast' || n.target_type === 'live' || n.title.toLowerCase().includes('live')) {
+      return Radio;
+    }
+    if (n.title.toLowerCase().includes('prayer')) {
+      return HandHeart;
+    }
+    if (n.title.toLowerCase().includes('event')) {
+      return Calendar;
+    }
+    switch (n.type) {
+      case 'chat':
+        return MessageSquare;
+      case 'like':
+        return Heart;
+      case 'follow':
+        return UserPlus;
+      default:
+        return Sparkles;
+    }
+  };
+
+  const formatTimeAgo = (dateStr: string) => {
+    try {
+      const diff = Date.now() - new Date(dateStr).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return 'Just now';
+      if (mins < 60) return `${mins}m ago`;
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return `${hours}h ago`;
+      const days = Math.floor(hours / 24);
+      return `${days}d ago`;
+    } catch {
+      return 'Recent';
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-[#001122]/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -98,7 +212,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
                 )}
               </div>
               <p className="text-xs text-white/60">
-                Follows, messages, mentions & milestones
+                Tap any notification to redirect to the conversation
               </p>
             </div>
           </div>
@@ -106,10 +220,11 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
           <div className="flex items-center gap-2">
             {unreadCount > 0 && (
               <button
+                id="btn-read-all-notifications"
                 onClick={handleMarkAllRead}
                 className="text-xs text-[#D4AF37] hover:underline font-bold"
               >
-                Read All
+                Mark Read
               </button>
             )}
             <button
@@ -121,53 +236,93 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
           </div>
         </div>
 
-        {/* Notifications List */}
-        <div className="p-4 overflow-y-auto space-y-2.5 flex-1">
-          {notifications.map(n => {
-            const Icon = n.icon;
-            return (
-              <div
-                key={n.id}
-                className={`p-3.5 rounded-2xl border transition-all ${
-                  n.unread
-                    ? 'bg-[#00172e] border-[#D4AF37]/40 shadow-sm'
-                    : 'bg-[#001428] border-white/5 opacity-80'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                    n.unread ? 'bg-[#D4AF37] text-[#001F3F]' : 'bg-white/10 text-white/60'
-                  }`}>
-                    <Icon className="w-4 h-4" />
-                  </div>
-
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <h4 className="text-xs font-bold text-white truncate">
-                        {n.title}
-                      </h4>
-                      <span className="text-[10px] text-white/40 font-mono shrink-0">
-                        {n.time}
-                      </span>
+        {/* Notifications List Body */}
+        <div className="p-4 overflow-y-auto space-y-2.5 flex-1 min-h-[160px]">
+          {notifications.length === 0 ? (
+            <div className="text-center py-10 px-4 text-white/40 space-y-2">
+              <CheckCheck className="w-8 h-8 text-[#D4AF37]/60 mx-auto" />
+              <p className="text-sm font-medium text-white/70">All messages are read</p>
+              <p className="text-xs text-white/40">You're completely caught up.</p>
+            </div>
+          ) : (
+            notifications.map(n => {
+              const Icon = getIcon(n);
+              const actionLabel = getRedirectLabel(n);
+              return (
+                <div
+                  key={n.id}
+                  id={`notif-item-${n.id}`}
+                  onClick={() => handleNotificationClick(n)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleNotificationClick(n);
+                    }
+                  }}
+                  className={`group p-3.5 rounded-2xl border transition-all cursor-pointer text-left hover:scale-[1.01] ${
+                    !n.is_read
+                      ? 'bg-[#00172e] border-[#D4AF37]/50 shadow-md hover:border-[#D4AF37] hover:bg-[#002244]'
+                      : 'bg-[#001428] border-white/5 opacity-85 hover:opacity-100 hover:border-white/20 hover:bg-[#001830]'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                      !n.is_read 
+                        ? 'bg-[#D4AF37] text-[#001F3F] shadow-sm' 
+                        : 'bg-white/10 text-white/60 group-hover:bg-[#D4AF37]/20 group-hover:text-[#D4AF37]'
+                    }`}>
+                      <Icon className="w-4 h-4" />
                     </div>
 
-                    <p className="text-xs text-white/70 leading-relaxed">
-                      {n.body}
-                    </p>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {!n.is_read && (
+                            <span className="w-2 h-2 rounded-full bg-[#D4AF37] shrink-0" />
+                          )}
+                          <h4 className="text-xs font-bold text-white truncate group-hover:text-[#D4AF37] transition-colors">
+                            {n.title}
+                          </h4>
+                        </div>
+                        <span className="text-[10px] text-white/40 font-mono shrink-0">
+                          {formatTimeAgo(n.created_at)}
+                        </span>
+                      </div>
 
-                    <div className="pt-1">
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/60 border border-white/10">
-                        {n.tag}
-                      </span>
+                      <p className="text-xs text-white/75 leading-relaxed line-clamp-2">
+                        {n.message}
+                      </p>
+
+                      <div className="pt-1.5 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/60 border border-white/10 capitalize">
+                            {n.type}
+                          </span>
+                          {n.actor_name && (
+                            <span className="text-[10px] text-white/50 truncate">
+                              {n.actor_name}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Redirect indicator */}
+                        <div className="flex items-center gap-1 text-[11px] text-[#D4AF37] font-semibold group-hover:translate-x-0.5 transition-transform">
+                          <span>{actionLabel}</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
 
       </div>
     </div>
   );
 };
+

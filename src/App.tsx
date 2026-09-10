@@ -11,6 +11,11 @@ import { DevConsole } from './components/dev/DevConsole';
 import { FlutterExportModal } from './components/modals/FlutterExportModal';
 import { WhatsAppProfileModal } from './components/modals/WhatsAppProfileModal';
 import { LoginScreen } from './components/auth/LoginScreen';
+import { BannedScreen } from './components/auth/BannedScreen';
+import { LiveSermonModal } from './components/modals/LiveSermonModal';
+import { DirectMessagesModal } from './components/modals/DirectMessagesModal';
+import { NotificationsModal } from './components/modals/NotificationsModal';
+import { FloatingNotificationToast } from './components/common/FloatingNotificationToast';
 import { StorageService } from './services/storageService';
 import { 
   TabType, 
@@ -38,7 +43,9 @@ import {
   VolumeX, 
   Play, 
   Pause,
-  ExternalLink
+  ExternalLink,
+  Radio,
+  Tv
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -63,12 +70,27 @@ export default function App() {
   const [showFlutterExport, setShowFlutterExport] = useState<boolean>(false);
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
+  const [showLiveSermonModal, setShowLiveSermonModal] = useState<boolean>(false);
+  const [showDirectMessagesModal, setShowDirectMessagesModal] = useState<boolean>(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState<boolean>(false);
+  const [directMessageRecipientId, setDirectMessageRecipientId] = useState<string | undefined>(undefined);
+  const [directMessageGroupId, setDirectMessageGroupId] = useState<string | undefined>(undefined);
+  const [bibleReference, setBibleReference] = useState<string | undefined>(undefined);
+  const [dismissedLiveNotification, setDismissedLiveNotification] = useState<boolean>(false);
+  const [liveSermonStatus, setLiveSermonStatus] = useState(StorageService.getLiveSermonStatus());
+  const [unreadDmsCount, setUnreadDmsCount] = useState<number>(() => {
+    const user = StorageService.getCurrentUser();
+    if (!user) return 0;
+    const threads = StorageService.getAllDirectMessageThreads(user.id);
+    return threads.reduce((acc, t) => acc + (t.unread_count || 0), 0);
+  });
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
 
   // Auth Form State
   const [authPhone, setAuthPhone] = useState<string>('');
   const [authPassword, setAuthPassword] = useState<string>('');
   const [authFullName, setAuthFullName] = useState<string>('');
+  const [authLocation, setAuthLocation] = useState<string>('Harare');
   const [authReferralCode, setAuthReferralCode] = useState<string>('');
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -86,7 +108,13 @@ export default function App() {
     setEvents(StorageService.getEvents());
     setProducts(StorageService.getProducts());
     setPushNotifications(StorageService.getPushNotifications());
-    setCurrentUser(StorageService.getCurrentUser());
+    const user = StorageService.getCurrentUser();
+    setCurrentUser(user);
+    setLiveSermonStatus(StorageService.getLiveSermonStatus());
+    if (user) {
+      const threads = StorageService.getAllDirectMessageThreads(user.id);
+      setUnreadDmsCount(threads.reduce((acc, t) => acc + (t.unread_count || 0), 0));
+    }
   };
 
   const handleToggleLowData = () => {
@@ -133,20 +161,30 @@ export default function App() {
         setAuthError('Please fill in all required fields.');
         return;
       }
-      const newUser = StorageService.signup(
+      const res = StorageService.signup(
         authFullName.trim(),
         authPhone.trim(),
         authPassword.trim(),
+        authLocation,
         authReferralCode.trim()
       );
-      setCurrentUser(newUser);
-      setShowAuthModal(false);
-      setAuthFullName('');
-      setAuthPhone('');
-      setAuthPassword('');
-      setAuthReferralCode('');
-      confetti({ particleCount: 40, spread: 70 });
+      if (res.success && res.user) {
+        setCurrentUser(res.user);
+        setShowAuthModal(false);
+        setAuthFullName('');
+        setAuthPhone('');
+        setAuthPassword('');
+        setAuthReferralCode('');
+        confetti({ particleCount: 40, spread: 70 });
+      } else {
+        setAuthError(res.error || 'Failed to create account.');
+      }
     }
+  };
+
+  const handleOpenDirectChat = (recipientId?: string) => {
+    setDirectMessageRecipientId(recipientId);
+    setShowDirectMessagesModal(true);
   };
 
   const handleGuestLogin = () => {
@@ -179,6 +217,18 @@ export default function App() {
     );
   }
 
+  // Check if current user is banned - blocks entire app and renders dedicated Banned Screen
+  const bannedMap = StorageService.getBannedUsers();
+  const isUserBanned = currentUser.is_banned || Boolean(bannedMap[currentUser.id] || bannedMap[currentUser.phone]);
+  if (isUserBanned) {
+    return (
+      <BannedScreen
+        user={currentUser}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#001122] text-white flex flex-col selection:bg-[#D4AF37] selection:text-[#001F3F] bg-[radial-gradient(ellipse_at_top_right,_#001F3F_0%,_#001122_70%)]">
       
@@ -193,8 +243,58 @@ export default function App() {
         onOpenAdminPanel={() => setShowAdminPanel(true)}
         onOpenDevConsole={() => setShowDevConsole(true)}
         onOpenFlutterExport={() => setShowFlutterExport(true)}
+        onOpenDirectMessages={() => handleOpenDirectChat()}
+        onOpenNotifications={() => setShowNotificationsModal(true)}
+        onOpenLiveSermon={() => setShowLiveSermonModal(true)}
+        isLiveSermon={liveSermonStatus.isLive}
+        unreadDmsCount={unreadDmsCount}
         pushNotifications={pushNotifications}
       />
+
+      {/* Non-Annoying Live Sermon Notification Bar */}
+      {liveSermonStatus.isLive && !dismissedLiveNotification && (
+        <div className="w-full max-w-5xl mx-auto px-2 sm:px-4 pt-3">
+          <div className="bg-gradient-to-r from-red-950/90 via-[#001F3F] to-red-950/90 border border-red-500/50 rounded-2xl p-3 sm:p-3.5 shadow-2xl flex items-center justify-between gap-3 text-white animate-slide-up">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className="w-9 h-9 rounded-xl bg-red-600 flex items-center justify-center shrink-0 shadow-md animate-pulse">
+                <Radio className="w-5 h-5 text-white" />
+              </div>
+              <div className="truncate">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-wider font-black px-1.5 py-0.5 rounded bg-red-500 text-white animate-pulse">
+                    LIVE SERVICE
+                  </span>
+                  <span className="text-xs sm:text-sm font-bold truncate text-white">
+                    {liveSermonStatus.title || 'Supernatural Dominion Service • Apostle Joe Daniels Live'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-white/70 truncate mt-0.5 flex items-center gap-1.5">
+                  <span className="text-emerald-400 font-semibold">{StorageService.getStreamViewers().length + 42} Believers Streaming</span>
+                  <span>•</span>
+                  <span className="text-[#D4AF37]">Streaming with your {currentUser.location || currentUser.city_location || 'Harare'} congregation</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setShowLiveSermonModal(true)}
+                className="px-3 sm:px-4 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg flex items-center gap-1.5 transition-all transform hover:scale-105"
+              >
+                <Tv className="w-3.5 h-3.5" />
+                <span>Join Stream</span>
+              </button>
+              <button
+                onClick={() => setDismissedLiveNotification(true)}
+                title="Dismiss notification"
+                className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 2. Main Content Area */}
       <main className="flex-1 w-full max-w-5xl mx-auto px-2 sm:px-4 py-3">
@@ -205,6 +305,10 @@ export default function App() {
             testimonies={testimonies}
             lowDataMode={lowDataMode}
             onNavigateTab={setActiveTab}
+            onNavigateToBible={(ref) => {
+              setBibleReference(ref);
+              setActiveTab('bible');
+            }}
             currentUser={currentUser}
             onRequireAuth={() => {
               setAuthMode('login');
@@ -216,7 +320,7 @@ export default function App() {
         )}
 
         {activeTab === 'bible' && (
-          <BibleTab lowDataMode={lowDataMode} />
+          <BibleTab lowDataMode={lowDataMode} initialReference={bibleReference} />
         )}
 
         {activeTab === 'community' && (
@@ -230,6 +334,17 @@ export default function App() {
               setAuthMode('login');
               setShowAuthModal(true);
             }}
+            onOpenGroupChat={(groupId) => {
+              setDirectMessageGroupId(groupId);
+              setDirectMessageRecipientId(undefined);
+              setShowDirectMessagesModal(true);
+            }}
+            onOpenDirectChat={(recipientId) => {
+              setDirectMessageRecipientId(recipientId);
+              setDirectMessageGroupId(undefined);
+              setShowDirectMessagesModal(true);
+            }}
+            onOpenLiveSermon={() => setShowLiveSermonModal(true)}
             onRefreshData={refreshAppData}
           />
         )}
@@ -252,6 +367,7 @@ export default function App() {
             onToggleLowData={handleToggleLowData}
             onLogout={handleLogout}
             onUpdateUser={handleUpdateUser}
+            onOpenDirectChat={handleOpenDirectChat}
             onOpenLogin={() => {
               setAuthMode('login');
               setShowAuthModal(true);
@@ -272,7 +388,6 @@ export default function App() {
             SYSTEM: ONLINE
           </span>
           <span className="hidden sm:inline text-white/40">FCM PUSH: READY</span>
-          <span className="text-white/40">PAYNOW: ACTIVE</span>
         </div>
         <div className="flex items-center gap-3 text-white/40">
           <span>V 1.0.4-PROD</span>
@@ -349,6 +464,77 @@ export default function App() {
         onUpdateUser={handleUpdateUser}
       />
 
+      {/* Live Sermon Broadcast Streaming Modal */}
+      {showLiveSermonModal && (
+        <LiveSermonModal
+          currentUser={currentUser}
+          onClose={() => {
+            setShowLiveSermonModal(false);
+            refreshAppData();
+          }}
+          onOpenSeedModal={() => {
+            setShowLiveSermonModal(false);
+            setActiveTab('store');
+          }}
+        />
+      )}
+
+      {/* Direct Messages Modal */}
+      {showDirectMessagesModal && (
+        <DirectMessagesModal
+          currentUser={currentUser}
+          initialRecipientId={directMessageRecipientId}
+          initialGroupId={directMessageGroupId}
+          onClose={() => {
+            setShowDirectMessagesModal(false);
+            setDirectMessageRecipientId(undefined);
+            setDirectMessageGroupId(undefined);
+            refreshAppData();
+          }}
+        />
+      )}
+
+      {/* Floating Notification Toast (Redirects to exact place message comes from) */}
+      <FloatingNotificationToast
+        onOpenLiveSermon={() => setShowLiveSermonModal(true)}
+        onOpenDirectChat={(recipientId) => {
+          setDirectMessageRecipientId(recipientId);
+          setDirectMessageGroupId(undefined);
+          setShowDirectMessagesModal(true);
+        }}
+        onOpenGroupChat={(groupId) => {
+          setDirectMessageGroupId(groupId);
+          setDirectMessageRecipientId(undefined);
+          setShowDirectMessagesModal(true);
+        }}
+        onNavigateTab={(tab) => {
+          setActiveTab(tab);
+        }}
+        onOpenAllNotifications={() => setShowNotificationsModal(true)}
+      />
+
+      {/* Notifications Modal */}
+      {showNotificationsModal && (
+        <NotificationsModal
+          isOpen={showNotificationsModal}
+          onClose={() => setShowNotificationsModal(false)}
+          onOpenLiveSermon={() => setShowLiveSermonModal(true)}
+          onOpenDirectChat={(recipientId) => {
+            setDirectMessageRecipientId(recipientId);
+            setDirectMessageGroupId(undefined);
+            setShowDirectMessagesModal(true);
+          }}
+          onOpenGroupChat={(groupId) => {
+            setDirectMessageGroupId(groupId);
+            setDirectMessageRecipientId(undefined);
+            setShowDirectMessagesModal(true);
+          }}
+          onNavigateTab={(tab) => {
+            setActiveTab(tab);
+          }}
+        />
+      )}
+
       {/* Auth Modal (Login / Signup) */}
       {showAuthModal && (
         <div className="fixed inset-0 z-50 bg-[#001122]/80 backdrop-blur-md flex items-center justify-center p-3">
@@ -421,21 +607,42 @@ export default function App() {
               </div>
 
               {authMode === 'signup' && (
-                <div>
-                  <label className="block font-semibold text-white/80 mb-1">
-                    Referral Code (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={authReferralCode}
-                    onChange={(e) => setAuthReferralCode(e.target.value)}
-                    placeholder="Enter 'JoeDaniels789' for Moderator Role"
-                    className="w-full bg-[#001122] border border-white/20 rounded-xl p-2.5 text-white focus:outline-none focus:border-[#D4AF37]"
-                  />
-                  <p className="text-[10px] text-[#D4AF37]/80 mt-1">
-                    Tip: Code <strong className="text-[#D4AF37]">JoeDaniels789</strong> automatically assigns the Moderator role.
-                  </p>
-                </div>
+                <>
+                  <div>
+                    <label className="block font-semibold text-white/80 mb-1">
+                      City / Location
+                    </label>
+                    <select
+                      value={authLocation}
+                      onChange={(e) => setAuthLocation(e.target.value)}
+                      className="w-full bg-[#001122] border border-white/20 rounded-xl p-2.5 text-white focus:outline-none focus:border-[#D4AF37]"
+                    >
+                      {[
+                        'Harare', 'Bulawayo', 'Chitungwiza', 'Mutare', 'Gweru', 'Kwekwe', 
+                        'Kadoma', 'Masvingo', 'Chinhoyi', 'Norton', 'Marondera', 'Ruwa', 
+                        'Chegutu', 'Zvishavane', 'Bindura', 'Victoria Falls', 'Hwange', 
+                        'Redcliff', 'Rusape', 'Karoi', 'Kariba', 'Chipinge', 'Gokwe', 'Shurugwi'
+                      ].map(city => (
+                        <option key={city} value={city} className="bg-[#001F3F] text-white">
+                          {city}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-white/80 mb-1">
+                      Referral Code (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={authReferralCode}
+                      onChange={(e) => setAuthReferralCode(e.target.value)}
+                      placeholder="Enter referral (optional)"
+                      className="w-full bg-[#001122] border border-white/20 rounded-xl p-2.5 text-white focus:outline-none focus:border-[#D4AF37]"
+                    />
+                  </div>
+                </>
               )}
 
               <button

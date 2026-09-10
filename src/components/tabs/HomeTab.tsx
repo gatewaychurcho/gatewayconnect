@@ -19,7 +19,11 @@ import {
   Calendar,
   Clock,
   ChevronRight,
-  MapPin
+  MapPin,
+  Gift,
+  CheckCircle2,
+  ExternalLink,
+  X
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Sermon, Devotional, Testimony, User } from '../../types';
@@ -55,6 +59,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   onNavigateTab,
 }) => {
   const [activeSermon, setActiveSermon] = useState<Sermon>(sermons[0] || {} as Sermon);
+  const [overridePlayingVideo, setOverridePlayingVideo] = useState<{ id: string; title: string; youtube_id: string } | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [isAudioOnly, setIsAudioOnly] = useState<boolean>(lowDataMode);
   const [offlineIds, setOfflineIds] = useState<string[]>(StorageService.getOfflineSermonsList());
@@ -75,19 +80,86 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     '👏': 4
   });
   const [userReacted, setUserReacted] = useState<Record<string, boolean>>({});
-  const [activeDevotionalIndex, setActiveDevotionalIndex] = useState<number>(0);
-  const [isPlayingDevotionalAudio, setIsPlayingDevotionalAudio] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedSeries, setSelectedSeries] = useState<string>('All');
 
-  // Synchronize testimonies when updated across the app
+  // Compute daily devotional dynamically based on the current calendar day
+  const currentDevotional = React.useMemo(() => {
+    if (!devotionals || devotionals.length === 0) return {} as Devotional;
+    const now = new Date();
+    // Unique day index
+    const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
+    const selected = devotionals[Math.abs(dayOfYear) % devotionals.length] || devotionals[0];
+    const formattedDate = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    return {
+      ...selected,
+      date: `Today • ${formattedDate}`
+    };
+  }, [devotionals]);
+
+  // Dynamic live stream URL from Admin Panel
+  const [liveStreamUrl, setLiveStreamUrl] = useState<string>(StorageService.getLiveStreamUrl());
+
+  // In-stream floating donation state
+  const [showInStreamDonation, setShowInStreamDonation] = useState(false);
+  const [seedAmount, setSeedAmount] = useState('20');
+  const [seedCategory, setSeedCategory] = useState<'Altar Seed' | 'Tithe' | 'Apostle Blessing' | 'Building Offering' | 'First Fruits'>('Altar Seed');
+  const [paymentMethod, setPaymentMethod] = useState<'ecocash' | 'innbucks' | 'onemoney' | 'card'>('ecocash');
+  const [donorPhone, setDonorPhone] = useState(currentUser.phone || '');
+  const [currency, setCurrency] = useState<'USD' | 'ZiG'>('USD');
+  const [isDonating, setIsDonating] = useState(false);
+  const [donationSuccess, setDonationSuccess] = useState(false);
+
+  // Synchronize testimonies and live stream URL when updated across the app
   useEffect(() => {
     const handleSync = () => {
       setLiveTestimonies(StorageService.getTestimonies());
     };
+    const handleUrlChange = (e: any) => {
+      if (e?.detail?.url) {
+        setLiveStreamUrl(e.detail.url);
+      } else {
+        setLiveStreamUrl(StorageService.getLiveStreamUrl());
+      }
+    };
     window.addEventListener('gcz_testimony_updated', handleSync);
-    return () => window.removeEventListener('gcz_testimony_updated', handleSync);
+    window.addEventListener('gcz_stream_url_updated', handleUrlChange);
+    return () => {
+      window.removeEventListener('gcz_testimony_updated', handleSync);
+      window.removeEventListener('gcz_stream_url_updated', handleUrlChange);
+    };
   }, []);
+
+  const handleProcessInStreamSeed = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amountNum = parseFloat(seedAmount);
+    if (!amountNum || amountNum <= 0) return;
+
+    setIsDonating(true);
+    setTimeout(() => {
+      StorageService.addDonation({
+        amount: amountNum,
+        currency,
+        category: seedCategory,
+        method: paymentMethod,
+        phone: donorPhone,
+        notes: `In-stream seed during live service (${activeSermon.title || 'Live Stream'})`
+      });
+
+      setIsDonating(false);
+      setDonationSuccess(true);
+      confetti({
+        particleCount: 40,
+        spread: 60,
+        origin: { y: 0.5 }
+      });
+
+      setTimeout(() => {
+        setDonationSuccess(false);
+        setShowInStreamDonation(false);
+      }, 2500);
+    }, 1200);
+  };
 
   const isGuest = currentUser.role === 'guest';
   const isSermonUnlocked = !activeSermon.is_premium || currentUser.is_premium || currentUser.unlocked_sermon_ids?.includes(activeSermon.id);
@@ -165,8 +237,20 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const [showPaidBookingModal, setShowPaidBookingModal] = useState(false);
 
   const uniqueSeries = ['All', ...Array.from(new Set(sermons.map(s => s.series).filter(Boolean)))];
-  const currentDevotional = devotionals[activeDevotionalIndex] || devotionals[0] || ({} as Devotional);
   const latestApostlePost = liveTestimonies.find(t => t.user_name.toLowerCase().includes('daniels')) || liveTestimonies[0];
+
+  const currentStreamTarget = (overridePlayingVideo && overridePlayingVideo.youtube_id) ||
+                              liveStreamUrl || 
+                              activeSermon.youtube_id || 
+                              '-CibsaxijIk';
+  const streamEmbedInfo = StorageService.getStreamEmbedInfo(currentStreamTarget);
+  const activeVideoId = streamEmbedInfo.videoId || StorageService.extractYoutubeId(currentStreamTarget) || '-CibsaxijIk';
+  const isFacebook = streamEmbedInfo.isFacebook;
+  const onlineStreamersCount = StorageService.getOnlineStreamersCount();
+  const liveStreamStatus = StorageService.getLiveSermonStatus();
+  const liveFeedTitle = overridePlayingVideo 
+    ? overridePlayingVideo.title 
+    : (liveStreamStatus.title || (isFacebook ? 'Apostle Joe Daniels - Sunday Dominion & Prophetic Broadcast (Facebook Live)' : 'Church & Politics (Controversial Issues) - Apostle Joe Daniels (YouTube Live)'));
 
   return (
     <div className="space-y-6 pb-24 max-w-4xl mx-auto px-2 sm:px-4 pt-1">
@@ -179,7 +263,10 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         <div className="overflow-hidden relative w-full whitespace-nowrap text-xs text-white/90">
           <div className="animate-marquee flex items-center gap-8">
             <span className="font-semibold text-[#D4AF37]">
-              Gateway Cathedral: Samora Machel Avenue West, Belvedere, Harare, Zimbabwe
+              Harare Assembly: Fantasyland Cinema Number 3 Harare, Zimbabwe
+            </span>
+            <span className="text-white/70">
+              • Gateway Cathedral: Samora Machel Avenue West, Belvedere, Harare
             </span>
             <span className="text-white/70">
               • Sunday Glorious Service: 09:30 AM CAT
@@ -188,54 +275,375 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               • Midweek Dominion Service: Wednesday 17:30 CAT
             </span>
             <span className="text-white/70">
-              • Apostolic Inquiries: +263 78 069 9988
+              • Apostolic Secretariat & Intercession Desk • Connect via App
             </span>
           </div>
         </div>
       </div>
 
-      {/* 2. Hero Live Stream & Sermon Player Card */}
-      <div className="bg-[#001F3F]/60 backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden relative shadow-2xl">
+      {/* 2. Hero Live Stream & Sermon Player Card with Platform Dynamic Theme */}
+      <div 
+        className={`backdrop-blur-md rounded-2xl border overflow-hidden relative shadow-2xl transition-all ${
+          isFacebook 
+            ? 'bg-[#001830]/80 border-[#1877F2]/50 shadow-[0_0_30px_rgba(24,119,242,0.2)]' 
+            : 'bg-[#180A0A]/80 border-red-600/50 shadow-[0_0_30px_rgba(239,68,68,0.2)]'
+        }`}
+      >
         
+        {/* Banner indicating swapped video playing on top */}
+        {overridePlayingVideo && (
+          <div className="bg-gradient-to-r from-amber-600/30 via-[#D4AF37]/40 to-amber-600/30 border-b border-[#D4AF37]/50 px-3.5 py-2.5 flex items-center justify-between text-xs animate-in fade-in">
+            <div className="flex items-center gap-2 text-white min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#D4AF37] animate-ping shrink-0" />
+              <span className="font-bold text-[#D4AF37] shrink-0">Playing On Top:</span>
+              <span className="truncate font-semibold">{overridePlayingVideo.title}</span>
+            </div>
+            <button
+              id="btn-return-live-stream"
+              onClick={() => setOverridePlayingVideo(null)}
+              className="ml-2 px-3 py-1 rounded-lg bg-[#001122] hover:bg-[#001F3F] text-amber-300 hover:text-white border border-[#D4AF37]/40 text-[11px] font-bold shrink-0 transition-colors shadow"
+            >
+              🔴 Return to Live Stream
+            </button>
+          </div>
+        )}
+
         {/* Stream Visual Container */}
         <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden group">
-          {isAudioOnly ? (
-            /* Audio-Only Low Data Mode Visualization */
-            <div className="w-full h-full bg-gradient-to-br from-[#001122] via-[#001F3F] to-[#001122] flex flex-col items-center justify-center p-6 text-center relative">
-              <div className="w-20 h-20 rounded-full bg-[#D4AF37]/20 border-2 border-[#D4AF37] flex items-center justify-center animate-pulse mb-3 shadow-2xl shadow-[#D4AF37]/40">
-                <Radio className="w-10 h-10 text-[#D4AF37]" />
-              </div>
-              <span className="text-xs font-bold text-[#D4AF37] tracking-widest uppercase mb-1">
-                ⚡ Low-Data Audio Mode Active (24 kbps)
-              </span>
-              <h3 className="text-sm sm:text-base font-bold text-white max-w-md line-clamp-2">
-                {activeSermon.title}
-              </h3>
-              <p className="text-xs text-white/60 mt-1">
-                Apostle Joe Daniels • Gateway Live Broadcast
-              </p>
-            </div>
-          ) : (
-            /* YouTube / Live Video Player Frame */
-            <div className="w-full h-full relative">
+          
+          {/* Underlying YouTube / Facebook Stream iframe - Always mounted so audio continues uninterrupted */}
+          <div className={isAudioOnly ? "absolute opacity-0 pointer-events-none w-1 h-1 overflow-hidden" : "w-full h-full relative"}>
+            {streamEmbedInfo.isFacebook ? (
               <iframe
-                className="w-full h-full pointer-events-auto"
-                src={`https://www.youtube-nocookie.com/embed/${activeSermon.youtube_id || 'Tde5rGafeBE'}?autoplay=1&mute=0&controls=1&rel=0`}
-                title={activeSermon.title || 'Supernatural Acceleration - Apostle Joe Daniels'}
+                id="facebook-hero-stream-player"
+                className="w-full h-full pointer-events-auto border-0"
+                src={streamEmbedInfo.embedUrl}
+                title="Gateway Connect Zimbabwe Facebook Live Service"
+                style={{ border: 'none', overflow: 'hidden' }}
+                scrolling="no"
+                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                referrerPolicy="origin-when-cross-origin"
+                allowFullScreen
+              />
+            ) : (
+              <iframe
+                id="youtube-hero-stream-player"
+                className="w-full h-full pointer-events-auto border-0"
+                src={streamEmbedInfo.embedUrl || `https://www.youtube-nocookie.com/embed/${activeVideoId}?autoplay=1&mute=0&controls=1&rel=0&playsinline=1&enablejsapi=1`}
+                title={activeSermon.title || 'Church & Politics (Controversial Issues) - Apostle Joe Daniels'}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               />
+            )}
+          </div>
+
+          {/* No Live Stream Offline Overlay */}
+          {!liveStreamStatus.isLive && !overridePlayingVideo && (
+            <div className="absolute inset-0 z-25 bg-[#001122]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
+              <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-amber-400 mb-3 shadow-inner">
+                <Radio className="w-7 h-7 text-[#D4AF37]" />
+              </div>
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-white/90 text-xs font-bold mb-2">
+                <span className="w-2 h-2 rounded-full bg-white/40" />
+                <span>No live stream broadcast currently active</span>
+              </div>
+              <h4 className="text-white font-bold text-base sm:text-lg mb-1">
+                Sanctuary Stream is Offline
+              </h4>
+              <p className="text-white/70 text-xs max-w-sm mb-4 leading-relaxed">
+                Join us for our next scheduled service this Sunday at 09:30 AM CAT. In the meantime, you can watch past recorded sermons or study the Word.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (sermons && sermons.length > 0) {
+                    setOverridePlayingVideo({
+                      id: sermons[0].id,
+                      title: sermons[0].title,
+                      youtube_id: sermons[0].youtube_id
+                    });
+                  }
+                }}
+                className="px-4 py-2 rounded-xl bg-[#D4AF37] hover:bg-[#C59B27] text-[#001F3F] font-bold text-xs flex items-center gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all"
+              >
+                <Tv className="w-4 h-4" />
+                <span>Watch Featured Sermon Replay</span>
+              </button>
+            </div>
+          )}
+
+          {/* Facebook Page Live Hub Launcher Overlay: prevents "Video Unavailable" for page /live links */}
+          {streamEmbedInfo.isFacebook && streamEmbedInfo.isLivePageHub && !streamEmbedInfo.hasNumericVideoId && (
+            <div className="absolute inset-0 z-20 bg-gradient-to-t from-black via-black/90 to-[#1877F2]/30 flex flex-col items-center justify-center p-6 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-[#1877F2] flex items-center justify-center text-white text-2xl font-black shadow-xl shadow-[#1877F2]/50 mb-3 animate-pulse">
+                f
+              </div>
+              <h4 className="text-white font-black text-base sm:text-lg mb-1">
+                Apostle Joe Daniels Facebook Live
+              </h4>
+              <p className="text-white/80 text-xs max-w-sm mb-4 leading-relaxed">
+                Tune into the live broadcast directly on Facebook, or switch to the YouTube stream:
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2.5">
+                <a
+                  href={streamEmbedInfo.facebookDirectUrl || streamEmbedInfo.originalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 rounded-xl bg-[#1877F2] hover:bg-[#1877F2]/90 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-[#1877F2]/40 hover:scale-105 active:scale-95 transition-all"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Launch Facebook Live Broadcast</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ytUrl = 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP';
+                    StorageService.setLiveStreamUrl(ytUrl);
+                    setLiveStreamUrl(ytUrl);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-300 font-bold text-xs flex items-center gap-1.5 border border-red-500/30 hover:scale-105 active:scale-95 transition-all"
+                >
+                  <Tv className="w-3.5 h-3.5" />
+                  <span>Switch to YouTube</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Floating Facebook Action Pill (if Facebook Live) */}
+          {streamEmbedInfo.isFacebook && (
+            <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2">
+              <a
+                href={streamEmbedInfo.facebookDirectUrl || streamEmbedInfo.originalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-full bg-[#1877F2] hover:bg-[#1877F2]/90 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-xl border border-white/20 transition-all hover:scale-105"
+                title="Watch directly on Facebook"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Watch on Facebook</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  const ytUrl = 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP';
+                  StorageService.setLiveStreamUrl(ytUrl);
+                  setLiveStreamUrl(ytUrl);
+                }}
+                className="px-2.5 py-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white/80 hover:text-white font-bold text-[10px] flex items-center gap-1 border border-white/20 transition-all"
+                title="Switch to YouTube stream"
+              >
+                <Tv className="w-3 h-3 text-red-400" />
+                <span>YouTube Mirror</span>
+              </button>
+            </div>
+          )}
+
+          {/* Floating In-Stream Seed Button */}
+          <div className="absolute bottom-3 right-3 z-20">
+            <button
+              id="btn-hero-floating-seed"
+              onClick={() => setShowInStreamDonation(true)}
+              className="px-3 py-1.5 rounded-full bg-gradient-to-r from-[#D4AF37] via-amber-300 to-[#D4AF37] text-[#001F3F] font-black text-xs flex items-center gap-1.5 shadow-xl shadow-[#D4AF37]/40 hover:scale-105 active:scale-95 transition-all border border-white/40"
+            >
+              <Gift className="w-3.5 h-3.5 fill-current" />
+              <span>Sow Seed</span>
+            </button>
+          </div>
+
+          {/* IN-STREAM DONATION FLOAT: Non-blocking, does not overlap whole screen, leaves space to navigate to other pages, with X close button */}
+          {showInStreamDonation && (
+            <div className="fixed bottom-20 right-3 sm:absolute sm:bottom-4 sm:right-4 z-40 w-[calc(100vw-24px)] max-w-[340px] max-h-[60vh] overflow-y-auto bg-[#001428]/95 backdrop-blur-md border border-[#D4AF37]/80 rounded-2xl p-4 shadow-2xl animate-in slide-in-from-bottom-4 duration-200 text-white">
+              <button
+                onClick={() => setShowInStreamDonation(false)}
+                className="absolute top-3 right-3 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white hover:text-amber-300 transition-all shadow"
+                title="Close Donation Float"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-2 mb-3 pr-8">
+                <div className="w-8 h-8 rounded-lg bg-[#D4AF37] text-[#001F3F] flex items-center justify-center font-bold shrink-0">
+                  <Gift className="w-4 h-4 fill-current" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-white">In-Stream Giving</h4>
+                  <p className="text-[10px] text-[#D4AF37]">Give while stream plays</p>
+                </div>
+              </div>
+
+              {donationSuccess ? (
+                <div className="text-center py-4 space-y-1.5">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto animate-bounce" />
+                  <div className="font-bold text-sm text-white">Altar Seed Received!</div>
+                  <div className="text-[11px] text-[#D4AF37]">
+                    May the God of Apostle Joe Daniels open the windows of heaven upon you!
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleProcessInStreamSeed} className="space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between bg-[#001122] p-1 rounded-lg border border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => setCurrency('USD')}
+                      className={`flex-1 py-1 rounded text-xs font-bold ${currency === 'USD' ? 'bg-[#D4AF37] text-[#001F3F]' : 'text-white/60'}`}
+                    >
+                      USD ($)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrency('ZiG')}
+                      className={`flex-1 py-1 rounded text-xs font-bold ${currency === 'ZiG' ? 'bg-[#D4AF37] text-[#001F3F]' : 'text-white/60'}`}
+                    >
+                      ZiG
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-1">
+                    {['5', '10', '20', '50'].map(amt => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setSeedAmount(amt)}
+                        className={`py-1 rounded text-xs font-bold border ${seedAmount === amt ? 'bg-[#D4AF37] text-[#001F3F] border-[#D4AF37]' : 'bg-white/5 border-white/10 text-white'}`}
+                      >
+                        {currency === 'USD' ? `$${amt}` : `${amt} ZiG`}
+                      </button>
+                    ))}
+                  </div>
+
+                  <select
+                    value={seedCategory}
+                    onChange={(e) => setSeedCategory(e.target.value as any)}
+                    className="w-full bg-[#001122] border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                  >
+                    <option value="Altar Seed">Altar Seed (Prophetic Covenant)</option>
+                    <option value="Tithe">Tithe (10% Kingdom Honor)</option>
+                    <option value="Apostle Blessing">Apostle Blessing</option>
+                    <option value="Building Offering">Building Offering</option>
+                  </select>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('ecocash')}
+                      className={`py-1 px-1.5 rounded text-[10px] font-bold border ${paymentMethod === 'ecocash' ? 'bg-blue-600/30 border-blue-400 text-white' : 'bg-white/5 border-white/10 text-white/70'}`}
+                    >
+                      EcoCash
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('innbucks')}
+                      className={`py-1 px-1.5 rounded text-[10px] font-bold border ${paymentMethod === 'innbucks' ? 'bg-amber-600/30 border-amber-400 text-white' : 'bg-white/5 border-white/10 text-white/70'}`}
+                    >
+                      Innbucks
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('card')}
+                      className={`py-1 px-1.5 rounded text-[10px] font-bold border ${paymentMethod === 'card' ? 'bg-emerald-600/30 border-emerald-400 text-white' : 'bg-white/5 border-white/10 text-white/70'}`}
+                    >
+                      Card / Visa
+                    </button>
+                  </div>
+
+                  <input
+                    type="tel"
+                    value={donorPhone}
+                    onChange={(e) => setDonorPhone(e.target.value)}
+                    placeholder="e.g. 0772123456"
+                    className="w-full bg-[#001122] border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={isDonating}
+                    className="w-full py-2 rounded-lg bg-gradient-to-r from-[#D4AF37] to-amber-400 text-[#001F3F] font-black text-xs flex items-center justify-center gap-1.5 shadow"
+                  >
+                    {isDonating ? 'Processing...' : `Give ${currency} ${seedAmount} Direct`}
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+
+          {/* Audio-Only Low Data Mode Visualization (active when isAudioOnly is true) */}
+          {isAudioOnly && (
+            <div className="w-full h-full bg-gradient-to-br from-[#000d1a] via-[#001F3F] to-[#000d1a] flex flex-col items-center justify-center p-6 text-center relative select-none">
+              
+              {/* Radio Wave Pulse Graphic */}
+              <div className="relative flex items-center justify-center mb-4">
+                <div className="absolute w-28 h-28 rounded-full bg-[#D4AF37]/10 animate-ping" />
+                <div className="absolute w-24 h-24 rounded-full bg-[#D4AF37]/15 animate-pulse" />
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#D4AF37] to-amber-300 text-[#001F3F] flex items-center justify-center shadow-xl shadow-[#D4AF37]/30 z-10">
+                  <Headphones className="w-8 h-8" />
+                </div>
+              </div>
+
+              {/* Streaming Indicator */}
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-black/40 border border-[#D4AF37]/30 mb-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[11px] font-bold tracking-widest text-[#D4AF37] uppercase">
+                  ⚡ YouTube Audio-Only Stream • 24kbps Low Data
+                </span>
+              </div>
+
+              {/* Sermon & Speaker Info */}
+              <h3 className="text-sm sm:text-base font-bold text-white max-w-md line-clamp-2 px-4 leading-snug">
+                {activeSermon.title || 'Church & Politics (Controversial Issues)'}
+              </h3>
+              <p className="text-xs text-white/70 mt-1 flex items-center gap-1.5 justify-center">
+                <span>{activeSermon.speaker || 'Apostle Joe Daniels'}</span>
+                <VerifiedBadge type="gold" size="xs" />
+                <span>• Live Broadcast</span>
+              </p>
+
+              {/* Equalizer Waveform Animation */}
+              <div className="flex items-end justify-center gap-1 h-7 mt-3 mb-2">
+                {[40, 70, 30, 90, 60, 100, 45, 80, 55, 95, 35, 75, 50, 85].map((height, idx) => (
+                  <div
+                    key={idx}
+                    className="w-1 bg-[#D4AF37] rounded-full animate-pulse"
+                    style={{
+                      height: `${height}%`,
+                      animationDuration: `${0.4 + (idx % 5) * 0.15}s`,
+                      animationDelay: `${idx * 0.05}s`
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Audio Controls */}
+              <div className="flex items-center gap-3 mt-2">
+                <button
+                  id="btn-audio-only-switch-video"
+                  onClick={() => setIsAudioOnly(false)}
+                  className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95"
+                >
+                  <Tv className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <span>Switch to Video</span>
+                </button>
+              </div>
             </div>
           )}
 
           {/* Live Overlay Badges */}
           <div className="absolute top-4 left-4 flex items-center gap-2 pointer-events-none z-10">
-            <span className="flex items-center gap-2 px-3 py-1 rounded-md bg-red-600 text-white text-xs font-bold animate-pulse shadow-lg">
-              <span className="w-2 h-2 rounded-full bg-white"></span>
-              LIVE
-            </span>
-            <span className="px-3 py-1 rounded-md bg-[#001F3F]/80 text-[#D4AF37] text-xs font-bold backdrop-blur-md border border-white/10 shadow-md">
-              1,429 Watching Now
+            {streamEmbedInfo.isFacebook ? (
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-[#1877F2] text-white text-xs font-bold animate-pulse shadow-lg">
+                <Radio className="w-3.5 h-3.5" />
+                FB LIVE
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-red-600 text-white text-xs font-bold animate-pulse shadow-lg">
+                <Radio className="w-3.5 h-3.5" />
+                YOUTUBE LIVE
+              </span>
+            )}
+            <span className="px-3 py-1 rounded-md bg-[#001F3F]/80 text-[#D4AF37] text-xs font-bold backdrop-blur-md border border-white/10 shadow-md flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>{onlineStreamersCount} {onlineStreamersCount === 1 ? 'Streamer Online' : 'Streamers Online'}</span>
             </span>
           </div>
 
@@ -248,7 +656,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               title={isAudioOnly ? "Switch to Video" : "Switch to Audio-Only (Low Data)"}
             >
               {isAudioOnly ? <Tv className="w-3.5 h-3.5 text-[#D4AF37]" /> : <Headphones className="w-3.5 h-3.5 text-[#D4AF37]" />}
-              <span>{isAudioOnly ? 'Video' : 'Audio Lite'}</span>
+              <span>{isAudioOnly ? 'Watch Video' : 'Audio Lite'}</span>
             </button>
           </div>
         </div>
@@ -256,13 +664,52 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         {/* Stream Details & Interactivity Bar */}
         <div className="p-4 sm:p-6 bg-[#001F3F]/40 space-y-4">
           
+          {/* Facebook Live Status & Troubleshooter Banner */}
+          {streamEmbedInfo.isFacebook && (
+            <div className="bg-[#1877F2]/10 border border-[#1877F2]/30 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-start sm:items-center gap-2 text-white/90">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#1877F2] shrink-0 mt-0.5 sm:mt-0 animate-ping" />
+                <div>
+                  <span className="font-bold text-[#1877F2]">Facebook Live Mode Active: </span>
+                  <span className="text-white/80">
+                    If Facebook displays <em>"Video Unavailable"</em>, Facebook requires opening the broadcast in the Facebook app or web browser due to browser cookie restrictions, or setting the video privacy on Facebook to <strong>Public 🌐</strong>.
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={streamEmbedInfo.facebookDirectUrl || streamEmbedInfo.originalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-lg bg-[#1877F2] hover:bg-[#1877F2]/90 text-white font-bold text-xs flex items-center gap-1.5 shadow transition-all"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open on Facebook</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ytUrl = 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP';
+                    StorageService.setLiveStreamUrl(ytUrl);
+                    setLiveStreamUrl(ytUrl);
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-300 font-bold text-xs border border-red-500/30 transition-all flex items-center gap-1"
+                  title="Switch to YouTube live stream"
+                >
+                  <Tv className="w-3 h-3 text-red-400" />
+                  <span>Switch to YouTube</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <span className="text-xs font-bold text-[#D4AF37] tracking-widest uppercase">
                 {activeSermon.series || 'Sunday Apostolic Service'}
               </span>
               <h2 className="text-lg sm:text-2xl font-bold text-white leading-snug mt-0.5">
-                {activeSermon.title}
+                {liveFeedTitle}
               </h2>
               <div className="flex items-center gap-1.5 text-xs text-white/60 mt-1">
                 <span>{activeSermon.speaker}</span>
@@ -420,14 +867,9 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               <h3 className="text-[#D4AF37] text-xs font-bold tracking-widest uppercase">
                 DAILY DEVOTIONAL
               </h3>
-              <button
-                id="btn-devotional-audio-toggle"
-                onClick={() => setIsPlayingDevotionalAudio(!isPlayingDevotionalAudio)}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D4AF37] text-[#001F3F] font-bold text-xs shadow-md hover:scale-105 transition-transform"
-              >
-                {isPlayingDevotionalAudio ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 fill-current" />}
-                <span>{isPlayingDevotionalAudio ? 'Audio Active' : `Listen (${currentDevotional.audio_duration || '3m'})`}</span>
-              </button>
+              <span className="text-[11px] font-bold text-[#D4AF37] bg-[#D4AF37]/10 px-2.5 py-1 rounded-full border border-[#D4AF37]/30">
+                {currentDevotional.date || 'Today'}
+              </span>
             </div>
 
             <h4 className="text-lg font-bold text-white font-serif-church">
@@ -595,27 +1037,46 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 }`}
               >
                 <div className="p-3 sm:p-4 space-y-2.5">
-                  <div className="relative aspect-video rounded-xl overflow-hidden bg-black">
+                  <div 
+                    onClick={() => {
+                      setActiveSermon(sermon);
+                      setOverridePlayingVideo({
+                        id: sermon.id,
+                        title: sermon.title,
+                        youtube_id: sermon.youtube_id
+                      });
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="relative aspect-video rounded-xl overflow-hidden bg-black cursor-pointer group"
+                  >
                     <img
                       src={sermon.thumbnail_url}
                       alt={sermon.title}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       loading="lazy"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-full bg-[#D4AF37]/90 text-[#001F3F] flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                        <Play className="w-5 h-5 fill-current ml-0.5" />
+                      </div>
+                    </div>
                     
                     {/* Duration badge */}
                     <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-[#001F3F]/90 text-[10px] font-bold text-[#D4AF37] border border-white/10">
                       {sermon.duration}
                     </span>
 
-                    {/* Offline badge */}
-                    {isDownloaded && (
+                    {/* Offline or Active Playing badge */}
+                    {overridePlayingVideo?.id === sermon.id ? (
+                      <span className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500 text-[10px] font-black text-[#001F3F] shadow animate-pulse">
+                        ▶ PLAYING ON TOP
+                      </span>
+                    ) : isDownloaded ? (
                       <span className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-600 text-[10px] font-bold text-white shadow">
                         <Check className="w-3 h-3" />
                         Downloaded
                       </span>
-                    )}
+                    ) : null}
                   </div>
 
                   <div>
@@ -636,12 +1097,17 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                   <button
                     onClick={() => {
                       setActiveSermon(sermon);
+                      setOverridePlayingVideo({
+                        id: sermon.id,
+                        title: sermon.title,
+                        youtube_id: sermon.youtube_id
+                      });
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
                     className="flex items-center gap-1.5 text-xs font-bold text-[#D4AF37] hover:scale-105 transition-transform"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Watch / Listen</span>
+                    <span>{overridePlayingVideo?.id === sermon.id ? 'Now Playing' : 'Watch / Listen'}</span>
                   </button>
 
                   <button
@@ -677,7 +1143,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               Need 1-on-1 Pastoral Consultation?
             </h4>
             <p className="text-xs text-white/70">
-              Book a paid private session with Apostle Joe Daniels. Submissions forwarded to +263780699988.
+              Book a paid private session with Apostle Joe Daniels. Submissions forwarded to our team
             </p>
           </div>
         </div>

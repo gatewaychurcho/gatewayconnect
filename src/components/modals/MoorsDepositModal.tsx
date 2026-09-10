@@ -55,22 +55,36 @@ export const MoorsDepositModal: React.FC<MoorsDepositModalProps> = ({
   const [ussdTimer, setUssdTimer] = useState<number>(45);
   const [simulatedPin, setSimulatedPin] = useState<string>('');
   const [activeReceipt, setActiveReceipt] = useState<Donation | null>(null);
+  const [pinError, setPinError] = useState<string | null>(null);
 
   // Quick Deposit Amount Presets (Moors Style)
   const PRESET_AMOUNTS = [2, 5, 10, 20, 50, 100, 200, 500];
 
   useEffect(() => {
+    if (isOpen) {
+      setDepositState('idle');
+      setUssdTimer(45);
+      setSimulatedPin('');
+      setPinError(null);
+      setActiveReceipt(null);
+      setSelectedFund(defaultFund);
+      setAmount(initialAmount);
+      setCustomAmount('');
+    }
+  }, [isOpen, defaultFund, initialAmount]);
+
+  useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (depositState === 'ussd_prompt' && ussdTimer > 0) {
+    if (isOpen && depositState === 'ussd_prompt' && ussdTimer > 0) {
       interval = setInterval(() => {
         setUssdTimer(prev => prev - 1);
       }, 1000);
-    } else if (depositState === 'ussd_prompt' && ussdTimer <= 0) {
+    } else if (isOpen && depositState === 'ussd_prompt' && ussdTimer <= 0) {
       // Auto-fallback
       handleCompleteDeposit();
     }
     return () => clearInterval(interval);
-  }, [depositState, ussdTimer]);
+  }, [isOpen, depositState, ussdTimer]);
 
   if (!isOpen) return null;
 
@@ -88,6 +102,7 @@ export const MoorsDepositModal: React.FC<MoorsDepositModalProps> = ({
 
   const handleStartDeposit = (e: React.FormEvent) => {
     e.preventDefault();
+    setPinError(null);
     if (!currentFinalAmount || currentFinalAmount <= 0) return;
 
     if (paymentChannel === 'ecocash_express' || paymentChannel === 'onemoney') {
@@ -110,6 +125,15 @@ export const MoorsDepositModal: React.FC<MoorsDepositModalProps> = ({
     }
   };
 
+  const handleAuthorizePin = () => {
+    if (paymentChannel !== 'ecocash_ussd' && simulatedPin.length < 4) {
+      setPinError('Please enter your 4-digit mobile wallet PIN to authorize transaction.');
+      return;
+    }
+    setPinError(null);
+    handleCompleteDeposit();
+  };
+
   const handleCompleteDeposit = () => {
     const finalAmt = currentFinalAmount;
     const impactMap: Record<DonationFund, string> = {
@@ -118,16 +142,17 @@ export const MoorsDepositModal: React.FC<MoorsDepositModalProps> = ({
       'Seed Faith': 'Supernatural harvest & breakthrough seed',
       'Building Foundation': 'Belvedere Cathedral Phase 2 Roofing Project',
       'Missions & Evangelism': 'Rural crusades & church plants across Zimbabwe',
-      'Apostolic Honorarium': 'Direct apostolic blessing and prophetic mantle honoring'
+      'Apostolic Honorarium': 'Direct apostolic blessing and prophetic mantle honoring',
+      'Altar Seed': 'Direct altar seed covenant offering & prophetic connection'
     };
 
     const channelNameMap: Record<typeof paymentChannel, string> = {
-      'ecocash_express': `EcoCash Push (0771445642)`,
-      'ecocash_ussd': `EcoCash Direct Dial (0771445642)`,
-      'onemoney': `OneMoney NetOne (0771445642)`,
-      'innbucks': `InnBucks Transfer (0771445642)`,
-      'paynow': `Paynow Online Gateway (0771445642)`,
-      'card': `Visa / MasterCard / Stripe`
+      'ecocash_express': 'EcoCash',
+      'ecocash_ussd': 'EcoCash',
+      'onemoney': 'OneMoney',
+      'innbucks': 'InnBucks',
+      'paynow': 'Paynow',
+      'card': 'Card'
     };
 
     const newDonation = StorageService.recordDonation({
@@ -170,26 +195,26 @@ export const MoorsDepositModal: React.FC<MoorsDepositModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-[#001F3F] border-2 border-[#D4AF37]/50 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden my-auto animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+      <div className="bg-[#001F3F] border-2 border-[#D4AF37]/50 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden my-auto animate-in fade-in zoom-in duration-200 max-h-[88vh] flex flex-col">
         
         {/* 1. Modal Top Banner (Moors Betting App Style Deposit Header) */}
-        <div className="bg-gradient-to-r from-[#001122] via-[#001F3F] to-[#001122] p-4 border-b border-[#D4AF37]/30 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-[#001122] via-[#001F3F] to-[#001122] p-3.5 sm:p-4 border-b border-[#D4AF37]/30 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#D4AF37] text-[#001F3F] flex items-center justify-center font-black shadow-md">
-              <Zap className="w-5 h-5 fill-current" />
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#D4AF37] text-[#001F3F] flex items-center justify-center font-black shadow-md shrink-0">
+              <Zap className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h3 className="font-bold text-sm sm:text-base text-white tracking-wide">
-                  ONLINE INSTANT DEPOSIT
+                <h3 className="font-bold text-xs sm:text-sm text-white tracking-wide">
+                  ONLINE DEPOSIT
                 </h3>
                 <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[9px] font-bold">
-                  LIVE SWITCH
+                  SECURE SWITCH
                 </span>
               </div>
-              <p className="text-[11px] text-[#D4AF37] font-semibold flex items-center gap-1">
-                <span>Account Number:</span>
+              <p className="text-[10px] sm:text-[11px] text-[#D4AF37] font-semibold flex items-center gap-1">
+                <span>Account:</span>
                 <span className="font-mono font-bold bg-[#001122] px-1.5 py-0.5 rounded border border-[#D4AF37]/40 text-white">
                   {PAYMENT_ACCOUNT_NUMBER}
                 </span>
@@ -199,14 +224,14 @@ export const MoorsDepositModal: React.FC<MoorsDepositModalProps> = ({
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* 2. MAIN MODAL BODY */}
-        <div className="p-4 sm:p-5 space-y-4">
+        <div className="p-3.5 sm:p-5 space-y-4 overflow-y-auto flex-1">
 
           {/* STATE: IDLE / FORM SELECTION */}
           {depositState === 'idle' && (
@@ -458,7 +483,7 @@ export const MoorsDepositModal: React.FC<MoorsDepositModalProps> = ({
 
               <div className="flex items-center justify-center gap-2 text-[10px] text-white/50 pt-1">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Encrypted 256-bit SSL • Instant Settlement to {PAYMENT_ACCOUNT_NUMBER}</span>
+                <span>Encrypted 256-bit SSL • Direct Settlement to {PAYMENT_ACCOUNT_NUMBER}</span>
               </div>
 
             </form>
@@ -502,18 +527,27 @@ export const MoorsDepositModal: React.FC<MoorsDepositModalProps> = ({
                   </p>
                   <p className="text-[#D4AF37]">Enter EcoCash PIN on your phone to approve:</p>
                   
+                  {pinError && (
+                    <p className="text-xs text-rose-400 font-semibold bg-rose-950/40 p-1.5 rounded border border-rose-500/30">
+                      {pinError}
+                    </p>
+                  )}
+
                   <div className="pt-2 flex items-center gap-2">
                     <input
                       type="password"
                       maxLength={4}
                       value={simulatedPin}
-                      onChange={e => setSimulatedPin(e.target.value)}
+                      onChange={e => {
+                        setSimulatedPin(e.target.value);
+                        if (pinError) setPinError(null);
+                      }}
                       placeholder="••••"
                       className="w-28 bg-[#001F3F] border border-[#D4AF37] rounded-lg px-3 py-1.5 text-center text-sm tracking-widest text-[#D4AF37] outline-none"
                     />
                     <button
                       type="button"
-                      onClick={handleCompleteDeposit}
+                      onClick={handleAuthorizePin}
                       className="flex-1 py-1.5 bg-[#D4AF37] hover:bg-[#c49f2f] text-[#001F3F] rounded-lg font-bold text-xs"
                     >
                       Authorize & Confirm
@@ -529,17 +563,9 @@ export const MoorsDepositModal: React.FC<MoorsDepositModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setDepositState('idle')}
-                    className="flex-1 py-2 rounded-xl bg-white/10 text-white text-xs font-semibold hover:bg-white/15"
+                    className="w-full py-2 rounded-xl bg-white/10 text-white text-xs font-semibold hover:bg-white/15"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCompleteDeposit}
-                    className="flex-1 py-2 rounded-xl bg-[#D4AF37] text-[#001F3F] text-xs font-bold flex items-center justify-center gap-1"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Simulate Success</span>
+                    Cancel Transaction
                   </button>
                 </div>
 

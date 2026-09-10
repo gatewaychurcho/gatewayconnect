@@ -95,33 +95,33 @@ export const PaidBookingModal: React.FC<PaidBookingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#001122]/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-[#001F3F] border border-[#D4AF37]/50 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150 my-4 text-white">
+    <div className="fixed inset-0 z-50 bg-[#001122]/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+      <div className="bg-[#001F3F] border border-[#D4AF37]/50 rounded-2xl max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150 my-auto text-white">
         
         {/* Header */}
-        <div className="bg-[#00172e] p-4 sm:p-5 border-b border-white/10 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center font-black shadow-lg">
-              <Video className="w-5 h-5" />
+        <div className="bg-[#00172e] p-3.5 sm:p-4 border-b border-white/10 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center font-black shadow shrink-0">
+              <Video className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-base sm:text-lg text-white">
+              <div className="flex items-center gap-1.5">
+                <h3 className="font-bold text-sm sm:text-base text-white">
                   Zoom Meetings Portal
                 </h3>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/40">
-                  1-on-1 with Apostle Joe Daniels
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/40">
+                  1-on-1
                 </span>
               </div>
-              <p className="text-xs text-white/60">
-                Direct live pastoral consultation & prophetic impartation
+              <p className="text-[11px] text-white/60">
+                Apostle Joe Daniels consultation request
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center transition-colors"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center transition-colors shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -129,17 +129,17 @@ export const PaidBookingModal: React.FC<PaidBookingModalProps> = ({
 
         {/* Live Meetings Portal View after submission */}
         {isSubmitted ? (
-          <div className="p-5 sm:p-6 text-center space-y-4">
-            <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/40 shadow-xl">
-              <CheckCircle2 className="w-8 h-8" />
+          <div className="p-4 sm:p-5 text-center space-y-3.5 overflow-y-auto flex-1">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/40 shadow">
+              <CheckCircle2 className="w-6 h-6" />
             </div>
 
             <div className="space-y-1">
-              <h4 className="text-lg font-bold text-white">
-                Zoom Meeting Session Confirmed!
+              <h4 className="text-base font-bold text-white">
+                Request Submitted Successfully!
               </h4>
               <p className="text-xs text-white/70 leading-relaxed max-w-sm mx-auto">
-                Your 1-on-1 session is synchronized into Apostle Joe Daniels' Meetings Portal. You can join directly or share your invite link.
+                Your 1-on-1 session request has been submitted to Apostle Joe Daniels. You can join directly or share your invite link when scheduled.
               </p>
             </div>
 

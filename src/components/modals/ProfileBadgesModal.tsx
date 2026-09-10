@@ -31,6 +31,7 @@ interface ProfileBadgesModalProps {
   onLogout?: () => void;
   onEditProfile?: () => void;
   onRefreshUser?: () => void;
+  onOpenDirectChat?: (userId: string) => void;
 }
 
 export const ProfileBadgesModal: React.FC<ProfileBadgesModalProps> = ({
@@ -40,7 +41,8 @@ export const ProfileBadgesModal: React.FC<ProfileBadgesModalProps> = ({
   onOpenChatDev,
   onLogout,
   onEditProfile,
-  onRefreshUser
+  onRefreshUser,
+  onOpenDirectChat
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'find_follow' | 'verification' | 'followers'>('overview');
   const [searchQuery, setSearchQuery] = useState('');
@@ -51,10 +53,6 @@ export const ProfileBadgesModal: React.FC<ProfileBadgesModalProps> = ({
   if (!isOpen) return null;
 
   const isSuperAdmin = currentUser.role === 'super_admin';
-  const points = isSuperAdmin ? 8500 : (currentUser.is_premium ? 5400 : 1250);
-  const rankTitle = isSuperAdmin ? 'GATEWAY OVERSEER' : 
-                    currentUser.role === 'pastor' ? 'PASTORAL SHEPHERD' : 
-                    currentUser.role === 'developer' ? 'PLATFORM ARCHITECT' : 'GATEWAY CHAMPION';
 
   const handleToggleFollow = (targetUserId: string) => {
     const res = StorageService.toggleFollowUser(targetUserId);
@@ -73,21 +71,25 @@ export const ProfileBadgesModal: React.FC<ProfileBadgesModalProps> = ({
     u.phone.includes(searchQuery)
   );
 
+  // Instagram-style recommendations: Users not yet followed
+  const recommendedUsers = otherUsers.filter(u => !followingList.includes(u.id)).slice(0, 4);
+
   const realFollowers = otherUsers.filter(u => followingList.includes(u.id) || u.role === 'super_admin');
 
-  const handleClaimMilestone = () => {
-    setClaimedReward(true);
-    confetti({ particleCount: 50, spread: 80, origin: { y: 0.6 } });
-  };
-
   return (
-    <div className="fixed inset-0 z-50 bg-[#001122]/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-[#001F3F] border border-white/10 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150 my-4 text-white flex flex-col max-h-[92vh]">
+    <div 
+      className="fixed inset-0 z-50 bg-[#001122]/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-[#001F3F] border border-white/10 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150 my-auto text-white flex flex-col max-h-[85vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
         
-        {/* Top Header Banner with Red/Magenta/Gold Gradient */}
-        <div className="relative h-28 sm:h-32 bg-gradient-to-r from-[#800020] via-[#5B0E2D] to-[#1A0B2E] p-4 flex items-start justify-between shrink-0">
+        {/* Top Header Banner */}
+        <div className="relative h-24 sm:h-28 bg-gradient-to-r from-[#800020] via-[#5B0E2D] to-[#1A0B2E] p-4 flex items-start justify-between shrink-0">
           <div className="px-3 py-1 rounded-full bg-black/40 backdrop-blur-sm border border-white/20 text-[10px] sm:text-xs font-bold tracking-wider uppercase text-white shadow">
-            {rankTitle} ({points.toLocaleString()} PTS)
+            GATEWAY BELIEVER PROFILE
           </div>
 
           <button
@@ -195,30 +197,6 @@ export const ProfileBadgesModal: React.FC<ProfileBadgesModalProps> = ({
           {activeTab === 'overview' && (
             <div className="space-y-4">
               
-              {/* Rank Status Card */}
-              <div className="bg-[#00172e] border border-white/10 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">
-                    GATEWAY RANK STATUS
-                  </span>
-                  <span className="text-xs font-bold text-white font-mono">
-                    {points.toLocaleString()} Points
-                  </span>
-                </div>
-
-                <div className="w-full bg-white/10 rounded-full h-2.5 overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-[#D4AF37] via-amber-300 to-yellow-500 rounded-full"
-                    style={{ width: `${Math.min(100, (points / 5000) * 100)}%` }}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-white/60">
-                  <span>Goal: 5,000 pts</span>
-                  <span className="text-emerald-400 font-bold">Milestone Unlocked! 🚀</span>
-                </div>
-              </div>
-
               {/* Created By Innovative Technology Card */}
               <div className="bg-[#00172e] border border-purple-500/30 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-md">
                 <div className="space-y-0.5">
@@ -229,7 +207,7 @@ export const ProfileBadgesModal: React.FC<ProfileBadgesModalProps> = ({
                     <VerifiedBadge type="blue" size="xs" />
                   </div>
                   <p className="text-[11px] text-white/60">
-                    Developer: @mr_juice7 • 0780699988
+                    Developer: @mr_juice7
                   </p>
                 </div>
 
@@ -263,7 +241,60 @@ export const ProfileBadgesModal: React.FC<ProfileBadgesModalProps> = ({
                 />
               </div>
 
-              {/* Users List with Realistic Follower Count */}
+              {/* Instagram-Style "Suggested For You" Recommendations */}
+              {!searchQuery && recommendedUsers.length > 0 && (
+                <div className="bg-[#00172e]/60 border border-white/10 rounded-2xl p-3 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs px-1">
+                    <span className="font-bold text-white/90 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
+                      Suggested For You
+                    </span>
+                    <span className="text-[10px] text-white/40">Gateway Network</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {recommendedUsers.map(rec => (
+                      <div key={rec.id} className="bg-[#001222] border border-white/10 rounded-xl p-2.5 flex flex-col items-center text-center relative group">
+                        <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-800 border border-white/15 mb-1.5">
+                          {rec.avatar_url ? (
+                            <img src={rec.avatar_url} alt={rec.full_name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-[#D4AF37] font-bold text-xs">
+                              {rec.full_name[0]}
+                            </div>
+                          )}
+                        </div>
+                        <h5 className="text-xs font-bold text-white truncate w-full">{rec.full_name}</h5>
+                        <p className="text-[10px] text-white/50 truncate w-full font-mono">{rec.handle || `@${rec.full_name.toLowerCase().replace(/\s+/g, '_')}`}</p>
+                        <div className="flex items-center gap-1 mt-2 w-full">
+                          <button
+                            onClick={() => handleToggleFollow(rec.id)}
+                            className="flex-1 py-1 rounded-lg bg-[#D4AF37] text-[#001F3F] font-bold text-[10px] hover:bg-amber-400 transition-colors"
+                          >
+                            Follow
+                          </button>
+                          <button
+                            onClick={() => {
+                              onClose();
+                              if (onOpenDirectChat) {
+                                onOpenDirectChat(rec.id);
+                              } else if (rec.role === 'developer' && onOpenChatDev) {
+                                onOpenChatDev();
+                              }
+                            }}
+                            title={`Chat with ${rec.full_name}`}
+                            className="p-1 rounded-lg bg-blue-600/20 text-blue-300 hover:bg-blue-600/40 transition-colors"
+                          >
+                            <MessageSquare className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Users List with Realistic Follower Count & Chat on ALL Accounts */}
               <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                 {filteredUsers.map(user => {
                   const isFollowing = followingList.includes(user.id);
@@ -300,18 +331,21 @@ export const ProfileBadgesModal: React.FC<ProfileBadgesModalProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {user.role === 'developer' && onOpenChatDev && (
-                          <button
-                            onClick={() => {
-                              onClose();
+                        {/* Chat button for ALL accounts as requested */}
+                        <button
+                          onClick={() => {
+                            onClose();
+                            if (onOpenDirectChat) {
+                              onOpenDirectChat(user.id);
+                            } else if (user.role === 'developer' && onOpenChatDev) {
                               onOpenChatDev();
-                            }}
-                            title="Chat with Dev"
-                            className="p-2 rounded-xl bg-purple-600/20 text-purple-300 hover:bg-purple-600/40 transition-colors"
-                          >
-                            <MessageSquare className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                            }
+                          }}
+                          title={`Chat with ${user.full_name}`}
+                          className="p-2 rounded-xl bg-blue-600/20 text-blue-300 hover:bg-blue-600/40 transition-colors"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                        </button>
 
                         <button
                           onClick={() => handleToggleFollow(user.id)}

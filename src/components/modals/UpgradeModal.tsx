@@ -114,7 +114,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             <div className="space-y-1">
               <h4 className="text-base font-bold text-white">Membership Upgraded!</h4>
               <p className="text-xs text-white/70 max-w-xs mx-auto">
-                Your partnership status is now active with the verified rosette badge and instant offline streaming privileges.
+                Your partnership status is now active with the verified rosette badge and offline streaming privileges.
               </p>
             </div>
             <button
@@ -171,7 +171,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             {/* Payment Guarantee Notice */}
             <div className="p-2.5 bg-[#001122] rounded-xl border border-white/10 flex items-center gap-2 text-[11px] text-white/60">
               <ShieldCheck className="w-4 h-4 text-[#D4AF37] shrink-0" />
-              <span>Supports EcoCash, Paynow Zimbabwe, and International Cards. Instant activation.</span>
+              <span>Supports EcoCash, Paynow Zimbabwe, and International Cards with secure confirmation.</span>
             </div>
 
             {/* Action CTA */}

@@ -11,6 +11,7 @@ import {
   Plus, 
   Search, 
   Check, 
+  Copy,
   X, 
   Edit3, 
   Download, 
@@ -34,7 +35,10 @@ import {
   ExternalLink,
   ChevronRight,
   ChevronDown,
-  ShieldAlert
+  ShieldAlert,
+  MapPin,
+  Tv,
+  Play
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -49,16 +53,22 @@ import {
   Product,
   JoeVibesSubmission,
   PushNotification,
-  ServiceBooking
+  ServiceBooking,
+  Testimony,
+  CongregationUnit,
+  StreamViewer,
+  StreamAttendanceRecord,
+  SUPPORTED_CITIES
 } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { downloadCsvForExcel } from '../../utils/exportUtils';
 
 interface AdminPanelProps {
   onClose: () => void;
   onRefreshAppState: () => void;
 }
 
-type AdminSection = 'overview' | 'broadcast' | 'inventory' | 'members' | 'prayers' | 'push' | 'finances' | 'vibes';
+type AdminSection = 'overview' | 'congregations' | 'stream_attendees' | 'broadcast' | 'content_moderation' | 'inventory' | 'members' | 'prayers' | 'push' | 'finances' | 'vibes';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppState }) => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
@@ -66,6 +76,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   // App data states
   const [users, setUsers] = useState<User[]>(StorageService.getAllUsers());
   const [sermons, setSermons] = useState<Sermon[]>(StorageService.getSermons());
+  const [congregationUnits, setCongregationUnits] = useState<CongregationUnit[]>(StorageService.getCongregationUnits());
+  const [streamViewers, setStreamViewers] = useState<StreamViewer[]>(StorageService.getStreamViewers());
+  const [streamAttendees, setStreamAttendees] = useState<StreamAttendanceRecord[]>(StorageService.getStreamAttendanceHistory());
+  const [attendeeCityFilter, setAttendeeCityFilter] = useState<string>('All');
+  const [attendeeSearch, setAttendeeSearch] = useState<string>('');
+  const [copiedAttendeeData, setCopiedAttendeeData] = useState<boolean>(false);
+  const [liveSermonStatus, setLiveSermonStatus] = useState(StorageService.getLiveSermonStatus());
+  const [adminStreamUrl, setAdminStreamUrl] = useState<string>(liveSermonStatus.streamUrl || 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP');
+  const [showAdminStreamPreview, setShowAdminStreamPreview] = useState<boolean>(false);
   const [products, setProducts] = useState<Product[]>(StorageService.getProducts());
   const [donations, setDonations] = useState<Donation[]>(StorageService.getDonations());
   const [prayers, setPrayers] = useState<PrayerRequest[]>(StorageService.getPrayerRequests());
@@ -73,6 +92,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   const [orders, setOrders] = useState<Order[]>(StorageService.getOrders());
   const [joeVibes, setJoeVibes] = useState<JoeVibesSubmission[]>(StorageService.getJoeVibes());
   const [notifications, setNotifications] = useState<PushNotification[]>(StorageService.getPushNotifications());
+
+  // Content Moderation States (Bans, Appeals, and Password Recovery are now exclusively in Dev Console)
+  const [testimonies, setTestimonies] = useState<Testimony[]>(StorageService.getTestimonies());
+  const [moderationMessage, setModerationMessage] = useState<string | null>(null);
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -133,6 +156,52 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   const handleUpdateRole = (userId: string, newRole: UserRole) => {
     StorageService.updateUserRole(userId, newRole);
     setUsers(StorageService.getAllUsers());
+    onRefreshAppState();
+  };
+
+  // Stream Attendees & Pastoral Follow-Up Export
+  const handleExportStreamAttendees = () => {
+    const list = StorageService.getStreamAttendanceHistory();
+    const csvHeader = 'Name,Phone,Handle,City,Joined At,Status,Session Title\n';
+    const csvRows = list.map(a => `"${a.user_name}","${a.user_phone}","${a.user_handle}","${a.city}","${a.joined_at}","${a.status}","${a.session_title}"`).join('\n');
+    const csvContent = csvHeader + csvRows;
+    
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(csvContent);
+      setCopiedAttendeeData(true);
+      setTimeout(() => setCopiedAttendeeData(false), 3000);
+    }
+    setModerationMessage(`Successfully copied ${list.length} attendee contact records to database export buffer.`);
+    confetti({ particleCount: 25, spread: 50 });
+  };
+
+  const handleDownloadStreamAttendeesExcel = () => {
+    const list = StorageService.getStreamAttendanceHistory();
+    const csvHeader = 'Name,Phone,Handle,City,Joined At,Status,Session Title\n';
+    const csvRows = list.map(a => `"${a.user_name}","${a.user_phone}","${a.user_handle}","${a.city}","${a.joined_at}","${a.status}","${a.session_title}"`).join('\n');
+    const csvContent = csvHeader + csvRows;
+    downloadCsvForExcel(`gateway_connect_stream_attendees_${new Date().toISOString().slice(0, 10)}.csv`, csvContent);
+    setModerationMessage(`Downloaded ${list.length} attendee records as Excel CSV file.`);
+    confetti({ particleCount: 30, spread: 60 });
+  };
+
+  const handleDownloadMembersExcel = () => {
+    const userList = StorageService.getAllUsers();
+    const csvHeader = 'Member ID,Full Name,Phone,Handle,Role,Cell Group,Verified,Premium,Joined Date\n';
+    const csvRows = userList.map(u => 
+      `"${u.member_id || u.id}","${u.full_name}","${u.phone}","${u.handle}","${u.role}","${u.cell_group || 'Harare Central'}","${u.is_verified ? 'Yes' : 'No'}","${u.is_premium ? 'Yes' : 'No'}","${u.created_at || '2026-01-01'}"`
+    ).join('\n');
+    const csvContent = csvHeader + csvRows;
+    downloadCsvForExcel(`gateway_connect_registered_members_${new Date().toISOString().slice(0, 10)}.csv`, csvContent);
+    setModerationMessage(`Downloaded ${userList.length} registered member records as Excel CSV file.`);
+    confetti({ particleCount: 30, spread: 60 });
+  };
+
+  const handleDeleteCommunityPost = (postId: string) => {
+    if (!window.confirm('Delete this community post/testimony permanently from the feed?')) return;
+    StorageService.deleteTestimony(postId);
+    setTestimonies(StorageService.getTestimonies());
+    setModerationMessage('Post removed by Moderator.');
     onRefreshAppState();
   };
 
@@ -290,6 +359,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
             >
               {[
                 { id: 'overview', label: '📊 Dashboard KPI' },
+                { id: 'congregations', label: `⛪ Congregations & Streaming (${congregationUnits.filter(c => c.is_congregation).length} Hubs)` },
+                { id: 'stream_attendees', label: `📡 Streamers & Attendees (${streamAttendees.length} Logged)` },
+                { id: 'content_moderation', label: `🛡️ Community Post Moderation (${testimonies.length} Posts)` },
                 { id: 'broadcast', label: '🔴 Sermon & Live Stream' },
                 { id: 'inventory', label: '📦 Store & Inventory' },
                 { id: 'push', label: '🔔 Push Broadcasts' },
@@ -315,6 +387,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
 
           {[
             { id: 'overview', label: 'Dashboard KPI', icon: Activity, badge: null },
+            { id: 'congregations', label: 'Congregations & Stream', icon: Tv, badge: `${congregationUnits.filter(c => c.is_congregation).length} Hubs` },
+            { id: 'stream_attendees', label: 'Stream Attendees Log', icon: Users, badge: `${streamAttendees.length}` },
+            { id: 'content_moderation', label: 'Post Moderation', icon: Trash2, badge: `${testimonies.length}` },
             { id: 'broadcast', label: 'Sermon & Live Stream', icon: Radio, badge: 'Live' },
             { id: 'inventory', label: 'Store & Inventory', icon: Package, badge: products.length },
             { id: 'push', label: 'Push Broadcasts', icon: Bell, badge: notifications.length },
@@ -357,6 +432,139 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
           {/* SECTION 1: DASHBOARD OVERVIEW */}
           {activeSection === 'overview' && (
             <div className="space-y-4">
+              {/* Notification Banner if action was recently taken */}
+              {moderationMessage && (
+                <div className="p-3.5 bg-[#D4AF37]/15 border border-[#D4AF37]/40 rounded-2xl flex items-center justify-between text-xs text-[#D4AF37] font-semibold animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 shrink-0" />
+                    <span>{moderationMessage}</span>
+                  </div>
+                  <button onClick={() => setModerationMessage(null)} className="text-white/60 hover:text-white">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* Administrative Security & Moderation Hub (Direct Access to Requested Features) */}
+              <div className="bg-gradient-to-r from-[#00172e] via-[#001F3F] to-[#00172e] border-2 border-[#D4AF37]/50 rounded-2xl p-4 shadow-xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-[#D4AF37]/20 border border-[#D4AF37]/40 flex items-center justify-center text-[#D4AF37]">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>Lead Administrator & Moderation Hub</span>
+                        <span className="px-2 py-0.5 rounded-full bg-[#D4AF37] text-[#001F3F] text-[10px] font-black uppercase">
+                          Ecclesiastical Hub
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-white/60">
+                        Pastoral control center for congregation live hubs, stream viewers registry, community post moderation, and altar services.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-mono text-[#D4AF37]">
+                    Active Status: Connected
+                  </span>
+                </div>
+
+                {/* 4 Feature Shortcut Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                  {/* Feature 1: Congregations & Streaming */}
+                  <div 
+                    onClick={() => setActiveSection('congregations')}
+                    className="p-3 rounded-xl bg-[#001122]/90 border border-[#D4AF37]/30 hover:border-[#D4AF37]/60 cursor-pointer transition-all hover:scale-[1.02] group"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-bold text-[#D4AF37] flex items-center gap-1.5">
+                        <Tv className="w-3.5 h-3.5" />
+                        <span>Congregation Hubs</span>
+                      </span>
+                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[#D4AF37]/20 text-[#D4AF37]">
+                        {congregationUnits.filter(c => c.is_congregation).length} Formed
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-white/60 line-clamp-2 mb-2">
+                      Groups active streamers by cities. 10+ active streamers form an official Congregation.
+                    </p>
+                    <span className="text-[11px] font-bold text-[#D4AF37] group-hover:underline flex items-center gap-1">
+                      <span>View Live Hubs</span>
+                      <ChevronRight className="w-3 h-3" />
+                    </span>
+                  </div>
+
+                  {/* Feature 2: Streamers & Attendees Registry */}
+                  <div 
+                    onClick={() => setActiveSection('stream_attendees')}
+                    className="p-3 rounded-xl bg-[#001122]/90 border border-blue-500/30 hover:border-blue-500/60 cursor-pointer transition-all hover:scale-[1.02] group"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-bold text-blue-300 flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5" />
+                        <span>Streamers Registry</span>
+                      </span>
+                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">
+                        {streamAttendees.length} Logged
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-white/60 line-clamp-2 mb-2">
+                      See who streamed, city location, contact details & export to database.
+                    </p>
+                    <span className="text-[11px] font-bold text-[#D4AF37] group-hover:underline flex items-center gap-1">
+                      <span>Attendee Records</span>
+                      <ChevronRight className="w-3 h-3" />
+                    </span>
+                  </div>
+
+                  {/* Feature 3: Community Content Moderation */}
+                  <div 
+                    onClick={() => setActiveSection('content_moderation')}
+                    className="p-3 rounded-xl bg-[#001122]/90 border border-emerald-500/30 hover:border-emerald-500/60 cursor-pointer transition-all hover:scale-[1.02] group"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Post Moderation</span>
+                      </span>
+                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
+                        {testimonies.length} Posts
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-white/60 line-clamp-2 mb-2">
+                      Moderate believers feed: delete abusive or non-edifying testimonies with 1 click.
+                    </p>
+                    <span className="text-[11px] font-bold text-[#D4AF37] group-hover:underline flex items-center gap-1">
+                      <span>Moderate Feed</span>
+                      <ChevronRight className="w-3 h-3" />
+                    </span>
+                  </div>
+
+                  {/* Feature 4: Broadcast & Pulpit Sync */}
+                  <div 
+                    onClick={() => setActiveSection('broadcast')}
+                    className="p-3 rounded-xl bg-[#001122]/90 border border-purple-500/30 hover:border-purple-500/60 cursor-pointer transition-all hover:scale-[1.02] group"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-bold text-purple-300 flex items-center gap-1.5">
+                        <Radio className="w-3.5 h-3.5" />
+                        <span>Sermon Broadcast</span>
+                      </span>
+                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">
+                        {liveSermonStatus.isLive ? 'Active' : 'Offline'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-white/60 line-clamp-2 mb-2">
+                      Start apostolic video stream and live-sync scriptures across member devices.
+                    </p>
+                    <span className="text-[11px] font-bold text-[#D4AF37] group-hover:underline flex items-center gap-1">
+                      <span>Launch Pulpit</span>
+                      <ChevronRight className="w-3 h-3" />
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               {/* KPI Summary Cards */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-3.5 shadow-sm">
@@ -413,7 +621,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                       <span>Live Pulpit Scripture Synchronizer</span>
                     </h3>
                     <p className="text-xs text-white/70">
-                      Instantly push today's sermon scripture to all connected congregation devices in real-time.
+                      Push today's sermon scripture to all connected congregation devices in real-time.
                     </p>
                   </div>
 
@@ -656,25 +864,410 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
 
               {/* Existing Sermons List */}
               <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-4 shadow-sm space-y-3">
-                <h4 className="font-bold text-xs text-white uppercase tracking-wider">
-                  Active Sermon Archive ({sermons.length})
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-xs text-white uppercase tracking-wider">
+                    Active Sermon Archive ({sermons.length})
+                  </h4>
+                  <span className="text-[11px] text-[#D4AF37]">
+                    Tap any video below to swap it to top & play
+                  </span>
+                </div>
                 <div className="space-y-2">
-                  {sermons.map(s => (
-                    <div key={s.id} className="bg-[#001122]/60 border border-white/5 rounded-xl p-3 flex items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-3">
-                        <img src={s.thumbnail_url} alt={s.title} className="w-14 h-10 rounded-lg object-cover border border-white/10 shrink-0" />
-                        <div>
-                          <div className="font-bold text-white">{s.title}</div>
-                          <div className="text-[11px] text-white/60">{s.series} • {s.speaker} • {s.date}</div>
+                  {sermons.map(s => {
+                    const isCurrentTop = extractYoutubeId(sermonYoutubeInput) === s.youtube_id;
+                    return (
+                      <div
+                        key={s.id}
+                        onClick={() => {
+                          setSermonYoutubeInput(`https://www.youtube.com/watch?v=${s.youtube_id}`);
+                          setSermonTitle(s.title);
+                          setSermonSeries(s.series || 'Apostolic Impartation');
+                          setSermonScripture(s.scriptures?.[0] || 'Isaiah 60:1');
+                          setSermonThumbnail(s.thumbnail_url);
+                          if (s.description) setSermonDesc(s.description);
+                          StorageService.setLiveStreamUrl(`https://www.youtube.com/watch?v=${s.youtube_id}`);
+                          onRefreshAppState();
+                          confetti({ particleCount: 20, spread: 60 });
+                        }}
+                        className={`border rounded-xl p-3 flex items-center justify-between gap-3 text-xs cursor-pointer transition-all ${
+                          isCurrentTop
+                            ? 'bg-[#001933] border-[#D4AF37] ring-1 ring-[#D4AF37]/50 shadow-md'
+                            : 'bg-[#001122]/60 hover:bg-[#001122] border-white/5 hover:border-white/20'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="relative w-16 h-11 rounded-lg overflow-hidden border border-white/10 shrink-0">
+                            <img src={s.thumbnail_url} alt={s.title} className="w-full h-full object-cover" />
+                            {isCurrentTop && (
+                              <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                <span className="w-2.5 h-2.5 rounded-full bg-[#D4AF37] animate-ping" />
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-bold text-white flex items-center gap-2">
+                              <span>{s.title}</span>
+                              {isCurrentTop && (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#D4AF37] text-[#001F3F] font-black uppercase tracking-wider">
+                                  Playing on Top
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-white/60">{s.series} • {s.speaker} • {s.date}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all ${
+                              isCurrentTop
+                                ? 'bg-[#D4AF37] text-[#001F3F]'
+                                : 'bg-white/10 hover:bg-[#D4AF37] text-white hover:text-[#001F3F]'
+                            }`}
+                          >
+                            <Play className="w-3 h-3" />
+                            <span>{isCurrentTop ? 'Now Playing' : 'Play on Top'}</span>
+                          </button>
                         </div>
                       </div>
-                      <span className="text-[11px] font-mono text-[#D4AF37] px-2 py-1 rounded bg-[#D4AF37]/10">
-                        {s.youtube_id}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 2: CONGREGATIONS & LIVE STREAM MONITOR */}
+          {activeSection === 'congregations' && (
+            <div className="space-y-4">
+              {/* Broadcast Status & Live Trigger Card */}
+              <div className="bg-[#001F3F] border border-[#D4AF37]/40 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2.5 h-2.5 rounded-full ${liveSermonStatus.isLive ? 'bg-red-500 animate-ping' : 'bg-white/30'}`} />
+                      <h3 className="font-bold text-sm text-[#D4AF37]">
+                        Live Sanctuary Streaming
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const newStatus = {
+                          isLive: !liveSermonStatus.isLive,
+                          title: 'Church & Politics (Controversial Issues) • Apostle Joe Daniels Live',
+                          sermonId: 'sermon_church_politics',
+                          viewerCount: liveSermonStatus.isLive ? 0 : 1429,
+                          streamUrl: adminStreamUrl.trim()
+                        };
+                        StorageService.setLiveSermonStatus(newStatus);
+                        setLiveSermonStatus(newStatus);
+                        setCongregationUnits(StorageService.getCongregationUnits());
+                        setStreamViewers(StorageService.getStreamViewers());
+                        confetti({ particleCount: 25, spread: 50 });
+                        onRefreshAppState();
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm ${
+                        liveSermonStatus.isLive
+                          ? 'bg-red-600 hover:bg-red-500 text-white animate-pulse'
+                          : 'bg-[#D4AF37] hover:bg-[#C59B27] text-[#001F3F]'
+                      }`}
+                    >
+                      <Radio className="w-3.5 h-3.5" />
+                      <span>{liveSermonStatus.isLive ? 'End Live' : 'Go Live'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Live Stream URL Configuration */}
+                <div className="bg-[#001122] border border-white/10 rounded-xl p-3 space-y-2.5">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <div className="flex-1">
+                      <input
+                        type="url"
+                        value={adminStreamUrl}
+                        onChange={(e) => setAdminStreamUrl(e.target.value)}
+                        placeholder="Paste Facebook Live or YouTube URL..."
+                        className="w-full bg-[#001A33] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#D4AF37]"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setShowAdminStreamPreview(!showAdminStreamPreview)}
+                        className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors flex items-center gap-1 ${
+                          showAdminStreamPreview 
+                            ? 'bg-[#D4AF37]/20 border-[#D4AF37] text-[#D4AF37]' 
+                            : 'bg-white/5 hover:bg-white/10 border-white/15 text-white/80'
+                        }`}
+                        title="Toggle preview"
+                      >
+                        <Tv className="w-3.5 h-3.5" />
+                        <span>{showAdminStreamPreview ? 'Hide' : 'Preview'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const cleanUrl = adminStreamUrl.trim();
+                          const newStatus = {
+                            ...liveSermonStatus,
+                            streamUrl: cleanUrl
+                          };
+                          StorageService.setLiveStreamUrl(cleanUrl);
+                          StorageService.setLiveSermonStatus(newStatus);
+                          setLiveSermonStatus(newStatus);
+                          confetti({ particleCount: 20, spread: 40 });
+                        }}
+                        className="px-3 py-1.5 bg-[#D4AF37] hover:bg-[#C59B27] text-[#001F3F] text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shadow-sm"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Save</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Quick Preset Links */}
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                    <span className="text-white/40 text-[10px] font-medium">Quick Presets:</span>
+                    <button
+                      type="button"
+                      onClick={() => setAdminStreamUrl('https://www.facebook.com/ApostleJoeDaniels/live')}
+                      className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 transition-colors text-[11px]"
+                    >
+                      Facebook Live
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminStreamUrl('https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP')}
+                      className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 transition-colors text-[11px]"
+                    >
+                      YouTube Live
+                    </button>
+                  </div>
+
+                  {/* Admin Stream Preview Player */}
+                  {showAdminStreamPreview && (
+                    <div className="pt-2 border-t border-white/10 animate-in fade-in duration-200">
+                      <div className="text-[11px] font-bold text-white/70 mb-2 flex items-center justify-between">
+                        <span>Admin Live Stream Preview (How members see it):</span>
+                        {StorageService.isFacebookUrl(adminStreamUrl) && (
+                          <a
+                            href={StorageService.getStreamEmbedInfo(adminStreamUrl).facebookDirectUrl || adminStreamUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#1877F2] hover:underline flex items-center gap-1"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Open on Facebook</span>
+                          </a>
+                        )}
+                      </div>
+                      <div className="aspect-video w-full max-w-lg mx-auto bg-black rounded-xl overflow-hidden border border-white/20 shadow-2xl relative">
+                        {StorageService.isFacebookUrl(adminStreamUrl) ? (
+                          <iframe
+                            className="w-full h-full border-0"
+                            src={StorageService.getStreamEmbedInfo(adminStreamUrl).embedUrl}
+                            title="Facebook Live Admin Preview"
+                            style={{ border: 'none', overflow: 'hidden' }}
+                            scrolling="no"
+                            allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                            allowFullScreen
+                          />
+                        ) : (
+                          <iframe
+                            className="w-full h-full border-0"
+                            src={StorageService.getStreamEmbedInfo(adminStreamUrl).embedUrl}
+                            title="YouTube Stream Admin Preview"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 4 Summary Stats */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-[#001122] border border-white/10 rounded-xl p-3">
+                    <div className="text-[10px] text-white/50 uppercase font-bold">Broadcast Mode</div>
+                    <div className={`text-sm font-black mt-1 ${liveSermonStatus.isLive ? 'text-red-400' : 'text-white/60'}`}>
+                      {liveSermonStatus.isLive ? '🔴 BROADCASTING LIVE' : 'Standby / Scheduled'}
+                    </div>
+                  </div>
+
+                  <div className="bg-[#001122] border border-white/10 rounded-xl p-3">
+                    <div className="text-[10px] text-white/50 uppercase font-bold">Active Live Streamers</div>
+                    <div className="text-lg font-black text-white mt-0.5 flex items-center gap-1">
+                      <Users className="w-4 h-4 text-[#D4AF37]" />
+                      <span>{streamViewers.length + (liveSermonStatus.isLive ? 42 : 0)} Believers</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#001122] border border-white/10 rounded-xl p-3">
+                    <div className="text-[10px] text-white/50 uppercase font-bold">Official Congregations (10+)</div>
+                    <div className="text-lg font-black text-emerald-400 mt-0.5 flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span>{congregationUnits.filter(c => c.is_congregation).length} Congregations</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#001122] border border-white/10 rounded-xl p-3">
+                    <div className="text-[10px] text-white/50 uppercase font-bold">Cities Connected</div>
+                    <div className="text-lg font-black text-[#D4AF37] mt-0.5 flex items-center gap-1">
+                      <MapPin className="w-4 h-4 text-[#D4AF37]" />
+                      <span>{congregationUnits.filter(c => c.total_members > 0 || c.active_streamers > 0).length} Hubs</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Congregation Hubs Grid (12 Defined Cities Clustering) */}
+              <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-4 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-white/80 flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-[#D4AF37]" />
+                    <span>City Congregation Hubs (10+ Rule Enforced)</span>
+                  </h4>
+                  <span className="text-[11px] text-white/50">
+                    Auto-grouped from member registration locations
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {congregationUnits.map((hub) => {
+                    const progressPercent = Math.min(100, Math.round((hub.total_members / 10) * 100));
+                    return (
+                      <div
+                        key={hub.city}
+                        className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between ${
+                          hub.is_congregation
+                            ? 'bg-gradient-to-b from-[#002A4A] to-[#00172D] border-[#D4AF37]/60 shadow-md'
+                            : 'bg-[#001122]/60 border-white/10 hover:border-white/20'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-bold text-sm text-white">{hub.city}</span>
+                            {hub.is_congregation ? (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/40 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Official Congregation</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-semibold border border-amber-500/30">
+                                {10 - hub.total_members} more to reach 10
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
+                            <div className="bg-black/30 rounded-lg p-2 border border-white/5">
+                              <span className="text-[10px] text-white/50 block">Registered Believers</span>
+                              <span className="font-bold text-white text-sm">{hub.total_members}</span>
+                            </div>
+                            <div className="bg-black/30 rounded-lg p-2 border border-white/5">
+                              <span className="text-[10px] text-white/50 block">Active Streamers</span>
+                              <span className="font-bold text-emerald-400 text-sm flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                                {hub.active_streamers}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Progress Bar to 10 believers */}
+                          {!hub.is_congregation && (
+                            <div className="mt-2.5">
+                              <div className="flex justify-between text-[10px] text-white/50 mb-1">
+                                <span>Congregation Threshold</span>
+                                <span>{hub.total_members}/10</span>
+                              </div>
+                              <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                                <div
+                                  className="bg-[#D4AF37] h-full rounded-full transition-all duration-500"
+                                  style={{ width: `${progressPercent}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {hub.is_congregation && (
+                          <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between text-[11px] text-[#D4AF37]">
+                            <span className="font-semibold">Sanctuary Fellowship Active</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#D4AF37]/20 font-bold">
+                              Tier 1 Altar
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Real-time Streaming Viewers Table */}
+              <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-4 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-white/80 flex items-center gap-1.5">
+                    <Radio className="w-4 h-4 text-red-500" />
+                    <span>Real-Time Live Service Viewers</span>
+                  </h4>
+                  <span className="text-[11px] text-white/50 font-mono">
+                    Updated every 3 seconds
+                  </span>
+                </div>
+
+                {streamViewers.length === 0 ? (
+                  <div className="p-6 bg-[#001122]/60 rounded-xl text-center text-xs text-white/50">
+                    No viewers currently connected. Viewers automatically populate when church members join the live sermon broadcast.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-white/10 text-white/50 text-[10px] uppercase">
+                          <th className="pb-2">Believer Name</th>
+                          <th className="pb-2">City Location Hub</th>
+                          <th className="pb-2">Congregation Status</th>
+                          <th className="pb-2">Connected At</th>
+                          <th className="pb-2 text-right">Sanctuary Link</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {streamViewers.map((viewer, idx) => (
+                          <tr key={`${viewer.user_id}_${idx}`} className="hover:bg-white/5 transition-colors">
+                            <td className="py-2.5 font-bold text-white flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+                              <span>{viewer.user_name}</span>
+                            </td>
+                            <td className="py-2.5 text-white/80">
+                              <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[11px]">
+                                {viewer.city}
+                              </span>
+                            </td>
+                            <td className="py-2.5">
+                              <span className="text-[10px] text-emerald-400 font-semibold">
+                                ✓ Counted toward {viewer.city} congregation
+                              </span>
+                            </td>
+                            <td className="py-2.5 text-white/50 font-mono text-[11px]">
+                              {new Date(viewer.joined_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                            <td className="py-2.5 text-right">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                Live Ingest
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -808,15 +1401,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                   </p>
                 </div>
 
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-white/40" />
-                  <input
-                    type="text"
-                    placeholder="Search by name, phone, or role..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    className="pl-8 pr-3 py-1.5 bg-[#001122] border border-white/15 rounded-xl text-xs text-white focus:border-[#D4AF37] outline-none w-56"
-                  />
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-white/40" />
+                    <input
+                      type="text"
+                      placeholder="Search by name, phone, or role..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className="pl-8 pr-3 py-1.5 bg-[#001122] border border-white/15 rounded-xl text-xs text-white focus:border-[#D4AF37] outline-none w-44 sm:w-56"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDownloadMembersExcel}
+                    className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0"
+                    title="Download Members as Excel CSV"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Excel</span>
+                  </button>
                 </div>
               </div>
 
@@ -883,6 +1487,274 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
             </div>
           )}
 
+          {/* SECTION: CONGREGATION STREAMERS & ATTENDEES REGISTRY */}
+          {activeSection === 'stream_attendees' && (
+            <div className="space-y-4">
+              {/* Header & Export */}
+              <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-sm text-[#D4AF37] flex items-center gap-2">
+                    <Users className="w-4 h-4 text-blue-400" />
+                    <span>Congregation Streamers & Attendees Registry</span>
+                  </h3>
+                  <p className="text-xs text-white/70">
+                    Real-time and historic record of members streaming sermons, their city locations, and phone contact details for database retention and pastoral follow-up.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleDownloadStreamAttendeesExcel}
+                    className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                    title="Download attendees as Excel CSV"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Excel</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportStreamAttendees}
+                    className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center gap-1.5 transition-all border border-white/10 cursor-pointer"
+                    title="Copy CSV to clipboard buffer"
+                  >
+                    {copiedAttendeeData ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span className="hidden md:inline">{copiedAttendeeData ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Status Counters */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-[#001F3F] border border-white/10 rounded-xl p-3">
+                  <span className="text-[11px] text-white/50 block">Total Logged Streamers</span>
+                  <span className="text-lg font-bold text-white">{streamAttendees.length}</span>
+                </div>
+                <div className="bg-[#001F3F] border border-blue-500/30 rounded-xl p-3">
+                  <span className="text-[11px] text-blue-400 block">Active Streaming Now</span>
+                  <span className="text-lg font-bold text-blue-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span>{streamViewers.length}</span>
+                  </span>
+                </div>
+                <div className="bg-[#001F3F] border border-white/10 rounded-xl p-3">
+                  <span className="text-[11px] text-[#D4AF37] block">Congregation Hubs Formed</span>
+                  <span className="text-lg font-bold text-[#D4AF37]">
+                    {congregationUnits.filter(c => c.is_congregation).length}
+                  </span>
+                </div>
+                <div className="bg-[#001F3F] border border-white/10 rounded-xl p-3">
+                  <span className="text-[11px] text-emerald-400 block">Cities Represented</span>
+                  <span className="text-lg font-bold text-emerald-400">
+                    {new Set(streamAttendees.map(a => a.city)).size}
+                  </span>
+                </div>
+              </div>
+
+              {/* Filters & Search */}
+              <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-3 flex flex-col sm:flex-row gap-2.5 items-center justify-between">
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                  <input
+                    type="text"
+                    value={attendeeSearch}
+                    onChange={(e) => setAttendeeSearch(e.target.value)}
+                    placeholder="Search by name, phone, or handle..."
+                    className="w-full bg-[#00172e] border border-white/10 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#D4AF37]"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <span className="text-[11px] text-white/50 shrink-0">Filter City:</span>
+                  <select
+                    value={attendeeCityFilter}
+                    onChange={(e) => setAttendeeCityFilter(e.target.value)}
+                    className="bg-[#00172e] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-[#D4AF37] font-semibold focus:outline-none focus:border-[#D4AF37]"
+                  >
+                    <option value="All">All Cities ({streamAttendees.length})</option>
+                    {SUPPORTED_CITIES.map(city => (
+                      <option key={city} value={city}>
+                        {city} ({streamAttendees.filter(a => a.city === city).length})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Attendees List Table */}
+              <div className="bg-[#001F3F] border border-white/10 rounded-2xl overflow-hidden shadow-sm">
+                <div className="p-3 bg-[#00172e] border-b border-white/10 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Tv className="w-4 h-4 text-[#D4AF37]" />
+                    <span className="text-xs font-bold text-white">Stream Attendees Contact & Location Database</span>
+                  </div>
+                  <span className="text-[10px] text-white/50">
+                    Recorded for congregation tracking & future follow-up
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-[#001122] text-white/50 border-b border-white/10">
+                        <th className="p-3">Believer / Attendee</th>
+                        <th className="p-3">Phone Contact</th>
+                        <th className="p-3">Location / City Hub</th>
+                        <th className="p-3">Session & Time</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3 text-right">Pastoral Contact</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {streamAttendees
+                        .filter(a => {
+                          const matchesCity = attendeeCityFilter === 'All' || a.city === attendeeCityFilter;
+                          const q = attendeeSearch.toLowerCase().trim();
+                          const matchesSearch = !q || 
+                            a.user_name.toLowerCase().includes(q) || 
+                            a.user_phone.includes(q) || 
+                            a.user_handle.toLowerCase().includes(q);
+                          return matchesCity && matchesSearch;
+                        })
+                        .map(att => {
+                          const isCurrentlyLive = streamViewers.some(v => v.user_id === att.user_id);
+                          const cleanPhone = att.user_phone.replace(/\D/g, '');
+                          const waPhone = cleanPhone.startsWith('0') ? `263${cleanPhone.slice(1)}` : cleanPhone;
+
+                          return (
+                            <tr key={att.id} className="hover:bg-white/5 transition-colors">
+                              <td className="p-3 font-semibold text-white">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center font-bold text-[11px] text-white">
+                                    {att.user_name.charAt(0)}
+                                  </div>
+                                  <div>
+                                    <span className="block">{att.user_name}</span>
+                                    <span className="text-[10px] text-white/50 font-mono">{att.user_handle}</span>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="p-3 font-mono text-white/90">
+                                <a 
+                                  href={`tel:${att.user_phone}`} 
+                                  className="text-blue-300 hover:underline flex items-center gap-1"
+                                >
+                                  {att.user_phone}
+                                </a>
+                              </td>
+
+                              <td className="p-3">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/30">
+                                  {att.city}
+                                </span>
+                              </td>
+
+                              <td className="p-3 text-white/70">
+                                <span className="block text-[11px] text-white/90 truncate max-w-[180px]">{att.session_title}</span>
+                                <span className="text-[10px] text-white/40">{new Date(att.joined_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              </td>
+
+                              <td className="p-3">
+                                {isCurrentlyLive ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 w-fit">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                    <span>Streaming Live</span>
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/10 text-white/60">
+                                    Completed
+                                  </span>
+                                )}
+                              </td>
+
+                              <td className="p-3 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <a
+                                    href={`https://wa.me/${waPhone}?text=Grace%20and%20peace%20beloved%2C%20thank%20you%20for%20fellowshipping%20with%20Gateway%20Church%20Zimbabwe!`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 transition-all"
+                                    title="Open WhatsApp chat with attendee"
+                                  >
+                                    <span>WhatsApp</span>
+                                  </a>
+                                  <a
+                                    href={`tel:${att.user_phone}`}
+                                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold transition-all"
+                                    title="Call attendee"
+                                  >
+                                    <span>Call</span>
+                                  </a>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION: COMMUNITY POST CONTENT MODERATION */}
+          {activeSection === 'content_moderation' && (
+            <div className="space-y-4">
+              <div className="bg-[#001F3F] border border-white/10 rounded-2xl overflow-hidden shadow-sm">
+                <div className="p-3.5 bg-[#00172e] border-b border-white/10 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Trash2 className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-bold text-white">Community Post Content Moderation ({testimonies.length})</span>
+                  </div>
+                  <span className="text-[10px] text-white/50">
+                    Direct deletion removes post immediately from the global community feed
+                  </span>
+                </div>
+
+                <div className="divide-y divide-white/5">
+                  {testimonies.length === 0 ? (
+                    <p className="p-4 text-xs text-white/40 italic">No community posts currently in feed.</p>
+                  ) : (
+                    testimonies.map(t => (
+                      <div key={t.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-white/5 transition-colors">
+                        <div className="flex items-start gap-3">
+                          <img src={t.user_avatar || '/assets/apostle_joe_daniels_main.jpg'} alt={t.user_name} className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/10" />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-white text-xs">{t.user_name}</span>
+                              <span className="text-[10px] text-[#D4AF37] px-1.5 py-0.2 rounded bg-[#D4AF37]/10 font-semibold">
+                                {t.category}
+                              </span>
+                              {t.scripture_tag && (
+                                <span className="text-[10px] text-white/50 font-mono">
+                                  {t.scripture_tag}
+                                </span>
+                              )}
+                            </div>
+                            <h4 className="text-xs font-semibold text-white/90 mt-0.5">{t.title}</h4>
+                            <p className="text-[11px] text-white/60 line-clamp-2 mt-0.5">{t.content}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                          <button
+                            onClick={() => handleDeleteCommunityPost(t.id)}
+                            className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white text-xs font-bold transition-all flex items-center gap-1.5"
+                            title="Delete this post from community feed"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete Post</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* SECTION 5: PUSH BROADCASTS */}
           {activeSection === 'push' && (
             <div className="space-y-4">
@@ -942,7 +1814,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                       className="px-5 py-2 rounded-xl bg-[#D4AF37] hover:bg-[#c49f2f] text-[#001F3F] font-bold text-xs flex items-center gap-1.5 shadow-md"
                     >
                       <Send className="w-3.5 h-3.5" />
-                      <span>Send Instant Push</span>
+                      <span>Send Push Broadcast</span>
                     </button>
                   </div>
                 </form>
