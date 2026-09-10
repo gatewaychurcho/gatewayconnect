@@ -246,11 +246,36 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const streamEmbedInfo = StorageService.getStreamEmbedInfo(currentStreamTarget);
   const activeVideoId = streamEmbedInfo.videoId || StorageService.extractYoutubeId(currentStreamTarget) || '-CibsaxijIk';
   const isFacebook = streamEmbedInfo.isFacebook;
-  const onlineStreamersCount = StorageService.getOnlineStreamersCount();
   const liveStreamStatus = StorageService.getLiveSermonStatus();
   const liveFeedTitle = overridePlayingVideo 
     ? overridePlayingVideo.title 
     : (liveStreamStatus.title || (isFacebook ? 'Apostle Joe Daniels - Sunday Dominion & Prophetic Broadcast (Facebook Live)' : 'Church & Politics (Controversial Issues) - Apostle Joe Daniels (YouTube Live)'));
+
+  const [onlineStreamersCount, setOnlineStreamersCount] = useState<number>(StorageService.getOnlineStreamersCount());
+
+  useEffect(() => {
+    const handleStreamersUpdated = () => {
+      setOnlineStreamersCount(StorageService.getOnlineStreamersCount());
+    };
+    window.addEventListener('gcz_stream_viewers_updated', handleStreamersUpdated);
+
+    // 10+ seconds watch requirement: record streamer with login details
+    let watchTimer: any = null;
+    if (isPlaying && currentUser && currentUser.id !== 'guest') {
+      watchTimer = setTimeout(() => {
+        StorageService.recordStreamer(currentUser, liveFeedTitle);
+        setOnlineStreamersCount(StorageService.getOnlineStreamersCount());
+      }, 10000);
+    }
+
+    return () => {
+      window.removeEventListener('gcz_stream_viewers_updated', handleStreamersUpdated);
+      if (watchTimer) clearTimeout(watchTimer);
+      if (currentUser?.id && currentUser.id !== 'guest') {
+        StorageService.leaveLiveStream(currentUser.id);
+      }
+    };
+  }, [isPlaying, currentUser?.id, liveFeedTitle]);
 
   return (
     <div className="space-y-6 pb-24 max-w-4xl mx-auto px-2 sm:px-4 pt-1">

@@ -50,7 +50,8 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
   const [selectedChapter, setSelectedChapter] = useState<number>(23);
   const [targetVerse, setTargetVerse] = useState<number | null>(null);
   const [version, setVersion] = useState<BibleVersion>('KJV');
-  const [hasSelectedBook, setHasSelectedBook] = useState<boolean>(true);
+  // Keep the Bible closed by default. Open only when requested to keep the UI neat and clean.
+  const [hasSelectedBook, setHasSelectedBook] = useState<boolean>(Boolean(initialReference));
   
   // JW-style navigation modal state
   const [showNavModal, setShowNavModal] = useState<boolean>(false);
@@ -131,6 +132,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
         } else {
           setTargetVerse(1);
         }
+        setHasSelectedBook(true);
         return true;
       }
     }
@@ -724,7 +726,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                   onClick={() => setHasSelectedBook(false)}
                   className="px-2.5 py-1.5 rounded-xl bg-[#001122] hover:bg-[#D4AF37] text-[#D4AF37] hover:text-[#001F3F] border border-[#D4AF37]/40 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
                 >
-                  <span>← Choose Another Book</span>
+                  <span>← Close Bible / Choose Book</span>
                 </button>
                 <div>
                   <h2 className={`text-xl sm:text-2xl font-bold text-[#D4AF37] ${fontFamily === 'serif' ? 'font-serif-church' : 'font-sans'}`}>

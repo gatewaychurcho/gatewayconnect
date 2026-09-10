@@ -392,6 +392,8 @@ export interface DirectMessage {
   deleted_for_everyone?: boolean;
   deleted_for_users?: string[];
   reactions?: MessageReaction[];
+  media_url?: string;
+  media_type?: 'image' | 'video' | 'audio';
 }
 
 export const SUPPORTED_CITIES = [
@@ -441,6 +443,8 @@ export interface LiveStreamViewer {
   city: SupportedCity | string;
   avatar_url?: string;
   device?: string;
+  login_details?: string;
+  is_active?: boolean;
   joined_at: string;
 }
 
@@ -461,6 +465,7 @@ export interface StreamAttendanceRecord {
 
 export interface AppNotification {
   id: string;
+  recipient_id?: string; // Target believer account for WhatsApp-style private notifications
   type: 'follow' | 'chat' | 'like' | 'reply' | 'broadcast';
   actor_id: string;
   actor_name: string;

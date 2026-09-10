@@ -51,6 +51,10 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
   const [dmInputText, setDmInputText] = useState<string>('');
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
 
+  // Accurate Followers / Following List Viewer
+  const [showFollowsListModal, setShowFollowsListModal] = useState<'followers' | 'following' | null>(null);
+  const [followsUsersList, setFollowsUsersList] = useState<User[]>([]);
+
   const currentUser = StorageService.getCurrentUser() || INITIAL_USERS[0];
   const isMe = currentUser && profileUser && currentUser.id === profileUser.id;
 
@@ -114,6 +118,17 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
     // Load DMs
     setDmList(StorageService.getDirectMessages(currentUser.id, found.id));
   }, [isOpen, userId]);
+
+  useEffect(() => {
+    if (!profileUser || !showFollowsListModal) return;
+    if (showFollowsListModal === 'followers') {
+      const list = StorageService.getFollowersUsers(profileUser.id);
+      setFollowsUsersList(list);
+    } else {
+      const list = StorageService.getFollowingUsers(profileUser.id);
+      setFollowsUsersList(list);
+    }
+  }, [showFollowsListModal, profileUser?.id, followersCount, followingCount]);
 
   if (!isOpen || !profileUser) return null;
 
@@ -223,18 +238,26 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
                   </p>
                   <p className="text-[11px] text-white/60 font-medium">Posts</p>
                 </div>
-                <div>
-                  <p className="font-extrabold text-base sm:text-lg text-white">
+                <button
+                  type="button"
+                  onClick={() => setShowFollowsListModal('followers')}
+                  className="cursor-pointer hover:opacity-80 transition-opacity text-center group"
+                >
+                  <p className="font-extrabold text-base sm:text-lg text-white group-hover:text-[#D4AF37] transition-colors">
                     {followersCount.toLocaleString()}
                   </p>
-                  <p className="text-[11px] text-white/60 font-medium">Followers</p>
-                </div>
-                <div>
-                  <p className="font-extrabold text-base sm:text-lg text-white">
+                  <p className="text-[11px] text-white/60 font-medium group-hover:text-white/90">Followers</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowFollowsListModal('following')}
+                  className="cursor-pointer hover:opacity-80 transition-opacity text-center group"
+                >
+                  <p className="font-extrabold text-base sm:text-lg text-white group-hover:text-[#D4AF37] transition-colors">
                     {followingCount.toLocaleString()}
                   </p>
-                  <p className="text-[11px] text-white/60 font-medium">Following</p>
-                </div>
+                  <p className="text-[11px] text-white/60 font-medium group-hover:text-white/90">Following</p>
+                </button>
               </div>
             </div>
 
@@ -511,6 +534,126 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
                 <Send className="w-4 h-4" />
               </button>
             </form>
+          </div>
+        )}
+
+        {/* REAL DATABASE FOLLOWERS / FOLLOWING LIST DRAWER */}
+        {showFollowsListModal && (
+          <div className="absolute inset-0 z-50 bg-[#001122] flex flex-col animate-in slide-in-from-right-4 duration-200">
+            {/* Header */}
+            <div className="px-4 py-3 bg-[#00172e] border-b border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={() => setShowFollowsListModal(null)}
+                  className="p-1 text-white/70 hover:text-white rounded-full"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div>
+                  <h3 className="font-bold text-sm text-white capitalize">
+                    {showFollowsListModal}
+                  </h3>
+                  <p className="text-[11px] text-white/50">
+                    {showFollowsListModal === 'followers' 
+                      ? `${followersCount} ${followersCount === 1 ? 'follower' : 'followers'}`
+                      : `${followingCount} following`}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowFollowsListModal(null)}
+                className="p-1.5 text-white/50 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Users List */}
+            <div className="flex-1 p-3 overflow-y-auto space-y-2">
+              {followsUsersList.length === 0 ? (
+                <div className="text-center py-12 text-white/40 text-xs">
+                  <UserCheck className="w-10 h-10 mx-auto mb-2 opacity-30 text-[#D4AF37]" />
+                  <p>No {showFollowsListModal} to display yet.</p>
+                </div>
+              ) : (
+                followsUsersList.map(u => {
+                  const isFollowingThisUser = StorageService.isFollowingUser(currentUser.id, u.id);
+                  const isSelf = currentUser.id === u.id;
+
+                  return (
+                    <div
+                      key={u.id}
+                      className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-between gap-3 transition-colors"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileUser(u);
+                          setShowFollowsListModal(null);
+                        }}
+                        className="flex items-center gap-3 min-w-0 text-left cursor-pointer flex-1"
+                      >
+                        <img
+                          src={u.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
+                          alt={u.full_name}
+                          className="w-10 h-10 rounded-full object-cover shrink-0 border border-white/10"
+                        />
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-xs text-white truncate flex items-center gap-1">
+                            <span>{u.full_name}</span>
+                            {u.is_verified && <VerifiedBadge type={u.badge_type || 'blue'} size="xs" />}
+                          </h4>
+                          <p className="text-[11px] text-white/50 truncate">
+                            {u.handle || `@${u.full_name.toLowerCase().replace(/\s+/g, '_')}`}
+                          </p>
+                        </div>
+                      </button>
+
+                      {!isSelf && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              StorageService.toggleFollowUser(u.id);
+                              setFollowersCount(StorageService.getUserFollowersCount(profileUser.id));
+                              setFollowingCount(StorageService.getUserFollowingCount(profileUser.id));
+                              if (showFollowsListModal === 'followers') {
+                                setFollowsUsersList(StorageService.getFollowersUsers(profileUser.id));
+                              } else {
+                                setFollowsUsersList(StorageService.getFollowingUsers(profileUser.id));
+                              }
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                              isFollowingThisUser
+                                ? 'bg-white/10 text-white/80 hover:bg-white/20'
+                                : 'bg-[#0070F3] text-white hover:bg-blue-600'
+                            }`}
+                          >
+                            {isFollowingThisUser ? 'Following' : 'Follow'}
+                          </button>
+
+                          {onOpenDirectChat && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowFollowsListModal(null);
+                                onClose();
+                                onOpenDirectChat(u.id);
+                              }}
+                              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs transition-colors"
+                              title="Send Message"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         )}
 

@@ -291,6 +291,45 @@ export class StorageService {
     if (cur && (cur.id === user.id || arePhoneNumbersEqual(cur.phone, user.phone))) {
       setLocal(KEYS.CURRENT_USER, { ...cur, ...user });
     }
+
+    SupabaseSyncService.syncUser(user).catch(() => {});
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: user }));
+    }
+  }
+
+  static async syncUsersWithRemote(): Promise<void> {
+    try {
+      const remoteUsers = await SupabaseSyncService.pullUsersFromSupabase();
+      if (!remoteUsers || remoteUsers.length === 0) return;
+      const localUsers = this.getAllUsers();
+      let changed = false;
+      for (const ru of remoteUsers) {
+        const localIdx = localUsers.findIndex(u => u.id === ru.id || arePhoneNumbersEqual(u.phone, ru.phone));
+        if (localIdx >= 0) {
+          localUsers[localIdx] = {
+            ...localUsers[localIdx],
+            avatar_url: ru.avatar_url || localUsers[localIdx].avatar_url,
+            full_name: ru.full_name || localUsers[localIdx].full_name,
+            handle: ru.handle || localUsers[localIdx].handle,
+            role: ru.role || localUsers[localIdx].role,
+            followers_count: ru.followers_count || localUsers[localIdx].followers_count,
+            following_count: ru.following_count || localUsers[localIdx].following_count
+          };
+          changed = true;
+        } else {
+          localUsers.push(ru);
+          changed = true;
+        }
+      }
+      if (changed) {
+        setLocal(KEYS.ALL_USERS, localUsers);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('gcz_users_synced'));
+        }
+      }
+    } catch {}
   }
 
   static updateUserRole(userId: string, newRole: UserRole): void {
@@ -628,7 +667,10 @@ export class StorageService {
     return list.map(group => {
       const cg = chatGroups.find(c => c.id === group.id);
       const memberCount = cg ? cg.member_ids.length : (group.member_count || 0);
-      const isMember = (cg && targetUserId) ? cg.member_ids.includes(targetUserId) : false;
+      const hasExited = targetUserId ? this.hasUserExitedGroup(group.id, targetUserId) : false;
+      const isMember = (cg && targetUserId)
+        ? (cg.member_ids.includes(targetUserId) || (!cg.is_paid && !hasExited))
+        : false;
       return {
         ...group,
         member_count: memberCount,
@@ -638,21 +680,38 @@ export class StorageService {
     });
   }
 
+  static hasUserExitedGroup(groupId: string, userId?: string): boolean {
+    const targetUserId = userId || this.getCurrentUser()?.id;
+    if (!groupId || !targetUserId) return false;
+    try {
+      if (typeof window !== 'undefined' && localStorage.getItem(`gcz_exited_${groupId}_${targetUserId}`) === 'true') {
+        return true;
+      }
+    } catch {}
+    const memberships = getLocal<GroupMembership[]>(KEYS.GROUP_MEMBERSHIPS, []);
+    const m = memberships.find(mem => mem.group_id === groupId && mem.user_id === targetUserId);
+    if (m && m.status === 'expired' && !!m.left_at) {
+      return true;
+    }
+    return false;
+  }
+
   static isUserInChatGroup(groupId: string, userId?: string): boolean {
     const targetUserId = userId || this.getCurrentUser()?.id;
     if (!groupId || !targetUserId) return false;
+    if (this.hasUserExitedGroup(groupId, targetUserId)) return false;
     const chatGroups = this.getChatGroups();
     const cg = chatGroups.find(c => c.id === groupId);
-    return cg ? cg.member_ids.includes(targetUserId) : false;
+    if (!cg) return false;
+    if (cg.member_ids.includes(targetUserId)) return true;
+    return !cg.is_paid;
   }
 
   static toggleGroupJoin(groupId: string, userId?: string): boolean {
     const currUser = userId ? this.getAllUsers().find(u => u.id === userId) : this.getCurrentUser();
     if (!currUser) return false;
     const currentUserId = currUser.id;
-    const chatGroups = this.getChatGroups();
-    const cg = chatGroups.find(c => c.id === groupId);
-    const isMember = cg ? cg.member_ids.includes(currentUserId) : false;
+    const isMember = this.isUserInChatGroup(groupId, currentUserId);
 
     if (isMember) {
       this.leaveChatGroup(groupId, currentUserId);
@@ -825,10 +884,10 @@ export class StorageService {
     });
   }
 
-  // Real Streamers Online Count
+  // Real Streamers Online Count (Realtime connected viewers)
   static getOnlineStreamersCount(): number {
     const viewers = this.getStreamViewers();
-    return Math.max(1, (viewers ? viewers.length : 0));
+    return viewers ? viewers.length : 0;
   }
 
   // Store & Products
@@ -1855,6 +1914,7 @@ export class StorageService {
         cur.password = newPass;
         this.setCurrentUser(cur);
       }
+      SupabaseSyncService.syncUser(u).catch(() => {});
       return true;
     }
     return false;
@@ -1965,22 +2025,13 @@ export class StorageService {
   }
 
   static getUserFollowersCount(userId: string): number {
-    const allUsers = this.getAllUsers();
-    const u = allUsers.find(user => user.id === userId);
-    if (u && u.followers_count) return u.followers_count;
-    if (userId === 'usr_daniels') return 12480;
-    if (userId.includes('grace')) return 4820;
-    if (userId.includes('kuda')) return 640;
-    if (userId.includes('chipo')) return 890;
-    return 145;
+    const list = this.getFollowersList(userId);
+    return list.length;
   }
 
   static getUserFollowingCount(userId: string): number {
-    const allUsers = this.getAllUsers();
-    const u = allUsers.find(user => user.id === userId);
-    if (u && u.following_count) return u.following_count;
     const list = this.getFollowingList(userId);
-    return list.length || 38;
+    return list.length;
   }
 
   // DIRECT MESSAGING (DM) SYSTEM - INSTAGRAM STYLE
@@ -2009,7 +2060,7 @@ export class StorageService {
   static sendDirectMessage(senderId: string, receiverId: string, text: string, replyTo?: { id: string; sender_name: string; text: string }): DirectMessage {
     const all = getLocal<DirectMessage[]>(KEYS.DIRECT_MESSAGES, []);
     const newMsg: DirectMessage = {
-      id: `dm_${Date.now()}`,
+      id: `dm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       sender_id: senderId,
       receiver_id: receiverId,
       text: text.trim(),
@@ -2020,7 +2071,28 @@ export class StorageService {
     all.push(newMsg);
     setLocal(KEYS.DIRECT_MESSAGES, all);
 
+    SupabaseSyncService.syncDirectMessage(newMsg).catch(() => {});
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_direct_messages_updated', { detail: newMsg }));
+      window.dispatchEvent(new CustomEvent('gcz_dms_updated'));
+    }
+
     return newMsg;
+  }
+
+  static receiveIncomingDirectMessage(message: DirectMessage): void {
+    if (!message) return;
+    const all = getLocal<DirectMessage[]>(KEYS.DIRECT_MESSAGES, []);
+    const exists = all.some(m => m.id === message.id);
+    if (!exists) {
+      all.push(message);
+      setLocal(KEYS.DIRECT_MESSAGES, all);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_direct_messages_updated', { detail: message }));
+        window.dispatchEvent(new CustomEvent('gcz_dms_updated'));
+      }
+    }
   }
 
   static markMessagesAsRead(senderId: string, currentUserId: string): void {
@@ -2126,68 +2198,74 @@ export class StorageService {
   }
 
   static getStreamViewers(): LiveStreamViewer[] {
-    return getLocal<LiveStreamViewer[]>(KEYS.STREAM_VIEWERS, [
-      { user_id: 'u1', full_name: 'Pastor Tendai Moyo', city: 'Harare', joined_at: new Date().toISOString() },
-      { user_id: 'u2', full_name: 'Pastor Grace Daniels', city: 'Harare', joined_at: new Date().toISOString() },
-      { user_id: 'u3', full_name: 'Chipo Ruvimbo Mandaza', city: 'Harare', joined_at: new Date().toISOString() },
-      { user_id: 'u4', full_name: 'Kudakwashe Sibanda', city: 'Harare', joined_at: new Date().toISOString() },
-      { user_id: 'u5', full_name: 'Tatenda Blessing Chirwa', city: 'Harare', joined_at: new Date().toISOString() },
-      { user_id: 'u6', full_name: 'Nyasha Lorraine Gumbo', city: 'Harare', joined_at: new Date().toISOString() },
-      { user_id: 'u7', full_name: 'Ezekiel Sithole', city: 'Harare', joined_at: new Date().toISOString() },
-      { user_id: 'u8', full_name: 'Rudo Mutasa', city: 'Harare', joined_at: new Date().toISOString() },
-      { user_id: 'u9', full_name: 'Simbarashe Zhou', city: 'Harare', joined_at: new Date().toISOString() },
-      { user_id: 'u10', full_name: 'Blessing Makoni', city: 'Harare', joined_at: new Date().toISOString() },
-      { user_id: 'u11', full_name: 'Tariro Hove', city: 'Harare', joined_at: new Date().toISOString() },
-      { user_id: 'u12', full_name: 'Tinashe Chikwava', city: 'Bulawayo', joined_at: new Date().toISOString() },
-      { user_id: 'u13', full_name: 'Sipho Ndebele', city: 'Bulawayo', joined_at: new Date().toISOString() },
-      { user_id: 'u14', full_name: 'Nomalanga Khumalo', city: 'Bulawayo', joined_at: new Date().toISOString() },
-      { user_id: 'u15', full_name: 'Bongani Ncube', city: 'Bulawayo', joined_at: new Date().toISOString() },
-      { user_id: 'u16', full_name: 'Thabo Dube', city: 'Bulawayo', joined_at: new Date().toISOString() },
-      { user_id: 'u17', full_name: 'Lindiwe Moyo', city: 'Bulawayo', joined_at: new Date().toISOString() },
-      { user_id: 'u18', full_name: 'Mthokozisi Sibanda', city: 'Bulawayo', joined_at: new Date().toISOString() },
-      { user_id: 'u19', full_name: 'Nomusa Mpofu', city: 'Bulawayo', joined_at: new Date().toISOString() },
-      { user_id: 'u20', full_name: 'Jabulani Nyoni', city: 'Bulawayo', joined_at: new Date().toISOString() },
-      { user_id: 'u21', full_name: 'Khulekani Tshuma', city: 'Bulawayo', joined_at: new Date().toISOString() },
-      { user_id: 'u22', full_name: 'Farai Takawira', city: 'Chitungwiza', joined_at: new Date().toISOString() },
-      { user_id: 'u23', full_name: 'Vimbai Chigumba', city: 'Chitungwiza', joined_at: new Date().toISOString() },
-      { user_id: 'u24', full_name: 'Tawanda Murehwa', city: 'Chitungwiza', joined_at: new Date().toISOString() },
-      { user_id: 'u25', full_name: 'Mercy Munetsi', city: 'Chitungwiza', joined_at: new Date().toISOString() },
-      { user_id: 'u26', full_name: 'Chengetai Marufu', city: 'Mutare', joined_at: new Date().toISOString() },
-      { user_id: 'u27', full_name: 'Tsitsi Dangarembwa', city: 'Mutare', joined_at: new Date().toISOString() },
-      { user_id: 'u28', full_name: 'Kudzai Shumba', city: 'Gweru', joined_at: new Date().toISOString() },
-      { user_id: 'u29', full_name: 'Patrick Mhlanga', city: 'Kwekwe', joined_at: new Date().toISOString() }
-    ]);
+    const raw = getLocal<LiveStreamViewer[]>(KEYS.STREAM_VIEWERS, []);
+    // Purge any legacy mock seeds ('u1', 'u2', etc.)
+    const clean = raw.filter(v => v && v.user_id && !/^u\d+$/.test(v.user_id));
+    if (clean.length !== raw.length) {
+      setLocal(KEYS.STREAM_VIEWERS, clean);
+    }
+    return clean;
+  }
+
+  // Record streamer when watched for 10+ seconds, capturing login & profile details
+  static recordStreamer(user: User, sessionTitle?: string): LiveStreamViewer {
+    const viewers = this.getStreamViewers();
+    const existingIdx = viewers.findIndex(v => v.user_id === user.id || (user.phone && v.phone === user.phone));
+    const viewerRecord: LiveStreamViewer = {
+      user_id: user.id,
+      full_name: user.full_name,
+      user_name: user.handle || user.full_name,
+      phone: user.phone,
+      handle: user.handle,
+      city: user.location || user.city_location || 'Harare',
+      avatar_url: user.avatar_url,
+      device: typeof navigator !== 'undefined' && /Mobi|Android|iPhone/i.test(navigator.userAgent) ? 'Mobile' : 'Desktop',
+      login_details: `${user.phone || 'Phone'} • Role: ${user.role} • ID: ${user.member_id || user.id.substring(0, 8)}`,
+      joined_at: new Date().toISOString(),
+      is_active: true
+    };
+
+    if (existingIdx >= 0) {
+      viewers[existingIdx] = viewerRecord;
+    } else {
+      viewers.push(viewerRecord);
+    }
+    setLocal(KEYS.STREAM_VIEWERS, viewers);
+
+    // Record into persistent congregation stream attendees registry
+    this.recordStreamAttendance(user, sessionTitle);
+
+    // Realtime broadcast to all connected devices so dashboards update instantly
+    SupabaseSyncService.syncStreamerJoined(viewerRecord).catch(() => {});
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_stream_viewers_updated', { detail: viewers }));
+    }
+    return viewerRecord;
   }
 
   static joinLiveStream(user: User, sessionTitle?: string): void {
-    const viewers = this.getStreamViewers();
-    if (!viewers.find(v => v.user_id === user.id)) {
-      viewers.push({
-        user_id: user.id,
-        full_name: user.full_name,
-        phone: user.phone,
-        handle: user.handle,
-        city: user.location || 'Harare',
-        avatar_url: user.avatar_url,
-        joined_at: new Date().toISOString()
-      });
-      setLocal(KEYS.STREAM_VIEWERS, viewers);
-    }
-    // Also record into persistent congregation stream attendees registry (for retention & future pastoral use)
-    this.recordStreamAttendance(user, sessionTitle);
+    this.recordStreamer(user, sessionTitle);
   }
 
   static leaveLiveStream(userId: string): void {
     const viewers = this.getStreamViewers().filter(v => v.user_id !== userId);
     setLocal(KEYS.STREAM_VIEWERS, viewers);
 
-    // Update ended_at in attendance history so pastoral and dev database retains who streamed and duration
+    // Update ended_at in attendance history
     const history = this.getStreamAttendanceHistory();
     const target = history.find(h => h.user_id === userId && h.status === 'active');
     if (target) {
       target.ended_at = new Date().toISOString();
       target.status = 'completed';
       setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, history);
+    }
+
+    // Broadcast immediate count drop to all devices in realtime
+    SupabaseSyncService.syncStreamerLeft(userId).catch(() => {});
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_stream_viewers_updated', { detail: viewers }));
     }
   }
 
@@ -2292,84 +2370,39 @@ export class StorageService {
     }
   }
 
-  // Social & Activity Notifications
-  static getAppNotifications(): AppNotification[] {
-    return getLocal<AppNotification[]>(KEYS.APP_NOTIFICATIONS, [
-      {
-        id: 'notif_1',
-        type: 'broadcast',
-        target_type: 'live',
-        actor_id: 'usr_apostle_joe',
-        actor_name: 'Apostle Joe Daniels',
-        actor_avatar: '/assets/apostle_joe_daniels_main.jpg',
-        title: '🔴 Live Apostolic Broadcast',
-        message: 'Apostle Joe Daniels is streaming live: "Supernatural Acceleration 2026". Tap to join fellowship!',
-        created_at: new Date(Date.now() - 15 * 60000).toISOString(),
-        is_read: false
-      },
-      {
-        id: 'notif_2',
-        type: 'follow',
-        target_type: 'dm',
-        actor_id: 'usr_pastor_tendai',
-        actor_name: 'Pastor Tendai Moyo',
-        actor_avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&auto=format&fit=crop&q=80',
-        title: 'New Follower',
-        message: 'Pastor Tendai Moyo (@pastor_tendai) followed you. Tap to send blessings.',
-        created_at: new Date(Date.now() - 60 * 60000).toISOString(),
-        is_read: false
-      },
-      {
-        id: 'notif_3',
-        type: 'chat',
-        target_type: 'dm',
-        target_id: 'usr_developer',
-        actor_id: 'usr_developer',
-        actor_name: 'mr_juice7',
-        actor_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-        title: 'Direct Message',
-        message: 'mr_juice7: Systems are running smoothly in Harare Hub.',
-        created_at: new Date(Date.now() - 3 * 3600000).toISOString(),
-        is_read: false
-      },
-      {
-        id: 'notif_5',
-        type: 'chat',
-        target_type: 'group',
-        target_id: 'group_ignite_worship',
-        actor_id: 'usr_apostle_joe',
-        actor_name: 'Apostle Joe Daniels',
-        actor_avatar: '/assets/apostle_joe_daniels_main.jpg',
-        title: 'Ignite Worship Team Notice',
-        message: 'Apostle Joe posted an announcement in Ignite Worship Team: "Worship rehearsals and atmospheric prayer every Thursday at 6:00 PM."',
-        created_at: new Date(Date.now() - 4 * 3600000).toISOString(),
-        is_read: false
-      },
-      {
-        id: 'notif_4',
-        type: 'like',
-        target_type: 'testimony',
-        actor_id: 'usr_chipo',
-        actor_name: 'Chipo Ruvimbo Mandaza',
-        actor_avatar: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200&auto=format&fit=crop&q=80',
-        title: 'Answered Prayer Testimony Reaction',
-        message: 'Chipo Mandaza and 12 others rejoiced over your altar testimony.',
-        created_at: new Date(Date.now() - 24 * 3600000).toISOString(),
-        is_read: true
-      }
-    ]);
+  // Social & Activity Notifications - WhatsApp-style per-account notifications
+  static getAppNotifications(recipientId?: string): AppNotification[] {
+    const targetUserId = recipientId || this.getCurrentUser()?.id;
+    const raw = getLocal<AppNotification[]>(KEYS.APP_NOTIFICATIONS, []);
+    
+    // Purge any legacy fake mock notifications
+    const clean = raw.filter(n => n && n.id && !n.id.startsWith('notif_1') && !n.id.startsWith('notif_2') && !n.id.startsWith('notif_3') && !n.id.startsWith('notif_4') && !n.id.startsWith('notif_5'));
+    if (clean.length !== raw.length) {
+      setLocal(KEYS.APP_NOTIFICATIONS, clean);
+    }
+
+    if (!targetUserId || targetUserId === 'guest') {
+      return [];
+    }
+
+    // Only return notifications specifically targeted to this believer or global church announcements
+    return clean.filter(n => !n.recipient_id || n.recipient_id === targetUserId);
   }
 
   static addAppNotification(notif: Omit<AppNotification, 'id' | 'created_at' | 'is_read'>): void {
-    const list = this.getAppNotifications();
+    const raw = getLocal<AppNotification[]>(KEYS.APP_NOTIFICATIONS, []);
     const newNotif: AppNotification = {
       ...notif,
-      id: `notif_${Date.now()}`,
+      id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       created_at: new Date().toISOString(),
       is_read: false
     };
-    list.unshift(newNotif);
-    setLocal(KEYS.APP_NOTIFICATIONS, list);
+    raw.unshift(newNotif);
+    setLocal(KEYS.APP_NOTIFICATIONS, raw);
+    
+    // Realtime notification sync across devices
+    SupabaseSyncService.syncNotificationCreated(newNotif).catch(() => {});
+
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_new_notification', { detail: newNotif }));
       window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
@@ -2462,6 +2495,30 @@ export class StorageService {
     allUsers = allUsers.filter(u => u.id !== target.id);
     setLocal(KEYS.ALL_USERS, allUsers);
     return { success: true };
+  }
+
+  // God Mode Verification Badge Management (Synced to Supabase in Realtime)
+  static developerSetVerificationBadge(targetUserId: string, isVerified: boolean, badgeType?: 'none' | 'blue' | 'gold' | 'silver'): { success: boolean; user?: User; error?: string } {
+    const allUsers = this.getAllUsers();
+    const target = allUsers.find(u => u.id === targetUserId || arePhoneNumbersEqual(u.phone, targetUserId));
+    if (!target) {
+      return { success: false, error: 'Target account not found in database.' };
+    }
+    target.is_verified = isVerified;
+    target.badge_type = badgeType || (isVerified ? 'blue' : 'none');
+    this.saveUser(target);
+
+    // Sync directly to Supabase persistent table and broadcast over realtime channel
+    SupabaseSyncService.syncVerificationBadge(target.id, isVerified, target.badge_type).catch(() => {});
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: target }));
+    }
+    return { success: true, user: target };
+  }
+
+  static developerRemoveVerificationBadge(targetUserId: string): { success: boolean; user?: User; error?: string } {
+    return this.developerSetVerificationBadge(targetUserId, false, 'none');
   }
 
   // =========================================================================
@@ -2809,6 +2866,13 @@ export class StorageService {
     const grp = groups.find(g => g.id === groupId);
     if (!grp) return { success: false, message: 'Group not found' };
 
+    // Clear per-user exit flag immediately so this specific user can actively participate
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(`gcz_exited_${groupId}_${userId}`);
+      }
+    } catch {}
+
     // Check if user was removed by admin (cannot rejoin via invite link)
     if (!isAdminAdd && grp.removed_user_ids && grp.removed_user_ids.includes(userId)) {
       return { 
@@ -2902,6 +2966,13 @@ export class StorageService {
     const groups = this.getChatGroups();
     const grp = groups.find(g => g.id === groupId);
     if (!grp) return { success: false, message: 'Group not found' };
+
+    // Record per-user exited flag so only this specific user is marked as exited
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`gcz_exited_${groupId}_${userId}`, 'true');
+      }
+    } catch {}
 
     if (grp.member_ids.includes(userId)) {
       grp.member_ids = grp.member_ids.filter(id => id !== userId);
@@ -3128,28 +3199,7 @@ export class StorageService {
     const msgs = allMsgs[groupId] || [];
     
     // Filter out messages deleted by this user for themselves
-    const activeMsgs = msgs.filter(m => !m.deleted_for_users || !m.deleted_for_users.includes(userId));
-
-    // Check membership join timestamp: new members only see messages from their join time
-    const users = this.getAllUsers();
-    const currentUser = users.find(u => u.id === userId);
-    const isSuperAdminOrDev = currentUser?.role === 'super_admin' || currentUser?.role === 'developer';
-
-    if (isSuperAdminOrDev) {
-      return activeMsgs;
-    }
-
-    const memberships = getLocal<GroupMembership[]>(KEYS.GROUP_MEMBERSHIPS, []);
-    const membership = memberships.find(m => m.group_id === groupId && m.user_id === userId);
-    if (!membership?.joined_at) {
-      return activeMsgs;
-    }
-
-    const joinTime = new Date(membership.joined_at).getTime();
-    return activeMsgs.filter(m => {
-      const msgTime = new Date(m.created_at).getTime();
-      return msgTime >= joinTime - 60000 || m.sender_id === userId || (m.is_system && m.text.includes(currentUser?.full_name || ''));
-    });
+    return msgs.filter(m => !m.deleted_for_users || !m.deleted_for_users.includes(userId));
   }
 
   static deleteChatGroupMessage(groupId: string, messageId: string, userId: string, forEveryone: boolean): boolean {
@@ -3294,11 +3344,19 @@ export class StorageService {
     const groups = this.getChatGroups();
     const grp = groups.find(g => g.id === groupId);
     if (grp && messageData.sender_id !== 'system') {
-      const isMember = grp.member_ids?.includes(messageData.sender_id);
       const user = this.getAllUsers().find(u => u.id === messageData.sender_id);
       const isPrivileged = user?.role === 'super_admin' || user?.role === 'developer';
-      if (!isMember && !isPrivileged) {
-        throw new Error("You cannot send messages because you are not a member of this group.");
+      const hasExited = this.hasUserExitedGroup(groupId, messageData.sender_id);
+      if (hasExited) {
+        throw new Error("You exited this group fellowship. Please rejoin to send messages.");
+      }
+      if (grp.is_paid && !grp.member_ids?.includes(messageData.sender_id) && !isPrivileged) {
+        throw new Error(`Enrollment required to participate in ${grp.name}.`);
+      }
+      if (!grp.member_ids.includes(messageData.sender_id)) {
+        grp.member_ids.push(messageData.sender_id);
+        setLocal(KEYS.CHAT_GROUPS, groups);
+        SupabaseSyncService.syncGroupMember(groupId, messageData.sender_id, true).catch(() => {});
       }
     }
 
@@ -3315,7 +3373,30 @@ export class StorageService {
     };
     allMsgs[groupId].push(newMsg);
     setLocal(KEYS.CHAT_GROUP_MESSAGES, allMsgs);
+
+    SupabaseSyncService.syncGroupMessage(newMsg).catch(() => {});
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_group_messages_updated', { detail: { groupId, message: newMsg } }));
+    }
+
     return newMsg;
+  }
+
+  static receiveIncomingGroupMessage(message: ChatGroupMessage): void {
+    if (!message || !message.group_id) return;
+    const allMsgs = getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
+    if (!allMsgs[message.group_id]) {
+      allMsgs[message.group_id] = [];
+    }
+    const exists = allMsgs[message.group_id].some(m => m.id === message.id);
+    if (!exists) {
+      allMsgs[message.group_id].push(message);
+      setLocal(KEYS.CHAT_GROUP_MESSAGES, allMsgs);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_group_messages_updated', { detail: { groupId: message.group_id, message } }));
+      }
+    }
   }
 
   static markGroupMessagesAsRead(groupId: string, currentUserId: string): void {

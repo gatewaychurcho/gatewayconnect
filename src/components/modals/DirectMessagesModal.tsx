@@ -54,6 +54,7 @@ import {
 import confetti from 'canvas-confetti';
 import { User, DirectMessage, DmThread, ChatGroup, ChatGroupMessage, GroupMembership, GroupInvite } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { SupabaseSyncService } from '../../services/supabaseSyncService';
 
 interface DirectMessagesModalProps {
   currentUser: User;
@@ -244,8 +245,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
   const handleConfirmSendMedia = () => {
     if (!activeGroup || !stagedLocalMedia) return;
-    if (!activeGroup.member_ids.includes(currentUser.id)) {
-      alert('You cannot send media because you are not a member of this fellowship.');
+    if (StorageService.hasUserExitedGroup(activeGroup.id, currentUser.id)) {
+      alert('You cannot send media because you exited this group fellowship. Please rejoin to participate.');
       return;
     }
 
@@ -313,24 +314,83 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   useEffect(() => {
     refreshThreads();
     refreshGroupsData();
-  }, [currentUser.id]);
+
+    // Event listeners for local and window-level custom events
+    const handleGroupMsgUpdated = (e: any) => {
+      const detail = e.detail;
+      if (detail && detail.groupId === activeGroupId) {
+        const msgs = StorageService.getChatGroupMessagesForUser(activeGroupId, currentUser.id);
+        setGroupMessages(msgs);
+      }
+      refreshGroupsData();
+    };
+
+    const handleDirectMsgUpdated = () => {
+      refreshMessages();
+      refreshThreads();
+    };
+
+    const handleProfileUpdated = () => {
+      refreshThreads();
+      refreshGroupsData();
+    };
+
+    window.addEventListener('gcz_group_messages_updated', handleGroupMsgUpdated);
+    window.addEventListener('gcz_direct_messages_updated', handleDirectMsgUpdated);
+    window.addEventListener('gcz_user_profile_updated', handleProfileUpdated);
+    window.addEventListener('gcz_users_synced', handleProfileUpdated);
+    window.addEventListener('gcz_groups_updated', refreshGroupsData);
+
+    // Cross-device Supabase Realtime Subscription (postgres_changes INSERT + broadcast)
+    const unsubscribe = SupabaseSyncService.subscribeToSocialMessaging({
+      onNewGroupMessage: (incomingGroupMsg) => {
+        StorageService.receiveIncomingGroupMessage(incomingGroupMsg);
+        if (incomingGroupMsg.group_id === activeGroupId) {
+          setGroupMessages(prev => {
+            if (prev.some(m => m.id === incomingGroupMsg.id)) return prev;
+            return [...prev, incomingGroupMsg];
+          });
+        }
+        refreshGroupsData();
+      },
+      onNewDirectMessage: (incomingDm) => {
+        StorageService.receiveIncomingDirectMessage(incomingDm);
+        if ((incomingDm.sender_id === activeUserId && incomingDm.receiver_id === currentUser.id) ||
+            (incomingDm.sender_id === currentUser.id && incomingDm.receiver_id === activeUserId)) {
+          setMessages(prev => {
+            if (prev.some(m => m.id === incomingDm.id)) return prev;
+            return [...prev, incomingDm];
+          });
+        }
+        refreshThreads();
+      },
+      onUserProfileUpdated: () => {
+        refreshThreads();
+        refreshGroupsData();
+      },
+      onGroupMemberChanged: () => {
+        refreshGroupsData();
+      }
+    });
+
+    return () => {
+      window.removeEventListener('gcz_group_messages_updated', handleGroupMsgUpdated);
+      window.removeEventListener('gcz_direct_messages_updated', handleDirectMsgUpdated);
+      window.removeEventListener('gcz_user_profile_updated', handleProfileUpdated);
+      window.removeEventListener('gcz_users_synced', handleProfileUpdated);
+      window.removeEventListener('gcz_groups_updated', refreshGroupsData);
+      unsubscribe();
+    };
+  }, [currentUser.id, activeGroupId, activeUserId]);
 
   useEffect(() => {
     if (activeTab === 'direct') {
       refreshMessages();
+      refreshThreads();
     } else if (activeTab === 'groups' && activeGroupId) {
       const msgs = StorageService.getChatGroupMessagesForUser(activeGroupId, currentUser.id);
       setGroupMessages(msgs);
     }
-    const interval = setInterval(() => {
-      if (activeTab === 'direct') {
-        refreshMessages();
-        refreshThreads();
-      } else if (activeTab === 'groups') {
-        refreshGroupsData();
-      }
-    }, 2000);
-    return () => clearInterval(interval);
   }, [activeUserId, activeGroupId, activeTab]);
 
   useEffect(() => {
@@ -349,9 +409,13 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     ? StorageService.getGroupMembership(activeGroup.id, currentUser.id) 
     : undefined;
   
-  // WhatsApp-style membership check: strictly whether user is in member_ids
+  // WhatsApp-style membership check: strictly whether user has exited or is in member_ids
+  const hasUserExitedActiveGroup = activeGroup 
+    ? StorageService.hasUserExitedGroup(activeGroup.id, currentUser.id)
+    : false;
+
   const isUserGroupMember = activeGroup 
-    ? activeGroup.member_ids.includes(currentUser.id)
+    ? (activeGroup.member_ids.includes(currentUser.id) || (!activeGroup.is_paid && !hasUserExitedActiveGroup))
     : false;
 
   // Foundation School membership check
@@ -535,8 +599,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   // WhatsApp-style Share Photo to Group
   const handleShareMediaToGroup = (url: string, caption?: string) => {
     if (!activeGroup || !url.trim()) return;
-    if (!activeGroup.member_ids.includes(currentUser.id)) {
-      alert('You cannot send media because you are not a member.');
+    if (StorageService.hasUserExitedGroup(activeGroup.id, currentUser.id)) {
+      alert('You cannot send media because you exited this group fellowship. Please rejoin to participate.');
       return;
     }
     StorageService.sendChatGroupMessage(activeGroup.id, {
@@ -575,9 +639,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     const content = textToSend || groupInputText;
     if (!content.trim() || !activeGroup) return;
 
-    // Strictly block non-members from sending messages (WhatsApp style)
-    if (!activeGroup.member_ids.includes(currentUser.id)) {
-      alert('You cannot send messages anymore because you are not a member.');
+    // Strictly block only members who exited that exact group
+    if (StorageService.hasUserExitedGroup(activeGroup.id, currentUser.id)) {
+      alert('You cannot send messages anymore because you exited this group fellowship. Please rejoin the group to participate in discussions.');
       return;
     }
 
@@ -609,38 +673,6 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     setReplyingToMessage(null);
     setMentionSuggestionsOpen(false);
     refreshGroupsData();
-
-    // WhatsApp-style Group Real-time Typing simulation
-    const otherMemberIds = activeGroup.member_ids.filter(id => id !== currentUser.id);
-    if (otherMemberIds.length > 0) {
-      const allUsers = StorageService.getAllUsers();
-      const randomMemberId = otherMemberIds[Math.floor(Math.random() * otherMemberIds.length)];
-      const randomMember = allUsers.find(u => u.id === randomMemberId);
-      if (randomMember) {
-        setTimeout(() => {
-          setGroupTypingUserName(randomMember.full_name);
-        }, 1500);
-
-        setTimeout(() => {
-          setGroupTypingUserName(null);
-          const groupReplies = [
-            'Amen! Glory to Jesus! 🙌🔥',
-            'Standing in faith with you! 🙏',
-            'Hallelujah! The word is working mightily in us! 🌟',
-            'Amen! Powerful revelation! 📖✨'
-          ];
-          const reply = groupReplies[Math.floor(Math.random() * groupReplies.length)];
-          StorageService.sendChatGroupMessage(activeGroup.id, {
-            sender_id: randomMember.id,
-            sender_name: randomMember.full_name,
-            sender_avatar: randomMember.avatar_url,
-            sender_role: randomMember.role,
-            text: reply
-          });
-          refreshGroupsData();
-        }, 3600);
-      }
-    }
   };
 
   // WhatsApp-style @ Tag User Handler
@@ -2461,11 +2493,11 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       </div>
 
                       {/* Quick Emoji Bar & Input Form or Admin-only Lock Notice / Non-Member Notice */}
-                      {!activeGroup.member_ids.includes(currentUser.id) ? (
+                      {hasUserExitedActiveGroup ? (
                         <div className="p-3.5 bg-[#001933] border-t border-white/10 text-center flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4 py-4">
                           <div className="flex items-center gap-2 text-xs text-white/80 font-medium">
                             <Lock className="w-4 h-4 text-amber-400 shrink-0" />
-                            <span>You cannot send messages anymore because you are not a member.</span>
+                            <span>You cannot send messages anymore because you exited this group fellowship.</span>
                           </div>
                           <button
                             type="button"
@@ -2474,6 +2506,21 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           >
                             <UserPlus className="w-3.5 h-3.5" />
                             <span>Rejoin Group</span>
+                          </button>
+                        </div>
+                      ) : (activeGroup.is_paid && !isUserGroupMember && !isSuperAdminOrDev) ? (
+                        <div className="p-3.5 bg-[#001933] border-t border-white/10 text-center flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4 py-4">
+                          <div className="flex items-center gap-2 text-xs text-white/80 font-medium">
+                            <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                            <span>Enrollment required to participate in {activeGroup.name}.</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openPaymentModal(activeGroup, `To post in ${activeGroup.name}, please complete your $${activeGroup.price_usd || 150} membership enrollment.`)}
+                            className="px-4 py-1.5 rounded-full bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] text-xs font-black transition-transform hover:scale-105 shrink-0 cursor-pointer shadow flex items-center gap-1.5"
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            <span>Enroll Now (${activeGroup.price_usd || 150})</span>
                           </button>
                         </div>
                       ) : (!activeGroup.only_admins_can_send_messages || 

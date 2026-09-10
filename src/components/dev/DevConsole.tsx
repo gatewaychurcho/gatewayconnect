@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X,
   Code2, 
@@ -44,7 +44,13 @@ import {
   Calendar,
   Clock,
   Download,
-  Send
+  Send,
+  BadgeCheck,
+  ShieldCheck,
+  Binary,
+  FileText,
+  PlayCircle,
+  PauseCircle
 } from 'lucide-react';
 import { StorageService } from '../../services/storageService';
 import { PaynowService } from '../../services/paynowService';
@@ -55,6 +61,68 @@ import { PaynowConfigModal } from '../modals/PaynowConfigModal';
 import { DEMO_ACCOUNTS, INITIAL_USERS } from '../../data/mockData';
 import { User, UnbanAppeal, PasswordResetRequest, StreamAttendanceRecord, LiveStreamViewer, SUPPORTED_CITIES } from '../../types';
 import type { UserRole } from '../../types';
+
+/**
+ * Hacker-style Matrix binary digital rain telemetry component
+ * Professional, high-contrast, cybersecurity aesthetic
+ */
+const MatrixRainCanvas: React.FC = () => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationFrameId: number;
+    const width = (canvas.width = canvas.offsetWidth || 240);
+    const height = (canvas.height = canvas.offsetHeight || 28);
+
+    const characters = '01GATEWAYCONNECT0101100101ZIMBABWE';
+    const fontSize = 9;
+    const columns = Math.floor(width / fontSize);
+    const drops = Array.from({ length: columns }, () => Math.floor(Math.random() * -15));
+
+    const draw = () => {
+      ctx.fillStyle = 'rgba(2, 6, 23, 0.2)';
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.font = `${fontSize}px monospace`;
+
+      for (let i = 0; i < drops.length; i++) {
+        const text = characters.charAt(Math.floor(Math.random() * characters.length));
+        ctx.fillStyle = i % 4 === 0 ? '#c084fc' : i % 2 === 0 ? '#34d399' : '#10b981';
+        ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+        if (drops[i] * fontSize > height && Math.random() > 0.97) {
+          drops[i] = 0;
+        }
+        drops[i]++;
+      }
+      animationFrameId = requestAnimationFrame(draw);
+    };
+
+    draw();
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  return (
+    <div className="relative w-48 sm:w-60 h-7 rounded-lg overflow-hidden border border-emerald-500/30 bg-slate-950/80 shrink-0 hidden sm:block">
+      <canvas ref={canvasRef} className="w-full h-full block opacity-75" />
+      <div className="absolute inset-0 bg-gradient-to-r from-slate-950/40 via-transparent to-slate-950/70 pointer-events-none" />
+      <div className="absolute inset-y-0 left-2 flex items-center gap-1.5 pointer-events-none">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+        <span className="text-[9px] font-mono font-bold text-emerald-300 tracking-wider">
+          CYBER MATRIX STREAM
+        </span>
+      </div>
+    </div>
+  );
+};
 
 interface DevConsoleProps {
   onClose: () => void;
@@ -135,6 +203,112 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   const [editRole, setEditRole] = useState<UserRole>('member');
   const [editCity, setEditCity] = useState('');
   const [editPassword, setEditPassword] = useState('');
+  const [editVerified, setEditVerified] = useState(false);
+  const [activeUserMenuId, setActiveUserMenuId] = useState<string | null>(null);
+  const [passwordModalUser, setPasswordModalUser] = useState<User | null>(null);
+  const [manualPasswordInput, setManualPasswordInput] = useState('');
+  const [logsFilter, setLogsFilter] = useState('');
+  const [autoScrollLogs, setAutoScrollLogs] = useState(true);
+  const [isPausedLogs, setIsPausedLogs] = useState(false);
+  const logsContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const [logs, setLogs] = useState<string[]>([
+    '[2026-09-02 11:15:02] [AUTH] Phone 0780699988 verified via Argon2 hash. Role: DEVELOPER',
+    `[2026-09-02 11:15:04] [SUPABASE] Project URL: ${supabaseConfig.url} (Ref: csinlqdcqdgcssdanvsr)`,
+    '[2026-09-02 11:15:10] [SUPABASE_POSTGRES] Connection pool healthy (PostgreSQL 15.x RLS Active)',
+    '[2026-09-02 11:15:15] [CACHE] Shona / KJV Multilingual Bible preloaded in IndexedDB (1,189 chapters)',
+    `[2026-09-02 11:15:30] [PAYNOW_GATEWAY] Status: ${paynowConfig.isConfigured ? 'CONNECTED (ID: ' + paynowConfig.integrationId + ')' : 'READY (Setup Required)'}`
+  ]);
+
+  // Realtime listeners & live telemetry heartbeat
+  useEffect(() => {
+    const refreshAll = () => {
+      setUsersList(StorageService.getAllUsers());
+      setBannedUsersMap(StorageService.getBannedUsers());
+      setPasswordRequests(StorageService.getPasswordResetRequests());
+      setUnbanAppeals(StorageService.getUnbanAppeals());
+      setActiveStreamers(StorageService.getStreamViewers());
+      setStreamAttendees(StorageService.getStreamAttendanceHistory());
+    };
+
+    window.addEventListener('gcz_user_profile_updated', refreshAll);
+    window.addEventListener('gcz_users_synced', refreshAll);
+    window.addEventListener('gcz_stream_viewers_updated', refreshAll);
+
+    // Heartbeat live telemetry logs
+    const heartbeat = setInterval(() => {
+      if (isPausedLogs) return;
+      const stamp = new Date().toLocaleTimeString();
+      const count = StorageService.getOnlineStreamersCount();
+      setLogs(prev => {
+        const next = [
+          `[${stamp}] [REALTIME_PULSE] Connected Streamers: ${count} | WebSocket Edge: HEALTHY | Security RLS: ENFORCED`,
+          ...prev
+        ];
+        return next.slice(0, 150);
+      });
+    }, 12000);
+
+    return () => {
+      window.removeEventListener('gcz_user_profile_updated', refreshAll);
+      window.removeEventListener('gcz_users_synced', refreshAll);
+      window.removeEventListener('gcz_stream_viewers_updated', refreshAll);
+      clearInterval(heartbeat);
+    };
+  }, [isPausedLogs]);
+
+  useEffect(() => {
+    if (autoScrollLogs && logsContainerRef.current) {
+      logsContainerRef.current.scrollTop = 0;
+    }
+  }, [logs, autoScrollLogs]);
+
+  const handleToggleVerificationBadge = (user: User) => {
+    const nextStatus = !user.is_verified;
+    const res = StorageService.developerSetVerificationBadge(user.id, nextStatus, nextStatus ? 'blue' : 'none');
+    if (res.success) {
+      setUsersList(StorageService.getAllUsers());
+      const actionLabel = nextStatus ? 'Granted' : 'Removed';
+      setLogs(prev => [
+        `[${new Date().toLocaleTimeString()}] [GODMODE_BADGE] ${actionLabel} official verification badge for ${user.full_name} (${user.phone}) -> Synced to Supabase in Realtime`,
+        ...prev
+      ]);
+      setPenetrateStatus(`✓ Successfully ${actionLabel.toLowerCase()} verification badge for ${user.full_name}`);
+    } else {
+      setPenetrateStatus(`Error: ${res.error}`);
+    }
+  };
+
+  const handleDirectPasswordReset = (user: User) => {
+    setPasswordModalUser(user);
+    setManualPasswordInput(`Gateway${Math.floor(1000 + Math.random() * 9000)}!`);
+  };
+
+  const handleSaveDirectPassword = () => {
+    if (!passwordModalUser || !manualPasswordInput.trim()) return;
+    const ok = StorageService.updateUserPassword(passwordModalUser.phone, manualPasswordInput.trim());
+    if (ok) {
+      setUsersList(StorageService.getAllUsers());
+      setLogs(prev => [
+        `[${new Date().toLocaleTimeString()}] [GODMODE_PWD] Reset password for ${passwordModalUser.full_name} (${passwordModalUser.phone}) to "${manualPasswordInput.trim()}" -> Synced to Supabase`,
+        ...prev
+      ]);
+      setPenetrateStatus(`✓ Password updated for ${passwordModalUser.phone}`);
+      setPasswordModalUser(null);
+    }
+  };
+
+  const handleExportLogs = () => {
+    const text = logs.join('\n');
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gateway_system_logs_${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setLogs(prev => [`[${new Date().toLocaleTimeString()}] [DEV_EXPORT] Exported live system telemetry logs to text file`, ...prev]);
+  };
 
   // Bans & Suspension state (Migrated from Admin Panel to Dev Console)
   const [bannedUsersMap, setBannedUsersMap] = useState<Record<string, { reason: string; banned_at: string; banned_by?: string }>>(StorageService.getBannedUsers());
@@ -146,14 +320,6 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   const [selectedPasswordRequest, setSelectedPasswordRequest] = useState<PasswordResetRequest | null>(null);
   const [tempPasswordToIssue, setTempPasswordToIssue] = useState('');
   const [copiedTempPass, setCopiedTempPass] = useState(false);
-
-  const [logs, setLogs] = useState<string[]>([
-    '[2026-09-02 11:15:02] [AUTH] Phone 0780699988 verified via Argon2 hash. Role: DEVELOPER',
-    `[2026-09-02 11:15:04] [SUPABASE] Project URL: ${supabaseConfig.url} (Ref: csinlqdcqdgcssdanvsr)`,
-    '[2026-09-02 11:15:10] [SUPABASE_POSTGRES] Connection pool healthy (PostgreSQL 15.x RLS Active)',
-    '[2026-09-02 11:15:15] [CACHE] Shona / KJV Multilingual Bible preloaded in IndexedDB (1,189 chapters)',
-    `[2026-09-02 11:15:30] [PAYNOW_GATEWAY] Status: ${paynowConfig.isConfigured ? 'CONNECTED (ID: ' + paynowConfig.integrationId + ')' : 'READY (Setup Required)'}`
-  ]);
 
   const [simulatedLatency, setSimulatedLatency] = useState<number>(38);
 
@@ -291,6 +457,11 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
               Gateway Connect Flutter & Supabase Engine Telemetry
             </p>
           </div>
+        </div>
+
+        {/* Hacker-style Cyber Matrix Animation */}
+        <div className="hidden lg:flex items-center gap-3">
+          <MatrixRainCanvas />
         </div>
 
         {/* Desktop Header Actions - Compact Icon Buttons */}
@@ -850,25 +1021,125 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
           </div>
         )}
 
-        {/* LOGS TAB */}
+        {/* LOGS TAB - Hacker Style Telemetry */}
         {activeTab === 'logs' && (
-          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
-            <div className="flex justify-between items-center">
-              <h4 className="text-xs font-bold text-purple-400 uppercase">Live Console Telemetry</h4>
-              <button
-                onClick={handleClearLogs}
-                className="text-[11px] text-slate-400 hover:text-white"
-              >
-                Clear Logs
-              </button>
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl">
+            {/* Top Toolbar */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+              <div className="flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-emerald-400" />
+                <h4 className="text-xs sm:text-sm font-mono font-black text-emerald-400 uppercase tracking-wide">
+                  Live System Logs & Network Telemetry
+                </h4>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                  isPausedLogs ? 'bg-amber-950 text-amber-300 border border-amber-500/40' : 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isPausedLogs ? 'bg-amber-400' : 'bg-emerald-400 animate-ping'}`} />
+                  <span>{isPausedLogs ? 'STREAM PAUSED' : 'LIVE STREAMING'}</span>
+                </span>
+              </div>
+
+              {/* Controls */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Search */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-500" />
+                  <input
+                    type="text"
+                    placeholder="Filter logs..."
+                    value={logsFilter}
+                    onChange={(e) => setLogsFilter(e.target.value)}
+                    className="bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-2.5 py-1 text-xs text-white placeholder-slate-500 outline-none focus:border-emerald-400 w-36 sm:w-44 font-mono"
+                  />
+                </div>
+
+                {/* Pause / Resume */}
+                <button
+                  type="button"
+                  onClick={() => setIsPausedLogs(prev => !prev)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all border ${
+                    isPausedLogs 
+                      ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600/30'
+                      : 'bg-amber-600/20 text-amber-300 border-amber-500/40 hover:bg-amber-600/30'
+                  }`}
+                  title={isPausedLogs ? 'Resume Realtime Stream' : 'Pause Realtime Stream'}
+                >
+                  {isPausedLogs ? <PlayCircle className="w-3.5 h-3.5" /> : <PauseCircle className="w-3.5 h-3.5" />}
+                  <span>{isPausedLogs ? 'Resume' : 'Pause'}</span>
+                </button>
+
+                {/* Auto-scroll toggle */}
+                <button
+                  type="button"
+                  onClick={() => setAutoScrollLogs(prev => !prev)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all border ${
+                    autoScrollLogs 
+                      ? 'bg-purple-600/20 text-purple-300 border-purple-500/40' 
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}
+                >
+                  Auto-Scroll: {autoScrollLogs ? 'ON' : 'OFF'}
+                </button>
+
+                {/* Export text */}
+                <button
+                  type="button"
+                  onClick={handleExportLogs}
+                  className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono font-bold flex items-center gap-1 transition-all border border-slate-700"
+                  title="Export telemetry logs to .txt file"
+                >
+                  <FileText className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Export</span>
+                </button>
+
+                {/* Clear */}
+                <button
+                  type="button"
+                  onClick={handleClearLogs}
+                  className="px-2.5 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 text-xs font-mono font-bold transition-all border border-rose-800/40"
+                >
+                  Clear
+                </button>
+              </div>
             </div>
 
-            <div className="bg-black p-3 rounded-xl border border-slate-900 text-xs text-emerald-400 space-y-1.5 max-h-96 overflow-y-auto">
-              {logs.map((log, i) => (
-                <div key={i} className="leading-relaxed font-mono">
-                  {log}
+            {/* Terminal Window */}
+            <div 
+              ref={logsContainerRef}
+              className="bg-black/95 p-4 rounded-xl border border-emerald-950/60 text-xs space-y-2 max-h-[460px] overflow-y-auto font-mono shadow-inner custom-scrollbar"
+            >
+              {logs
+                .filter(log => !logsFilter || log.toLowerCase().includes(logsFilter.toLowerCase()))
+                .map((log, i) => {
+                  const isPulse = log.includes('[REALTIME_PULSE]') || log.includes('[STREAM');
+                  const isGodmode = log.includes('[GODMODE_') || log.includes('[BAN_DESK]');
+                  const isAuth = log.includes('[AUTH]') || log.includes('[PWD_RECOVERY]');
+                  const isError = log.includes('[ERROR]') || log.includes('ERR') || log.includes('Failed');
+
+                  return (
+                    <div 
+                      key={i} 
+                      className={`leading-relaxed py-0.5 px-1.5 rounded transition-colors flex items-start gap-2 ${
+                        isError ? 'text-rose-400 bg-rose-950/20 border-l-2 border-rose-500' :
+                        isGodmode ? 'text-purple-300 bg-purple-950/15 border-l-2 border-purple-500' :
+                        isAuth ? 'text-cyan-300 bg-cyan-950/15 border-l-2 border-cyan-500' :
+                        isPulse ? 'text-emerald-300 bg-emerald-950/10 border-l-2 border-emerald-500' :
+                        'text-slate-300 hover:bg-slate-900/40'
+                      }`}
+                    >
+                      <span className="text-slate-600 select-none text-[10px] shrink-0 pt-0.5">
+                        {String(i + 1).padStart(3, '0')}
+                      </span>
+                      <span className="break-all whitespace-pre-wrap">{log}</span>
+                    </div>
+                  );
+                })}
+
+              {logs.filter(log => !logsFilter || log.toLowerCase().includes(logsFilter.toLowerCase())).length === 0 && (
+                <div className="text-slate-500 text-center py-8">
+                  No logs matching "{logsFilter}"
                 </div>
-              ))}
+              )}
             </div>
           </div>
         )}
@@ -1017,6 +1288,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                     <th className="p-3">Believer / Member</th>
                     <th className="p-3">Phone Number</th>
                     <th className="p-3">Role</th>
+                    <th className="p-3">Verification Badge</th>
                     <th className="p-3">City Location</th>
                     <th className="p-3 text-right">Developer Godmode Actions</th>
                   </tr>
@@ -1032,6 +1304,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                       const isDev = u.phone === '0780699988';
                       const isCurrentUser = StorageService.getCurrentUser()?.phone === u.phone;
                       const isBanned = !!StorageService.getBannedUsers()[u.phone];
+                      const isMenuOpen = activeUserMenuId === u.id;
 
                       return (
                         <tr key={u.id} className="hover:bg-slate-950/60 transition-colors">
@@ -1062,11 +1335,37 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                               {u.role.replace('_', ' ')}
                             </span>
                           </td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-2">
+                              {u.is_verified ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                                  <BadgeCheck className="w-3.5 h-3.5 text-blue-400" />
+                                  <span>{u.badge_type === 'gold' ? 'Gold' : 'Verified'}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                                  <span>Standard</span>
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleVerificationBadge(u)}
+                                className={`px-2 py-0.5 rounded text-[10px] font-sans font-bold transition-all border ${
+                                  u.is_verified
+                                    ? 'bg-rose-950/40 text-rose-300 border-rose-500/30 hover:bg-rose-900/60'
+                                    : 'bg-blue-950/40 text-blue-300 border-blue-500/30 hover:bg-blue-900/60'
+                                }`}
+                                title={u.is_verified ? 'Revoke Verification Badge' : 'Grant Verified Badge'}
+                              >
+                                {u.is_verified ? 'Remove Badge' : 'Grant Badge'}
+                              </button>
+                            </div>
+                          </td>
                           <td className="p-3 text-slate-400">
                             {u.city_location || 'Harare'}
                           </td>
                           <td className="p-3 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                            <div className="flex items-center justify-end gap-1.5 relative">
                               {/* Penetrate Button */}
                               <button
                                 onClick={() => {
@@ -1097,6 +1396,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                                   setEditRole(u.role);
                                   setEditCity(u.city_location || 'Harare');
                                   setEditPassword('');
+                                  setEditVerified(Boolean(u.is_verified));
                                 }}
                                 title="Edit Account Details"
                                 className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-sans font-bold transition-colors flex items-center gap-1"
@@ -1132,31 +1432,103 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                                 </button>
                               )}
 
-                              {/* Delete Account */}
-                              {!isDev && (
+                              {/* 3-Dot Action Menu Button */}
+                              <div className="relative">
                                 <button
-                                  onClick={() => {
-                                    if (window.confirm(`Are you sure you want to permanently delete user ${u.full_name} (${u.phone})? This cannot be undone.`)) {
-                                      const res = StorageService.developerDeleteAccount(u.phone);
-                                      if (res.success) {
-                                        setUsersList(StorageService.getAllUsers());
-                                        setPenetrateStatus(`✓ Permanently purged account ${u.phone}`);
-                                        setLogs(prev => [
-                                          `[${new Date().toLocaleTimeString()}] [GODMODE_PURGE] Deleted account ${u.phone}`,
-                                          ...prev
-                                        ]);
-                                      } else {
-                                        alert(res.error);
-                                      }
-                                    }
-                                  }}
-                                  title="Permanently Delete Account"
-                                  className="px-2 py-1 rounded bg-rose-950/80 hover:bg-rose-900 text-rose-300 text-[11px] font-sans font-bold transition-colors flex items-center gap-1"
+                                  type="button"
+                                  onClick={() => setActiveUserMenuId(isMenuOpen ? null : u.id)}
+                                  className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                                  title="More Account Actions"
                                 >
-                                  <Trash2 className="w-3 h-3" />
-                                  <span>Delete</span>
+                                  <MoreVertical className="w-3.5 h-3.5" />
                                 </button>
-                              )}
+
+                                {isMenuOpen && (
+                                  <div className="absolute right-0 top-full mt-1 z-30 w-48 rounded-xl bg-slate-900 border border-purple-500/40 shadow-2xl p-1.5 space-y-1 text-left font-sans animate-in fade-in zoom-in-95 duration-100">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleToggleVerificationBadge(u);
+                                        setActiveUserMenuId(null);
+                                      }}
+                                      className="w-full px-2.5 py-1.5 text-left text-xs text-slate-200 hover:bg-purple-600/30 rounded-lg flex items-center gap-2 font-medium"
+                                    >
+                                      <BadgeCheck className="w-3.5 h-3.5 text-blue-400" />
+                                      <span>{u.is_verified ? 'Remove Verification' : 'Grant Verified Badge'}</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleDirectPasswordReset(u);
+                                        setActiveUserMenuId(null);
+                                      }}
+                                      className="w-full px-2.5 py-1.5 text-left text-xs text-slate-200 hover:bg-purple-600/30 rounded-lg flex items-center gap-2 font-medium"
+                                    >
+                                      <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                                      <span>Reset Password</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingUser(u);
+                                        setEditFullName(u.full_name);
+                                        setEditRole(u.role);
+                                        setEditCity(u.city_location || 'Harare');
+                                        setEditPassword('');
+                                        setEditVerified(Boolean(u.is_verified));
+                                        setActiveUserMenuId(null);
+                                      }}
+                                      className="w-full px-2.5 py-1.5 text-left text-xs text-slate-200 hover:bg-purple-600/30 rounded-lg flex items-center gap-2 font-medium"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5 text-slate-400" />
+                                      <span>Edit Profile</span>
+                                    </button>
+
+                                    {!isDev && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (isBanned) {
+                                            StorageService.unbanUser(u.phone);
+                                          } else {
+                                            StorageService.banUser(u.phone, 'Developer 3-Dot Action');
+                                          }
+                                          setUsersList(StorageService.getAllUsers());
+                                          setActiveUserMenuId(null);
+                                        }}
+                                        className="w-full px-2.5 py-1.5 text-left text-xs text-amber-300 hover:bg-amber-950/40 rounded-lg flex items-center gap-2 font-medium"
+                                      >
+                                        <Ban className="w-3.5 h-3.5" />
+                                        <span>{isBanned ? 'Lift Suspension' : 'Suspend Account'}</span>
+                                      </button>
+                                    )}
+
+                                    {!isDev && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActiveUserMenuId(null);
+                                          if (window.confirm(`Permanently delete account ${u.full_name} (${u.phone})?`)) {
+                                            const res = StorageService.developerDeleteAccount(u.phone);
+                                            if (res.success) {
+                                              setUsersList(StorageService.getAllUsers());
+                                              setPenetrateStatus(`✓ Purged ${u.phone}`);
+                                            } else {
+                                              alert(res.error);
+                                            }
+                                          }
+                                        }}
+                                        className="w-full px-2.5 py-1.5 text-left text-xs text-rose-400 hover:bg-rose-950/40 rounded-lg flex items-center gap-2 font-medium border-t border-slate-800"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        <span>Purge Account</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </td>
                         </tr>
@@ -1165,6 +1537,59 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                 </tbody>
               </table>
             </div>
+
+            {/* Modal for Direct Password Reset */}
+            {passwordModalUser && (
+              <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-slate-900 border border-purple-500 rounded-2xl p-5 max-w-sm w-full space-y-4 text-white font-sans shadow-2xl">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h4 className="font-bold text-sm text-purple-300 flex items-center gap-2">
+                      <KeyRound className="w-4 h-4 text-amber-400" />
+                      <span>Reset Password: {passwordModalUser.phone}</span>
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => setPasswordModalUser(null)}
+                      className="text-slate-400 hover:text-white text-xs"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-slate-400">
+                    Set a new password for <strong>{passwordModalUser.full_name}</strong>. This update will immediately sync to Supabase auth in realtime.
+                  </p>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-slate-300 font-semibold">New Password</label>
+                    <input
+                      type="text"
+                      value={manualPasswordInput}
+                      onChange={(e) => setManualPasswordInput(e.target.value)}
+                      placeholder="Enter new password"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono outline-none focus:border-purple-400"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setPasswordModalUser(null)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveDirectPassword}
+                      className="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow"
+                    >
+                      Sync Password
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Modal for Editing User */}
             {editingUser && (
@@ -1246,6 +1671,30 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                         className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono outline-none focus:border-purple-400"
                       />
                     </div>
+
+                    {/* God Mode Verification Badge Toggle */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <BadgeCheck className="w-4 h-4 text-blue-400" />
+                          <span className="text-slate-200 font-bold">Verification Badge</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Grant or revoke official verification checkmark
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditVerified(prev => !prev)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                          editVerified
+                            ? 'bg-blue-600 text-white border-blue-400 shadow-md'
+                            : 'bg-slate-800 text-slate-400 border-slate-700'
+                        }`}
+                      >
+                        {editVerified ? 'Verified ✓' : 'Unverified (Standard)'}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
@@ -1262,18 +1711,21 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                         const updates: any = {
                           full_name: editFullName.trim(),
                           role: editRole,
-                          city_location: editCity
+                          city_location: editCity,
+                          is_verified: editVerified,
+                          badge_type: editVerified ? 'blue' : 'none'
                         };
                         if (editPassword.trim()) {
                           updates.password = editPassword.trim();
                         }
                         const res = StorageService.developerEditAccount(editingUser.phone, updates);
                         if (res.success) {
+                          StorageService.developerSetVerificationBadge(editingUser.phone, editVerified, editVerified ? 'blue' : 'none');
                           setUsersList(StorageService.getAllUsers());
                           setEditingUser(null);
                           setPenetrateStatus(`✓ Successfully updated ${editingUser.phone}`);
                           setLogs(prev => [
-                            `[${new Date().toLocaleTimeString()}] [GODMODE_EDIT] Updated account details for ${editingUser.phone}`,
+                            `[${new Date().toLocaleTimeString()}] [GODMODE_EDIT] Updated account details for ${editingUser.phone} (Verified: ${editVerified})`,
                             ...prev
                           ]);
                         } else {

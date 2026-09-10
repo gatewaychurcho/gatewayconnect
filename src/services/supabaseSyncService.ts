@@ -1,5 +1,5 @@
 import { getSupabase } from './supabaseClient';
-import { Donation, PrayerRequest, ServiceBooking, Sermon, Devotional, Testimony, PostComment, CommunityStory, CartItem, MessageReaction, GroupMediaItem, NotificationSettings, Receipt } from '../types';
+import { Donation, PrayerRequest, ServiceBooking, Sermon, Devotional, Testimony, PostComment, CommunityStory, CartItem, MessageReaction, GroupMediaItem, NotificationSettings, Receipt, User, ChatGroupMessage, DirectMessage, ChatGroup, LiveStreamViewer, AppNotification } from '../types';
 
 export class SupabaseSyncService {
   /**
@@ -651,6 +651,534 @@ export class SupabaseSyncService {
           .delete()
           .match({ group_id: groupId, user_id: userId });
       }
+
+      const channel = this.getSocialChannel();
+      if (channel) {
+        channel.send({
+          type: 'broadcast',
+          event: 'group_member_changed',
+          payload: { groupId, userId, isJoining }
+        });
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private static socialChannelInstance: any = null;
+  private static socialSubscribers = new Set<{
+    onNewGroupMessage?: (msg: ChatGroupMessage) => void;
+    onNewDirectMessage?: (msg: DirectMessage) => void;
+    onUserProfileUpdated?: (user: Partial<User>) => void;
+    onGroupMemberChanged?: (detail: { groupId: string; userId: string; isJoining: boolean }) => void;
+    onFollowUpdated?: (detail: { followerId: string; followingId: string; isFollowing: boolean }) => void;
+    onStreamerJoined?: (viewer: LiveStreamViewer) => void;
+    onStreamerLeft?: (userId: string) => void;
+    onNotificationCreated?: (notification: AppNotification) => void;
+    onBanStatusUpdated?: (detail: { userId: string; isBanned: boolean; reason?: string }) => void;
+  }>();
+
+  static getSocialChannel() {
+    const supabase = getSupabase();
+    if (!supabase) return null;
+    if (!this.socialChannelInstance) {
+      try {
+        const channel = supabase.channel('gcz_social_realtime', {
+          config: {
+            broadcast: { self: true }
+          }
+        });
+
+        // 1. Unified Broadcast listeners (Instant real-time dispatch across all devices)
+        channel
+          .on('broadcast', { event: 'new_group_message' }, ({ payload }: any) => {
+            if (!payload) return;
+            this.socialSubscribers.forEach(cb => cb.onNewGroupMessage?.(payload));
+          })
+          .on('broadcast', { event: 'new_direct_message' }, ({ payload }: any) => {
+            if (!payload) return;
+            this.socialSubscribers.forEach(cb => cb.onNewDirectMessage?.(payload));
+          })
+          .on('broadcast', { event: 'user_profile_updated' }, ({ payload }: any) => {
+            if (!payload) return;
+            this.socialSubscribers.forEach(cb => cb.onUserProfileUpdated?.(payload));
+          })
+          .on('broadcast', { event: 'group_member_changed' }, ({ payload }: any) => {
+            if (!payload) return;
+            this.socialSubscribers.forEach(cb => cb.onGroupMemberChanged?.(payload));
+          })
+          .on('broadcast', { event: 'follow_updated' }, ({ payload }: any) => {
+            if (!payload) return;
+            this.socialSubscribers.forEach(cb => cb.onFollowUpdated?.(payload));
+          })
+          .on('broadcast', { event: 'streamer_joined' }, ({ payload }: any) => {
+            if (!payload) return;
+            this.socialSubscribers.forEach(cb => cb.onStreamerJoined?.(payload));
+          })
+          .on('broadcast', { event: 'streamer_left' }, ({ payload }: any) => {
+            const uid = payload?.userId || payload?.user_id || payload;
+            if (!uid) return;
+            this.socialSubscribers.forEach(cb => cb.onStreamerLeft?.(uid));
+          })
+          .on('broadcast', { event: 'notification_created' }, ({ payload }: any) => {
+            if (!payload) return;
+            this.socialSubscribers.forEach(cb => cb.onNotificationCreated?.(payload));
+          })
+          .on('broadcast', { event: 'ban_status_updated' }, ({ payload }: any) => {
+            if (!payload) return;
+            this.socialSubscribers.forEach(cb => cb.onBanStatusUpdated?.(payload));
+          })
+
+          // 2. Database triggers (PostgreSQL Realtime replication)
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload: any) => {
+            const row = payload.new;
+            if (!row) return;
+            if (row.group_id) {
+              const groupMsg: ChatGroupMessage = {
+                id: row.id,
+                group_id: row.group_id,
+                sender_id: row.sender_id,
+                sender_name: row.sender_name || 'Church Member',
+                sender_avatar: row.sender_avatar,
+                sender_role: row.sender_role || 'member',
+                text: row.text,
+                reply_to: row.reply_to,
+                media_url: row.media_url,
+                media_type: row.media_type,
+                is_system: row.is_system || false,
+                read_by_user_ids: row.read_by_user_ids || [row.sender_id],
+                created_at: row.created_at
+              };
+              this.socialSubscribers.forEach(cb => cb.onNewGroupMessage?.(groupMsg));
+            } else if (row.receiver_id) {
+              const dm: DirectMessage = {
+                id: row.id,
+                sender_id: row.sender_id,
+                receiver_id: row.receiver_id,
+                text: row.text,
+                reply_to: row.reply_to,
+                media_url: row.media_url,
+                is_read: row.is_read || false,
+                created_at: row.created_at
+              };
+              this.socialSubscribers.forEach(cb => cb.onNewDirectMessage?.(dm));
+            }
+          })
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'direct_messages' }, (payload: any) => {
+            const row = payload.new;
+            if (!row) return;
+            const dm: DirectMessage = {
+              id: row.id ? String(row.id) : `dm_${Date.now()}`,
+              sender_id: row.sender_id,
+              receiver_id: row.receiver_id,
+              text: row.message || row.text || '',
+              media_url: row.media_url,
+              is_read: row.is_read || false,
+              created_at: row.created_at
+            };
+            this.socialSubscribers.forEach(cb => cb.onNewDirectMessage?.(dm));
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, (payload: any) => {
+            if (payload.new) {
+              this.socialSubscribers.forEach(cb => cb.onUserProfileUpdated?.(payload.new));
+            }
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'profile_pictures' }, (payload: any) => {
+            if (payload.new) {
+              this.socialSubscribers.forEach(cb => cb.onUserProfileUpdated?.({ id: payload.new.user_id, avatar_url: payload.new.avatar_url }));
+            }
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members' }, (payload: any) => {
+            if (payload.eventType === 'DELETE' && payload.old) {
+              this.socialSubscribers.forEach(cb => cb.onGroupMemberChanged?.({ groupId: payload.old.group_id, userId: payload.old.user_id, isJoining: false }));
+            } else if (payload.new) {
+              this.socialSubscribers.forEach(cb => cb.onGroupMemberChanged?.({ groupId: payload.new.group_id, userId: payload.new.user_id, isJoining: true }));
+            }
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'live_streamers' }, (payload: any) => {
+            if (payload.eventType === 'DELETE' && payload.old) {
+              this.socialSubscribers.forEach(cb => cb.onStreamerLeft?.(payload.old.user_id));
+            } else if (payload.new) {
+              if (payload.new.is_active === false) {
+                this.socialSubscribers.forEach(cb => cb.onStreamerLeft?.(payload.new.user_id));
+              } else {
+                this.socialSubscribers.forEach(cb => cb.onStreamerJoined?.({
+                  user_id: payload.new.user_id,
+                  full_name: payload.new.full_name,
+                  city: payload.new.city || 'Harare',
+                  device: payload.new.device || 'Mobile',
+                  joined_at: payload.new.joined_at || new Date().toISOString()
+                }));
+              }
+            }
+          });
+
+        channel.subscribe();
+        this.socialChannelInstance = channel;
+      } catch (err) {
+        console.warn('Realtime subscription channel error:', err);
+        this.socialChannelInstance = null;
+      }
+    }
+    return this.socialChannelInstance;
+  }
+
+  /**
+   * Syncs user account to Supabase PostgreSQL users and profile_pictures tables
+   * Stops demo-mode behavior: newly created accounts interact like real accounts on all devices
+   */
+  static async syncUser(user: User): Promise<boolean> {
+    const supabase = getSupabase();
+    if (!supabase || !user) return false;
+    try {
+      const userPayload: any = {
+        id: user.id,
+        phone: user.phone,
+        full_name: user.full_name,
+        role: user.role || 'member',
+        referral_code: user.handle || user.referral_code || null,
+        avatar_url: user.avatar_url || null,
+        cell_group: user.cell_group || null,
+        is_verified: user.is_verified || false,
+        member_id: user.member_id || null,
+        location: user.location || 'Harare, Zimbabwe',
+        city_location: user.city_location || 'Harare',
+        followers_count: user.followers_count || 0,
+        following_count: user.following_count || 0,
+        saved_verses: user.saved_verses || [],
+        offline_sermon_ids: user.offline_sermon_ids || [],
+        updated_at: new Date().toISOString()
+      };
+      if (user.password) {
+        userPayload.password_hash = user.password;
+      }
+
+      await supabase.from('users').upsert(userPayload, { onConflict: 'id' });
+
+      if (user.avatar_url) {
+        await supabase.from('profile_pictures').upsert({
+          user_id: user.id,
+          avatar_url: user.avatar_url,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' });
+      }
+
+      const channel = this.getSocialChannel();
+      if (channel) {
+        channel.send({
+          type: 'broadcast',
+          event: 'user_profile_updated',
+          payload: user
+        });
+      }
+
+      return true;
+    } catch (err) {
+      console.warn('Supabase syncUser notice:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Syncs new app notification across devices instantly
+   */
+  static async syncNotificationCreated(notification: any): Promise<void> {
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'new_notification',
+        payload: notification
+      });
+    }
+  }
+
+  /**
+   * Pulls real registered users from Supabase and merges them into local storage
+   */
+  static async pullUsersFromSupabase(): Promise<User[]> {
+    const supabase = getSupabase();
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*');
+
+      if (error || !data) return [];
+
+      return data.map((row: any) => ({
+        id: row.id,
+        phone: row.phone,
+        password: row.password_hash || 'juice2026',
+        full_name: row.full_name || 'Church Member',
+        handle: row.referral_code?.startsWith('@') ? row.referral_code : `@${(row.full_name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+        role: row.role || 'member',
+        badge_type: (row.role === 'super_admin' || row.role === 'developer') ? 'gold' : 'none',
+        avatar_url: row.avatar_url || null,
+        cell_group: row.cell_group || 'Harare Assembly',
+        is_verified: row.is_verified || false,
+        member_id: row.member_id || `GCZ-MEM-${Math.floor(1000 + Math.random() * 9000)}`,
+        location: row.location || 'Harare',
+        city_location: row.city_location || 'Harare',
+        created_at: row.created_at || new Date().toISOString(),
+        followers_count: row.followers_count || 0,
+        following_count: row.following_count || 0,
+        saved_verses: row.saved_verses || ['John 1:1', 'Isaiah 40:31']
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Syncs group message instantly over Realtime WebSocket without blocking or falling back to REST
+   */
+  static async syncGroupMessage(message: ChatGroupMessage): Promise<boolean> {
+    if (!message) return false;
+    // 1. Instant Realtime broadcast across all devices
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'new_group_message',
+        payload: message
+      });
+    }
+
+    // 2. Background database persistence
+    const supabase = getSupabase();
+    if (supabase) {
+      Promise.resolve(supabase.from('messages').insert({
+        id: message.id,
+        group_id: message.group_id,
+        sender_id: message.sender_id,
+        sender_name: message.sender_name,
+        sender_avatar: message.sender_avatar || null,
+        sender_role: message.sender_role || 'member',
+        text: message.text,
+        reply_to: message.reply_to || null,
+        media_url: message.media_url || null,
+        media_type: message.media_type || null,
+        is_system: message.is_system || false,
+        read_by_user_ids: message.read_by_user_ids || [message.sender_id],
+        created_at: message.created_at || new Date().toISOString()
+      })).catch(() => {});
+    }
+
+    return true;
+  }
+
+  /**
+   * Syncs direct message instantly over Realtime WebSocket without blocking or falling back to REST
+   */
+  static async syncDirectMessage(message: DirectMessage): Promise<boolean> {
+    if (!message) return false;
+    // 1. Instant Realtime broadcast across all devices
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'new_direct_message',
+        payload: message
+      });
+    }
+
+    // 2. Background database persistence
+    const supabase = getSupabase();
+    if (supabase) {
+      Promise.resolve(supabase.from('messages').insert({
+        id: message.id,
+        sender_id: message.sender_id,
+        receiver_id: message.receiver_id,
+        sender_name: (message as any).sender_name || 'Church Member',
+        sender_avatar: (message as any).sender_avatar || null,
+        text: message.text,
+        reply_to: message.reply_to || null,
+        media_url: message.media_url || null,
+        is_read: message.is_read || false,
+        created_at: message.created_at || new Date().toISOString()
+      })).catch(() => {});
+
+      Promise.resolve(supabase.from('direct_messages').insert({
+        sender_id: message.sender_id,
+        receiver_id: message.receiver_id,
+        message: message.text,
+        media_url: message.media_url || null,
+        is_read: message.is_read || false,
+        created_at: message.created_at || new Date().toISOString()
+      })).catch(() => {});
+    }
+
+    return true;
+  }
+
+  /**
+   * Subscribes to the single persistent Realtime channel 'gcz_social_realtime'
+   * Instant broadcast delivery across all devices with zero REST latency
+   */
+  static subscribeToSocialMessaging(callbacks: {
+    onNewGroupMessage?: (msg: ChatGroupMessage) => void;
+    onNewDirectMessage?: (msg: DirectMessage) => void;
+    onUserProfileUpdated?: (user: Partial<User>) => void;
+    onGroupMemberChanged?: (detail: { groupId: string; userId: string; isJoining: boolean }) => void;
+    onFollowUpdated?: (detail: { followerId: string; followingId: string; isFollowing: boolean }) => void;
+    onStreamerJoined?: (viewer: LiveStreamViewer) => void;
+    onStreamerLeft?: (userId: string) => void;
+    onNotificationCreated?: (notification: AppNotification) => void;
+    onBanStatusUpdated?: (detail: { userId: string; isBanned: boolean; reason?: string }) => void;
+  }): () => void {
+    this.getSocialChannel();
+    this.socialSubscribers.add(callbacks);
+    return () => {
+      this.socialSubscribers.delete(callbacks);
+    };
+  }
+
+  /**
+   * Records a live streamer into Supabase live_streamers table
+   * Broadcasts streamer_joined event across all devices in real time
+   */
+  static async syncStreamerJoined(viewer: LiveStreamViewer): Promise<boolean> {
+    const supabase = getSupabase();
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'streamer_joined',
+        payload: viewer
+      });
+    }
+    if (!supabase || !viewer) return false;
+    try {
+      await supabase.from('live_streamers').upsert({
+        user_id: viewer.user_id,
+        full_name: viewer.full_name || viewer.user_name || 'Church Believer',
+        city: viewer.city || 'Harare',
+        device: viewer.device || (typeof navigator !== 'undefined' && /Mobi|Android|iPhone/i.test(navigator.userAgent) ? 'Mobile' : 'Desktop'),
+        is_active: true,
+        joined_at: viewer.joined_at || new Date().toISOString()
+      }, { onConflict: 'user_id' });
+      return true;
+    } catch {
+      try {
+        await supabase.from('live_streamers').insert({
+          user_id: viewer.user_id,
+          full_name: viewer.full_name || viewer.user_name || 'Church Believer',
+          city: viewer.city || 'Harare',
+          device: viewer.device || 'Mobile',
+          is_active: true,
+          joined_at: viewer.joined_at || new Date().toISOString()
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  }
+
+  /**
+   * Removes or deactivates streamer from live_streamers when they exit
+   * Broadcasts streamer_left event across all devices immediately
+   */
+  static async syncStreamerLeft(userId: string): Promise<boolean> {
+    const supabase = getSupabase();
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'streamer_left',
+        payload: { userId }
+      });
+    }
+    if (!supabase || !userId) return false;
+    try {
+      await supabase.from('live_streamers').delete().eq('user_id', userId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Pulls current active live streamers from Supabase
+   */
+  static async pullActiveStreamers(): Promise<LiveStreamViewer[]> {
+    const supabase = getSupabase();
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase
+        .from('live_streamers')
+        .select('*')
+        .eq('is_active', true);
+      if (error || !data) return [];
+      return data.map((d: any) => ({
+        user_id: d.user_id,
+        full_name: d.full_name,
+        city: d.city || 'Harare',
+        device: d.device || 'Mobile',
+        joined_at: d.joined_at
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Updates user verification badge status in Supabase (God Mode action)
+   * Broadcasts user_profile_updated across devices instantly
+   */
+  static async syncVerificationBadge(userId: string, isVerified: boolean, badgeType?: string): Promise<boolean> {
+    const supabase = getSupabase();
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'user_profile_updated',
+        payload: { id: userId, is_verified: isVerified, badge_type: badgeType || (isVerified ? 'blue' : 'none') }
+      });
+    }
+    if (!supabase || !userId) return false;
+    try {
+      await supabase
+        .from('users')
+        .update({
+          is_verified: isVerified,
+          badge_type: badgeType || (isVerified ? 'blue' : 'none'),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+      return true;
+    } catch (err) {
+      console.warn('Supabase syncVerificationBadge notice:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Syncs user ban/unban status in Supabase
+   * Broadcasts ban_status_updated across devices instantly
+   */
+  static async syncBanStatus(userId: string, isBanned: boolean, reason?: string): Promise<boolean> {
+    const supabase = getSupabase();
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'ban_status_updated',
+        payload: { userId, isBanned, reason }
+      });
+    }
+    if (!supabase || !userId) return false;
+    try {
+      await supabase
+        .from('users')
+        .update({
+          is_banned: isBanned,
+          ban_reason: reason || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
       return true;
     } catch {
       return false;

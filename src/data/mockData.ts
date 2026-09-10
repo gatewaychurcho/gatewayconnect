@@ -824,7 +824,7 @@ export const MOCK_PRODUCTS: Product[] = [
     author_or_brand: 'Joe Daniels Collection',
     in_stock: true,
     is_bestseller: true
-  },
+  }
 ];
 
 export const MOCK_DONATIONS: Donation[] = [

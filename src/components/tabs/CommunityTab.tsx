@@ -38,6 +38,7 @@ import {
 import confetti from 'canvas-confetti';
 import { CommunityGroup, PrayerRequest, ChurchEvent, Testimony, User } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { SupabaseSyncService } from '../../services/supabaseSyncService';
 import { INITIAL_USERS } from '../../data/mockData';
 import { ImagePickerModal } from '../modals/ImagePickerModal';
 import { VerifiedBadge } from '../common/VerifiedBadge';
@@ -95,7 +96,27 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       setGroupList(StorageService.getGroups(currentUser?.id));
     };
     window.addEventListener('gcz_groups_updated', handleGroupsUpdated);
-    return () => window.removeEventListener('gcz_groups_updated', handleGroupsUpdated);
+
+    // Cross-device social sync
+    const unsubscribe = SupabaseSyncService.subscribeToSocialMessaging({
+      onUserProfileUpdated: () => {
+        setGroupList(StorageService.getGroups(currentUser?.id));
+      },
+      onGroupMemberChanged: () => {
+        setGroupList(StorageService.getGroups(currentUser?.id));
+      },
+      onFollowUpdated: () => {
+        const updatedList = StorageService.getFollowingList(currentUser?.id);
+        const updatedMap: Record<string, boolean> = {};
+        updatedList.forEach(id => { updatedMap[id] = true; });
+        setFollowingUsers(updatedMap);
+      }
+    });
+
+    return () => {
+      window.removeEventListener('gcz_groups_updated', handleGroupsUpdated);
+      unsubscribe();
+    };
   }, [currentUser?.id]);
 
   useEffect(() => {

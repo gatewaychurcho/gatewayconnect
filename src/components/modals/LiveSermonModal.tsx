@@ -74,13 +74,24 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
   const [donationSuccess, setDonationSuccess] = useState(false);
 
   const status = StorageService.getLiveSermonStatus();
-  const viewers = StorageService.getStreamViewers();
+  const [streamersCount, setStreamersCount] = useState<number>(StorageService.getOnlineStreamersCount());
 
   useEffect(() => {
-    // Record user as streaming viewer
-    StorageService.joinLiveStream(currentUser);
-    setCongregations(StorageService.getCongregationUnits());
+    // 10+ seconds watch requirement:
+    // If a user watches a video for 10+ seconds, record them as a streamer with their login details.
+    const watchTimer = setTimeout(() => {
+      StorageService.recordStreamer(currentUser, status.title || 'Live Apostolic Broadcast');
+      setStreamersCount(StorageService.getOnlineStreamersCount());
+      setCongregations(StorageService.getCongregationUnits());
+    }, 10000);
 
+    const handleStreamersUpdated = () => {
+      setStreamersCount(StorageService.getOnlineStreamersCount());
+      setCongregations(StorageService.getCongregationUnits());
+    };
+    window.addEventListener('gcz_stream_viewers_updated', handleStreamersUpdated);
+
+    setCongregations(StorageService.getCongregationUnits());
     const timer = setInterval(() => {
       setCongregations(StorageService.getCongregationUnits());
     }, 4000);
@@ -95,8 +106,11 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
     window.addEventListener('gcz_stream_url_updated', handleStreamUrlUpdate);
 
     return () => {
+      clearTimeout(watchTimer);
       clearInterval(timer);
       window.removeEventListener('gcz_stream_url_updated', handleStreamUrlUpdate);
+      window.removeEventListener('gcz_stream_viewers_updated', handleStreamersUpdated);
+      // When a user exits a group or stream, the count drops immediately
       StorageService.leaveLiveStream(currentUser.id);
     };
   }, [currentUser]);
@@ -182,7 +196,7 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
 
   const isFacebook = streamEmbedInfo.isFacebook;
   const liveFeedTitle = status.title || (isFacebook ? 'Apostle Joe Daniels - Sunday Dominion & Prophetic Broadcast (Facebook Live)' : 'Church & Politics (Controversial Issues) - Apostle Joe Daniels (YouTube Live)');
-  const onlineStreamersCount = StorageService.getOnlineStreamersCount();
+  const onlineStreamersCount = streamersCount;
 
   const establishedCongregations = congregations.filter((c) => c.is_congregation);
 

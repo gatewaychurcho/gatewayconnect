@@ -441,7 +441,38 @@ CREATE TABLE IF NOT EXISTS public.orders (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 18. DIRECT MESSAGES TABLE (Real-Time Member DMs)
+-- 18. DIRECT MESSAGES & SOCIAL MESSAGES TABLE (Real-Time Group & Direct Social Messaging)
+CREATE TABLE IF NOT EXISTS public.messages (
+    id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+    group_id TEXT,
+    sender_id TEXT NOT NULL,
+    receiver_id TEXT,
+    sender_name VARCHAR(150) NOT NULL DEFAULT 'Church Member',
+    sender_avatar TEXT,
+    sender_role VARCHAR(50) DEFAULT 'member',
+    text TEXT NOT NULL,
+    reply_to JSONB,
+    media_url TEXT,
+    media_type VARCHAR(50),
+    is_system BOOLEAN DEFAULT FALSE,
+    is_read BOOLEAN DEFAULT FALSE,
+    read_by_user_ids TEXT[] DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Ensure messages columns exist
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS group_id TEXT;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS receiver_id TEXT;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS sender_name VARCHAR(150) DEFAULT 'Church Member';
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS sender_avatar TEXT;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS sender_role VARCHAR(50) DEFAULT 'member';
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS reply_to JSONB;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS media_url TEXT;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS media_type VARCHAR(50);
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS is_system BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS read_by_user_ids TEXT[] DEFAULT '{}';
+
 CREATE TABLE IF NOT EXISTS public.direct_messages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     sender_id VARCHAR(100) NOT NULL,
@@ -579,6 +610,7 @@ ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.direct_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_activities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.live_streamers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.carts ENABLE ROW LEVEL SECURITY;
@@ -701,6 +733,16 @@ CREATE POLICY "Public insert direct_messages" ON public.direct_messages FOR INSE
 DROP POLICY IF EXISTS "Public update direct_messages" ON public.direct_messages;
 CREATE POLICY "Public update direct_messages" ON public.direct_messages FOR UPDATE USING (true);
 
+-- Social & Group Messages Policies (Allows members to read and broadcast in real-time)
+DROP POLICY IF EXISTS "Public read messages" ON public.messages;
+CREATE POLICY "Public read messages" ON public.messages FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Public insert messages" ON public.messages;
+CREATE POLICY "Public insert messages" ON public.messages FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Public update messages" ON public.messages;
+CREATE POLICY "Public update messages" ON public.messages FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Public delete messages" ON public.messages;
+CREATE POLICY "Public delete messages" ON public.messages FOR DELETE USING (true);
+
 -- Activities & Live Streamers Policies
 DROP POLICY IF EXISTS "Public read user_activities" ON public.user_activities;
 CREATE POLICY "Public read user_activities" ON public.user_activities FOR SELECT USING (true);
@@ -775,6 +817,39 @@ DROP POLICY IF EXISTS "Public insert group_media" ON public.group_media;
 CREATE POLICY "Public insert group_media" ON public.group_media FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "Public delete group_media" ON public.group_media;
 CREATE POLICY "Public delete group_media" ON public.group_media FOR DELETE USING (true);
+
+-- Realtime Publications (Enables instant WebSocket broadcast across devices)
+DO $$
+BEGIN
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+    EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL;
+    END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.direct_messages;
+    EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL;
+    END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.users;
+    EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL;
+    END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.group_members;
+    EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL;
+    END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.profile_pictures;
+    EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL;
+    END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.user_follows;
+    EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL;
+    END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.follows;
+    EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL;
+    END;
+END $$;
 
 -- ==============================================================================
 -- 23. SEED INITIAL FOUNDERS, DEFAULT STREAM, & LATEST APOSTOLIC SERMON
