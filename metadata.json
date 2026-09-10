@@ -1,6 +1,11 @@
 {
   "name": "Gateway Connect",
-  "description": "Official mobile community platform for Apostle Joe Daniels & Gateway Church Zimbabwe. Features live streaming, multilingual Bible (KJV, NIV, ESV, Shona), Ecocash/Paynow/Stripe donations, 1-on-1 pastoral booking, and interactive prayer wall.",
-  "requestFramePermissions": ["camera", "microphone"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "description": "Official mobile community platform for Apostle Joe Daniels \u0026 Gateway Church Zimbabwe. Features live streaming, multilingual Bible (KJV, NIV, ESV, Shona), Ecocash/Paynow/Stripe donations, 1-on-1 pastoral booking, and interactive prayer wall.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
