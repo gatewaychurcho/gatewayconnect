@@ -1,6 +1,6 @@
 {
-  "name": "Gateway Community Connect",
-  "description": "Official mobile community platform for Apostle Joe Daniels \u0026 Gateway Church Zimbabwe. Features live streaming, multilingual Bible (KJV, NIV, ESV, Shona), Ecocash/Paynow/Stripe donations, 1-on-1 pastoral booking, and interactive prayer wall.",
+  "name": "Gateway Community",
+  "description": "Official mobile community platform for Apostle Joe Daniels \u0026 Gateway Church Zimbabwe. Features live streaming, multilingual Bible (KJV, NIV, ESV, Shona) 1-on-1 pastoral booking, and interactive prayer wall.",
   "requestFramePermissions": [
     "camera",
     "microphone"
