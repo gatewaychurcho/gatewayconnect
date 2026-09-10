@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { StorageService } from '../../services/storageService';
+import { PaynowService } from '../../services/paynowService';
 
 interface PaidBookingModalProps {
   isOpen: boolean;
@@ -49,6 +50,7 @@ export const PaidBookingModal: React.FC<PaidBookingModalProps> = ({
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [confirmedZoomUrl, setConfirmedZoomUrl] = useState('');
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -56,13 +58,31 @@ export const PaidBookingModal: React.FC<PaidBookingModalProps> = ({
   const meetingId = '812 3901 9284';
   const meetingPasscode = 'GATEWAY';
 
-  const handleSubmitBooking = (e: React.FormEvent) => {
+  const handleSubmitBooking = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const activeZoomUrl = (zoomMode === 'custom_link' && customZoomLink.trim()) 
       ? customZoomLink.trim() 
       : defaultGatewayZoomUrl;
 
+    setPaymentError(null);
+    const payment = await PaynowService.initiateTransaction({
+      reference: `GCZ-BOOKING-${Date.now().toString().slice(-8)}`,
+      amount: serviceType.includes('Prophetic') ? 50 : 30,
+      additionalInfo: `Pastoral booking - ${serviceType}`,
+      phone: phone.trim(),
+      paymentMethod: 'EcoCash'
+    });
+    if (!payment.success || !payment.pollUrl) {
+      setPaymentError(payment.error || 'Payment could not be started. Booking was not created.');
+      return;
+    }
+    if (payment.browserUrl) window.open(payment.browserUrl, '_blank', 'noopener,noreferrer');
+    const result = await PaynowService.waitForPayment(payment.pollUrl);
+    if (!result.isPaid) {
+      setPaymentError(`Payment status: ${result.status}. Booking was not created.`);
+      return;
+    }
     setConfirmedZoomUrl(activeZoomUrl);
 
     // Save to service bookings
@@ -213,6 +233,11 @@ export const PaidBookingModal: React.FC<PaidBookingModalProps> = ({
           </div>
         ) : (
           <form onSubmit={handleSubmitBooking} className="p-4 sm:p-5 space-y-3.5 max-h-[80vh] overflow-y-auto">
+            {paymentError && (
+              <div className="rounded-xl border border-rose-500/40 bg-rose-950/40 p-3 text-xs text-rose-200">
+                {paymentError}
+              </div>
+            )}
             
             <div className="bg-[#001428] p-3 rounded-2xl border border-blue-500/30 text-xs text-white/80 flex items-start gap-2.5">
               <Video className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />

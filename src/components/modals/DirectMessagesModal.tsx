@@ -55,6 +55,7 @@ import confetti from 'canvas-confetti';
 import { User, DirectMessage, DmThread, ChatGroup, ChatGroupMessage, GroupMembership, GroupInvite } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { SupabaseSyncService } from '../../services/supabaseSyncService';
+import { PaynowService } from '../../services/paynowService';
 
 interface DirectMessagesModalProps {
   currentUser: User;
@@ -1033,22 +1034,36 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     setShowPaymentModal(true);
   };
 
-  const handleProcessPayment = () => {
+  const handleProcessPayment = async () => {
     if (!paymentTargetGroup) return;
     setIsProcessingPayment(true);
-
-    setTimeout(() => {
-      const price = paymentTargetGroup.price_usd || 150;
-      const res = StorageService.joinChatGroup(paymentTargetGroup.id, currentUser.id, price);
+    const price = paymentTargetGroup.price_usd || 150;
+    const payment = await PaynowService.initiateTransaction({
+      reference: `GCZ-GROUP-${Date.now().toString().slice(-8)}`,
+      amount: price,
+      additionalInfo: `Fellowship enrollment - ${paymentTargetGroup.name}`,
+      phone: paymentPhone,
+      paymentMethod: paymentMethod === 'ecocash' ? 'EcoCash' : paymentMethod === 'innbucks' ? 'InnBucks' : 'Card'
+    });
+    if (!payment.success || !payment.pollUrl) {
+      setPaymentNoticeMessage(payment.error || 'Payment could not be started. Membership was not activated.');
       setIsProcessingPayment(false);
-      setShowPaymentModal(false);
-
-      if (res.success) {
-        confetti({ particleCount: 60, spread: 80 });
-        refreshGroupsData();
-        refreshThreads();
-      }
-    }, 1200);
+      return;
+    }
+    if (payment.browserUrl) window.open(payment.browserUrl, '_blank', 'noopener,noreferrer');
+    const result = await PaynowService.waitForPayment(payment.pollUrl);
+    const res = result.isPaid
+      ? StorageService.joinChatGroup(paymentTargetGroup.id, currentUser.id, price)
+      : { success: false, message: `Payment status: ${result.status}. Membership was not activated.` };
+    setIsProcessingPayment(false);
+    if (!res.success) {
+      setPaymentNoticeMessage(res.message);
+      return;
+    }
+    setShowPaymentModal(false);
+    confetti({ particleCount: 60, spread: 80 });
+    refreshGroupsData();
+    refreshThreads();
   };
 
   const handleCreateGroupSubmit = (e: React.FormEvent) => {

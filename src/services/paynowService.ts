@@ -222,4 +222,19 @@ export class PaynowService {
       };
     }
   }
+
+  static async waitForPayment(pollUrl: string, attempts = 20): Promise<PaynowPollResult> {
+    let latest: PaynowPollResult = {
+      status: 'Created',
+      reference: '',
+      amount: 0,
+      isPaid: false
+    };
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      latest = await this.pollStatus(pollUrl);
+      if (latest.isPaid || ['Cancelled', 'Failed'].includes(latest.status)) return latest;
+      await new Promise(resolve => window.setTimeout(resolve, 3000));
+    }
+    return latest;
+  }
 }

@@ -219,6 +219,7 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
     };
 
     const refNumber = `GCZ-PAYNOW-${Date.now().toString().slice(-6)}`;
+    let paynowPollUrl: string | undefined;
 
     // If payment gateway is Paynow, initiate with Paynow Zimbabwe
     if (paymentGateway === 'Paynow') {
@@ -237,6 +238,7 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
         setPaynowInstruction(paynowRes.error || 'Paynow could not start this payment. No funds were recorded.');
         return;
       }
+      paynowPollUrl = paynowRes.pollUrl;
       if (paynowRes.browserUrl) {
         setPaynowRedirectUrl(paynowRes.browserUrl);
       }
@@ -259,6 +261,22 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
     setActiveReceipt(donation);
     if (onDonationSuccess) {
       onDonationSuccess(donation);
+    }
+
+    if (paymentGateway === 'Paynow' && paynowPollUrl) {
+      setPaynowInstruction('Payment started. Waiting for Paynow confirmation...');
+      const paymentResult = await PaynowService.waitForPayment(paynowPollUrl);
+      const finalDonation = StorageService.updateDonationStatus(
+        donation.id,
+        paymentResult.isPaid ? 'completed' : ['Cancelled', 'Failed'].includes(paymentResult.status) ? 'failed' : 'pending'
+      );
+      if (finalDonation) {
+        setActiveReceipt(finalDonation);
+        onDonationSuccess?.(finalDonation);
+      }
+      setPaynowInstruction(paymentResult.isPaid
+        ? 'Payment confirmed by Paynow.'
+        : `Payment status: ${paymentResult.status}. No paid receipt was issued.`);
     }
     confetti({
       particleCount: 50,
@@ -297,23 +315,40 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
       ? (deliveryAddress.trim() || 'Harare Residential Delivery') 
       : 'Main Church Pick-up Desk / Belvedere Cathedral Hub';
       
-    const newOrder = StorageService.createOrder({
+    const processCheckout = async () => {
+      const payment = await PaynowService.initiateTransaction({
+        reference: `GCZ-ORDER-${Date.now().toString().slice(-8)}`,
+        amount: totalCartUsd,
+        additionalInfo: `Kingdom Store order - ${cart.length} item(s)`,
+        phone: orderPhone,
+        paymentMethod: orderPaymentMethod === 'OneMoney' ? 'OneMoney' : orderPaymentMethod === 'EcoCash' ? 'EcoCash' : 'Card'
+      });
+      if (!payment.success || !payment.pollUrl) {
+        setCartToast(payment.error || 'Payment could not be started. The order was not created.');
+        return;
+      }
+      if (payment.browserUrl) window.open(payment.browserUrl, '_blank', 'noopener,noreferrer');
+      const result = await PaynowService.waitForPayment(payment.pollUrl);
+      if (!result.isPaid) {
+        setCartToast(`Payment status: ${result.status}. The order was not created.`);
+        return;
+      }
+
+      const newOrder = StorageService.createOrder({
       user_name: orderName.trim() || 'Church Member',
       user_phone: orderPhone.trim() || '+263772123456',
       items: [...cart],
       total_usd: totalCartUsd,
       payment_method: orderPaymentMethod,
       delivery_address: finalAddress
-    });
+      });
 
-    setConfirmedOrder(newOrder);
-    setCart([]);
-    setShowCartModal(false);
-    confetti({
-      particleCount: 50,
-      spread: 80,
-      origin: { y: 0.5 }
-    });
+      setConfirmedOrder(newOrder);
+      setCart([]);
+      setShowCartModal(false);
+      confetti({ particleCount: 50, spread: 80, origin: { y: 0.5 } });
+    };
+    void processCheckout();
   };
 
   return (

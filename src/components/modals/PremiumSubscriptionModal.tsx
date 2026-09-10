@@ -19,6 +19,7 @@ import {
 import confetti from 'canvas-confetti';
 import { User, Sermon, PremiumPlan } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { PaynowService } from '../../services/paynowService';
 import { VerifiedBadge } from '../common/VerifiedBadge';
 
 interface PremiumSubscriptionModalProps {
@@ -59,7 +60,7 @@ export const PremiumSubscriptionModal: React.FC<PremiumSubscriptionModalProps> =
   const isGuest = currentUser.role === 'guest';
   const selectedPlan = plans.find(p => p.id === selectedPlanId) || plans[1] || plans[0];
 
-  const handleSubscribe = () => {
+  const handleSubscribe = async () => {
     if (isGuest) {
       onClose();
       onRequireAuth?.();
@@ -67,7 +68,26 @@ export const PremiumSubscriptionModal: React.FC<PremiumSubscriptionModalProps> =
     }
 
     setIsProcessing(true);
-    setTimeout(() => {
+    const payment = await PaynowService.initiateTransaction({
+      reference: `GCZ-PREMIUM-${Date.now().toString().slice(-8)}`,
+      amount: selectedPlan.priceUsd,
+      additionalInfo: `Gateway Premium ${selectedPlan.title}`,
+      phone,
+      paymentMethod: paymentMethod === 'EcoCash' ? 'EcoCash' : 'Card'
+    });
+    if (!payment.success || !payment.pollUrl) {
+      setIsProcessing(false);
+      setSuccessMessage(payment.error || 'Payment could not be started. Premium was not activated.');
+      return;
+    }
+    if (payment.browserUrl) window.open(payment.browserUrl, '_blank', 'noopener,noreferrer');
+    const result = await PaynowService.waitForPayment(payment.pollUrl);
+    if (!result.isPaid) {
+      setIsProcessing(false);
+      setSuccessMessage(`Payment status: ${result.status}. Premium was not activated.`);
+      return;
+    }
+    {
       const updatedUser = StorageService.subscribePremium(selectedPlan.durationMonths);
       onUpdateUser(updatedUser);
       setIsProcessing(false);
@@ -81,10 +101,10 @@ export const PremiumSubscriptionModal: React.FC<PremiumSubscriptionModalProps> =
         setSuccessMessage(null);
         onClose();
       }, 2000);
-    }, 1000);
+    }
   };
 
-  const handleUnlockSingleSermon = () => {
+  const handleUnlockSingleSermon = async () => {
     if (isGuest) {
       onClose();
       onRequireAuth?.();
@@ -93,7 +113,26 @@ export const PremiumSubscriptionModal: React.FC<PremiumSubscriptionModalProps> =
 
     if (!targetSermon) return;
     setIsProcessing(true);
-    setTimeout(() => {
+    const payment = await PaynowService.initiateTransaction({
+      reference: `GCZ-SERMON-${Date.now().toString().slice(-8)}`,
+      amount: targetSermon.unlock_price_usd || 5,
+      additionalInfo: `Sermon unlock - ${targetSermon.title}`,
+      phone,
+      paymentMethod: paymentMethod === 'EcoCash' ? 'EcoCash' : 'Card'
+    });
+    if (!payment.success || !payment.pollUrl) {
+      setIsProcessing(false);
+      setSuccessMessage(payment.error || 'Payment could not be started. Sermon was not unlocked.');
+      return;
+    }
+    if (payment.browserUrl) window.open(payment.browserUrl, '_blank', 'noopener,noreferrer');
+    const result = await PaynowService.waitForPayment(payment.pollUrl);
+    if (!result.isPaid) {
+      setIsProcessing(false);
+      setSuccessMessage(`Payment status: ${result.status}. Sermon was not unlocked.`);
+      return;
+    }
+    {
       const updatedUser = StorageService.unlockSermon(targetSermon.id);
       onUpdateUser(updatedUser);
       onSermonUnlocked?.(targetSermon.id);
@@ -104,7 +143,7 @@ export const PremiumSubscriptionModal: React.FC<PremiumSubscriptionModalProps> =
         setSuccessMessage(null);
         onClose();
       }, 1800);
-    }, 800);
+    }
   };
 
   const handleSaveAdminPrices = () => {

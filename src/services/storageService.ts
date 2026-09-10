@@ -1079,6 +1079,33 @@ export class StorageService {
     return this.recordDonation(formatted);
   }
 
+  static updateDonationStatus(donationId: string, status: Donation['status']): Donation | null {
+    const donations = this.getDonations();
+    const donation = donations.find(item => item.id === donationId);
+    if (!donation) return null;
+    donation.status = status;
+    setLocal(KEYS.DONATIONS, donations);
+    if (status === 'completed' && !this.getReceiptsArchive().some(receipt => receipt.reference === donation.receipt_number)) {
+      this.addReceipt({
+        id: `rec_${Date.now()}`,
+        reference: donation.receipt_number,
+        date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+        payer_name: donation.donor_name,
+        amount: donation.amount,
+        currency: donation.currency,
+        purpose: donation.fund_type,
+        payment_method: donation.payment_method,
+        status: 'Paid',
+        created_at: new Date().toISOString(),
+        items_summary: `${donation.fund_type} via ${donation.payment_method}`
+      });
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_donation_updated', { detail: donation }));
+    }
+    return donation;
+  }
+
   // Bookings
   static getBookings(): ServiceBooking[] {
     return getLocal<ServiceBooking[]>(KEYS.BOOKINGS, MOCK_BOOKINGS);
@@ -2964,6 +2991,9 @@ export class StorageService {
     };
     groups.unshift(newGroup);
     setLocal(KEYS.CHAT_GROUPS, groups);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_groups_updated', { detail: newGroup }));
+    }
     return newGroup;
   }
 
@@ -3562,7 +3592,15 @@ export class StorageService {
               : type === 'reaction'
                 ? 'gcz_reactions_updated'
                 : 'gcz_stream_url_updated';
-      window.dispatchEvent(new CustomEvent(eventName, { detail: payload }));
+        if (type === 'group' && payload && typeof payload === 'object' && 'id' in payload) {
+          const groups = this.getChatGroups();
+          const group = payload as ChatGroup;
+          const index = groups.findIndex(item => item.id === group.id);
+          if (index >= 0) groups[index] = { ...groups[index], ...group };
+          else groups.unshift(group);
+          setLocal(KEYS.CHAT_GROUPS, groups);
+        }
+        window.dispatchEvent(new CustomEvent(eventName, { detail: payload }));
     }
   }
 

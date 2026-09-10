@@ -22,6 +22,7 @@ import {
 import confetti from 'canvas-confetti';
 import { DonationFund, Donation, User } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { PaynowService } from '../../services/paynowService';
 
 interface MoorsDepositModalProps {
   isOpen: boolean;
@@ -80,8 +81,8 @@ export const MoorsDepositModal: React.FC<MoorsDepositModalProps> = ({
         setUssdTimer(prev => prev - 1);
       }, 1000);
     } else if (isOpen && depositState === 'ussd_prompt' && ussdTimer <= 0) {
-      // Auto-fallback
-      handleCompleteDeposit();
+      setDepositState('failed');
+      setPinError('The payment window expired without confirmation. No funds were recorded.');
     }
     return () => clearInterval(interval);
   }, [isOpen, depositState, ussdTimer]);
@@ -100,28 +101,46 @@ export const MoorsDepositModal: React.FC<MoorsDepositModalProps> = ({
     setTimeout(() => setCopiedUssd(false), 2500);
   };
 
-  const handleStartDeposit = (e: React.FormEvent) => {
+  const handleStartDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPinError(null);
     if (!currentFinalAmount || currentFinalAmount <= 0) return;
 
-    if (paymentChannel === 'ecocash_express' || paymentChannel === 'onemoney') {
-      setDepositState('initiating');
-      setUssdTimer(45);
-      
-      // Simulate network handshake to mobile operator switch for account 0771445642
-      setTimeout(() => {
-        setDepositState('ussd_prompt');
-      }, 1200);
-    } else if (paymentChannel === 'ecocash_ussd') {
+    if (paymentChannel === 'ecocash_ussd') {
       // Manual USSD mode
       setDepositState('ussd_prompt');
+      setPinError('Complete the USSD payment on your phone, then use the Paynow or EcoCash Express option so the gateway can verify it automatically.');
+      return;
+    }
+
+    setDepositState('initiating');
+    const method = paymentChannel === 'onemoney' ? 'OneMoney' : paymentChannel === 'ecocash_express' ? 'EcoCash' : paymentChannel === 'paynow' ? 'Paynow' : 'Card';
+    const payment = await PaynowService.initiateTransaction({
+      reference: `GCZ-DEPOSIT-${Date.now().toString().slice(-8)}`,
+      amount: currentFinalAmount,
+      additionalInfo: `${selectedFund} - Gateway Connect`,
+      phone,
+      paymentMethod: method as 'EcoCash' | 'OneMoney' | 'Card' | 'Paynow'
+    });
+    if (!payment.success) {
+      setPinError(payment.error || 'Payment gateway unavailable. No funds were recorded.');
+      setDepositState('failed');
+      return;
+    }
+    if (payment.browserUrl) window.open(payment.browserUrl, '_blank', 'noopener,noreferrer');
+    if (!payment.pollUrl) {
+      setPinError('Payment started, but the gateway did not provide a verification URL. Check your merchant configuration.');
+      setDepositState('failed');
+      return;
+    }
+    setUssdTimer(60);
+    setDepositState('ussd_prompt');
+    const result = await PaynowService.waitForPayment(payment.pollUrl);
+    if (result.isPaid) {
+      handleCompleteDeposit();
     } else {
-      // Paynow / Card / InnBucks
-      setDepositState('initiating');
-      setTimeout(() => {
-        handleCompleteDeposit();
-      }, 1500);
+      setPinError(`Payment status: ${result.status}. No funds were recorded as paid.`);
+      setDepositState('failed');
     }
   };
 
@@ -131,7 +150,7 @@ export const MoorsDepositModal: React.FC<MoorsDepositModalProps> = ({
       return;
     }
     setPinError(null);
-    handleCompleteDeposit();
+    setPinError('Manual PIN entry cannot verify a payment. Use the gateway prompt so confirmation is received securely.');
   };
 
   const handleCompleteDeposit = () => {
