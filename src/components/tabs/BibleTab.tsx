@@ -375,27 +375,27 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
   return (
     <div className="space-y-4 pb-24 max-w-4xl mx-auto px-2 sm:px-4 pt-1">
       
-      {/* 1. JW-Style Main Top Navigation Bar */}
-      <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-2.5 sm:p-3 shadow-xl sticky top-14 z-30 backdrop-blur-md space-y-2">
+      {/* 1. Main Top Navigation Bar */}
+      <div className="bg-card/95 backdrop-blur-md border border-border rounded-xl p-2.5 sm:p-3 shadow-sm sticky top-14 z-30 space-y-2">
         
         <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
-          {/* Main Scripture Selector Trigger (JW-Style: Book + Chapter) */}
+          {/* Main Scripture Selector Trigger (Book + Chapter) */}
           <button
             id="btn-open-jw-bible-nav"
             onClick={() => {
               setNavStep('book');
               setShowNavModal(true);
             }}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#001122] border border-[#D4AF37]/50 hover:border-[#D4AF37] text-white font-bold text-sm sm:text-base transition-all shadow-sm active:scale-95"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border hover:border-primary/40 text-foreground font-semibold text-sm sm:text-base transition-all shadow-xs active:scale-95"
           >
-            <BookOpen className="w-4 h-4 text-[#D4AF37]" />
-            <span className="text-[#D4AF37]">{displayBookName(selectedBook)}</span>
-            <span className="text-white/90">{selectedChapter}</span>
-            <ChevronDown className="w-3.5 h-3.5 text-white/50" />
+            <BookOpen className="w-4 h-4 text-primary" />
+            <span className="text-primary">{displayBookName(selectedBook)}</span>
+            <span className="text-foreground">{selectedChapter}</span>
+            <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
           </button>
 
           {/* Quick Chapter Step Prev / Next Buttons */}
-          <div className="flex items-center gap-1 bg-[#001122] p-1 rounded-xl border border-white/10">
+          <div className="flex items-center gap-1 bg-secondary/70 p-1 rounded-lg border border-border">
             <button
               disabled={selectedChapter <= 1}
               onClick={() => {
@@ -403,11 +403,11 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                 setTargetVerse(1);
               }}
               title="Previous Chapter"
-              className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 disabled:opacity-30 transition-all"
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-background/80 disabled:opacity-30 transition-all"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="text-xs font-mono text-white/60 px-1 font-semibold">
+            <span className="text-xs font-mono text-muted-foreground px-1 font-semibold">
               {selectedChapter} / {currentBookObj.chaptersCount}
             </span>
             <button
@@ -417,22 +417,22 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                 setTargetVerse(1);
               }}
               title="Next Chapter"
-              className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 disabled:opacity-30 transition-all"
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-background/80 disabled:opacity-30 transition-all"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Translation Switcher (JW Clean Style - KJV + NIV) */}
-          <div className="flex items-center gap-1 bg-[#001122] p-1 rounded-xl border border-white/10">
+          {/* Translation Switcher */}
+          <div className="flex items-center gap-1 bg-secondary/70 p-1 rounded-lg border border-border">
             {(['KJV', 'NIV'] as BibleVersion[]).map(v => (
               <button
                 key={v}
                 onClick={() => setVersion(v)}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
                   version === v 
-                    ? 'bg-[#D4AF37] text-[#001F3F] shadow-sm' 
-                    : 'text-white/60 hover:text-white'
+                    ? 'bg-primary text-primary-foreground shadow-xs' 
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {v}
@@ -444,22 +444,22 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
           <div className="flex items-center gap-1.5">
             <button
               onClick={handleToggleAudio}
-              className={`p-2 rounded-xl text-xs font-bold transition-all ${
+              className={`p-2 rounded-lg text-xs font-semibold transition-all ${
                 isPlayingAudio 
-                  ? 'bg-red-600 text-white animate-pulse' 
-                  : 'bg-[#001122] hover:bg-white/10 text-white/80 border border-white/10'
+                  ? 'bg-destructive text-destructive-foreground animate-pulse' 
+                  : 'bg-secondary hover:bg-secondary/80 text-foreground border border-border'
               }`}
               title="Read Chapter Aloud"
             >
-              {isPlayingAudio ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-[#D4AF37]" />}
+              {isPlayingAudio ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-primary" />}
             </button>
 
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className={`p-2 rounded-xl text-xs font-bold transition-all border ${
+              className={`p-2 rounded-lg text-xs font-semibold transition-all border ${
                 showSettings 
-                  ? 'bg-[#D4AF37] text-[#001F3F] border-[#D4AF37]' 
-                  : 'bg-[#001122] hover:bg-white/10 text-white/80 border-white/10'
+                  ? 'bg-primary text-primary-foreground border-primary' 
+                  : 'bg-secondary hover:bg-secondary/80 text-foreground border border-border'
               }`}
               title="Typography & Reading Settings"
             >
@@ -471,18 +471,18 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
         {/* Quick Reference / Verse Search Bar */}
         <form onSubmit={handleQuickSearch} className="flex items-center gap-1.5">
           <div className="relative flex-1">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
               value={quickSearchQuery}
               onChange={(e) => setQuickSearchQuery(e.target.value)}
               placeholder='Search verse e.g. "John 3:16", "Romans 8:28", or word "shepherd"'
-              className="w-full bg-[#001122] border border-white/10 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-[#D4AF37]"
+              className="w-full bg-secondary/70 border border-border rounded-lg pl-9 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
             />
           </div>
           <button
             type="submit"
-            className="px-3 py-1.5 bg-[#D4AF37] text-[#001F3F] font-bold text-xs rounded-xl hover:brightness-110 shadow"
+            className="px-3 py-1.5 bg-primary text-primary-foreground font-semibold text-xs rounded-lg hover:opacity-90 shadow-xs transition-all"
           >
             Jump
           </button>
@@ -490,10 +490,10 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
 
         {/* Search Results Dropdown */}
         {isSearching && quickSearchResults.length > 0 && (
-          <div className="p-2.5 bg-[#001122] border border-[#D4AF37]/40 rounded-xl space-y-1.5 max-h-48 overflow-y-auto text-xs">
-            <div className="flex items-center justify-between text-[11px] text-[#D4AF37] font-bold px-1">
+          <div className="p-2.5 bg-card border border-border rounded-xl space-y-1.5 max-h-48 overflow-y-auto text-xs shadow-lg">
+            <div className="flex items-center justify-between text-[11px] text-primary font-semibold px-1">
               <span>{quickSearchResults.length} Search Matches</span>
-              <button onClick={() => setIsSearching(false)} className="text-white/50 hover:text-white">
+              <button onClick={() => setIsSearching(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -507,12 +507,12 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                   setHasSelectedBook(true);
                   setIsSearching(false);
                 }}
-                className="w-full text-left p-2 rounded-lg bg-white/5 hover:bg-[#D4AF37]/10 border border-white/5 hover:border-[#D4AF37]/40 transition-all block"
+                className="w-full text-left p-2 rounded-lg bg-secondary/60 hover:bg-secondary border border-border transition-all block"
               >
-                <div className="font-bold text-[#D4AF37]">
+                <div className="font-semibold text-primary">
                   {res.book} {res.chapter}:{res.verse}
                 </div>
-                <div className="text-white/70 line-clamp-1">{res.text}</div>
+                <div className="text-muted-foreground line-clamp-1">{res.text}</div>
               </button>
             ))}
           </div>
@@ -520,26 +520,26 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
 
         {/* JW Typography Settings Panel (Expandable) */}
         {showSettings && (
-          <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs text-white/80 animate-in fade-in duration-150">
+          <div className="pt-2 border-t border-border flex flex-wrap items-center justify-between gap-3 text-xs text-foreground animate-in fade-in duration-150">
             {/* Font Size Adjuster (A- / A / A+) */}
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-white/60">Font Size:</span>
-              <div className="flex rounded-lg bg-[#001122] p-0.5 border border-white/10">
+              <span className="text-[11px] text-muted-foreground">Font Size:</span>
+              <div className="flex rounded-lg bg-secondary/70 p-0.5 border border-border">
                 <button
                   onClick={() => setFontSize('sm')}
-                  className={`px-2.5 py-0.5 rounded text-xs ${fontSize === 'sm' ? 'bg-[#D4AF37] text-slate-950 font-bold' : 'text-white/60'}`}
+                  className={`px-2.5 py-0.5 rounded text-xs transition-colors ${fontSize === 'sm' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   A-
                 </button>
                 <button
                   onClick={() => setFontSize('base')}
-                  className={`px-2.5 py-0.5 rounded text-xs ${fontSize === 'base' ? 'bg-[#D4AF37] text-slate-950 font-bold' : 'text-white/60'}`}
+                  className={`px-2.5 py-0.5 rounded text-xs transition-colors ${fontSize === 'base' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   A
                 </button>
                 <button
                   onClick={() => setFontSize('lg')}
-                  className={`px-2.5 py-0.5 rounded text-xs ${fontSize === 'lg' ? 'bg-[#D4AF37] text-slate-950 font-bold' : 'text-white/60'}`}
+                  className={`px-2.5 py-0.5 rounded text-xs transition-colors ${fontSize === 'lg' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   A+
                 </button>
@@ -548,18 +548,18 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
 
             {/* Layout Style: Verse-by-Verse vs Continuous Paragraph */}
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-white/60">Layout:</span>
-              <div className="flex rounded-lg bg-[#001122] p-0.5 border border-white/10">
+              <span className="text-[11px] text-muted-foreground">Layout:</span>
+              <div className="flex rounded-lg bg-secondary/70 p-0.5 border border-border">
                 <button
                   onClick={() => setViewStyle('verse')}
-                  className={`px-2.5 py-0.5 rounded text-xs flex items-center gap-1 ${viewStyle === 'verse' ? 'bg-[#D4AF37] text-slate-950 font-bold' : 'text-white/60'}`}
+                  className={`px-2.5 py-0.5 rounded text-xs flex items-center gap-1 transition-colors ${viewStyle === 'verse' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   <List className="w-3 h-3" />
                   <span>Verse by Verse</span>
                 </button>
                 <button
                   onClick={() => setViewStyle('paragraph')}
-                  className={`px-2.5 py-0.5 rounded text-xs flex items-center gap-1 ${viewStyle === 'paragraph' ? 'bg-[#D4AF37] text-slate-950 font-bold' : 'text-white/60'}`}
+                  className={`px-2.5 py-0.5 rounded text-xs flex items-center gap-1 transition-colors ${viewStyle === 'paragraph' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   <AlignLeft className="w-3 h-3" />
                   <span>Continuous</span>
@@ -569,17 +569,17 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
 
             {/* Font Family: Classical Serif vs Clean Sans */}
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-white/60">Font:</span>
-              <div className="flex rounded-lg bg-[#001122] p-0.5 border border-white/10">
+              <span className="text-[11px] text-muted-foreground">Font:</span>
+              <div className="flex rounded-lg bg-secondary/70 p-0.5 border border-border">
                 <button
                   onClick={() => setFontFamily('serif')}
-                  className={`px-2.5 py-0.5 rounded text-xs font-serif ${fontFamily === 'serif' ? 'bg-[#D4AF37] text-slate-950 font-bold' : 'text-white/60'}`}
+                  className={`px-2.5 py-0.5 rounded text-xs font-serif transition-colors ${fontFamily === 'serif' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   Serif
                 </button>
                 <button
                   onClick={() => setFontFamily('sans')}
-                  className={`px-2.5 py-0.5 rounded text-xs font-sans ${fontFamily === 'sans' ? 'bg-[#D4AF37] text-slate-950 font-bold' : 'text-white/60'}`}
+                  className={`px-2.5 py-0.5 rounded text-xs font-sans transition-colors ${fontFamily === 'sans' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   Sans
                 </button>
@@ -591,33 +591,33 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
       </div>
 
       {/* 2. Sub-navigation tabs (Reader, Reading Plans, Bookmarks) */}
-      <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+      <div className="flex items-center gap-1.5 border-b border-border pb-2">
         <button
           onClick={() => setActiveTab('reader')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
             activeTab === 'reader'
-              ? 'bg-[#D4AF37] text-[#001F3F] shadow-sm'
-              : 'text-white/60 hover:text-white'
+              ? 'bg-primary text-primary-foreground shadow-xs'
+              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
           }`}
         >
           Holy Scriptures
         </button>
         <button
           onClick={() => setActiveTab('plans')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
             activeTab === 'plans'
-              ? 'bg-[#D4AF37] text-[#001F3F] shadow-sm'
-              : 'text-white/60 hover:text-white'
+              ? 'bg-primary text-primary-foreground shadow-xs'
+              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
           }`}
         >
           Reading Plans ({READING_PLANS.length})
         </button>
         <button
           onClick={() => setActiveTab('highlights')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
             activeTab === 'highlights'
-              ? 'bg-[#D4AF37] text-[#001F3F] shadow-sm'
-              : 'text-white/60 hover:text-white'
+              ? 'bg-primary text-primary-foreground shadow-xs'
+              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
           }`}
         >
           Bookmarks & Notes ({savedVerses.length})
@@ -628,27 +628,27 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
       {activeTab === 'reader' && (
         !hasSelectedBook ? (
           /* Clean Book Selection Portal (Before Scriptures are loaded) */
-          <div className="bg-[#001F3F]/70 border border-[#D4AF37]/30 rounded-2xl p-4 sm:p-6 space-y-4 shadow-xl">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+          <div className="bg-card border border-border rounded-xl p-4 sm:p-6 space-y-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
               <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-[#D4AF37] font-serif-church flex items-center gap-2">
-                  <BookOpen className="w-5 h-5 text-[#D4AF37]" />
+                <h2 className="text-xl sm:text-2xl font-bold text-foreground font-serif-church flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-primary" />
                   <span>Select a Book from the Holy Scriptures</span>
                 </h2>
-                <p className="text-xs text-white/60 mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Choose any book below to open its chapters and display verses ({version}):
                 </p>
               </div>
 
               {/* Testament Filter buttons */}
-              <div className="flex bg-[#001122] rounded-xl p-1 border border-white/10 text-xs font-bold self-start sm:self-auto">
+              <div className="flex bg-secondary/80 rounded-lg p-1 border border-border text-xs font-semibold self-start sm:self-auto">
                 <button
                   type="button"
                   onClick={() => setNavTestament('OT')}
-                  className={`px-3 py-1.5 rounded-lg transition-all ${
+                  className={`px-3 py-1.5 rounded-md transition-all ${
                     navTestament === 'OT' 
-                      ? 'bg-[#D4AF37] text-[#001F3F] shadow' 
-                      : 'text-white/60 hover:text-white'
+                      ? 'bg-primary text-primary-foreground shadow-xs' 
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   Old Testament (39)
@@ -656,10 +656,10 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                 <button
                   type="button"
                   onClick={() => setNavTestament('NT')}
-                  className={`px-3 py-1.5 rounded-lg transition-all ${
+                  className={`px-3 py-1.5 rounded-md transition-all ${
                     navTestament === 'NT' 
-                      ? 'bg-[#D4AF37] text-[#001F3F] shadow' 
-                      : 'text-white/60 hover:text-white'
+                      ? 'bg-primary text-primary-foreground shadow-xs' 
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   New Testament (27)
@@ -674,10 +674,10 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                   key={cat}
                   type="button"
                   onClick={() => setBookCategoryFilter(cat)}
-                  className={`px-2.5 py-1 rounded-lg whitespace-nowrap text-[11px] font-semibold transition-all ${
+                  className={`px-2.5 py-1 rounded-md whitespace-nowrap text-[11px] font-semibold transition-all ${
                     bookCategoryFilter === cat
-                      ? 'bg-white/20 text-[#D4AF37] border border-[#D4AF37]/50'
-                      : 'bg-[#001122] text-white/50 hover:text-white border border-white/5'
+                      ? 'bg-primary/15 text-primary border border-primary/30'
+                      : 'bg-secondary/70 text-muted-foreground hover:text-foreground border border-border'
                   }`}
                 >
                   {cat}
@@ -697,42 +697,42 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                     setTargetVerse(null);
                     setHasSelectedBook(true);
                   }}
-                  className="bg-[#001122]/90 hover:bg-[#D4AF37]/20 border border-white/10 hover:border-[#D4AF37]/60 rounded-xl p-3 text-left transition-all group flex flex-col justify-between shadow-sm hover:scale-[1.02]"
+                  className="bg-card hover:bg-secondary/60 border border-border hover:border-primary/40 rounded-lg p-3 text-left transition-all group flex flex-col justify-between shadow-xs hover:scale-[1.01]"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white group-hover:text-[#D4AF37] transition-colors truncate">
+                    <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors truncate">
                       {b.name}
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-[#D4AF37] font-mono">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-primary font-mono">
                       {b.abbreviation}
                     </span>
                   </div>
-                  <div className="text-[10px] text-white/50 mt-2 flex items-center justify-between">
+                  <div className="text-[10px] text-muted-foreground mt-2 flex items-center justify-between">
                     <span className="truncate">{b.category}</span>
-                    <span className="text-white/40">{b.chaptersCount} ch.</span>
+                    <span>{b.chaptersCount} ch.</span>
                   </div>
                 </button>
               ))}
             </div>
           </div>
         ) : (
-          <div className="bg-[#001F3F]/70 border border-white/10 rounded-2xl p-4 sm:p-6 space-y-4 shadow-xl">
+          <div className="bg-card border border-border rounded-xl p-4 sm:p-6 space-y-4 shadow-sm">
             
             {/* Chapter Title Bar with Back to Books Button */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
                   onClick={() => setHasSelectedBook(false)}
-                  className="px-2.5 py-1.5 rounded-xl bg-[#001122] hover:bg-[#D4AF37] text-[#D4AF37] hover:text-[#001F3F] border border-[#D4AF37]/40 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+                  className="px-2.5 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground border border-border text-xs font-semibold transition-all flex items-center gap-1.5 shadow-xs"
                 >
                   <span>← Close Bible / Choose Book</span>
                 </button>
                 <div>
-                  <h2 className={`text-xl sm:text-2xl font-bold text-[#D4AF37] ${fontFamily === 'serif' ? 'font-serif-church' : 'font-sans'}`}>
+                  <h2 className={`text-xl sm:text-2xl font-bold text-foreground ${fontFamily === 'serif' ? 'font-serif-church' : 'font-sans'}`}>
                     {selectedBook} {selectedChapter}
                   </h2>
-                  <p className="text-xs text-white/50">
+                  <p className="text-xs text-muted-foreground">
                     Translation: {version} • {currentBookObj.testament === 'OT' ? 'Hebrew-Aramaic Scriptures (OT)' : 'Christian Greek Scriptures (NT)'}
                   </p>
                 </div>
@@ -745,7 +745,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                     setSelectedChapter(prev => Math.max(1, prev - 1));
                     setTargetVerse(1);
                   }}
-                  className="px-2.5 py-1 rounded-lg bg-[#001122] border border-white/10 text-white/70 hover:text-white disabled:opacity-30"
+                  className="px-2.5 py-1 rounded-lg bg-secondary border border-border text-muted-foreground hover:text-foreground disabled:opacity-30"
                 >
                   ‹ Prev Chapter
                 </button>
@@ -755,7 +755,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                     setSelectedChapter(prev => Math.min(currentBookObj.chaptersCount, prev + 1));
                     setTargetVerse(1);
                   }}
-                  className="px-2.5 py-1 rounded-lg bg-[#001122] border border-white/10 text-white/70 hover:text-white disabled:opacity-30"
+                  className="px-2.5 py-1 rounded-lg bg-secondary border border-border text-muted-foreground hover:text-foreground disabled:opacity-30"
                 >
                   Next Chapter ›
                 </button>
@@ -764,9 +764,9 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
 
           {/* SCRIPTURE CONTENT: Loading vs Verse vs Paragraph */}
           {isLoadingBible ? (
-            <div className="py-16 flex flex-col items-center justify-center space-y-3 bg-[#001122]/40 rounded-2xl border border-white/5">
-              <div className="w-8 h-8 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin" />
-              <p className="text-xs text-[#D4AF37] font-semibold tracking-wide animate-pulse">
+            <div className="py-16 flex flex-col items-center justify-center space-y-3 bg-secondary/40 rounded-xl border border-border">
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              <p className="text-xs text-primary font-semibold tracking-wide animate-pulse">
                 Opening Scripture: {selectedBook} {selectedChapter} ({version})...
               </p>
             </div>
@@ -774,7 +774,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
             <>
               {/* MODE A: Verse by Verse Layout */}
               {viewStyle === 'verse' && (
-                <div ref={verseContainerRef} className={`space-y-3 ${fontFamily === 'serif' ? 'font-serif-church' : 'font-sans'}`}>
+                <div ref={verseContainerRef} className={`space-y-2.5 ${fontFamily === 'serif' ? 'font-serif-church' : 'font-sans'}`}>
               {versesForChapter.map(({ verseNum, text }) => {
                 const verseKey = `${selectedBook} ${selectedChapter}:${verseNum}`;
                 const highlightColor = highlights[verseKey];
@@ -786,60 +786,60 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                   <div
                     key={verseNum}
                     id={`verse-${verseNum}`}
-                    className={`group relative p-2.5 rounded-xl transition-all border ${
-                      isSelected ? 'ring-2 ring-[#D4AF37] bg-[#D4AF37]/15' : ''
+                    className={`group relative p-2.5 rounded-lg transition-all border ${
+                      isSelected ? 'ring-2 ring-primary bg-primary/10' : ''
                     } ${
-                      highlightColor === 'gold' ? 'bg-amber-500/20 border-amber-400/60 text-amber-100' :
-                      highlightColor === 'emerald' ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-100' :
-                      highlightColor === 'blue' ? 'bg-blue-500/20 border-blue-400/60 text-blue-100' :
-                      highlightColor === 'rose' ? 'bg-rose-500/20 border-rose-400/60 text-rose-100' :
-                      'bg-[#001122]/40 border-transparent hover:border-white/10'
+                      highlightColor === 'gold' ? 'bg-amber-500/15 border-amber-400/40 text-foreground' :
+                      highlightColor === 'emerald' ? 'bg-emerald-500/15 border-emerald-400/40 text-foreground' :
+                      highlightColor === 'blue' ? 'bg-sky-500/15 border-sky-400/40 text-foreground' :
+                      highlightColor === 'rose' ? 'bg-rose-500/15 border-rose-400/40 text-foreground' :
+                      'bg-card hover:bg-secondary/40 border-border/60 hover:border-border'
                     }`}
                   >
                     <div className="flex items-start gap-2.5">
                       {/* Compact clean superscript-style verse number */}
-                      <span className="text-xs font-bold text-[#D4AF37] font-mono mt-0.5 select-none shrink-0 min-w-[20px]">
+                      <span className="text-xs font-bold text-primary font-mono mt-0.5 select-none shrink-0 min-w-[20px]">
                         {verseNum}
                       </span>
 
-                      <p className={`${fontClass} text-slate-100 flex-1 font-normal tracking-wide`}>
+                      <p className={`${fontClass} text-foreground flex-1 font-normal tracking-wide`}>
                         {text}
                       </p>
                     </div>
 
                     {/* Personal Study Note if present */}
                     {noteText && (
-                      <div className="mt-2 text-xs bg-[#001122] border border-[#D4AF37]/40 rounded-lg p-2 text-[#D4AF37] flex items-start gap-1.5">
-                        <FileEdit className="w-3.5 h-3.5 text-[#D4AF37] shrink-0 mt-0.5" />
+                      <div className="mt-2 text-xs bg-secondary/70 border border-primary/30 rounded-lg p-2 text-foreground flex items-start gap-1.5">
+                        <FileEdit className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
                         <div>
-                          <span className="font-bold">Personal Note:</span> {noteText}
+                          <span className="font-semibold text-primary">Personal Note:</span> {noteText}
                         </div>
                       </div>
                     )}
 
                     {/* Verse Actions toolbar (Highlight, Note, Save, WhatsApp Share) */}
-                    <div className="mt-2 flex items-center justify-between pt-1 border-t border-white/5 opacity-80 group-hover:opacity-100 transition-opacity">
+                    <div className="mt-2 flex items-center justify-between pt-1 border-t border-border/40 opacity-80 group-hover:opacity-100 transition-opacity">
                       {/* Highlight color dots */}
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => handleToggleHighlight(verseKey, 'gold')}
                           title="Highlight Gold"
-                          className={`w-3.5 h-3.5 rounded-full bg-amber-400 border border-white/30 ${highlightColor === 'gold' ? 'ring-2 ring-white' : ''}`}
+                          className={`w-3.5 h-3.5 rounded-full bg-amber-400 border border-border ${highlightColor === 'gold' ? 'ring-2 ring-primary' : ''}`}
                         />
                         <button
                           onClick={() => handleToggleHighlight(verseKey, 'emerald')}
                           title="Highlight Emerald"
-                          className={`w-3.5 h-3.5 rounded-full bg-emerald-500 border border-white/30 ${highlightColor === 'emerald' ? 'ring-2 ring-white' : ''}`}
+                          className={`w-3.5 h-3.5 rounded-full bg-emerald-500 border border-border ${highlightColor === 'emerald' ? 'ring-2 ring-primary' : ''}`}
                         />
                         <button
                           onClick={() => handleToggleHighlight(verseKey, 'blue')}
                           title="Highlight Blue"
-                          className={`w-3.5 h-3.5 rounded-full bg-sky-400 border border-white/30 ${highlightColor === 'blue' ? 'ring-2 ring-white' : ''}`}
+                          className={`w-3.5 h-3.5 rounded-full bg-sky-400 border border-border ${highlightColor === 'blue' ? 'ring-2 ring-primary' : ''}`}
                         />
                         <button
                           onClick={() => handleToggleHighlight(verseKey, 'rose')}
                           title="Highlight Rose"
-                          className={`w-3.5 h-3.5 rounded-full bg-rose-500 border border-white/30 ${highlightColor === 'rose' ? 'ring-2 ring-white' : ''}`}
+                          className={`w-3.5 h-3.5 rounded-full bg-rose-500 border border-border ${highlightColor === 'rose' ? 'ring-2 ring-primary' : ''}`}
                         />
                       </div>
 
@@ -850,10 +850,10 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                             setActiveStudyVerse({ verseKey, verseNum, text });
                             setStudyModalTab('interpreter');
                           }}
-                          className="px-2 py-0.5 rounded text-amber-300 hover:text-amber-200 bg-amber-400/10 hover:bg-amber-400/20 border border-amber-400/30 flex items-center gap-1 font-semibold transition-all"
+                          className="px-2 py-0.5 rounded text-amber-500 hover:text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 flex items-center gap-1 font-semibold transition-all"
                           title="Apostolic Interpretation & Prophetic Exposition"
                         >
-                          <Sparkles className="w-3 h-3 text-[#D4AF37]" />
+                          <Sparkles className="w-3 h-3 text-primary" />
                           <span>Interpreter</span>
                         </button>
 
@@ -863,10 +863,10 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                             setActiveStudyVerse({ verseKey, verseNum, text });
                             setStudyModalTab('dictionary');
                           }}
-                          className="px-2 py-0.5 rounded text-sky-300 hover:text-sky-200 bg-sky-400/10 hover:bg-sky-400/20 border border-sky-400/30 flex items-center gap-1 font-semibold transition-all"
+                          className="px-2 py-0.5 rounded text-sky-500 hover:text-sky-600 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 flex items-center gap-1 font-semibold transition-all"
                           title="Biblical Concordance & Dictionary"
                         >
-                          <Book className="w-3 h-3 text-sky-400" />
+                          <Book className="w-3 h-3 text-sky-500" />
                           <span>Dictionary</span>
                         </button>
 
@@ -876,7 +876,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                             setSelectedVerseKey(verseKey);
                             setActiveNoteInput(notes[verseKey] || '');
                           }}
-                          className="px-2 py-0.5 rounded text-white/60 hover:text-[#D4AF37] hover:bg-white/5 flex items-center gap-1"
+                          className="px-2 py-0.5 rounded text-muted-foreground hover:text-primary hover:bg-secondary flex items-center gap-1 transition-colors"
                         >
                           <FileEdit className="w-3 h-3" />
                           <span>Note</span>
@@ -886,7 +886,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                         <button
                           onClick={() => handleToggleBookmark(verseKey)}
                           className={`px-2 py-0.5 rounded flex items-center gap-1 transition-all ${
-                            isSaved ? 'text-[#D4AF37] font-bold' : 'text-white/60 hover:text-white'
+                            isSaved ? 'text-primary font-semibold' : 'text-muted-foreground hover:text-foreground'
                           }`}
                         >
                           {isSaved ? <BookmarkCheck className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
@@ -896,7 +896,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                         {/* WhatsApp Share */}
                         <button
                           onClick={() => handleShareVerse(verseKey, text)}
-                          className="p-1 rounded text-emerald-400 hover:bg-emerald-950/40"
+                          className="p-1 rounded text-emerald-500 hover:bg-emerald-500/10 transition-colors"
                           title="Share to WhatsApp"
                         >
                           <Share2 className="w-3 h-3" />
@@ -906,24 +906,24 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
 
                     {/* Inline Note Editor */}
                     {selectedVerseKey === verseKey && (
-                      <div className="mt-2 p-2.5 bg-[#001122] border border-[#D4AF37]/50 rounded-xl space-y-2 animate-in fade-in duration-150">
+                      <div className="mt-2 p-2.5 bg-secondary/70 border border-border rounded-lg space-y-2 animate-in fade-in duration-150">
                         <textarea
                           value={activeNoteInput}
                           onChange={(e) => setActiveNoteInput(e.target.value)}
                           placeholder={`Write study note for ${verseKey}...`}
-                          className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#D4AF37]"
+                          className="w-full bg-background border border-border rounded-lg p-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
                           rows={2}
                         />
                         <div className="flex justify-end gap-2 text-xs">
                           <button
                             onClick={() => setSelectedVerseKey(null)}
-                            className="px-3 py-1 rounded-lg text-white/60 hover:text-white"
+                            className="px-3 py-1 rounded-lg text-muted-foreground hover:text-foreground"
                           >
                             Cancel
                           </button>
                           <button
                             onClick={() => handleSaveNote(verseKey)}
-                            className="px-3 py-1 bg-[#D4AF37] text-[#001F3F] font-bold rounded-lg"
+                            className="px-3 py-1 bg-primary text-primary-foreground font-semibold rounded-lg shadow-xs"
                           >
                             Save Note
                           </button>
@@ -937,10 +937,10 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
             </div>
           )}
 
-          {/* MODE B: Continuous Flowing Paragraph Layout (JW Reader Style) */}
+          {/* MODE B: Continuous Flowing Paragraph Layout */}
           {viewStyle === 'paragraph' && (
-            <div className={`p-4 bg-[#001122]/50 rounded-xl border border-white/5 ${fontFamily === 'serif' ? 'font-serif-church' : 'font-sans'}`}>
-              <p className={`${fontClass} text-slate-100 text-justify tracking-wide`}>
+            <div className={`p-4 bg-secondary/30 rounded-xl border border-border ${fontFamily === 'serif' ? 'font-serif-church' : 'font-sans'}`}>
+              <p className={`${fontClass} text-foreground text-justify tracking-wide leading-relaxed`}>
                 {versesForChapter.map(({ verseNum, text }) => {
                   const verseKey = `${selectedBook} ${selectedChapter}:${verseNum}`;
                   const highlightColor = highlights[verseKey];
@@ -955,16 +955,16 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                         setActiveStudyVerse({ verseKey, verseNum, text });
                       }}
                       title={`Click to view Interpreter & Lexicon for ${verseKey}`}
-                      className={`inline cursor-pointer hover:underline decoration-[#D4AF37]/50 transition-colors ${
-                        isTarget ? 'bg-[#D4AF37]/30 text-white font-semibold px-1 rounded' : ''
+                      className={`inline cursor-pointer hover:underline decoration-primary/50 transition-colors ${
+                        isTarget ? 'bg-primary/20 text-foreground font-semibold px-1 rounded' : ''
                       } ${
-                        highlightColor === 'gold' ? 'bg-amber-500/25 text-amber-200' :
-                        highlightColor === 'emerald' ? 'bg-emerald-500/25 text-emerald-200' :
-                        highlightColor === 'blue' ? 'bg-blue-500/25 text-sky-200' :
-                        highlightColor === 'rose' ? 'bg-rose-500/25 text-rose-200' : ''
+                        highlightColor === 'gold' ? 'bg-amber-500/20 text-foreground' :
+                        highlightColor === 'emerald' ? 'bg-emerald-500/20 text-foreground' :
+                        highlightColor === 'blue' ? 'bg-sky-500/20 text-foreground' :
+                        highlightColor === 'rose' ? 'bg-rose-500/20 text-foreground' : ''
                       }`}
                     >
-                      <sup className="text-[10px] font-bold text-[#D4AF37] select-none mx-1 font-mono">
+                      <sup className="text-[10px] font-bold text-primary select-none mx-1 font-mono">
                         {verseNum}
                       </sup>
                       {text}{' '}
@@ -978,7 +978,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
           )}
 
           {/* Bottom Chapter Jump Navigation */}
-          <div className="pt-4 border-t border-white/10 flex items-center justify-between">
+          <div className="pt-4 border-t border-border flex items-center justify-between">
             <button
               disabled={selectedChapter <= 1}
               onClick={() => {
@@ -986,7 +986,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                 setTargetVerse(1);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="px-4 py-2 rounded-xl bg-[#001122] border border-white/10 text-white/70 hover:text-white text-xs font-bold disabled:opacity-30 transition-all flex items-center gap-1.5"
+              className="px-4 py-2 rounded-lg bg-secondary border border-border text-foreground hover:bg-secondary/80 text-xs font-semibold disabled:opacity-30 transition-all flex items-center gap-1.5 shadow-xs"
             >
               <ChevronLeft className="w-4 h-4" />
               <span>{selectedBook} {selectedChapter - 1}</span>
@@ -997,7 +997,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                 setNavStep('chapter');
                 setShowNavModal(true);
               }}
-              className="text-xs text-[#D4AF37] font-bold hover:underline"
+              className="text-xs text-primary font-semibold hover:underline"
             >
               View All Chapters
             </button>
@@ -1009,7 +1009,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                 setTargetVerse(1);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="px-4 py-2 rounded-xl bg-[#001122] border border-white/10 text-white/70 hover:text-white text-xs font-bold disabled:opacity-30 transition-all flex items-center gap-1.5"
+              className="px-4 py-2 rounded-lg bg-secondary border border-border text-foreground hover:bg-secondary/80 text-xs font-semibold disabled:opacity-30 transition-all flex items-center gap-1.5 shadow-xs"
             >
               <span>{selectedBook} {selectedChapter + 1}</span>
               <ChevronRight className="w-4 h-4" />
@@ -1022,12 +1022,12 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
 
       {/* Reading Plans Tab */}
       {activeTab === 'plans' && (
-        <div className="bg-[#001F3F]/70 border border-white/10 rounded-2xl p-4 sm:p-6 space-y-4">
+        <div className="bg-card border border-border rounded-xl p-4 sm:p-6 space-y-4 shadow-sm">
           <div>
-            <h3 className="text-lg font-bold text-[#D4AF37] font-serif-church">
+            <h3 className="text-lg font-bold text-foreground font-serif-church">
               Structured Scripture Reading Plans
             </h3>
-            <p className="text-xs text-white/60">
+            <p className="text-xs text-muted-foreground">
               Follow spiritual discipleship tracks curated by Apostle Joe Daniels.
             </p>
           </div>
@@ -1036,22 +1036,22 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
             {READING_PLANS.map(plan => {
               const progressPercent = Math.round((plan.currentDay / plan.daysTotal) * 100);
               return (
-                <div key={plan.id} className="p-4 rounded-xl bg-[#001122] border border-white/10 space-y-3">
+                <div key={plan.id} className="p-4 rounded-xl bg-secondary/50 border border-border space-y-3">
                   <div>
-                    <h4 className="font-bold text-white text-sm">{plan.title}</h4>
-                    <p className="text-xs text-white/60 mt-0.5">{plan.description}</p>
+                    <h4 className="font-semibold text-foreground text-sm">{plan.title}</h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">{plan.description}</p>
                   </div>
-                  <div className="text-xs text-[#D4AF37] font-bold">
+                  <div className="text-xs text-primary font-semibold">
                     Today: {plan.todaysReading}
                   </div>
                   <div className="space-y-1">
-                    <div className="flex justify-between text-[10px] text-white/50">
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
                       <span>Progress</span>
                       <span>{progressPercent}%</span>
                     </div>
-                    <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-white/5">
+                    <div className="w-full bg-muted h-2 rounded-full overflow-hidden border border-border">
                       <div
-                        className="bg-gradient-to-r from-[#D4AF37] to-amber-300 h-full rounded-full"
+                        className="bg-primary h-full rounded-full transition-all"
                         style={{ width: `${progressPercent}%` }}
                       />
                     </div>
@@ -1065,12 +1065,12 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
 
       {/* Bookmarks Tab */}
       {activeTab === 'highlights' && (
-        <div className="bg-[#001F3F]/70 border border-white/10 rounded-2xl p-4 space-y-3">
-          <h3 className="font-bold text-base text-[#D4AF37] font-serif-church">
+        <div className="bg-card border border-border rounded-xl p-4 space-y-3 shadow-sm">
+          <h3 className="font-bold text-base text-foreground font-serif-church">
             Saved Verses & Study Notes
           </h3>
           {savedVerses.length === 0 ? (
-            <p className="text-xs text-white/50 py-6 text-center">
+            <p className="text-xs text-muted-foreground py-6 text-center">
               No bookmarked verses yet. Tap "Save" on any verse in the reader.
             </p>
           ) : (
@@ -1078,14 +1078,14 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
               {savedVerses.map((ref, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center justify-between p-3 rounded-xl bg-[#001122] border border-white/10 hover:border-[#D4AF37]/40"
+                  className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border hover:border-primary/40 transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    <BookmarkCheck className="w-4 h-4 text-[#D4AF37]" />
+                    <BookmarkCheck className="w-4 h-4 text-primary" />
                     <div>
-                      <p className="font-bold text-xs sm:text-sm text-white">{ref}</p>
+                      <p className="font-semibold text-xs sm:text-sm text-foreground">{ref}</p>
                       {notes[ref] && (
-                        <p className="text-[11px] text-[#D4AF37] italic">{notes[ref]}</p>
+                        <p className="text-[11px] text-primary italic">{notes[ref]}</p>
                       )}
                     </div>
                   </div>
@@ -1094,7 +1094,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                       parseAndNavigateReference(ref);
                       setActiveTab('reader');
                     }}
-                    className="px-3 py-1 bg-[#D4AF37]/20 hover:bg-[#D4AF37]/30 text-[#D4AF37] text-xs font-bold rounded-lg"
+                    className="px-3 py-1 bg-primary/15 hover:bg-primary/25 text-primary text-xs font-semibold rounded-lg transition-colors"
                   >
                     Open Verse
                   </button>
@@ -1105,38 +1105,38 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
         </div>
       )}
 
-      {/* 4. JW.org-Style 3-Step Navigation Modal (Book -> Chapter -> Verse) */}
+      {/* 4. 3-Step Navigation Modal (Book -> Chapter -> Verse) */}
       {showNavModal && (
         <div 
-          className="fixed inset-0 z-50 bg-[#001122]/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4"
+          className="fixed inset-0 z-50 bg-background/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4"
           onClick={() => setShowNavModal(false)}
         >
           <div 
-            className="bg-[#001F3F] border-2 border-[#D4AF37]/60 rounded-3xl max-w-xl w-full max-h-[88vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150"
+            className="bg-card border border-border rounded-2xl max-w-xl w-full max-h-[88vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             
-            {/* JW Nav Modal Header */}
-            <div className="p-4 border-b border-white/10 bg-[#001122] flex items-center justify-between">
+            {/* Nav Modal Header */}
+            <div className="p-4 border-b border-border bg-muted/40 flex items-center justify-between">
               {/* Breadcrumb path: e.g. [ Books ] > [ Psalms ] > [ Verse ] */}
               <div className="flex items-center gap-1 text-xs sm:text-sm">
                 <button
                   onClick={() => setNavStep('book')}
-                  className={`font-bold transition-colors ${navStep === 'book' ? 'text-[#D4AF37]' : 'text-white/60 hover:text-white'}`}
+                  className={`font-semibold transition-colors ${navStep === 'book' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   Books
                 </button>
-                <span className="text-white/30">/</span>
+                <span className="text-muted-foreground/40">/</span>
                 <button
                   onClick={() => setNavStep('chapter')}
-                  className={`font-bold transition-colors ${navStep === 'chapter' ? 'text-[#D4AF37]' : 'text-white/60 hover:text-white'}`}
+                  className={`font-semibold transition-colors ${navStep === 'chapter' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   {selectedBook}
                 </button>
-                <span className="text-white/30">/</span>
+                <span className="text-muted-foreground/40">/</span>
                 <button
                   onClick={() => setNavStep('verse')}
-                  className={`font-bold transition-colors ${navStep === 'verse' ? 'text-[#D4AF37]' : 'text-white/60 hover:text-white'}`}
+                  className={`font-semibold transition-colors ${navStep === 'verse' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   Ch. {selectedChapter}
                 </button>
@@ -1144,34 +1144,34 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
 
               <button
                 onClick={() => setShowNavModal(false)}
-                className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white"
+                className="p-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* STEP 1: JW Book Selector */}
+            {/* STEP 1: Book Selector */}
             {navStep === 'book' && (
               <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Testament Switcher & Search Filter */}
-                <div className="p-3 bg-[#001F3F] border-b border-white/10 flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
-                  <div className="flex rounded-xl bg-[#001122] p-1 border border-white/10 text-xs font-bold">
+                <div className="p-3 bg-muted/20 border-b border-border flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+                  <div className="flex rounded-lg bg-secondary p-1 border border-border text-xs font-semibold">
                     <button
                       onClick={() => setNavTestament('OT')}
-                      className={`px-3 py-1 rounded-lg transition-all ${
+                      className={`px-3 py-1 rounded-md transition-all ${
                         navTestament === 'OT' 
-                          ? 'bg-[#D4AF37] text-[#001F3F] shadow' 
-                          : 'text-white/60 hover:text-white'
+                          ? 'bg-primary text-primary-foreground shadow-xs' 
+                          : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
                       Hebrew-Aramaic (OT)
                     </button>
                     <button
                       onClick={() => setNavTestament('NT')}
-                      className={`px-3 py-1 rounded-lg transition-all ${
+                      className={`px-3 py-1 rounded-md transition-all ${
                         navTestament === 'NT' 
-                          ? 'bg-[#D4AF37] text-[#001F3F] shadow' 
-                          : 'text-white/60 hover:text-white'
+                          ? 'bg-primary text-primary-foreground shadow-xs' 
+                          : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
                       Christian Greek (NT)
@@ -1179,13 +1179,13 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                   </div>
 
                   <div className="relative flex-1 min-w-[140px]">
-                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-white/40" />
+                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                     <input
                       type="text"
                       value={bookFilterQuery}
                       onChange={(e) => setBookFilterQuery(e.target.value)}
                       placeholder="Filter book..."
-                      className="w-full bg-[#001122] border border-white/10 rounded-xl pl-8 pr-2 py-1 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#D4AF37]"
+                      className="w-full bg-background border border-border rounded-lg pl-8 pr-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
                     />
                   </div>
                 </div>
@@ -1201,14 +1201,14 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                           setSelectedBook(book.name);
                           setNavStep('chapter');
                         }}
-                        className={`p-2.5 rounded-xl text-left border transition-all flex flex-col justify-between ${
+                        className={`p-2.5 rounded-lg text-left border transition-all flex flex-col justify-between ${
                           isSelected
-                            ? 'bg-[#D4AF37] text-[#001F3F] font-bold border-[#D4AF37] shadow-md'
-                            : 'bg-[#001122] border-white/10 hover:border-[#D4AF37]/50 text-white'
+                            ? 'bg-primary text-primary-foreground font-semibold border-primary shadow-xs'
+                            : 'bg-secondary/50 border-border hover:border-primary/40 text-foreground'
                         }`}
                       >
-                        <span className="text-xs font-bold truncate">{book.name}</span>
-                        <span className={`text-[10px] mt-1 ${isSelected ? 'text-[#001F3F]/70' : 'text-white/40'}`}>
+                        <span className="text-xs font-semibold truncate">{book.name}</span>
+                        <span className={`text-[10px] mt-1 ${isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
                           {book.chaptersCount} Ch • {book.category}
                         </span>
                       </button>
@@ -1218,16 +1218,16 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
               </div>
             )}
 
-            {/* STEP 2: JW Chapter Grid (Uniform Squares) */}
+            {/* STEP 2: Chapter Grid (Uniform Squares) */}
             {navStep === 'chapter' && (
               <div className="p-4 overflow-y-auto flex-1 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#D4AF37] uppercase tracking-wider">
+                  <span className="text-xs font-semibold text-primary uppercase tracking-wider">
                     Select Chapter for {selectedBook}
                   </span>
                   <button
                     onClick={() => setNavStep('book')}
-                    className="text-xs text-white/60 hover:text-white"
+                    className="text-xs text-muted-foreground hover:text-foreground"
                   >
                     ‹ Change Book
                   </button>
@@ -1243,10 +1243,10 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                           setSelectedChapter(chNum);
                           setNavStep('verse');
                         }}
-                        className={`aspect-square rounded-xl flex items-center justify-center text-sm font-bold border transition-all ${
+                        className={`aspect-square rounded-lg flex items-center justify-center text-sm font-semibold border transition-all ${
                           isSelected
-                            ? 'bg-[#D4AF37] text-[#001F3F] border-[#D4AF37] shadow-md scale-105'
-                            : 'bg-[#001122] border-white/10 hover:border-[#D4AF37]/50 text-white'
+                            ? 'bg-primary text-primary-foreground border-primary shadow-xs scale-105'
+                            : 'bg-secondary/50 border-border hover:border-primary/40 text-foreground'
                         }`}
                       >
                         {chNum}
@@ -1257,16 +1257,16 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
               </div>
             )}
 
-            {/* STEP 3: JW Verse Grid (Uniform Squares) */}
+            {/* STEP 3: Verse Grid (Uniform Squares) */}
             {navStep === 'verse' && (
               <div className="p-4 overflow-y-auto flex-1 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#D4AF37] uppercase tracking-wider">
+                  <span className="text-xs font-semibold text-primary uppercase tracking-wider">
                     Select Verse in {selectedBook} {selectedChapter}
                   </span>
                   <button
                     onClick={() => setNavStep('chapter')}
-                    className="text-xs text-white/60 hover:text-white"
+                    className="text-xs text-muted-foreground hover:text-foreground"
                   >
                     ‹ Change Chapter
                   </button>
@@ -1283,10 +1283,10 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                           setShowNavModal(false);
                           setActiveTab('reader');
                         }}
-                        className={`aspect-square rounded-xl flex items-center justify-center text-sm font-bold border transition-all ${
+                        className={`aspect-square rounded-lg flex items-center justify-center text-sm font-semibold border transition-all ${
                           isSelected
-                            ? 'bg-[#D4AF37] text-[#001F3F] border-[#D4AF37] shadow-md scale-105'
-                            : 'bg-[#001122] border-white/10 hover:border-[#D4AF37]/50 text-white'
+                            ? 'bg-primary text-primary-foreground border-primary shadow-xs scale-105'
+                            : 'bg-secondary/50 border-border hover:border-primary/40 text-foreground'
                         }`}
                       >
                         {vNum}
@@ -1301,7 +1301,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                     setShowNavModal(false);
                     setActiveTab('reader');
                   }}
-                  className="w-full py-2.5 bg-[#D4AF37] text-[#001F3F] font-bold text-xs rounded-xl mt-3 shadow"
+                  className="w-full py-2.5 bg-primary text-primary-foreground font-semibold text-xs rounded-lg mt-3 shadow-xs"
                 >
                   Read From Beginning of Chapter {selectedChapter}
                 </button>
@@ -1350,20 +1350,20 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
             }}
           >
             <div 
-              className="bg-[#001F3F] border-2 border-[#D4AF37]/60 rounded-3xl max-w-xl w-full max-h-[88vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150"
+              className="bg-card border border-border rounded-2xl max-w-xl w-full max-h-[88vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150 text-foreground"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="p-4 border-b border-white/10 bg-[#001122] flex items-center justify-between gap-3">
+              <div className="p-4 border-b border-border bg-muted/40 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-[#D4AF37]/20 border border-[#D4AF37]/40 flex items-center justify-center text-[#D4AF37] shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center text-primary shrink-0">
                     {studyModalTab === 'interpreter' ? <Sparkles className="w-4 h-4" /> : <Book className="w-4 h-4" />}
                   </div>
                   <div className="min-w-0">
-                    <h3 className="font-serif-church font-bold text-white text-sm sm:text-base truncate">
+                    <h3 className="font-serif-church font-bold text-foreground text-sm sm:text-base truncate">
                       {activeStudyVerse.verseKey} ({version})
                     </h3>
-                    <p className="text-[11px] text-[#D4AF37] font-medium">
+                    <p className="text-[11px] text-primary font-medium">
                       {studyModalTab === 'interpreter' ? 'Apostolic Interpreter & Prophetic Revelation' : 'Strong’s Concordance Lexicon & Dictionary'}
                     </p>
                   </div>
@@ -1375,7 +1375,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                     setSelectedDictTermKey(null);
                     setDictionarySearchQuery('');
                   }}
-                  className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors shrink-0"
+                  className="p-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-colors shrink-0"
                   title="Close (Esc)"
                 >
                   <X className="w-4 h-4" />
@@ -1383,20 +1383,20 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
               </div>
 
               {/* Verse Text Display Banner */}
-              <div className="p-3.5 bg-[#00172e] border-b border-white/10">
-                <p className="text-xs sm:text-sm text-amber-100 font-serif-church italic leading-relaxed">
+              <div className="p-3.5 bg-secondary/50 border-b border-border">
+                <p className="text-xs sm:text-sm text-foreground font-serif-church italic leading-relaxed">
                   "{activeStudyVerse.text}"
                 </p>
               </div>
 
               {/* Mode Tabs Switcher */}
-              <div className="flex border-b border-white/10 bg-[#001122] p-1.5 gap-1.5">
+              <div className="flex border-b border-border bg-muted/30 p-1.5 gap-1.5">
                 <button
                   onClick={() => setStudyModalTab('interpreter')}
-                  className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
                     studyModalTab === 'interpreter'
-                      ? 'bg-[#D4AF37] text-[#001F3F] shadow-sm'
-                      : 'text-white/60 hover:text-white'
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
                   }`}
                 >
                   <Sparkles className="w-3.5 h-3.5" />
@@ -1404,10 +1404,10 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                 </button>
                 <button
                   onClick={() => setStudyModalTab('dictionary')}
-                  className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
                     studyModalTab === 'dictionary'
-                      ? 'bg-[#D4AF37] text-[#001F3F] shadow-sm'
-                      : 'text-white/60 hover:text-white'
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
                   }`}
                 >
                   <Book className="w-3.5 h-3.5" />
@@ -1417,33 +1417,33 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
 
               {/* Tab 1: Apostolic Interpreter Content */}
               {studyModalTab === 'interpreter' && (
-                <div className="p-4 overflow-y-auto flex-1 space-y-4 text-xs">
+                <div className="p-4 overflow-y-auto flex-1 space-y-3.5 text-xs">
                   {/* Linguistic & Original Text Breakdown */}
-                  <div className="p-3 bg-[#001122] border border-white/10 rounded-2xl space-y-1.5">
-                    <span className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider block">
+                  <div className="p-3 bg-secondary/40 border border-border rounded-xl space-y-1.5">
+                    <span className="text-[10px] font-semibold text-primary uppercase tracking-wider block">
                       Original Root & Translation Insight
                     </span>
-                    <p className="text-slate-200 leading-relaxed font-sans">
+                    <p className="text-foreground leading-relaxed font-sans">
                       {interpData.originalTextSummary}
                     </p>
                   </div>
 
                   {/* Apostolic Hermeneutics / Commentary by Apostle Joe Daniels */}
-                  <div className="p-3.5 bg-gradient-to-br from-[#001f3f] to-[#001122] border border-[#D4AF37]/40 rounded-2xl space-y-2 shadow-sm">
-                    <div className="flex items-center gap-1.5 text-[#D4AF37]">
+                  <div className="p-3.5 bg-primary/5 border border-primary/25 rounded-xl space-y-2 shadow-xs">
+                    <div className="flex items-center gap-1.5 text-primary">
                       <Flame className="w-4 h-4" />
                       <span className="font-bold uppercase tracking-wider text-[11px]">
                         Apostolic Exposition • Apostle Joe Daniels
                       </span>
                     </div>
-                    <p className="text-slate-100 leading-relaxed font-serif-church italic">
+                    <p className="text-foreground leading-relaxed font-serif-church italic">
                       "{interpData.apostolicHermeneutics}"
                     </p>
                   </div>
 
                   {/* Prophetic Declaration */}
-                  <div className="p-3 bg-amber-500/10 border border-amber-400/40 rounded-2xl space-y-1.5 text-amber-200">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 block">
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-1.5 text-foreground">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 block">
                       Prophetic Decree Over Your Life
                     </span>
                     <p className="font-medium leading-relaxed">
@@ -1452,24 +1452,24 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                   </div>
 
                   {/* Cultural & Historical Setting */}
-                  <div className="p-3 bg-[#001122] border border-white/10 rounded-2xl space-y-1">
-                    <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider block">
+                  <div className="p-3 bg-secondary/40 border border-border rounded-xl space-y-1">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
                       Historical Setting
                     </span>
-                    <p className="text-slate-300 leading-relaxed">
+                    <p className="text-muted-foreground leading-relaxed">
                       {interpData.culturalHistoricalContext}
                     </p>
                   </div>
 
                   {/* Practical Life Application */}
-                  <div className="p-3 bg-[#001122] border border-white/10 rounded-2xl space-y-2">
-                    <span className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider block">
+                  <div className="p-3 bg-secondary/40 border border-border rounded-xl space-y-2">
+                    <span className="text-[10px] font-semibold text-primary uppercase tracking-wider block">
                       Personal Kingdom Walk & Action Steps
                     </span>
-                    <ul className="space-y-1.5 text-slate-200">
+                    <ul className="space-y-1.5 text-foreground">
                       {interpData.lifeApplication.map((app, idx) => (
                         <li key={idx} className="flex items-start gap-2">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
                           <span>{app}</span>
                         </li>
                       ))}
@@ -1478,7 +1478,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
 
                   {/* Linked Concordance Terms */}
                   <div className="pt-1">
-                    <span className="text-[11px] font-bold text-white/70 block mb-2">
+                    <span className="text-[11px] font-semibold text-muted-foreground block mb-2">
                       Linked Greek & Hebrew Terms In This Verse:
                     </span>
                     <div className="flex flex-wrap gap-1.5">
@@ -1492,11 +1492,11 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                               setSelectedDictTermKey(termKey);
                               setStudyModalTab('dictionary');
                             }}
-                            className="px-2.5 py-1 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-sky-200 text-xs font-bold flex items-center gap-1 transition-all"
+                            className="px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-600 dark:text-sky-300 text-xs font-semibold flex items-center gap-1 transition-all"
                           >
-                            <Book className="w-3 h-3 text-sky-400" />
+                            <Book className="w-3 h-3 text-sky-500" />
                             <span>{entry.term}</span>
-                            <span className="text-[10px] text-sky-300/60 font-mono">({entry.strongsNumber})</span>
+                            <span className="text-[10px] opacity-70 font-mono">({entry.strongsNumber})</span>
                           </button>
                         );
                       })}
@@ -1510,7 +1510,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                 <div className="p-4 overflow-y-auto flex-1 space-y-3.5 text-xs">
                   {/* Dictionary Search Input */}
                   <div className="relative">
-                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                     <input
                       type="text"
                       value={dictionarySearchQuery}
@@ -1519,13 +1519,13 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                         setSelectedDictTermKey(null);
                       }}
                       placeholder="Search Hebrew/Greek term, Strong’s #, or word..."
-                      className="w-full bg-[#001122] border border-white/15 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#D4AF37]"
+                      className="w-full bg-secondary/70 border border-border rounded-lg pl-8 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
                     />
                   </div>
 
                   {/* Quick Term Pills */}
                   <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                    <span className="text-[10px] text-white/40 font-bold uppercase shrink-0">Glossary:</span>
+                    <span className="text-[10px] text-muted-foreground font-semibold uppercase shrink-0">Glossary:</span>
                     {dictEntries.map(([key, entry]) => (
                       <button
                         key={key}
@@ -1533,10 +1533,10 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                           setSelectedDictTermKey(key);
                           setDictionarySearchQuery('');
                         }}
-                        className={`px-2 py-0.5 rounded-lg text-[11px] font-bold shrink-0 transition-all ${
+                        className={`px-2 py-0.5 rounded-md text-[11px] font-semibold shrink-0 transition-all ${
                           (selectedDictTermKey === key || (!selectedDictTermKey && !dictionarySearchQuery && interpData.keyTerms[0] === key))
-                            ? 'bg-[#D4AF37] text-[#001F3F]'
-                            : 'bg-[#001122] text-white/60 hover:text-white border border-white/10'
+                            ? 'bg-primary text-primary-foreground shadow-xs'
+                            : 'bg-secondary/70 text-muted-foreground hover:text-foreground border border-border'
                         }`}
                       >
                         {key.charAt(0).toUpperCase() + key.slice(1)}
@@ -1546,53 +1546,53 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
 
                   {/* Active Selected Term Detailed Card */}
                   {activeDictEntry && (
-                    <div className="p-4 bg-gradient-to-b from-[#001122] to-[#00172e] border border-[#D4AF37]/50 rounded-2xl space-y-3 shadow-md">
-                      <div className="flex items-start justify-between gap-2 border-b border-white/10 pb-3">
+                    <div className="p-4 bg-secondary/40 border border-border rounded-xl space-y-3 shadow-xs">
+                      <div className="flex items-start justify-between gap-2 border-b border-border pb-3">
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-bold text-sm sm:text-base text-[#D4AF37]">
+                            <h4 className="font-bold text-sm sm:text-base text-primary">
                               {activeDictEntry.term}
                             </h4>
-                            <span className="px-2 py-0.5 rounded-md bg-white/10 text-white/80 font-mono text-[10px]">
+                            <span className="px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-mono text-[10px]">
                               {activeDictEntry.strongsNumber}
                             </span>
-                            <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-[10px] font-semibold">
+                            <span className="px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-300 text-[10px] font-semibold">
                               {activeDictEntry.language} • {activeDictEntry.partOfSpeech}
                             </span>
                           </div>
-                          <p className="text-sm font-serif text-white/90 mt-1 font-medium">
-                            {activeDictEntry.originalWord} • Pronunciation: <span className="text-amber-200 italic font-mono">{activeDictEntry.phonetic}</span>
+                          <p className="text-sm font-serif text-foreground mt-1 font-medium">
+                            {activeDictEntry.originalWord} • Pronunciation: <span className="text-primary italic font-mono">{activeDictEntry.phonetic}</span>
                           </p>
                         </div>
                       </div>
 
                       <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider block">
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
                           Literal Lexical Definition
                         </span>
-                        <p className="text-slate-100 leading-relaxed font-sans">
+                        <p className="text-foreground leading-relaxed font-sans">
                           {activeDictEntry.definition}
                         </p>
                       </div>
 
-                      <div className="space-y-1 p-2.5 rounded-xl bg-[#001F3F]/60 border border-white/5">
-                        <span className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider block">
+                      <div className="space-y-1 p-2.5 rounded-lg bg-secondary/60 border border-border">
+                        <span className="text-[10px] font-semibold text-primary uppercase tracking-wider block">
                           Theological & Prophetic Nuance
                         </span>
-                        <p className="text-amber-100/90 leading-relaxed font-serif-church italic">
+                        <p className="text-foreground leading-relaxed font-serif-church italic">
                           "{activeDictEntry.theologicalUsage}"
                         </p>
                       </div>
 
                       <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider block">
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
                           Key Scripture References
                         </span>
                         <div className="flex flex-wrap gap-1.5">
                           {activeDictEntry.relatedVerses.map(r => (
                             <span
                               key={r}
-                              className="px-2 py-0.5 rounded-lg bg-black/40 border border-white/10 text-[#D4AF37] text-[10px] font-bold"
+                              className="px-2 py-0.5 rounded-md bg-muted border border-border text-primary text-[10px] font-semibold"
                             >
                               {r}
                             </span>
@@ -1605,20 +1605,20 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                   {/* All Matching Glossary List if Searching */}
                   {dictionarySearchQuery && (
                     <div className="space-y-2">
-                      <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider block">
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
                         Search Results ({filteredDictEntries.length})
                       </span>
                       {filteredDictEntries.map(([key, item]) => (
                         <div
                           key={key}
                           onClick={() => setSelectedDictTermKey(key)}
-                          className="p-2.5 rounded-xl bg-[#001122] border border-white/10 hover:border-[#D4AF37]/40 cursor-pointer transition-all"
+                          className="p-2.5 rounded-lg bg-secondary/50 border border-border hover:border-primary/40 cursor-pointer transition-all"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-bold text-white text-xs">{item.term}</span>
-                            <span className="text-[10px] text-[#D4AF37] font-mono">{item.strongsNumber}</span>
+                            <span className="font-semibold text-foreground text-xs">{item.term}</span>
+                            <span className="text-[10px] text-primary font-mono">{item.strongsNumber}</span>
                           </div>
-                          <p className="text-[11px] text-white/70 line-clamp-1 mt-0.5">{item.definition}</p>
+                          <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{item.definition}</p>
                         </div>
                       ))}
                     </div>
@@ -1627,10 +1627,10 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
               )}
 
               {/* Modal Footer */}
-              <div className="p-3 bg-[#001122] border-t border-white/10 flex items-center justify-between gap-2">
+              <div className="p-3 bg-muted/40 border-t border-border flex items-center justify-between gap-2">
                 <button
                   onClick={() => handleShareVerse(activeStudyVerse.verseKey, activeStudyVerse.text)}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5 border border-emerald-500/40 transition-all"
+                  className="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-1.5 border border-emerald-500/30 transition-all"
                 >
                   <Share2 className="w-3.5 h-3.5" />
                   <span>Share via WhatsApp</span>
@@ -1642,7 +1642,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
                     setSelectedDictTermKey(null);
                     setDictionarySearchQuery('');
                   }}
-                  className="px-4 py-1.5 rounded-xl bg-[#D4AF37] text-[#001F3F] font-bold text-xs hover:bg-[#c49f27] transition-all shadow"
+                  className="px-4 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs"
                 >
                   Done
                 </button>

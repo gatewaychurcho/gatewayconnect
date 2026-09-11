@@ -1,96 +1,153 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 
-type RealtimeHandlers = {
+export type RealtimeHandlers = {
   directMessages?: (payload: unknown) => void;
+  messages?: (payload: unknown) => void;
   posts?: (payload: unknown) => void;
-  communityPosts?: (payload: unknown) => void;
+  comments?: (payload: unknown) => void;
+  prayers?: (payload: unknown) => void;
   liveStreams?: (payload: unknown) => void;
+  reactions?: (payload: unknown) => void;
+  onPresenceSync?: (activeMembers: Array<{ id: string; full_name: string; handle?: string }>) => void;
+  onBroadcastEvent?: (event: { type: string; payload: unknown }) => void;
 };
 
 export function subscribeToRealtime(
   supabase: SupabaseClient,
-  handlers: RealtimeHandlers = {}
-) {
-  const channel = supabase
-    .channel('gatewayconnect-realtime')
+  handlers: RealtimeHandlers = {},
+  currentUser?: { id: string; full_name: string; handle?: string }
+): () => void {
+  const channel: RealtimeChannel = supabase.channel('gatewayconnect-realtime', {
+    config: {
+      broadcast: { self: false },
+      presence: { key: currentUser?.id || 'anon' },
+    },
+  });
 
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'direct_messages',
-      },
-      (payload) => {
-        console.log('Realtime direct_messages event:', payload);
-        handlers.directMessages?.(payload);
-      }
-    )
+  // 1. Direct Messages
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'direct_messages' },
+    (payload) => {
+      handlers.directMessages?.(payload);
+    }
+  );
 
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'posts',
-      },
-      (payload) => {
-        console.log('Realtime posts event:', payload);
-        handlers.posts?.(payload);
-      }
-    )
+  // 2. Fellowship / Group Messages
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'messages' },
+    (payload) => {
+      handlers.messages?.(payload);
+    }
+  );
 
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'community_posts',
-      },
-      (payload) => {
-        console.log('Realtime community_posts event:', payload);
-        handlers.communityPosts?.(payload);
-      }
-    )
+  // 3. Posts & Testimonies
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'posts' },
+    (payload) => {
+      handlers.posts?.(payload);
+    }
+  );
 
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'live_streams',
-      },
-      (payload) => {
-        console.log('Realtime live_streams event:', payload);
-        handlers.liveStreams?.(payload);
-      }
-    );
+  // 4. Post Comments
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'post_comments' },
+    (payload) => {
+      handlers.comments?.(payload);
+    }
+  );
 
-  channel.subscribe((status, error) => {
+  // 5. Prayer Requests
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'prayer_requests' },
+    (payload) => {
+      handlers.prayers?.(payload);
+    }
+  );
+
+  // 6. Live Streams Broadcast Status
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'live_streams' },
+    (payload) => {
+      handlers.liveStreams?.(payload);
+    }
+  );
+
+  // 7. Message Reactions
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'message_reactions' },
+    (payload) => {
+      handlers.reactions?.(payload);
+    }
+  );
+
+  // 8. Ephemeral Broadcast Events (Amen reactions, live chat bursts, pulpit scriptures)
+  channel.on('broadcast', { event: 'live_event' }, (envelope: any) => {
+    if (envelope?.payload) {
+      handlers.onBroadcastEvent?.(envelope.payload);
+    }
+  });
+
+  // 9. Member Presence Tracking
+  channel.on('presence', { event: 'sync' }, () => {
+    const presenceState = channel.presenceState();
+    const members: Array<{ id: string; full_name: string; handle?: string }> = [];
+    Object.values(presenceState).forEach((presences: any) => {
+      presences.forEach((p: any) => {
+        if (p.id) members.push(p);
+      });
+    });
+    handlers.onPresenceSync?.(members);
+  });
+
+  channel.subscribe(async (status, error) => {
     if (status === 'SUBSCRIBED') {
-      console.log('✅ Supabase Realtime WebSocket connected');
+      console.log('✅ Supabase Realtime connected');
+      if (currentUser && currentUser.id) {
+        await channel.track({
+          id: currentUser.id,
+          full_name: currentUser.full_name,
+          handle: currentUser.handle,
+        });
+      }
       return;
     }
 
     if (status === 'CHANNEL_ERROR') {
-      console.error('❌ Supabase Realtime channel error:', error);
+      console.warn('⚠️ Supabase Realtime channel error (tables may be syncing):', error);
       return;
     }
 
     if (status === 'TIMED_OUT') {
-      console.error('❌ Supabase Realtime connection timed out:', error);
+      console.warn('⚠️ Supabase Realtime connection timed out:', error);
       return;
     }
 
     if (status === 'CLOSED') {
-      console.warn('⚠️ Supabase Realtime channel closed');
+      console.info('Supabase Realtime channel closed');
       return;
     }
-
-    console.log('Supabase Realtime status:', status, error);
   });
 
   return () => {
     void supabase.removeChannel(channel);
   };
+}
+
+export async function broadcastLiveEvent(
+  supabase: SupabaseClient,
+  event: { type: string; payload: unknown }
+): Promise<void> {
+  const channel = supabase.channel('gatewayconnect-realtime');
+  await channel.send({
+    type: 'broadcast',
+    event: 'live_event',
+    payload: event,
+  });
 }

@@ -202,27 +202,44 @@ export default function App() {
       return;
     }
 
-    const unsubscribe = subscribeToRealtime(supabase, {
-      directMessages: (payload) => {
-        console.log('Realtime direct message:', payload);
-        refreshAppData();
+    const unsubscribe = subscribeToRealtime(
+      supabase,
+      {
+        directMessages: (payload) => {
+          console.log('Realtime direct message:', payload);
+          refreshAppData();
+        },
+        messages: (payload) => {
+          console.log('Realtime group message:', payload);
+          refreshAppData();
+        },
+        posts: (payload) => {
+          console.log('Realtime post:', payload);
+          refreshAppData();
+        },
+        comments: (payload) => {
+          console.log('Realtime comment:', payload);
+          refreshAppData();
+        },
+        prayers: (payload) => {
+          console.log('Realtime prayer request:', payload);
+          refreshAppData();
+        },
+        liveStreams: (payload) => {
+          console.log('Realtime live stream:', payload);
+          refreshAppData();
+        },
+        reactions: (payload) => {
+          console.log('Realtime reaction:', payload);
+          refreshAppData();
+        },
+        onBroadcastEvent: (event) => {
+          console.log('Realtime live broadcast event:', event);
+          refreshAppData();
+        },
       },
-
-      posts: (payload) => {
-        console.log('Realtime post:', payload);
-        refreshAppData();
-      },
-
-      communityPosts: (payload) => {
-        console.log('Realtime community post:', payload);
-        refreshAppData();
-      },
-
-      liveStreams: (payload) => {
-        console.log('Realtime live stream:', payload);
-        refreshAppData();
-      },
-    });
+      currentUser
+    );
 
     return () => {
       unsubscribe();
@@ -324,7 +341,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#001122] text-white flex flex-col selection:bg-[#D4AF37] selection:text-[#001F3F] bg-[radial-gradient(ellipse_at_top_right,_#001F3F_0%,_#001122_70%)]">
+    <div className="min-h-screen bg-[var(--gcz-bg-page)] text-[var(--gcz-text-main)] flex flex-col selection:bg-amber-400 selection:text-slate-950 transition-colors duration-200">
       
       {/* 1. Main Header */}
       <Header

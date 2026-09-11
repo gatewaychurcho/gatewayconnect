@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import crypto from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
+import { CONFIG } from './config';
 
 type LiveEvent = {
   type: 'testimony' | 'comment' | 'like' | 'direct_message' | 'fellowship_post' | 'prayer' | 'follow' | 'notification' | 'story' | 'group' | 'reaction' | 'stream' | 'pulpit';
@@ -65,8 +66,8 @@ const server = createServer(async (request, response) => {
   if (requestUrl.pathname === '/api/paynow/initiate' && request.method === 'POST') {
     try {
       const body = await readJson(request);
-      const integrationId = String(process.env.PAYNOW_INTEGRATION_ID || '').trim();
-      const integrationKey = String(process.env.PAYNOW_INTEGRATION_KEY || '').trim();
+      const integrationId = CONFIG.PAYNOW_INTEGRATION_ID;
+      const integrationKey = CONFIG.PAYNOW_INTEGRATION_KEY;
       if (!integrationId || !integrationKey || integrationId === '12345') {
         sendJson(response, 503, { success: false, error: 'Live Paynow credentials are not configured on the server.' });
         return;
@@ -74,9 +75,9 @@ const server = createServer(async (request, response) => {
       const reference = String(body.reference || '').trim();
       const amount = Number(body.amount || 0).toFixed(2);
       const additionalInfo = String(body.additionalInfo || 'Gateway Church Ministry').trim();
-      const returnUrl = String(body.returnUrl || process.env.PAYNOW_RETURN_URL || '').trim();
-      const resultUrl = String(body.resultUrl || process.env.PAYNOW_RESULT_URL || '').trim();
-      const authEmail = String(body.authEmail || process.env.PAYNOW_MERCHANT_EMAIL || '').trim();
+      const returnUrl = String(body.returnUrl || CONFIG.PAYNOW_RETURN_URL || '').trim();
+      const resultUrl = String(body.resultUrl || CONFIG.PAYNOW_RESULT_URL || '').trim();
+      const authEmail = String(body.authEmail || CONFIG.PAYNOW_MERCHANT_EMAIL || '').trim();
       const status = 'Message';
       const values = [integrationId, reference, amount, additionalInfo, returnUrl, resultUrl, authEmail, status];
       const params = new URLSearchParams({
@@ -209,7 +210,7 @@ socketServer.on('connection', (socket) => {
   });
 });
 
-const port = Number(process.env.PORT || process.env.LIVE_PORT || 8787);
+const port = CONFIG.PORT;
 
 server.listen(port, '0.0.0.0', () => {
   console.log('Gateway Connect live hub listening on port ' + port);
