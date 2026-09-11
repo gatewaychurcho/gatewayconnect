@@ -186,6 +186,48 @@ export default function App() {
       window.removeEventListener('gcz_live_event_received', refreshLiveState);
     };
   }, [currentUser?.id]);
+  useEffect(() => {
+    if (
+      !currentUser ||
+      currentUser.role === 'guest' ||
+      currentUser.id.startsWith('usr_guest')
+    ) {
+      return;
+    }
+
+    const supabase = getSupabase();
+
+    if (!supabase) {
+      console.warn('Supabase Realtime is not configured.');
+      return;
+    }
+
+    const unsubscribe = subscribeToRealtime(supabase, {
+      directMessages: (payload) => {
+        console.log('Realtime direct message:', payload);
+        refreshAppData();
+      },
+
+      posts: (payload) => {
+        console.log('Realtime post:', payload);
+        refreshAppData();
+      },
+
+      communityPosts: (payload) => {
+        console.log('Realtime community post:', payload);
+        refreshAppData();
+      },
+
+      liveStreams: (payload) => {
+        console.log('Realtime live stream:', payload);
+        refreshAppData();
+      },
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUser?.id]);
 
   // Login / Signup Handlers
   const handleAuthSubmit = (e: React.FormEvent) => {
