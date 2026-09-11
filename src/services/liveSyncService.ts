@@ -1,7 +1,7 @@
 import { DirectMessage, PrayerRequest, Testimony, ChatGroupMessage, User } from '../types';
 import { StorageService } from './storageService';
 
-type LiveEventType = 'testimony' | 'comment' | 'like' | 'direct_message' | 'fellowship_post' | 'prayer' | 'follow' | 'notification' | 'story' | 'group' | 'reaction' | 'stream';
+type LiveEventType = 'testimony' | 'comment' | 'like' | 'direct_message' | 'fellowship_post' | 'prayer' | 'follow' | 'notification' | 'story' | 'group' | 'reaction' | 'stream' | 'pulpit';
 type LiveEvent = { type: LiveEventType; payload: unknown };
 type LiveState = {
   testimonies: Testimony[];
@@ -144,7 +144,8 @@ export class LiveSyncService {
       ['gcz_story_updated', 'story'],
       ['gcz_groups_updated', 'group'],
       ['gcz_reactions_updated', 'reaction'],
-      ['gcz_stream_url_updated', 'stream']
+      ['gcz_stream_url_updated', 'stream'],
+      ['gcz_pulpit_scripture_updated', 'pulpit']
     ];
     const handlers = eventNames.map(([name, type]) => {
       const handler = (event: Event) => {

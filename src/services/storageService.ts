@@ -3591,7 +3591,9 @@ export class StorageService {
               ? 'gcz_groups_updated'
               : type === 'reaction'
                 ? 'gcz_reactions_updated'
-                : 'gcz_stream_url_updated';
+                : type === 'pulpit'
+                  ? 'gcz_pulpit_scripture_updated'
+                  : 'gcz_stream_url_updated';
         if (type === 'group' && payload && typeof payload === 'object' && 'id' in payload) {
           const groups = this.getChatGroups();
           const group = payload as ChatGroup;

@@ -58,7 +58,6 @@ import { testSupabaseConnection } from '../../services/supabaseClient';
 import { downloadCsvForExcel } from '../../utils/exportUtils';
 import { SUPABASE_SCHEMA_SQL } from '../../data/flutterExportData';
 import { PaynowConfigModal } from '../modals/PaynowConfigModal';
-import { DEMO_ACCOUNTS, INITIAL_USERS } from '../../data/mockData';
 import { User, UnbanAppeal, PasswordResetRequest, StreamAttendanceRecord, LiveStreamViewer, SUPPORTED_CITIES } from '../../types';
 import type { UserRole } from '../../types';
 import { AdminCyberBackground } from '../admin/AdminCyberBackground';
@@ -233,11 +232,10 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   const logsContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [logs, setLogs] = useState<string[]>([
-    '[2026-09-02 11:15:02] [AUTH] Phone 0780699988 verified via Argon2 hash. Role: DEVELOPER',
-    `[2026-09-02 11:15:04] [SUPABASE] Project URL: ${supabaseConfig.url} (Ref: csinlqdcqdgcssdanvsr)`,
-    '[2026-09-02 11:15:10] [SUPABASE_POSTGRES] Connection pool healthy (PostgreSQL 15.x RLS Active)',
-    '[2026-09-02 11:15:15] [CACHE] Shona / KJV Multilingual Bible preloaded in IndexedDB (1,189 chapters)',
-    `[2026-09-02 11:15:30] [PAYNOW_GATEWAY] Status: ${paynowConfig.isConfigured ? 'CONNECTED (ID: ' + paynowConfig.integrationId + ')' : 'READY (Setup Required)'}`
+    `[SYSTEM] Console opened ${new Date().toISOString()}`,
+    `[CONFIG] Supabase: ${supabaseConfig.isLiveConnected ? 'configured' : 'not configured'}${supabaseConfig.url ? ` (${supabaseConfig.url})` : ''}`,
+    `[CONFIG] WebSocket: ${(import.meta as ImportMeta & { env?: { VITE_LIVE_WS_URL?: string } }).env?.VITE_LIVE_WS_URL ? 'configured' : 'not configured'}`,
+    `[CONFIG] Paynow: ${paynowConfig.isConfigured ? 'configured' : 'not configured'}`
   ]);
 
   // Realtime listeners & live telemetry heartbeat
@@ -262,7 +260,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
       const count = StorageService.getOnlineStreamersCount();
       setLogs(prev => {
         const next = [
-          `[${stamp}] [REALTIME_PULSE] Connected Streamers: ${count} | WebSocket Edge: HEALTHY | Security RLS: ENFORCED`,
+          `[${stamp}] [REALTIME_PULSE] Connected Streamers: ${count} | WebSocket: ${(import.meta as ImportMeta & { env?: { VITE_LIVE_WS_URL?: string } }).env?.VITE_LIVE_WS_URL ? 'CONFIGURED' : 'NOT_CONFIGURED'} | Supabase: ${supabaseConfig.isLiveConnected ? 'CONFIGURED' : 'NOT_CONFIGURED'}`,
           ...prev
         ];
         return next.slice(0, 150);
@@ -341,7 +339,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   const [tempPasswordToIssue, setTempPasswordToIssue] = useState('');
   const [copiedTempPass, setCopiedTempPass] = useState(false);
 
-  const [simulatedLatency, setSimulatedLatency] = useState<number>(38);
+  const [measuredLatency, setMeasuredLatency] = useState<number | null>(null);
 
   const handleTestSupabaseLive = async () => {
     setIsPingingSupabase(true);
@@ -349,7 +347,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
     try {
       const result = await testSupabaseConnection();
       if (result.connected) {
-        setSimulatedLatency(result.latencyMs);
+        setMeasuredLatency(result.latencyMs);
         setLogs(prev => [
           `[${new Date().toLocaleTimeString()}] [SUPABASE_SUCCESS] Live ping succeeded! Latency: ${result.latencyMs}ms. Status: OK.`,
           ...prev
@@ -376,13 +374,6 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
 
   const handleClearLogs = () => {
     setLogs(['[SYSTEM] Logs cleared by developer 0780699988']);
-  };
-
-  const handleSimulateError = () => {
-    setLogs(prev => [
-      `[${new Date().toLocaleTimeString()}] [SIMULATION] Low-data Econet 2G packet drop test initiated (0% data loss)`,
-      ...prev
-    ]);
   };
 
   const handleToggleBanUser = (targetUser: User) => {
@@ -632,7 +623,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
           </span>
         </div>
         <span className="text-[9px] sm:text-[10px] bg-purple-900/60 px-2 py-0.5 rounded font-mono shrink-0 ml-2">
-          RLS ENFORCED
+          {supabaseConfig.isLiveConnected ? 'SUPABASE CONFIGURED' : 'SUPABASE NOT CONFIGURED'}
         </span>
       </div>
 
@@ -649,7 +640,6 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
           { id: 'schema', label: '🗄️ Supabase Postgres Schema', icon: Database },
           { id: 'logs', label: '📜 Live System Logs', icon: Terminal },
           { id: 'endpoints', label: '🌐 API Endpoints & Routes', icon: Layers },
-          { id: 'accounts', label: '👥 Test Profiles & Accounts', icon: Users }
         ].map(tab => (
           <button
             key={tab.id}
@@ -685,7 +675,6 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
               { id: 'schema', label: '🗄️ Supabase Postgres Schema' },
               { id: 'logs', label: '📜 Live System Logs' },
               { id: 'endpoints', label: '🌐 API Endpoints & Routes' },
-              { id: 'accounts', label: '👥 Test Profiles & Accounts' }
             ].map(tab => (
               <option key={tab.id} value={tab.id} className="bg-slate-900 text-white">
                 {tab.label}
@@ -717,9 +706,9 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                 <span className="text-xs text-slate-400">Supabase REST & Auth</span>
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                  <span className="text-sm font-bold text-white">READY</span>
+                  <span className="text-sm font-bold text-white">{supabaseConfig.isLiveConnected ? 'CONFIGURED' : 'NOT CONFIGURED'}</span>
                 </div>
-                <p className="text-[10px] text-slate-500">Latency: {simulatedLatency}ms (Edge)</p>
+                <p className="text-[10px] text-slate-500">Latency: {measuredLatency === null ? 'Not measured' : `${measuredLatency}ms`}</p>
               </div>
 
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 space-y-1">
@@ -744,7 +733,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                   <Zap className="w-3.5 h-3.5 text-amber-400" />
                   <span className="text-sm font-bold text-amber-400">24kbps OPUS</span>
                 </div>
-                <p className="text-[10px] text-slate-500">Econet / NetOne ready</p>
+                <p className="text-[10px] text-slate-500">Browser cache status: available</p>
               </div>
             </div>
 
@@ -773,12 +762,6 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                 >
                   {copiedSql ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copiedSql ? 'Copied SQL Script!' : '📋 Copy Supabase SQL Schema'}</span>
-                </button>
-                <button
-                  onClick={handleSimulateError}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded-xl border border-slate-700"
-                >
-                  Simulate Econet 2G Throttling
                 </button>
               </div>
             </div>
@@ -2175,82 +2158,6 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                 })}
               </div>
             )}
-          </div>
-        )}
-
-        {/* ACCOUNTS TAB */}
-        {activeTab === 'accounts' && (
-          <div className="bg-slate-900 border border-purple-500/30 rounded-2xl p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div>
-                <h4 className="font-bold text-purple-400 text-sm uppercase">Developer Test Profiles & Switcher</h4>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Pre-configured ministerial profiles for testing role-based access control (Super Admin, Moderator, Member, Developer).
-                </p>
-              </div>
-              <span className="px-2.5 py-1 rounded bg-purple-950 text-purple-300 font-mono text-[11px] border border-purple-500/40">
-                DEV RESTRICTED
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {DEMO_ACCOUNTS.map((acc, idx) => {
-                const fullUser = INITIAL_USERS.find(u => u.phone === acc.phone);
-                const isCurrent = StorageService.getCurrentUser()?.phone === acc.phone;
-                return (
-                  <div
-                    key={idx}
-                    className={`p-4 rounded-xl border transition-all flex flex-col justify-between space-y-3 ${
-                      isCurrent
-                        ? 'bg-purple-950/40 border-purple-400 shadow-lg'
-                        : 'bg-slate-950 border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-sm text-white">{acc.name}</span>
-                        <span className={`text-[9px] px-2 py-0.5 rounded font-bold uppercase ${
-                          acc.role === 'super_admin' ? 'bg-[#D4AF37] text-[#001F3F]' :
-                          acc.role === 'developer' ? 'bg-purple-600 text-white' :
-                          acc.role === 'moderator' ? 'bg-blue-600 text-white' :
-                          'bg-emerald-600 text-white'
-                        }`}>
-                          {acc.role.replace('_', ' ')}
-                        </span>
-                      </div>
-                      <p className="text-xs text-purple-300 font-semibold mt-0.5">{acc.roleTitle}</p>
-                      <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">{acc.description}</p>
-                      
-                      <div className="mt-2.5 p-2 bg-slate-900 rounded-lg border border-slate-800 text-[11px] font-mono space-y-0.5">
-                        <div className="text-slate-300">Phone: <strong className="text-[#D4AF37]">{acc.phone}</strong></div>
-                        <div className="text-slate-400">Password: <strong className="text-emerald-400">{acc.password}</strong></div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (fullUser) {
-                          StorageService.setCurrentUser(fullUser);
-                          if (onSwitchUser) onSwitchUser(fullUser);
-                          setLogs(prev => [
-                            `[${new Date().toLocaleTimeString()}] [AUTH_SWITCH] Switched active profile to: ${acc.name} (${acc.role})`,
-                            ...prev
-                          ]);
-                        }
-                      }}
-                      className={`w-full py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-                        isCurrent
-                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 cursor-default'
-                          : 'bg-[#D4AF37] hover:bg-[#c29e2e] text-[#001F3F] shadow'
-                      }`}
-                    >
-                      <span>{isCurrent ? '✓ Active Current Session' : '1-Click Switch to Account'}</span>
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         )}
 

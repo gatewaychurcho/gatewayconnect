@@ -66,6 +66,7 @@ import {
 import { StorageService } from '../../services/storageService';
 import { downloadCsvForExcel } from '../../utils/exportUtils';
 import { AdminCyberBackground } from './AdminCyberBackground';
+import { LocalImagePicker } from '../common/LocalImagePicker';
 
 interface AdminPanelProps {
   onClose: () => void;
@@ -271,6 +272,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
 
   const handleSyncPulpitScripture = () => {
     const reference = `${pulpitBook} ${pulpitChapter}:${pulpitVerse}`;
+    window.dispatchEvent(new CustomEvent('gcz_pulpit_scripture_updated', { detail: { reference, synced_at: new Date().toISOString() } }));
     setPulpitSyncStatus(`Synced: ${reference}`);
     confetti({ particleCount: 25, spread: 50 });
     setTimeout(() => setPulpitSyncStatus(null), 4000);
@@ -783,7 +785,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                 {pulpitSyncStatus && (
                   <div className="mt-2 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-2 flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>{pulpitSyncStatus} — Broadcasted to active members!</span>
+                    <span>{pulpitSyncStatus} — sync event sent to connected clients.</span>
                   </div>
                 )}
               </div>
@@ -868,7 +870,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                   </div>
                   <span className="px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-400 text-xs font-bold border border-rose-500/30 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-                    Broadcast Ready
+                    {liveSermonStatus.isLive ? 'Broadcast Live' : 'Broadcast Standby'}
                   </span>
                 </div>
 
@@ -952,6 +954,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                         </button>
                       ))}
                     </div>
+                    <LocalImagePicker value={sermonThumbnail} onChange={setSermonThumbnail} />
+                                  <LocalImagePicker value={newProdImage} onChange={setNewProdImage} className="mt-1.5" />
                   </div>
 
                   {/* Live Embed Preview */}

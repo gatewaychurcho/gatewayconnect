@@ -56,6 +56,7 @@ import { User, DirectMessage, DmThread, ChatGroup, ChatGroupMessage, GroupMember
 import { StorageService } from '../../services/storageService';
 import { SupabaseSyncService } from '../../services/supabaseSyncService';
 import { PaynowService } from '../../services/paynowService';
+import { LocalImagePicker } from '../common/LocalImagePicker';
 
 interface DirectMessagesModalProps {
   currentUser: User;
@@ -2888,6 +2889,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     placeholder="https://..."
                     className="w-full bg-[#001122] border border-white/20 rounded-xl p-2.5 text-white focus:outline-none focus:border-[#D4AF37]"
                   />
+                  <LocalImagePicker value={newGroupAvatar} onChange={setNewGroupAvatar} className="mt-1.5" />
                 </div>
               </div>
 

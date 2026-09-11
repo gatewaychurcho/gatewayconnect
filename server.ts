@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 
 type LiveEvent = {
-  type: 'testimony' | 'comment' | 'like' | 'direct_message' | 'fellowship_post' | 'prayer' | 'follow' | 'notification' | 'story' | 'group' | 'reaction' | 'stream';
+  type: 'testimony' | 'comment' | 'like' | 'direct_message' | 'fellowship_post' | 'prayer' | 'follow' | 'notification' | 'story' | 'group' | 'reaction' | 'stream' | 'pulpit';
   payload: unknown;
 };
 
@@ -19,7 +19,7 @@ const clients = new Map<WebSocket, { id: string; full_name: string; handle?: str
 const state: LiveState = { testimonies: [], prayers: [], directMessages: [], fellowshipPosts: [], activeMembers: [] };
 const knownEventTypes = new Set<LiveEvent['type']>([
   'testimony', 'comment', 'like', 'direct_message', 'fellowship_post', 'prayer',
-  'follow', 'notification', 'story', 'group', 'reaction', 'stream'
+  'follow', 'notification', 'story', 'group', 'reaction', 'stream', 'pulpit'
 ]);
 
 const broadcast = (message: unknown, except?: WebSocket) => {
