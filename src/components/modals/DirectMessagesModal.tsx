@@ -1197,16 +1197,16 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4"
       onClick={onClose}
     >
       <div 
-        className="bg-[#001428] border-0 sm:border sm:border-[#D4AF37]/40 rounded-none sm:rounded-2xl w-full max-w-4xl h-full sm:h-[92vh] sm:max-h-[780px] flex flex-col shadow-2xl overflow-hidden text-white animate-in zoom-in-95 duration-150"
+        className="bg-card border-0 sm:border sm:border-border rounded-none sm:rounded-xl w-full max-w-4xl h-full sm:h-[92vh] sm:max-h-[780px] flex flex-col shadow-2xl overflow-hidden text-card-foreground animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         
-        {/* Top Header Bar & Mode Selector - Hidden on mobile when inside a conversation */}
-        <div className={`h-14 bg-[#001F3F] border-b border-white/10 px-3 sm:px-4 flex items-center justify-between shrink-0 ${
+        {/* Top Header Bar & Mode Selector */}
+        <div className={`h-14 bg-card border-b border-border px-3 sm:px-4 flex items-center justify-between shrink-0 ${
           (activeTab === 'direct' ? activeUserId : activeGroupId) ? 'hidden sm:flex' : 'flex'
         }`}>
           <div className="flex items-center gap-3">
@@ -1217,10 +1217,10 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   setActiveTab('direct');
                   setSearchQuery('');
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs sm:text-sm transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs sm:text-sm transition-all ${
                   activeTab === 'direct'
-                    ? 'bg-[#D4AF37] text-[#001F3F] shadow'
-                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                 }`}
               >
                 <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -1233,23 +1233,23 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   setActiveTab('groups');
                   setSearchQuery('');
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs sm:text-sm transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs sm:text-sm transition-all ${
                   activeTab === 'groups'
-                    ? 'bg-[#D4AF37] text-[#001F3F] shadow'
-                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                 }`}
               >
                 <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span>Church Groups</span>
                 {groups.length > 0 && (
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                    activeTab === 'groups' ? 'bg-[#001F3F] text-[#D4AF37]' : 'bg-white/10 text-white'
+                    activeTab === 'groups' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-secondary text-foreground'
                   }`}>
                     {groups.length}
                   </span>
                 )}
                 {pendingInvites.length > 0 && (
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                  <span className="w-2 h-2 rounded-full bg-destructive animate-ping" />
                 )}
               </button>
             </div>
@@ -1257,13 +1257,13 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
           <div className="flex items-center gap-2">
             {copyFeedback && (
-              <span className="text-[11px] text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-500/40 animate-fade-in font-medium">
+              <span className="text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/30 animate-fade-in font-medium">
                 {copyFeedback}
               </span>
             )}
             <button
               onClick={onClose}
-              className="p-1.5 rounded-full hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
               title="Close"
             >
               <X className="w-5 h-5" />
@@ -1277,14 +1277,14 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
           {/* ========================================================================= */}
           {/* LEFT COLUMN (Sidebar for Direct Messages OR Church Groups) */}
           {/* ========================================================================= */}
-          <div className={`w-full sm:w-80 bg-[#001A33] border-r border-white/10 flex flex-col relative ${
+          <div className={`w-full sm:w-80 bg-card sm:bg-secondary/30 border-r border-border flex flex-col relative ${
             (activeTab === 'direct' ? activeUserId && !showNewChatPicker : activeGroupId) ? 'hidden sm:flex' : 'flex'
           }`}>
             
             {/* Search & Actions Bar */}
-            <div className="p-3 border-b border-white/10 flex items-center gap-2">
+            <div className="p-3 border-b border-border flex items-center gap-2">
               <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="text"
                   value={searchQuery}
@@ -1294,7 +1294,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       ? (showNewChatPicker ? "Search all believers..." : "Search messages...")
                       : "Search church groups..."
                   }
-                  className="w-full bg-[#001122] border border-white/15 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-[#D4AF37]"
+                  className="w-full bg-secondary/70 border border-border rounded-lg pl-9 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
 
@@ -1303,10 +1303,10 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   id="btn-new-chat-plus"
                   onClick={() => setShowNewChatPicker(!showNewChatPicker)}
                   title={showNewChatPicker ? "View Conversations" : "New Chat (+)"}
-                  className={`p-2 rounded-xl transition-all font-bold flex items-center justify-center shrink-0 shadow ${
+                  className={`p-2 rounded-lg transition-all font-semibold flex items-center justify-center shrink-0 shadow-sm ${
                     showNewChatPicker 
-                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30' 
-                      : 'bg-[#D4AF37] text-[#001F3F] hover:bg-amber-400'
+                      ? 'bg-destructive/15 text-destructive border border-destructive/30 hover:bg-destructive/25' 
+                      : 'bg-primary text-primary-foreground hover:brightness-105'
                   }`}
                 >
                   {showNewChatPicker ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
@@ -1316,7 +1316,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   <button
                     onClick={() => setShowJoinByCodeModal(true)}
                     title="Join via link or code"
-                    className="p-2 rounded-xl bg-[#001122] border border-white/20 text-white/80 hover:text-white text-xs font-semibold"
+                    className="p-2 rounded-lg bg-secondary border border-border text-foreground hover:bg-secondary/80 text-xs font-semibold"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </button>
@@ -1325,7 +1325,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       id="btn-create-church-group"
                       onClick={() => setShowCreateGroupModal(true)}
                       title="Create Church Group"
-                      className="p-2 rounded-xl bg-[#D4AF37] text-[#001F3F] hover:bg-amber-400 transition-all font-bold shadow"
+                      className="p-2 rounded-lg bg-primary text-primary-foreground hover:brightness-105 transition-all font-semibold shadow-sm"
                     >
                       <Plus className="w-4 h-4" />
                     </button>
@@ -1338,8 +1338,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
             {activeTab === 'direct' && (
               <>
                 {showNewChatPicker ? (
-                  <div className="flex-1 overflow-y-auto divide-y divide-white/5">
-                    <div className="px-3 py-2 bg-[#001222] text-[11px] font-bold text-[#D4AF37] uppercase tracking-wider flex items-center gap-1.5">
+                  <div className="flex-1 overflow-y-auto divide-y divide-border">
+                    <div className="px-3 py-2 bg-secondary/80 text-[11px] font-bold text-primary uppercase tracking-wider flex items-center gap-1.5 border-b border-border">
                       <Users className="w-3.5 h-3.5" />
                       <span>Start New Chat (Prioritized)</span>
                     </div>
@@ -1351,9 +1351,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           setShowNewChatPicker(false);
                           setSearchQuery('');
                         }}
-                        className="w-full p-3 flex items-center gap-3 transition-colors text-left hover:bg-white/5"
+                        className="w-full p-3 flex items-center gap-3 transition-colors text-left hover:bg-secondary/60"
                       >
-                        <div className="w-10 h-10 rounded-full border border-[#D4AF37]/60 overflow-hidden bg-[#001F3F] flex items-center justify-center text-[#D4AF37] font-bold text-xs shrink-0">
+                        <div className="w-10 h-10 rounded-full border border-border overflow-hidden bg-secondary flex items-center justify-center text-primary font-bold text-xs shrink-0">
                           {contact.avatar_url ? (
                             <img src={contact.avatar_url} alt={contact.full_name} className="w-full h-full object-cover" />
                           ) : (
@@ -1363,21 +1363,21 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
-                            <span className="font-bold text-xs text-white truncate flex items-center gap-1">
+                            <span className="font-semibold text-xs text-foreground truncate flex items-center gap-1">
                               {contact.full_name}
                             </span>
                             {contact.role === 'super_admin' && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#D4AF37]/20 text-[#D4AF37] font-bold border border-[#D4AF37]/40">
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary font-bold border border-primary/20">
                                 Apostle
                               </span>
                             )}
                             {contact.role === 'developer' && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/40">
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold border border-purple-500/20">
                                 Dev
                               </span>
                             )}
                           </div>
-                          <p className="text-[11px] text-white/50 truncate font-mono">
+                          <p className="text-[11px] text-muted-foreground truncate font-mono">
                             {contact.handle || `@${contact.full_name.toLowerCase().replace(/\s+/g, '_')}`} • {contact.location || 'Harare'}
                           </p>
                         </div>
@@ -1385,13 +1385,13 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     ))}
                   </div>
                 ) : (
-                  <div className="flex-1 overflow-y-auto divide-y divide-white/5">
+                  <div className="flex-1 overflow-y-auto divide-y divide-border">
                     {filteredThreads.length === 0 ? (
-                      <div className="p-6 text-center text-white/50 text-xs space-y-2">
+                      <div className="p-6 text-center text-muted-foreground text-xs space-y-2">
                         <p>No active conversations yet.</p>
                         <button
                           onClick={() => setShowNewChatPicker(true)}
-                          className="px-3 py-1.5 rounded-xl bg-[#D4AF37] text-[#001F3F] font-bold text-xs hover:bg-amber-400 transition-colors inline-flex items-center gap-1"
+                          className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:brightness-105 transition-colors inline-flex items-center gap-1 shadow-sm"
                         >
                           <Plus className="w-3.5 h-3.5" />
                           <span>Start a chat</span>
@@ -1405,43 +1405,43 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             key={thread.other_user.id}
                             onClick={() => setActiveUserId(thread.other_user.id)}
                             className={`w-full p-3 flex items-center gap-3 transition-colors text-left ${
-                              isSelected ? 'bg-[#002B55] border-l-4 border-[#D4AF37]' : 'hover:bg-white/5'
+                              isSelected ? 'bg-primary/10 border-l-4 border-primary text-foreground' : 'hover:bg-secondary/60 text-foreground'
                             }`}
                           >
                             <div className="relative shrink-0">
-                              <div className="w-11 h-11 rounded-full border-2 border-[#D4AF37]/60 overflow-hidden bg-[#001F3F] flex items-center justify-center text-[#D4AF37] font-bold text-sm">
+                              <div className="w-11 h-11 rounded-full border border-border overflow-hidden bg-secondary flex items-center justify-center text-primary font-bold text-sm">
                                 {thread.other_user.avatar_url ? (
                                   <img src={thread.other_user.avatar_url} alt={thread.other_user.full_name} className="w-full h-full object-cover" />
                                 ) : (
                                   thread.other_user.full_name.slice(0, 2).toUpperCase()
                                 )}
                               </div>
-                              <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[#001A33]" />
+                              <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-background" />
                             </div>
 
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between mb-0.5">
-                                <span className="font-bold text-xs text-white truncate flex items-center gap-1">
+                                <span className="font-semibold text-xs text-foreground truncate flex items-center gap-1">
                                   {pinnedDms.includes(thread.other_user.id) && (
-                                    <Pin className="w-3 h-3 text-[#D4AF37] fill-[#D4AF37] shrink-0" />
+                                    <Pin className="w-3 h-3 text-primary fill-primary shrink-0" />
                                   )}
                                   <span>{thread.other_user.full_name}</span>
                                   {thread.other_user.role === 'super_admin' && (
-                                    <span className="text-[10px] text-[#D4AF37]">✦</span>
+                                    <span className="text-[10px] text-primary">✦</span>
                                   )}
                                 </span>
-                                <span className="text-[10px] text-white/40">
+                                <span className="text-[10px] text-muted-foreground">
                                   {new Date(thread.last_message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                               </div>
-                              <p className="text-[11px] text-white/60 truncate">
+                              <p className="text-[11px] text-muted-foreground truncate">
                                 {thread.last_message.sender_id === currentUser.id ? 'You: ' : ''}
                                 {thread.last_message.text}
                               </p>
                             </div>
 
                             {thread.unread_count > 0 && (
-                              <span className="w-5 h-5 rounded-full bg-blue-500 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
+                              <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground font-bold text-[10px] flex items-center justify-center shrink-0 shadow-sm">
                                 {thread.unread_count}
                               </span>
                             )}
@@ -1454,44 +1454,42 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               </>
             )}
 
-            {/* CHURCH GROUPS VIEW (WhatsApp Style) */}
+            {/* CHURCH GROUPS VIEW */}
             {activeTab === 'groups' && (
-              <div className="flex-1 overflow-y-auto divide-y divide-white/5">
-                
-                {/* Pending WhatsApp Invites for Admins & Moderators */}
+              <div className="flex-1 overflow-y-auto divide-y divide-border">
+                {/* Pending WhatsApp Invites */}
                 {pendingInvites.length > 0 && (
-                  <div className="p-3 bg-gradient-to-b from-amber-950/60 to-black/40 border-b border-[#D4AF37]/40 space-y-2.5">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-[#D4AF37]">
-                      <Sparkles className="w-4 h-4 text-[#D4AF37]" />
+                  <div className="p-3 bg-secondary/80 border-b border-border space-y-2.5">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                      <Sparkles className="w-4 h-4 text-primary" />
                       <span>Official Group Invitations ({pendingInvites.length})</span>
                     </div>
                     {pendingInvites.map(inv => (
-                      <div key={inv.id} className="bg-[#001428] border border-[#D4AF37]/50 rounded-2xl p-3 space-y-2 text-xs shadow-md">
+                      <div key={inv.id} className="bg-card border border-border rounded-xl p-3 space-y-2 text-xs shadow-sm">
                         <div className="flex items-start gap-2.5">
-                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#D4AF37] to-amber-700 text-[#001F3F] font-black text-xs flex items-center justify-center shrink-0 shadow">
+                          <div className="w-8 h-8 rounded-lg bg-primary text-primary-foreground font-bold text-xs flex items-center justify-center shrink-0 shadow-sm">
                             {inv.group_name.slice(0, 1)}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-bold text-white text-xs truncate">{inv.group_name}</p>
-                            <p className="text-white/70 text-[11px] leading-tight">
-                              Invited by <span className="font-semibold text-[#D4AF37]">{inv.invited_by_name}</span>
+                            <p className="font-semibold text-foreground text-xs truncate">{inv.group_name}</p>
+                            <p className="text-muted-foreground text-[11px] leading-tight">
+                              Invited by <span className="font-semibold text-primary">{inv.invited_by_name}</span>
                             </p>
                           </div>
                         </div>
-                        <p className="text-[10px] text-white/60 italic bg-black/40 px-2 py-1 rounded-lg border border-white/5">
+                        <p className="text-[10px] text-muted-foreground italic bg-secondary px-2 py-1 rounded-md border border-border">
                           Official Admin & Moderator Invitation Link
                         </p>
-                        {/* 2 Buttons at the bottom: 1st Join, 2nd Decline */}
-                        <div className="flex items-center gap-2 pt-1 border-t border-white/10">
+                        <div className="flex items-center gap-2 pt-1 border-t border-border">
                           <button
                             onClick={() => handleRespondToInvite(inv.id, true)}
-                            className="flex-1 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-1 shadow-sm transition-all active:scale-95"
+                            className="flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1 shadow-sm transition-all active:scale-95"
                           >
                             <Check className="w-3.5 h-3.5" /> Join
                           </button>
                           <button
                             onClick={() => handleRespondToInvite(inv.id, false)}
-                            className="flex-1 py-1.5 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-500/40 text-red-300 font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95"
+                            className="flex-1 py-1.5 rounded-lg bg-destructive/10 hover:bg-destructive/20 border border-destructive/20 text-destructive font-semibold text-xs flex items-center justify-center gap-1 transition-all active:scale-95"
                           >
                             <X className="w-3.5 h-3.5" /> Decline
                           </button>
@@ -1512,21 +1510,21 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       key={grp.id}
                       onClick={() => handleSelectGroup(grp.id)}
                       className={`w-full p-3 flex items-center gap-3 transition-colors text-left ${
-                        isSelected ? 'bg-[#002B55] border-l-4 border-[#D4AF37]' : 'hover:bg-white/5'
+                        isSelected ? 'bg-primary/10 border-l-4 border-primary text-foreground' : 'hover:bg-secondary/60 text-foreground'
                       }`}
                     >
                       <div className="relative shrink-0">
-                        <div className="w-12 h-12 rounded-2xl border-2 border-[#D4AF37]/50 overflow-hidden bg-[#001F3F] flex items-center justify-center text-[#D4AF37] font-bold text-sm shadow">
+                        <div className="w-12 h-12 rounded-xl border border-border overflow-hidden bg-secondary flex items-center justify-center text-primary font-bold text-sm shadow-sm">
                           {grp.avatar_url ? (
                             <img src={grp.avatar_url} alt={grp.name} className="w-full h-full object-cover" />
                           ) : isFs ? (
-                            <GraduationCap className="w-6 h-6 text-[#D4AF37]" />
+                            <GraduationCap className="w-6 h-6 text-primary" />
                           ) : (
                             grp.name.slice(0, 2).toUpperCase()
                           )}
                         </div>
                         {grp.is_paid && (
-                          <span className="absolute -top-1 -right-1 bg-amber-500 text-[#001F3F] p-0.5 rounded-full shadow" title="Paid Group">
+                          <span className="absolute -top-1 -right-1 bg-amber-500 text-slate-950 p-0.5 rounded-full shadow-sm" title="Paid Group">
                             <Crown className="w-3 h-3 fill-current" />
                           </span>
                         )}
@@ -1534,38 +1532,38 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1 mb-0.5">
-                          <h4 className="font-bold text-xs sm:text-sm text-white truncate flex items-center gap-1">
+                          <h4 className="font-semibold text-xs sm:text-sm text-foreground truncate flex items-center gap-1">
                             {grp.pinned_by_users?.includes(currentUser.id) && (
-                              <Pin className="w-3 h-3 text-[#D4AF37] fill-[#D4AF37] shrink-0" />
+                              <Pin className="w-3 h-3 text-primary fill-primary shrink-0" />
                             )}
                             <span>{grp.name}</span>
                           </h4>
                           {grp.is_paid ? (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40 shrink-0">
+                            <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20 shrink-0">
                               ${grp.price_usd}/3m
                             </span>
                           ) : (
-                            <span className="text-[10px] text-white/40 shrink-0">
+                            <span className="text-[10px] text-muted-foreground shrink-0">
                               {grp.member_ids.length} members
                             </span>
                           )}
                         </div>
 
-                        <p className="text-[11px] text-white/60 truncate">
+                        <p className="text-[11px] text-muted-foreground truncate">
                           {grp.description}
                         </p>
 
                         <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/10 text-white/70 font-semibold uppercase tracking-wider">
+                          <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-secondary text-muted-foreground font-semibold uppercase tracking-wider border border-border">
                             {grp.category || 'Group'}
                           </span>
 
                           {isMember ? (
-                            <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-0.5">
+                            <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-0.5">
                               <Check className="w-2.5 h-2.5" /> Enrolled
                             </span>
                           ) : (
-                            <span className="text-[9px] text-[#D4AF37] font-bold">
+                            <span className="text-[9px] text-primary font-semibold">
                               {grp.is_paid ? 'Tap to Enroll' : 'Tap to Join'}
                             </span>
                           )}
@@ -1578,39 +1576,39 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               </div>
             )}
 
-            {/* Mobile WhatsApp-Style Floating Action Buttons (FABs) with icons & compact labels */}
+            {/* Mobile Floating Action Buttons (FABs) */}
             <div className="sm:hidden absolute bottom-4 right-4 z-20 flex flex-col items-end gap-2.5 pointer-events-auto">
               {activeTab === 'direct' ? (
                 <button
                   id="fab-mobile-new-chat"
                   type="button"
                   onClick={() => setShowNewChatPicker(prev => !prev)}
-                  className="flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] font-bold shadow-2xl active:scale-95 transition-transform border border-amber-300/40 cursor-pointer"
+                  className="flex items-center gap-2 px-3.5 py-2.5 rounded-lg bg-primary hover:brightness-105 text-primary-foreground font-semibold shadow-lg active:scale-95 transition-transform border border-primary/30 cursor-pointer"
                   title="Start New Direct Chat"
                 >
-                  <MessageSquarePlus className="w-4 h-4 text-[#001F3F]" />
-                  <span className="text-[11px] font-black uppercase tracking-wider">New Chat</span>
+                  <MessageSquarePlus className="w-4 h-4" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">New Chat</span>
                 </button>
               ) : (
                 <div className="flex flex-col items-end gap-2">
                   <button
                     type="button"
                     onClick={() => setShowJoinByCodeModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#001F3F] text-[#D4AF37] border border-[#D4AF37]/50 font-bold shadow-lg text-[10px] active:scale-95 transition-transform"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-foreground border border-border font-semibold shadow text-[10px] active:scale-95 transition-transform"
                     title="Join with Invite Code"
                   >
-                    <ExternalLink className="w-3 h-3 text-[#D4AF37]" />
+                    <ExternalLink className="w-3 h-3 text-primary" />
                     <span>Join Code</span>
                   </button>
                   <button
                     id="fab-mobile-new-group"
                     type="button"
                     onClick={() => setShowCreateGroupModal(true)}
-                    className="flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] font-bold shadow-2xl active:scale-95 transition-transform border border-amber-300/40 cursor-pointer"
+                    className="flex items-center gap-2 px-3.5 py-2.5 rounded-lg bg-primary hover:brightness-105 text-primary-foreground font-semibold shadow-lg active:scale-95 transition-transform border border-primary/30 cursor-pointer"
                     title="Create Church Group"
                   >
-                    <Users className="w-4 h-4 text-[#001F3F]" />
-                    <span className="text-[11px] font-black uppercase tracking-wider">New Group</span>
+                    <Users className="w-4 h-4" />
+                    <span className="text-[11px] font-bold uppercase tracking-wider">New Group</span>
                   </button>
                 </div>
               )}
@@ -1621,7 +1619,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
           {/* ========================================================================= */}
           {/* RIGHT COLUMN (Active Conversation Canvas for Direct OR Group) */}
           {/* ========================================================================= */}
-          <div className={`flex-1 flex flex-col bg-[#001122] ${
+          <div className={`flex-1 flex flex-col bg-background ${
             activeTab === 'direct' 
               ? (!activeUserId && 'hidden sm:flex') 
               : (!activeGroupId && 'hidden sm:flex')
@@ -1633,16 +1631,16 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                 <>
                   {/* Direct Chat Header */}
                   {isSelectMode ? (
-                    <div className="h-14 bg-[#001933] border-b border-white/10 px-4 flex items-center justify-between shrink-0">
+                    <div className="h-14 bg-card border-b border-border px-4 flex items-center justify-between shrink-0">
                       <div className="flex items-center gap-3">
                         <button
                           onClick={handleCancelSelectMode}
-                          className="p-1.5 rounded-lg hover:bg-white/10 text-white/80"
+                          className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
                           title="Cancel selection"
                         >
                           <ArrowLeft className="w-5 h-5" />
                         </button>
-                        <span className="font-bold text-sm text-white">
+                        <span className="font-semibold text-sm text-foreground">
                           {selectedMessageIds.length} selected
                         </span>
                       </div>
@@ -1650,35 +1648,35 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         <button
                           onClick={() => handleDeleteSelected(false)}
                           disabled={selectedMessageIds.length === 0}
-                          className="p-2 rounded-xl bg-red-500/15 text-red-400 hover:bg-red-500/25 border border-red-500/30 disabled:opacity-40 transition-colors cursor-pointer"
+                          className="p-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20 disabled:opacity-40 transition-colors cursor-pointer"
                           title="Delete selected messages"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={handleCancelSelectMode}
-                          className="text-xs px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white/80 transition-colors"
+                          className="text-xs px-2.5 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground transition-colors font-medium border border-border"
                         >
                           Cancel
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <div className="h-14 bg-[#001933] border-b border-white/10 px-4 flex items-center justify-between shrink-0">
+                    <div className="h-14 bg-card border-b border-border px-4 flex items-center justify-between shrink-0">
                       <div className="flex items-center gap-3 min-w-0">
                         <button
                           onClick={() => setActiveUserId('')}
-                          className="sm:hidden p-1 rounded-lg hover:bg-white/10 text-white/60"
+                          className="sm:hidden p-1 rounded-lg hover:bg-secondary text-muted-foreground"
                         >
                           <ArrowLeft className="w-5 h-5" />
                         </button>
                         <button
                           type="button"
                           onClick={() => setViewUserProfile(activeUser)}
-                          className="flex items-center gap-2.5 text-left p-1 rounded-xl hover:bg-white/5 transition-colors cursor-pointer min-w-0"
+                          className="flex items-center gap-2.5 text-left p-1 rounded-lg hover:bg-secondary/60 transition-colors cursor-pointer min-w-0"
                           title="View profile"
                         >
-                          <div className="w-9 h-9 rounded-full border border-[#D4AF37]/50 overflow-hidden bg-[#001F3F] flex items-center justify-center text-xs font-bold text-[#D4AF37] shrink-0">
+                          <div className="w-9 h-9 rounded-full border border-border overflow-hidden bg-secondary flex items-center justify-center text-xs font-bold text-primary shrink-0">
                             {activeUser.avatar_url ? (
                               <img src={activeUser.avatar_url} alt={activeUser.full_name} className="w-full h-full object-cover" />
                             ) : (
@@ -1686,27 +1684,27 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             )}
                           </div>
                           <div className="min-w-0">
-                            <h3 className="font-bold text-xs sm:text-sm text-white flex items-center gap-1 truncate">
+                            <h3 className="font-semibold text-xs sm:text-sm text-foreground flex items-center gap-1 truncate">
                               <span className="truncate">{activeUser.full_name}</span>
                               {activeUser.role === 'super_admin' && (
-                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/30 font-bold shrink-0">
+                                <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold shrink-0">
                                   Apostolic Lead
                                 </span>
                               )}
                               {activeUser.role === 'developer' && (
-                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold shrink-0">
+                                <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 font-bold shrink-0">
                                   Lead Dev
                                 </span>
                               )}
                             </h3>
                             {isRecipientTyping ? (
-                              <p className="text-[10px] text-emerald-400 flex items-center gap-1.5 truncate font-semibold animate-pulse">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                              <p className="text-[10px] text-emerald-500 flex items-center gap-1.5 truncate font-semibold animate-pulse">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
                                 <span className="truncate font-mono">typing...</span>
                               </p>
                             ) : (
-                              <p className="text-[10px] text-emerald-400 flex items-center gap-1 truncate">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                              <p className="text-[10px] text-muted-foreground flex items-center gap-1 truncate">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                                 <span className="truncate">Active Now • {activeUser.location || 'Harare'}</span>
                               </p>
                             )}
@@ -1714,11 +1712,11 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         </button>
                       </div>
 
-                      {/* Right Action Menu: Clean 3-dots dropdown & Close Button */}
+                      {/* Right Action Menu: 3-dots dropdown & Close Button */}
                       <div className="relative flex items-center gap-1 sm:gap-1.5">
                         <button
                           onClick={() => setShowDirectTopMenu(prev => !prev)}
-                          className="p-2 rounded-xl hover:bg-white/10 text-white/70 hover:text-white transition-colors cursor-pointer"
+                          className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                           title="More options"
                         >
                           <MoreVertical className="w-4 h-4" />
@@ -1726,7 +1724,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
                         <button
                           onClick={onClose}
-                          className="p-2 rounded-xl hover:bg-white/10 text-white/70 hover:text-white transition-colors cursor-pointer"
+                          className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                           title="Close"
                         >
                           <X className="w-4 h-4" />
@@ -1734,7 +1732,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
                         {showDirectTopMenu && (
                           <div 
-                            className="absolute right-0 top-11 z-50 w-52 rounded-2xl bg-[#001b36] border border-[#D4AF37]/40 shadow-2xl py-1.5 text-xs text-white divide-y divide-white/5 animate-in fade-in zoom-in-95 duration-100"
+                            className="absolute right-0 top-11 z-50 w-52 rounded-xl bg-card border border-border shadow-2xl py-1.5 text-xs text-foreground divide-y divide-border animate-in fade-in zoom-in-95 duration-100"
                             onClick={() => setShowDirectTopMenu(false)}
                           >
                             <div className="py-1">
@@ -1743,9 +1741,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                   setViewUserProfile(activeUser);
                                   setShowDirectTopMenu(false);
                                 }}
-                                className="w-full px-3.5 py-2 text-left hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                                className="w-full px-3.5 py-2 text-left hover:bg-secondary flex items-center gap-2.5 transition-colors"
                               >
-                                <Users className="w-3.5 h-3.5 text-[#D4AF37]" />
+                                <Users className="w-3.5 h-3.5 text-primary" />
                                 <span>View Profile</span>
                               </button>
                               <button
@@ -1753,9 +1751,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                   handleStartSelectMode();
                                   setShowDirectTopMenu(false);
                                 }}
-                                className="w-full px-3.5 py-2 text-left hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                                className="w-full px-3.5 py-2 text-left hover:bg-secondary flex items-center gap-2.5 transition-colors"
                               >
-                                <CheckSquare className="w-3.5 h-3.5 text-blue-400" />
+                                <CheckSquare className="w-3.5 h-3.5 text-blue-500" />
                                 <span>Select Messages</span>
                               </button>
                               <button
@@ -1763,9 +1761,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                   handleExportChatHistory('direct');
                                   setShowDirectTopMenu(false);
                                 }}
-                                className="w-full px-3.5 py-2 text-left hover:bg-white/10 text-blue-300 flex items-center gap-2.5 transition-colors"
+                                className="w-full px-3.5 py-2 text-left hover:bg-secondary text-primary flex items-center gap-2.5 transition-colors"
                               >
-                                <Download className="w-3.5 h-3.5 text-blue-400" />
+                                <Download className="w-3.5 h-3.5 text-primary" />
                                 <span>Export Chat (.txt)</span>
                               </button>
                             </div>
@@ -1778,9 +1776,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                   refreshThreads();
                                   setShowDirectTopMenu(false);
                                 }}
-                                className="w-full px-3.5 py-2 text-left hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                                className="w-full px-3.5 py-2 text-left hover:bg-secondary flex items-center gap-2.5 transition-colors"
                               >
-                                <Pin className={`w-3.5 h-3.5 ${pinnedDms.includes(activeUserId) ? 'text-[#D4AF37] fill-[#D4AF37]' : 'text-white/60'}`} />
+                                <Pin className={`w-3.5 h-3.5 ${pinnedDms.includes(activeUserId) ? 'text-primary fill-primary' : 'text-muted-foreground'}`} />
                                 <span>{pinnedDms.includes(activeUserId) ? 'Unpin Chat' : 'Pin Chat to Top'}</span>
                               </button>
                               <button
@@ -1792,9 +1790,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                   });
                                   setShowDirectTopMenu(false);
                                 }}
-                                className="w-full px-3.5 py-2 text-left hover:bg-red-500/10 text-red-300 flex items-center gap-2.5 transition-colors"
+                                className="w-full px-3.5 py-2 text-left hover:bg-destructive/10 text-destructive flex items-center gap-2.5 transition-colors"
                               >
-                                <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                                <Trash2 className="w-3.5 h-3.5 text-destructive" />
                                 <span>Clear Chat History</span>
                               </button>
                             </div>
@@ -1804,20 +1802,20 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     </div>
                   )}
 
-                  {/* SPECIAL INTERACTIVE EXPIRY CARD IN INBOX (Apostle Joe Daniels Chat) */}
+                  {/* SPECIAL INTERACTIVE EXPIRY CARD IN INBOX */}
                   {isFsExpiringSoon && activeUserId === 'usr_apostle_joe' && (
-                    <div className="m-3 p-3.5 rounded-2xl bg-gradient-to-r from-amber-950/80 via-[#001F3F] to-amber-950/80 border-2 border-[#D4AF37] shadow-xl animate-fade-in space-y-2">
+                    <div className="m-3 p-3.5 rounded-xl bg-primary/10 border border-primary/30 shadow-sm animate-fade-in space-y-2">
                       <div className="flex items-start gap-2.5">
-                        <div className="p-2 rounded-xl bg-amber-500 text-[#001F3F] shrink-0 font-bold">
+                        <div className="p-2 rounded-lg bg-primary text-primary-foreground shrink-0 font-bold">
                           <GraduationCap className="w-5 h-5" />
                         </div>
                         <div className="flex-1">
-                          <h4 className="text-xs font-black text-[#D4AF37] uppercase tracking-wide flex items-center gap-1.5">
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                          <h4 className="text-xs font-bold text-primary uppercase tracking-wide flex items-center gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 text-primary" />
                             Foundation School Membership Expiring
                           </h4>
-                          <p className="text-xs text-white/90 mt-1 leading-relaxed">
-                            Special Notice from Apostle Joe Daniels: Your 3-month membership for <span className="font-bold text-[#D4AF37]">Foundation School</span> is about to expire! You can pay $150 to continue your discipleship curriculum or accept that your current session will conclude.
+                          <p className="text-xs text-foreground mt-1 leading-relaxed">
+                            Special Notice from Apostle Joe Daniels: Your 3-month membership for <span className="font-bold text-primary">Foundation School</span> is about to expire! You can pay $150 to continue your discipleship curriculum or accept that your current session will conclude.
                           </p>
                         </div>
                       </div>
@@ -1828,7 +1826,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             const fsGrp = groups.find(g => g.id === 'group_foundation_school');
                             if (fsGrp) openPaymentModal(fsGrp, 'Renew your 3-month Foundation School membership for $150 USD.');
                           }}
-                          className="px-3.5 py-1.5 rounded-xl bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] font-black text-xs shadow-md transition-transform hover:scale-[1.02] flex items-center gap-1.5"
+                          className="px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs shadow-sm hover:brightness-105 transition-transform flex items-center gap-1.5"
                         >
                           <CreditCard className="w-3.5 h-3.5" />
                           <span>Pay $150 to Renew (3 Months)</span>
@@ -1840,7 +1838,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             refreshGroupsData();
                             alert('You have accepted that your Foundation School term will conclude at the end of the term.');
                           }}
-                          className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white/80 font-bold text-xs transition-colors"
+                          className="px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-semibold text-xs transition-colors border border-border"
                         >
                           Accept Term Concluding
                         </button>
@@ -1849,7 +1847,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   )}
 
                   {/* Messages Bubbles Area */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-background">
                     {messages.map((msg) => {
                       const isMine = msg.sender_id === currentUser.id;
                       const isSelected = selectedMessageIds.includes(msg.id);
@@ -1862,15 +1860,15 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             if (isSelectMode) handleToggleSelectMessage(msg.id);
                           }}
                           className={`group/msg flex items-end gap-2 transition-colors rounded-xl p-1 ${
-                            isSelectMode ? 'cursor-pointer hover:bg-white/5' : ''
-                          } ${isSelected ? 'bg-[#D4AF37]/15' : ''} ${isMine ? 'justify-end' : 'justify-start'}`}
+                            isSelectMode ? 'cursor-pointer hover:bg-secondary/60' : ''
+                          } ${isSelected ? 'bg-primary/15' : ''} ${isMine ? 'justify-end' : 'justify-start'}`}
                         >
                           {isSelectMode && (
                             <div className="shrink-0 mb-2">
                               {isSelected ? (
-                                <CheckSquare className="w-4 h-4 text-[#D4AF37]" />
+                                <CheckSquare className="w-4 h-4 text-primary" />
                               ) : (
-                                <Square className="w-4 h-4 text-white/40" />
+                                <Square className="w-4 h-4 text-muted-foreground" />
                               )}
                             </div>
                           )}
@@ -1879,22 +1877,22 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             <div
                               className={`px-3.5 py-2.5 rounded-2xl text-xs break-words shadow-sm leading-relaxed ${
                                 isDeleted 
-                                  ? 'bg-white/5 border border-white/10 text-white/50 italic'
+                                  ? 'bg-secondary border border-border text-muted-foreground italic'
                                   : isMine
-                                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-none'
-                                    : 'bg-[#002244] border border-white/10 text-white rounded-bl-none'
+                                    ? 'bg-primary text-primary-foreground rounded-br-none'
+                                    : 'bg-card border border-border text-card-foreground rounded-bl-none'
                               }`}
                             >
                               {renderMessageContent(msg)}
                             </div>
 
-                            <div className="flex items-center gap-2 text-[9px] text-white/40 mt-1 px-1">
+                            <div className="flex items-center gap-2 text-[9px] text-muted-foreground mt-1 px-1">
                               <span>
                                 {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </span>
                               {isMine && !isDeleted && (
                                 <span title={msg.is_read ? "Read" : "Delivered"} className="inline-flex items-center">
-                                  <CheckCheck className={`w-3.5 h-3.5 inline ${msg.is_read ? 'text-sky-400' : 'text-white/40'}`} />
+                                  <CheckCheck className={`w-3.5 h-3.5 inline ${msg.is_read ? 'text-primary' : 'text-muted-foreground'}`} />
                                 </span>
                               )}
 
@@ -1906,7 +1904,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                       e.stopPropagation();
                                       handleStartSelectMode(msg.id);
                                     }}
-                                    className="hover:text-white text-white/50 p-0.5"
+                                    className="hover:text-foreground text-muted-foreground p-0.5"
                                     title="Select message"
                                   >
                                     <CheckSquare className="w-3 h-3" />
@@ -1917,7 +1915,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                       e.stopPropagation();
                                       handleDeleteSingleMessage(msg.id, false);
                                     }}
-                                    className="hover:text-red-400 text-white/50 p-0.5"
+                                    className="hover:text-destructive text-muted-foreground p-0.5"
                                     title="Delete message"
                                   >
                                     <Trash2 className="w-3 h-3" />
@@ -1933,12 +1931,12 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   </div>
 
                   {/* Quick Emoji Bar */}
-                  <div className="px-4 py-1.5 bg-[#00172D] border-t border-white/5 flex items-center gap-2 text-xs">
+                  <div className="px-4 py-1.5 bg-card border-t border-border flex items-center gap-2 text-xs">
                     {EMOJI_REACTIONS.map((emoji) => (
                       <button
                         key={emoji}
                         onClick={() => setInputText((prev) => prev + emoji)}
-                        className="hover:scale-125 transition-transform text-sm"
+                        className="hover:scale-125 transition-transform text-sm cursor-pointer"
                       >
                         {emoji}
                       </button>
@@ -1951,29 +1949,29 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       e.preventDefault();
                       handleSendMessage();
                     }}
-                    className="p-3 bg-[#001933] border-t border-white/10 flex items-center gap-2"
+                    className="p-3 bg-card border-t border-border flex items-center gap-2"
                   >
                     <input
                       type="text"
                       value={inputText}
                       onChange={(e) => setInputText(e.target.value)}
                       placeholder={`Message ${activeUser.full_name}...`}
-                      className="flex-1 bg-[#001122] border border-white/20 rounded-full px-4 py-2.5 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-[#D4AF37]"
+                      className="flex-1 bg-secondary border border-border rounded-lg px-4 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                     <button
                       type="submit"
                       disabled={!inputText.trim()}
-                      className="p-2.5 rounded-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-bold transition-all shadow shrink-0"
+                      className="p-2.5 rounded-lg bg-primary hover:brightness-105 disabled:opacity-40 text-primary-foreground font-semibold transition-all shadow-sm shrink-0"
                     >
                       <Send className="w-4 h-4" />
                     </button>
                   </form>
                 </>
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-white/50">
-                  <Send className="w-12 h-12 text-[#D4AF37]/50 mb-2" />
-                  <h3 className="font-bold text-white text-sm">Your Direct Messages</h3>
-                  <p className="text-xs text-white/60 max-w-xs mt-1">
+                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-muted-foreground bg-background">
+                  <Send className="w-12 h-12 text-primary/40 mb-2" />
+                  <h3 className="font-semibold text-foreground text-sm">Your Direct Messages</h3>
+                  <p className="text-xs text-muted-foreground max-w-xs mt-1">
                     Send private prayers, direct words of faith, or connect with Ministry Leaders.
                   </p>
                 </div>
@@ -1986,16 +1984,16 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                 <>
                   {/* Group Header */}
                   {isSelectMode ? (
-                    <div className="h-14 bg-[#001933] border-b border-white/10 px-3 sm:px-4 flex items-center justify-between shrink-0 gap-2">
+                    <div className="h-14 bg-card border-b border-border px-3 sm:px-4 flex items-center justify-between shrink-0 gap-2">
                       <div className="flex items-center gap-3">
                         <button
                           onClick={handleCancelSelectMode}
-                          className="p-1.5 rounded-lg hover:bg-white/10 text-white/80"
+                          className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
                           title="Cancel selection"
                         >
                           <ArrowLeft className="w-5 h-5" />
                         </button>
-                        <span className="font-bold text-sm text-white">
+                        <span className="font-semibold text-sm text-foreground">
                           {selectedMessageIds.length} selected
                         </span>
                       </div>
@@ -2003,25 +2001,25 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         <button
                           onClick={() => handleDeleteSelected(true)}
                           disabled={selectedMessageIds.length === 0}
-                          className="p-2 rounded-xl bg-red-500/15 text-red-400 hover:bg-red-500/25 border border-red-500/30 disabled:opacity-40 transition-colors cursor-pointer"
+                          className="p-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20 disabled:opacity-40 transition-colors cursor-pointer"
                           title="Delete selected messages"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={handleCancelSelectMode}
-                          className="text-xs px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white/80 transition-colors"
+                          className="text-xs px-2.5 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground transition-colors font-medium border border-border"
                         >
                           Cancel
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <div className="h-14 bg-[#001933] border-b border-white/10 px-3 sm:px-4 flex items-center justify-between shrink-0 gap-2">
+                    <div className="h-14 bg-card border-b border-border px-3 sm:px-4 flex items-center justify-between shrink-0 gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <button
                           onClick={() => setActiveGroupId('')}
-                          className="sm:hidden p-1 rounded-lg hover:bg-white/10 text-white/60"
+                          className="sm:hidden p-1 rounded-lg hover:bg-secondary text-muted-foreground"
                         >
                           <ArrowLeft className="w-5 h-5" />
                         </button>
@@ -2030,10 +2028,10 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setShowGroupInfoModal(true)}
-                          className="flex items-center gap-2.5 text-left p-1 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group/hdr min-w-0"
-                          title="Click to see group info and members in it"
+                          className="flex items-center gap-2.5 text-left p-1 rounded-lg hover:bg-secondary/60 transition-colors cursor-pointer group/hdr min-w-0"
+                          title="Click to see group info and members"
                         >
-                          <div className="w-9 h-9 rounded-xl border border-[#D4AF37]/50 group-hover/hdr:border-[#D4AF37] overflow-hidden bg-[#001F3F] flex items-center justify-center text-xs font-bold text-[#D4AF37] shrink-0 transition-colors">
+                          <div className="w-9 h-9 rounded-xl border border-border overflow-hidden bg-secondary flex items-center justify-center text-xs font-bold text-primary shrink-0 transition-colors">
                             {activeGroup.avatar_url ? (
                               <img src={activeGroup.avatar_url} alt={activeGroup.name} className="w-full h-full object-cover" />
                             ) : (
@@ -2041,24 +2039,24 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             )}
                           </div>
                           <div className="min-w-0">
-                            <h3 className="font-bold text-xs sm:text-sm text-white group-hover/hdr:text-[#D4AF37] flex items-center gap-1.5 truncate transition-colors">
+                            <h3 className="font-semibold text-xs sm:text-sm text-foreground group-hover/hdr:text-primary flex items-center gap-1.5 truncate transition-colors">
                               <span className="truncate">{activeGroup.name}</span>
                               {activeGroup.is_paid && (
-                                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40 shrink-0">
+                                <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20 shrink-0">
                                   Paid $150
                                 </span>
                               )}
                             </h3>
                             {groupTypingUserName ? (
-                              <p className="text-[10px] text-emerald-400 flex items-center gap-1.5 truncate font-semibold animate-pulse">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                              <p className="text-[10px] text-emerald-500 flex items-center gap-1.5 truncate font-semibold animate-pulse">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
                                 <span className="truncate font-mono">{groupTypingUserName} is typing...</span>
                               </p>
                             ) : (
-                              <p className="text-[10px] text-white/60 flex items-center gap-1.5 truncate">
+                              <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 truncate">
                                 <span>{activeGroup.member_ids.length} members</span>
                                 <span>•</span>
-                                <span className="text-[#D4AF37] font-semibold">Group Info</span>
+                                <span className="text-primary font-medium">Group Info</span>
                               </p>
                             )}
                           </div>
@@ -2066,21 +2064,21 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-                        {/* Share WhatsApp Invite Link */}
+                        {/* Share Group Invite Link */}
                         <button
                           onClick={() => handleCopyLink(activeGroup.invite_code)}
                           title="Copy Group Invite Link"
-                          className="p-1.5 px-2 rounded-xl bg-[#001122] hover:bg-white/10 text-white/70 hover:text-white border border-white/10 text-xs flex items-center gap-1 font-semibold"
+                          className="p-1.5 px-2 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground border border-border text-xs flex items-center gap-1 font-medium transition-colors"
                         >
-                          <Share2 className="w-3.5 h-3.5 text-[#D4AF37]" />
+                          <Share2 className="w-3.5 h-3.5 text-primary" />
                           <span className="hidden md:inline">Invite</span>
                         </button>
 
-                        {/* WhatsApp-style 3-dots Dropdown Menu */}
+                        {/* 3-dots Dropdown Menu */}
                         <div className="relative">
                           <button
                             onClick={() => setShowGroupTopMenu(prev => !prev)}
-                            className="p-2 rounded-xl hover:bg-white/10 text-white/70 hover:text-white transition-colors cursor-pointer"
+                            className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                             title="More group options"
                           >
                             <MoreVertical className="w-4 h-4" />
@@ -2088,7 +2086,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
                           {showGroupTopMenu && (
                             <div 
-                              className="absolute right-0 top-11 z-50 w-52 rounded-2xl bg-[#001b36] border border-[#D4AF37]/40 shadow-2xl py-1.5 text-xs text-white divide-y divide-white/5 animate-in fade-in zoom-in-95 duration-100"
+                              className="absolute right-0 top-11 z-50 w-52 rounded-xl bg-card border border-border shadow-2xl py-1.5 text-xs text-foreground divide-y divide-border animate-in fade-in zoom-in-95 duration-100"
                               onClick={() => setShowGroupTopMenu(false)}
                             >
                               <div className="py-1">
@@ -2097,9 +2095,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                     setShowGroupInfoModal(true);
                                     setShowGroupTopMenu(false);
                                   }}
-                                  className="w-full px-3.5 py-2 text-left hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                                  className="w-full px-3.5 py-2 text-left hover:bg-secondary flex items-center gap-2.5 transition-colors"
                                 >
-                                  <Info className="w-3.5 h-3.5 text-[#D4AF37]" />
+                                  <Info className="w-3.5 h-3.5 text-primary" />
                                   <span>Group Info</span>
                                 </button>
 
@@ -2108,9 +2106,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                     setShowMediaBrowserModal(true);
                                     setShowGroupTopMenu(false);
                                   }}
-                                  className="w-full px-3.5 py-2 text-left hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                                  className="w-full px-3.5 py-2 text-left hover:bg-secondary flex items-center gap-2.5 transition-colors"
                                 >
-                                  <ImageIcon className="w-3.5 h-3.5 text-pink-400" />
+                                  <ImageIcon className="w-3.5 h-3.5 text-pink-500" />
                                   <span>Media, Links & Docs</span>
                                 </button>
 
@@ -2119,9 +2117,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                     handleStartSelectMode();
                                     setShowGroupTopMenu(false);
                                   }}
-                                  className="w-full px-3.5 py-2 text-left hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                                  className="w-full px-3.5 py-2 text-left hover:bg-secondary flex items-center gap-2.5 transition-colors"
                                 >
-                                  <CheckSquare className="w-3.5 h-3.5 text-blue-400" />
+                                  <CheckSquare className="w-3.5 h-3.5 text-blue-500" />
                                   <span>Select Messages</span>
                                 </button>
 
@@ -2130,9 +2128,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                     handleExportChatHistory('group');
                                     setShowGroupTopMenu(false);
                                   }}
-                                  className="w-full px-3.5 py-2 text-left hover:bg-white/10 text-blue-300 flex items-center gap-2.5 transition-colors"
+                                  className="w-full px-3.5 py-2 text-left hover:bg-secondary text-primary flex items-center gap-2.5 transition-colors"
                                 >
-                                  <Download className="w-3.5 h-3.5 text-blue-400" />
+                                  <Download className="w-3.5 h-3.5 text-primary" />
                                   <span>Export Chat (.txt)</span>
                                 </button>
 
@@ -2142,9 +2140,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                       setShowAddMemberModal(true);
                                       setShowGroupTopMenu(false);
                                     }}
-                                    className="w-full px-3.5 py-2 text-left hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                                    className="w-full px-3.5 py-2 text-left hover:bg-secondary flex items-center gap-2.5 transition-colors"
                                   >
-                                    <UserPlus className="w-3.5 h-3.5 text-emerald-400" />
+                                    <UserPlus className="w-3.5 h-3.5 text-emerald-500" />
                                     <span>Add Member</span>
                                   </button>
                                 )}
@@ -2157,9 +2155,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                     refreshGroupsData();
                                     setShowGroupTopMenu(false);
                                   }}
-                                  className="w-full px-3.5 py-2 text-left hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                                  className="w-full px-3.5 py-2 text-left hover:bg-secondary flex items-center gap-2.5 transition-colors"
                                 >
-                                  <Pin className={`w-3.5 h-3.5 ${activeGroup.pinned_by_users?.includes(currentUser.id) ? 'text-[#D4AF37] fill-[#D4AF37]' : 'text-white/60'}`} />
+                                  <Pin className={`w-3.5 h-3.5 ${activeGroup.pinned_by_users?.includes(currentUser.id) ? 'text-primary fill-primary' : 'text-muted-foreground'}`} />
                                   <span>{activeGroup.pinned_by_users?.includes(currentUser.id) ? 'Unpin Group' : 'Pin Group'}</span>
                                 </button>
 
@@ -2168,9 +2166,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                     handleCopyLink(activeGroup.invite_code);
                                     setShowGroupTopMenu(false);
                                   }}
-                                  className="w-full px-3.5 py-2 text-left hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                                  className="w-full px-3.5 py-2 text-left hover:bg-secondary flex items-center gap-2.5 transition-colors"
                                 >
-                                  <Copy className="w-3.5 h-3.5 text-[#D4AF37]" />
+                                  <Copy className="w-3.5 h-3.5 text-primary" />
                                   <span>Copy Invite Link</span>
                                 </button>
 
@@ -2184,9 +2182,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                       });
                                       setShowGroupTopMenu(false);
                                     }}
-                                    className="w-full px-3.5 py-2 text-left hover:bg-white/10 text-white/80 flex items-center gap-2.5 transition-colors"
+                                    className="w-full px-3.5 py-2 text-left hover:bg-secondary text-foreground flex items-center gap-2.5 transition-colors"
                                   >
-                                    <Trash2 className="w-3.5 h-3.5 text-amber-400" />
+                                    <Trash2 className="w-3.5 h-3.5 text-amber-500" />
                                     <span>Clear Chat</span>
                                   </button>
                                 )}
@@ -2199,9 +2197,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                       setShowExitGroupConfirm(true);
                                       setShowGroupTopMenu(false);
                                     }}
-                                    className="w-full px-3.5 py-2 text-left hover:bg-red-500/10 text-red-400 flex items-center gap-2.5 transition-colors"
+                                    className="w-full px-3.5 py-2 text-left hover:bg-destructive/10 text-destructive flex items-center gap-2.5 transition-colors"
                                   >
-                                    <LogOut className="w-3.5 h-3.5 text-red-400" />
+                                    <LogOut className="w-3.5 h-3.5 text-destructive" />
                                     <span>Exit Group</span>
                                   </button>
                                 </div>
@@ -2210,10 +2208,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           )}
                         </div>
 
-                        {/* WhatsApp-style direct modal Close Button in Header */}
                         <button
                           onClick={onClose}
-                          className="p-2 rounded-xl hover:bg-white/10 text-white/70 hover:text-white transition-colors cursor-pointer"
+                          className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                           title="Close"
                         >
                           <X className="w-4 h-4" />
@@ -2224,21 +2221,20 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
                   {/* SPECIAL BANNER FOR FOUNDATION SCHOOL EXPIRY (Inside Group) */}
                   {activeGroup.id === 'group_foundation_school' && (
-                    <div className="px-4 py-2 bg-gradient-to-r from-amber-950/70 via-[#001F3F] to-amber-950/70 border-b border-[#D4AF37]/30 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="px-4 py-2 bg-primary/10 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2 text-xs">
                       <div className="flex items-center gap-2">
-                        <GraduationCap className="w-4 h-4 text-[#D4AF37]" />
-                        <span className="font-bold text-white">
+                        <GraduationCap className="w-4 h-4 text-primary" />
+                        <span className="font-semibold text-foreground">
                           Foundation School 3-Month Curriculum
                         </span>
                         {activeGroupMembership?.expires_at && (
-                          <span className="text-[10px] text-[#D4AF37]">
+                          <span className="text-[10px] text-primary">
                             (Term active until {new Date(activeGroupMembership.expires_at).toLocaleDateString()})
                           </span>
                         )}
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* Instant Simulator trigger so user can test the expiry notice workflow */}
                         <button
                           onClick={() => {
                             StorageService.triggerFoundationSchoolExpiryNotice(currentUser.id);
@@ -2246,7 +2242,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             refreshThreads();
                             alert('Foundation School Expiry Notice has been triggered! Check your inbox and the top banner.');
                           }}
-                          className="text-[10px] px-2 py-1 rounded-md bg-[#001122] border border-amber-400/40 text-amber-300 hover:bg-amber-400/10 font-bold"
+                          className="text-[10px] px-2 py-1 rounded-md bg-secondary border border-border text-foreground hover:bg-secondary/80 font-semibold"
                           title="Simulate membership expiry notice"
                         >
                           ⚡ Test Expiry Notice
@@ -2255,7 +2251,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         {isFsExpiringSoon && (
                           <button
                             onClick={() => openPaymentModal(activeGroup, 'Renew your 3-month Foundation School membership for $150 USD.')}
-                            className="text-[10px] px-2.5 py-1 rounded-md bg-[#D4AF37] text-[#001F3F] font-black hover:bg-amber-400"
+                            className="text-[10px] px-2.5 py-1 rounded-md bg-primary text-primary-foreground font-bold hover:brightness-105"
                           >
                             Pay $150 to Renew
                           </button>
@@ -2266,40 +2262,40 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
                   {/* Pinned Notice if exists */}
                   {activeGroup.pinned_notice && (
-                    <div className="px-4 py-2 bg-[#00162B] border-b border-white/5 flex items-center gap-2 text-xs text-white/80">
-                      <Flame className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
+                    <div className="px-4 py-2 bg-secondary/80 border-b border-border flex items-center gap-2 text-xs text-foreground">
+                      <Flame className="w-3.5 h-3.5 text-primary shrink-0" />
                       <span className="truncate font-medium">{activeGroup.pinned_notice}</span>
                     </div>
                   )}
 
                   {/* Non-Member Locked Overlay if removed by admin or unpaid Foundation School */}
                   {activeGroup.removed_user_ids?.includes(currentUser.id) ? (
-                    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4">
-                      <div className="w-16 h-16 rounded-3xl bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-400 shadow-xl">
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4 bg-background">
+                      <div className="w-16 h-16 rounded-2xl bg-destructive/10 border border-destructive/20 flex items-center justify-center text-destructive shadow-sm">
                         <Lock className="w-8 h-8" />
                       </div>
                       <div className="max-w-md space-y-2">
-                        <h3 className="text-lg font-serif-church font-bold text-white">
+                        <h3 className="text-lg font-bold text-foreground">
                           Removed from {activeGroup.name}
                         </h3>
-                        <p className="text-xs text-white/70 leading-relaxed">
+                        <p className="text-xs text-muted-foreground leading-relaxed">
                           You were removed from this group by an administrator. You cannot view chat history or rejoin this group.
                         </p>
                       </div>
                     </div>
                   ) : (activeGroup.is_paid && !activeGroupMembership && !isSuperAdminOrDev) ? (
-                    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4">
-                      <div className="w-16 h-16 rounded-3xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-[#D4AF37] shadow-xl">
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4 bg-background">
+                      <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-sm">
                         <GraduationCap className="w-8 h-8" />
                       </div>
                       <div className="max-w-md space-y-1.5">
-                        <h3 className="text-lg font-serif-church font-bold text-white">
+                        <h3 className="text-lg font-bold text-foreground">
                           Enroll in {activeGroup.name}
                         </h3>
-                        <p className="text-xs text-white/70 leading-relaxed">
+                        <p className="text-xs text-muted-foreground leading-relaxed">
                           {activeGroup.description}
                         </p>
-                        <div className="py-2 px-4 rounded-xl bg-[#001A33] border border-white/10 text-xs font-semibold text-[#D4AF37] inline-block">
+                        <div className="py-2 px-4 rounded-lg bg-secondary border border-border text-xs font-semibold text-primary inline-block">
                           Term Fee: ${activeGroup.price_usd || 150} USD for {activeGroup.duration_months || 3} Months
                         </div>
                       </div>
@@ -2307,7 +2303,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       <button
                         id="btn-enroll-foundation-school"
                         onClick={() => openPaymentModal(activeGroup)}
-                        className="px-6 py-2.5 rounded-xl bg-[#D4AF37] text-[#001F3F] font-black text-sm uppercase tracking-wider shadow-lg hover:scale-105 transition-transform flex items-center gap-2 cursor-pointer"
+                        className="px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-bold text-sm uppercase tracking-wider shadow-sm hover:brightness-105 transition-transform flex items-center gap-2 cursor-pointer"
                       >
                         <CreditCard className="w-4 h-4" />
                         <span>Enroll & Join Group (${activeGroup.price_usd || 150})</span>
@@ -2316,7 +2312,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   ) : (
                     <>
                       {/* Messages History */}
-                      <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+                      <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-background">
                         {groupMessages.map((msg) => {
                           const isMine = msg.sender_id === currentUser.id;
                           const isSelected = selectedMessageIds.includes(msg.id);
@@ -2325,7 +2321,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           if (msg.is_system) {
                             return (
                               <div key={msg.id} className="flex justify-center my-2">
-                                <span className="text-[10px] px-3 py-1 rounded-full bg-white/5 border border-white/10 text-white/70 text-center font-medium">
+                                <span className="text-[10px] px-3 py-1 rounded-full bg-secondary border border-border text-muted-foreground text-center font-medium">
                                   {msg.text}
                                 </span>
                               </div>
@@ -2339,15 +2335,15 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                 if (isSelectMode) handleToggleSelectMessage(msg.id);
                               }}
                               className={`group/msg flex items-start gap-2.5 transition-colors rounded-xl p-1 ${
-                                isSelectMode ? 'cursor-pointer hover:bg-white/5' : ''
-                              } ${isSelected ? 'bg-[#D4AF37]/15' : ''} ${isMine ? 'flex-row-reverse' : ''}`}
+                                isSelectMode ? 'cursor-pointer hover:bg-secondary/60' : ''
+                              } ${isSelected ? 'bg-primary/15' : ''} ${isMine ? 'flex-row-reverse' : ''}`}
                             >
                               {isSelectMode && (
                                 <div className="shrink-0 mt-2">
                                   {isSelected ? (
-                                    <CheckSquare className="w-4 h-4 text-[#D4AF37]" />
+                                    <CheckSquare className="w-4 h-4 text-primary" />
                                   ) : (
-                                    <Square className="w-4 h-4 text-white/40" />
+                                    <Square className="w-4 h-4 text-muted-foreground" />
                                   )}
                                 </div>
                               )}
@@ -2358,7 +2354,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                   e.stopPropagation();
                                   handleOpenUserProfile(msg.sender_name);
                                 }}
-                                className="w-8 h-8 rounded-full border border-[#D4AF37]/40 hover:border-[#D4AF37] overflow-hidden bg-[#001F3F] flex items-center justify-center text-[10px] font-bold text-[#D4AF37] shrink-0 mt-0.5 cursor-pointer"
+                                className="w-8 h-8 rounded-full border border-border overflow-hidden bg-secondary flex items-center justify-center text-[10px] font-bold text-primary shrink-0 mt-0.5 cursor-pointer"
                                 title={`View ${msg.sender_name}'s profile`}
                               >
                                 {msg.sender_avatar ? (
@@ -2376,17 +2372,17 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                       e.stopPropagation();
                                       handleOpenUserProfile(msg.sender_name);
                                     }}
-                                    className="text-[11px] font-bold text-white/90 hover:text-[#D4AF37] transition-colors cursor-pointer"
+                                    className="text-[11px] font-semibold text-foreground hover:text-primary transition-colors cursor-pointer"
                                   >
                                     {isMine ? 'You' : msg.sender_name}
                                   </button>
                                   {msg.sender_role === 'super_admin' && (
-                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#D4AF37]/20 text-[#D4AF37] font-bold border border-[#D4AF37]/30">
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-primary/10 text-primary font-bold border border-primary/20">
                                       Apostle ✦
                                     </span>
                                   )}
                                   {msg.sender_role === 'developer' && (
-                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/40">
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold border border-purple-500/20">
                                       Dev 🛡️
                                     </span>
                                   )}
@@ -2395,20 +2391,20 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                 <div
                                   className={`px-3.5 py-2.5 rounded-2xl text-xs break-words shadow-sm leading-relaxed ${
                                     isDeleted
-                                      ? 'bg-white/5 border border-white/10 text-white/50 italic'
+                                      ? 'bg-secondary border border-border text-muted-foreground italic'
                                       : isMine
-                                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-tr-none'
-                                        : 'bg-[#002244] border border-white/10 text-white rounded-tl-none'
+                                        ? 'bg-primary text-primary-foreground rounded-tr-none'
+                                        : 'bg-card border border-border text-card-foreground rounded-tl-none'
                                   }`}
                                 >
                                   {/* WhatsApp-style Quoted Reply Banner inside Message */}
                                   {msg.reply_to && !isDeleted && (
-                                    <div className="mb-2 p-2 rounded-xl bg-black/35 border-l-4 border-[#D4AF37] text-left text-[11px] leading-snug">
-                                      <div className="font-bold text-[#D4AF37] text-[10px] flex items-center gap-1">
+                                    <div className="mb-2 p-2 rounded-lg bg-secondary/80 border-l-4 border-primary text-left text-[11px] leading-snug">
+                                      <div className="font-semibold text-primary text-[10px] flex items-center gap-1">
                                         <Reply className="w-3 h-3" />
                                         <span>{msg.reply_to.sender_name}</span>
                                       </div>
-                                      <p className="text-white/80 line-clamp-2 text-[11px] mt-0.5">
+                                      <p className="text-foreground line-clamp-2 text-[11px] mt-0.5">
                                         {msg.reply_to.text}
                                       </p>
                                     </div>
@@ -2427,7 +2423,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                           created_at: msg.created_at
                                         });
                                       }}
-                                      className="mb-2 rounded-xl overflow-hidden max-w-xs cursor-pointer group/media relative border border-white/15 shadow-md"
+                                      className="mb-2 rounded-lg overflow-hidden max-w-xs cursor-pointer group/media relative border border-border shadow-sm"
                                     >
                                       <img
                                         src={msg.media_url}
@@ -2446,14 +2442,14 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                   <div>{renderMessageContent(msg)}</div>
                                 </div>
 
-                                <div className="flex items-center gap-2 text-[9px] text-white/40 mt-1 px-1">
+                                <div className="flex items-center gap-2 text-[9px] text-muted-foreground mt-1 px-1">
                                   <span>
                                     {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                   </span>
 
                                   {isMine && !isDeleted && (
                                     <span title={(msg.read_by_user_ids && msg.read_by_user_ids.length > 1) ? "Read by group members" : "Delivered"} className="inline-flex items-center">
-                                      <CheckCheck className={`w-3.5 h-3.5 inline ${(msg.read_by_user_ids && msg.read_by_user_ids.length > 1) ? 'text-sky-400' : 'text-white/40'}`} />
+                                      <CheckCheck className={`w-3.5 h-3.5 inline ${(msg.read_by_user_ids && msg.read_by_user_ids.length > 1) ? 'text-primary' : 'text-muted-foreground'}`} />
                                     </span>
                                   )}
 
@@ -2466,7 +2462,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                           setReplyingToMessage(msg);
                                           setTimeout(() => groupInputRef.current?.focus(), 50);
                                         }}
-                                        className="hover:text-[#D4AF37] p-0.5 transition-colors flex items-center gap-0.5 font-medium cursor-pointer"
+                                        className="hover:text-primary p-0.5 transition-colors flex items-center gap-0.5 font-medium cursor-pointer"
                                         title={`Reply to ${msg.sender_name}`}
                                       >
                                         <Reply className="w-3 h-3" />
@@ -2479,7 +2475,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                           e.stopPropagation();
                                           handleQuickTagUser(msg.sender_name);
                                         }}
-                                        className="hover:text-[#D4AF37] p-0.5 transition-colors flex items-center gap-0.5 font-medium cursor-pointer"
+                                        className="hover:text-primary p-0.5 transition-colors flex items-center gap-0.5 font-medium cursor-pointer"
                                         title={`Tag @${msg.sender_name}`}
                                       >
                                         <AtSign className="w-3 h-3" />
@@ -2492,7 +2488,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                           e.stopPropagation();
                                           handleDeleteSingleMessage(msg.id, true);
                                         }}
-                                        className="hover:text-red-400 p-0.5 transition-colors flex items-center gap-0.5 font-medium cursor-pointer"
+                                        className="hover:text-destructive p-0.5 transition-colors flex items-center gap-0.5 font-medium cursor-pointer"
                                         title="Delete message"
                                       >
                                         <Trash2 className="w-3 h-3" />
@@ -2510,30 +2506,30 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
                       {/* Quick Emoji Bar & Input Form or Admin-only Lock Notice / Non-Member Notice */}
                       {hasUserExitedActiveGroup ? (
-                        <div className="p-3.5 bg-[#001933] border-t border-white/10 text-center flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4 py-4">
-                          <div className="flex items-center gap-2 text-xs text-white/80 font-medium">
-                            <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                        <div className="p-3.5 bg-card border-t border-border text-center flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4 py-4">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                            <Lock className="w-4 h-4 text-amber-500 shrink-0" />
                             <span>You cannot send messages anymore because you exited this group fellowship.</span>
                           </div>
                           <button
                             type="button"
                             onClick={() => handleJoinGroup(activeGroup)}
-                            className="px-4 py-1.5 rounded-full bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] text-xs font-black transition-transform hover:scale-105 shrink-0 cursor-pointer shadow flex items-center gap-1.5"
+                            className="px-4 py-1.5 rounded-lg bg-primary hover:brightness-105 text-primary-foreground text-xs font-semibold transition-transform shrink-0 cursor-pointer shadow-sm flex items-center gap-1.5"
                           >
                             <UserPlus className="w-3.5 h-3.5" />
                             <span>Rejoin Group</span>
                           </button>
                         </div>
                       ) : (activeGroup.is_paid && !isUserGroupMember && !isSuperAdminOrDev) ? (
-                        <div className="p-3.5 bg-[#001933] border-t border-white/10 text-center flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4 py-4">
-                          <div className="flex items-center gap-2 text-xs text-white/80 font-medium">
-                            <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                        <div className="p-3.5 bg-card border-t border-border text-center flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4 py-4">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                            <Lock className="w-4 h-4 text-amber-500 shrink-0" />
                             <span>Enrollment required to participate in {activeGroup.name}.</span>
                           </div>
                           <button
                             type="button"
                             onClick={() => openPaymentModal(activeGroup, `To post in ${activeGroup.name}, please complete your $${activeGroup.price_usd || 150} membership enrollment.`)}
-                            className="px-4 py-1.5 rounded-full bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] text-xs font-black transition-transform hover:scale-105 shrink-0 cursor-pointer shadow flex items-center gap-1.5"
+                            className="px-4 py-1.5 rounded-lg bg-primary hover:brightness-105 text-primary-foreground text-xs font-semibold transition-transform shrink-0 cursor-pointer shadow-sm flex items-center gap-1.5"
                           >
                             <CreditCard className="w-3.5 h-3.5" />
                             <span>Enroll Now (${activeGroup.price_usd || 150})</span>
@@ -2543,16 +2539,16 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         (activeGroup.admin_ids || [activeGroup.created_by]).includes(currentUser.id) || 
                         ['super_admin', 'developer'].includes(currentUser.role)) ? (
                         <>
-                          {/* WhatsApp-style Replying Quote Preview Banner */}
+                          {/* Replying Quote Preview Banner */}
                           {replyingToMessage && (
-                            <div className="px-4 py-2 bg-[#00172D] border-t border-[#D4AF37]/30 flex items-center justify-between gap-3 text-xs animate-in slide-in-from-bottom-2 duration-150">
-                              <div className="flex items-center gap-2.5 border-l-4 border-[#D4AF37] pl-2.5 py-0.5 min-w-0">
-                                <Reply className="w-4 h-4 text-[#D4AF37] shrink-0" />
+                            <div className="px-4 py-2 bg-secondary/80 border-t border-border flex items-center justify-between gap-3 text-xs animate-in slide-in-from-bottom-2 duration-150">
+                              <div className="flex items-center gap-2.5 border-l-4 border-primary pl-2.5 py-0.5 min-w-0">
+                                <Reply className="w-4 h-4 text-primary shrink-0" />
                                 <div className="min-w-0">
-                                  <span className="text-[10px] font-bold text-[#D4AF37] block">
+                                  <span className="text-[10px] font-semibold text-primary block">
                                     Replying to {replyingToMessage.sender_name}
                                   </span>
-                                  <span className="text-white/70 text-xs truncate block max-w-xs sm:max-w-md">
+                                  <span className="text-muted-foreground text-xs truncate block max-w-xs sm:max-w-md">
                                     {replyingToMessage.text}
                                   </span>
                                 </div>
@@ -2560,7 +2556,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setReplyingToMessage(null)}
-                                className="p-1 rounded-full hover:bg-white/10 text-white/60 hover:text-white shrink-0"
+                                className="p-1 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground shrink-0"
                                 title="Cancel reply"
                               >
                                 <X className="w-4 h-4" />
@@ -2568,10 +2564,10 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             </div>
                           )}
 
-                          {/* WhatsApp-style @ Tag User Suggestions Autocomplete Dropdown */}
+                          {/* @ Tag User Suggestions Autocomplete Dropdown */}
                           {mentionSuggestionsOpen && (
-                            <div className="p-2 bg-[#001224] border-t border-b border-[#D4AF37]/30 max-h-44 overflow-y-auto space-y-1 shadow-2xl">
-                              <div className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider px-2 py-0.5 flex items-center gap-1">
+                            <div className="p-2 bg-card border-t border-b border-border max-h-44 overflow-y-auto space-y-1 shadow-2xl">
+                              <div className="text-[10px] font-bold text-primary uppercase tracking-wider px-2 py-0.5 flex items-center gap-1">
                                 <AtSign className="w-3 h-3" />
                                 <span>Tag a group member</span>
                               </div>
@@ -2583,31 +2579,31 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                     key={member.id}
                                     type="button"
                                     onClick={() => handleSelectMentionUser(member.full_name)}
-                                    className="w-full p-1.5 px-2.5 rounded-xl hover:bg-white/10 flex items-center justify-between gap-2 text-left text-xs transition-colors cursor-pointer"
+                                    className="w-full p-1.5 px-2.5 rounded-lg hover:bg-secondary flex items-center justify-between gap-2 text-left text-xs transition-colors cursor-pointer"
                                   >
                                     <div className="flex items-center gap-2 min-w-0">
-                                      <div className="w-6 h-6 rounded-full bg-[#001F3F] border border-[#D4AF37]/40 flex items-center justify-center text-[10px] font-bold text-[#D4AF37] shrink-0">
+                                      <div className="w-6 h-6 rounded-full bg-secondary border border-border flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
                                         {member.full_name.slice(0, 2).toUpperCase()}
                                       </div>
-                                      <span className="font-semibold text-white truncate">{member.full_name}</span>
+                                      <span className="font-semibold text-foreground truncate">{member.full_name}</span>
                                       {member.role === 'super_admin' && (
-                                        <span className="text-[9px] px-1 py-0.2 rounded bg-[#D4AF37]/20 text-[#D4AF37] font-bold">Apostle</span>
+                                        <span className="text-[9px] px-1 py-0.2 rounded bg-primary/10 text-primary font-bold">Apostle</span>
                                       )}
                                     </div>
-                                    <span className="text-[10px] text-[#D4AF37] font-semibold shrink-0">@tag</span>
+                                    <span className="text-[10px] text-primary font-semibold shrink-0">@tag</span>
                                   </button>
                                 ))}
                             </div>
                           )}
 
                           {/* Quick Emoji Bar */}
-                          <div className="px-4 py-1.5 bg-[#00172D] border-t border-white/5 flex items-center gap-2 text-xs">
+                          <div className="px-4 py-1.5 bg-card border-t border-border flex items-center gap-2 text-xs">
                             {EMOJI_REACTIONS.map((emoji) => (
                               <button
                                 key={emoji}
                                 type="button"
                                 onClick={() => setGroupInputText((prev) => prev + emoji)}
-                                className="hover:scale-125 transition-transform text-sm"
+                                className="hover:scale-125 transition-transform text-sm cursor-pointer"
                               >
                                 {emoji}
                               </button>
@@ -2620,7 +2616,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               e.preventDefault();
                               handleSendGroupMessage();
                             }}
-                            className="p-3 bg-[#001933] border-t border-white/10 flex items-center gap-2"
+                            className="p-3 bg-card border-t border-border flex items-center gap-2"
                           >
                             {/* Quick @ Tag button */}
                             <button
@@ -2630,10 +2626,10 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                 setMentionFilter('');
                               }}
                               title="Tag a group member"
-                              className={`p-2 rounded-full border text-xs transition-colors shrink-0 ${
+                              className={`p-2 rounded-lg border text-xs transition-colors shrink-0 ${
                                 mentionSuggestionsOpen
-                                  ? 'bg-[#D4AF37] text-[#001F3F] border-[#D4AF37]'
-                                  : 'bg-[#001122] hover:bg-white/10 text-white/70 hover:text-white border-white/20'
+                                  ? 'bg-primary text-primary-foreground border-primary'
+                                  : 'bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground border-border'
                               }`}
                             >
                               <AtSign className="w-4 h-4" />
@@ -2644,7 +2640,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               type="button"
                               onClick={() => setShowShareMediaPrompt(true)}
                               title="Share photo to group"
-                              className="p-2 rounded-full bg-[#001122] hover:bg-white/10 text-white/70 hover:text-[#D4AF37] border border-white/20 text-xs transition-colors shrink-0"
+                              className="p-2 rounded-lg bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-primary border border-border text-xs transition-colors shrink-0"
                             >
                               <ImageIcon className="w-4 h-4" />
                             </button>
@@ -2655,20 +2651,20 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               value={groupInputText}
                               onChange={handleGroupInputChange}
                               placeholder={`Message ${activeGroup.name} (type @ to tag)...`}
-                              className="flex-1 bg-[#001122] border border-white/20 rounded-full px-4 py-2.5 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-[#D4AF37]"
+                              className="flex-1 bg-secondary border border-border rounded-lg px-4 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                             />
                             <button
                               type="submit"
                               disabled={!groupInputText.trim()}
-                              className="p-2.5 rounded-full bg-[#D4AF37] hover:bg-amber-400 disabled:opacity-40 text-[#001F3F] font-bold transition-all shadow shrink-0 cursor-pointer"
+                              className="p-2.5 rounded-lg bg-primary hover:brightness-105 disabled:opacity-40 text-primary-foreground font-semibold transition-all shadow-sm shrink-0 cursor-pointer"
                             >
                               <Send className="w-4 h-4" />
                             </button>
                           </form>
                         </>
                       ) : (
-                        <div className="p-3.5 bg-[#001933] border-t border-white/10 text-center text-xs text-white/70 flex items-center justify-center gap-2 py-4">
-                          <Lock className="w-4 h-4 text-[#D4AF37]" />
+                        <div className="p-3.5 bg-card border-t border-border text-center text-xs text-muted-foreground flex items-center justify-center gap-2 py-4">
+                          <Lock className="w-4 h-4 text-primary" />
                           <span>Only administrators can send messages to <strong>{activeGroup.name}</strong>.</span>
                         </div>
                       )}
@@ -2676,10 +2672,10 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   )}
                 </>
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-white/50">
-                  <Users className="w-12 h-12 text-[#D4AF37]/50 mb-2" />
-                  <h3 className="font-bold text-white text-sm">Gateway Church Groups</h3>
-                  <p className="text-xs text-white/60 max-w-xs mt-1">
+                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-muted-foreground bg-background">
+                  <Users className="w-12 h-12 text-primary/40 mb-2" />
+                  <h3 className="font-semibold text-foreground text-sm">Gateway Church Groups</h3>
+                  <p className="text-xs text-muted-foreground max-w-xs mt-1">
                     Join ministry wings, brotherhood cells, ladies grooming, and the Foundation School.
                   </p>
                 </div>
@@ -2697,57 +2693,57 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       {/* ========================================================================= */}
       {showPaymentModal && paymentTargetGroup && (
         <div 
-          className="fixed inset-0 z-60 bg-black/85 backdrop-blur-md flex items-center justify-center p-3"
+          className="fixed inset-0 z-60 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3"
           onClick={() => setShowPaymentModal(false)}
         >
           <div 
-            className="bg-[#001B36] border-2 border-[#D4AF37] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl text-white animate-in zoom-in-95 duration-150"
+            className="bg-card border border-primary/30 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl text-card-foreground animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-[#D4AF37] text-[#001F3F] flex items-center justify-center font-bold">
+                <div className="w-11 h-11 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold shadow-sm">
                   <GraduationCap className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-serif-church font-bold text-base text-[#D4AF37]">
+                  <h3 className="font-serif-church font-bold text-base text-foreground">
                     {paymentTargetGroup.name} Enrollment
                   </h3>
-                  <p className="text-xs text-white/70">Apostolic 3-Month Discipleship Term</p>
+                  <p className="text-xs text-muted-foreground">Apostolic 3-Month Discipleship Term</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowPaymentModal(false)}
-                className="p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white"
+                className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {paymentNoticeMessage && (
-              <div className="p-3 rounded-xl bg-amber-950/60 border border-[#D4AF37]/40 text-xs text-amber-200">
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-300">
                 {paymentNoticeMessage}
               </div>
             )}
 
-            <div className="p-4 rounded-2xl bg-[#001122] border border-white/10 space-y-2 text-xs">
-              <div className="flex justify-between items-center text-white/70">
+            <div className="p-4 rounded-xl bg-secondary/50 border border-border space-y-2 text-xs">
+              <div className="flex justify-between items-center text-muted-foreground">
                 <span>Tuition / Membership Term</span>
-                <span className="font-bold text-white">3 Months (90 Days)</span>
+                <span className="font-bold text-foreground">3 Months (90 Days)</span>
               </div>
-              <div className="flex justify-between items-center text-white/70">
+              <div className="flex justify-between items-center text-muted-foreground">
                 <span>Curriculum Modules</span>
-                <span className="font-bold text-emerald-400">All Included</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">All Included</span>
               </div>
-              <div className="border-t border-white/10 pt-2 flex justify-between items-center text-sm">
-                <span className="font-bold text-white">Total Membership Fee</span>
-                <span className="font-black text-[#D4AF37] text-lg">${paymentTargetGroup.price_usd || 150} USD</span>
+              <div className="border-t border-border pt-2 flex justify-between items-center text-sm">
+                <span className="font-bold text-foreground">Total Membership Fee</span>
+                <span className="font-black text-primary text-lg">${paymentTargetGroup.price_usd || 150} USD</span>
               </div>
             </div>
 
             {/* Payment Method Selector */}
             <div className="space-y-1.5 text-xs">
-              <label className="block font-bold text-white/80">Select Payment Method</label>
+              <label className="block font-bold text-foreground">Select Payment Method</label>
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { id: 'ecocash', label: 'EcoCash' },
@@ -2758,10 +2754,10 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     key={m.id}
                     type="button"
                     onClick={() => setPaymentMethod(m.id as any)}
-                    className={`py-2 rounded-xl border text-xs font-bold transition-all ${
+                    className={`py-2 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
                       paymentMethod === m.id
-                        ? 'bg-[#D4AF37] text-[#001F3F] border-[#D4AF37]'
-                        : 'bg-[#001122] text-white/70 border-white/15 hover:text-white'
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-secondary text-foreground border-border hover:bg-secondary/80'
                     }`}
                   >
                     {m.label}
@@ -2772,17 +2768,17 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
             {/* Phone Number */}
             <div className="space-y-1 text-xs">
-              <label className="block font-semibold text-white/80">
+              <label className="block font-semibold text-foreground">
                 {paymentMethod === 'card' ? 'Cardholder Phone' : `${paymentMethod === 'ecocash' ? 'EcoCash' : 'InnBucks'} Number`}
               </label>
               <div className="relative">
-                <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="tel"
                   value={paymentPhone}
                   onChange={(e) => setPaymentPhone(e.target.value)}
                   placeholder="0772123456"
-                  className="w-full bg-[#001122] border border-white/20 rounded-xl pl-9 pr-3 py-2 text-white text-xs focus:outline-none focus:border-[#D4AF37]"
+                  className="w-full bg-background border border-border rounded-lg pl-9 pr-3 py-2 text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 />
               </div>
             </div>
@@ -2792,11 +2788,11 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               id="btn-confirm-foundation-school-payment"
               onClick={handleProcessPayment}
               disabled={isProcessingPayment || !paymentPhone.trim()}
-              className="w-full py-3 rounded-xl bg-[#D4AF37] hover:bg-amber-400 disabled:opacity-50 text-[#001F3F] font-black text-xs sm:text-sm uppercase tracking-wider shadow-xl transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-lg bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-black text-xs sm:text-sm uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               {isProcessingPayment ? (
                 <>
-                  <span className="w-4 h-4 border-2 border-[#001F3F] border-t-transparent rounded-full animate-spin" />
+                  <span className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
                   <span>Authorizing ${paymentTargetGroup.price_usd || 150}...</span>
                 </>
               ) : (
@@ -2815,28 +2811,28 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       {/* ========================================================================= */}
       {showCreateGroupModal && (
         <div 
-          className="fixed inset-0 z-60 bg-black/85 backdrop-blur-md flex items-center justify-center p-3"
+          className="fixed inset-0 z-60 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3"
           onClick={() => setShowCreateGroupModal(false)}
         >
           <div 
-            className="bg-[#001B36] border border-[#D4AF37]/50 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl text-white animate-in zoom-in-95 duration-150"
+            className="bg-card border border-border rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl text-card-foreground animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-[#D4AF37] text-[#001F3F] flex items-center justify-center font-bold">
+                <div className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold shadow-sm">
                   <Users className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-serif-church font-bold text-base text-[#D4AF37]">
+                  <h3 className="font-serif-church font-bold text-base text-foreground">
                     Create Church Group
                   </h3>
-                  <p className="text-[11px] text-white/60">WhatsApp-style Fellowship Cell</p>
+                  <p className="text-[11px] text-muted-foreground">WhatsApp-style Fellowship Cell</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowCreateGroupModal(false)}
-                className="p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white"
+                className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2844,65 +2840,65 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
             <form onSubmit={handleCreateGroupSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-white/90 mb-1">Group Name *</label>
+                <label className="block font-bold text-foreground mb-1">Group Name *</label>
                 <input
                   type="text"
                   required
                   value={newGroupName}
                   onChange={(e) => setNewGroupName(e.target.value)}
                   placeholder="e.g. Ignite Worship Team"
-                  className="w-full bg-[#001122] border border-white/20 rounded-xl p-2.5 text-white focus:outline-none focus:border-[#D4AF37]"
+                  className="w-full bg-background border border-border rounded-lg p-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder:text-muted-foreground"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-white/90 mb-1">About / Description</label>
+                <label className="block font-bold text-foreground mb-1">About / Description</label>
                 <textarea
                   rows={2}
                   value={newGroupDesc}
                   onChange={(e) => setNewGroupDesc(e.target.value)}
                   placeholder="State the purpose and mission of the group..."
-                  className="w-full bg-[#001122] border border-white/20 rounded-xl p-2.5 text-white focus:outline-none focus:border-[#D4AF37]"
+                  className="w-full bg-background border border-border rounded-lg p-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder:text-muted-foreground"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-white/90 mb-1">Category</label>
+                  <label className="block font-bold text-foreground mb-1">Category</label>
                   <select
                     value={newGroupCategory}
                     onChange={(e) => setNewGroupCategory(e.target.value as any)}
-                    className="w-full bg-[#001122] border border-white/20 rounded-xl p-2.5 text-white focus:outline-none focus:border-[#D4AF37]"
+                    className="w-full bg-background border border-border rounded-lg p-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   >
                     {['Worship', 'Men', 'Women', 'Youth', 'School', 'General'].map(c => (
-                      <option key={c} value={c} className="bg-[#001F3F] text-white">{c}</option>
+                      <option key={c} value={c} className="bg-card text-foreground">{c}</option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block font-bold text-white/90 mb-1">Avatar Image URL</label>
+                  <label className="block font-bold text-foreground mb-1">Avatar Image URL</label>
                   <input
                     type="url"
                     value={newGroupAvatar}
                     onChange={(e) => setNewGroupAvatar(e.target.value)}
                     placeholder="https://..."
-                    className="w-full bg-[#001122] border border-white/20 rounded-xl p-2.5 text-white focus:outline-none focus:border-[#D4AF37]"
+                    className="w-full bg-background border border-border rounded-lg p-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder:text-muted-foreground"
                   />
                   <LocalImagePicker value={newGroupAvatar} onChange={setNewGroupAvatar} className="mt-1.5" />
                 </div>
               </div>
 
               {/* Paid Group Toggle (e.g. Foundation School) */}
-              <div className="p-3 rounded-2xl bg-[#001122] border border-white/10 space-y-2.5">
+              <div className="p-3 rounded-xl bg-secondary/40 border border-border space-y-2.5">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={newGroupIsPaid}
                     onChange={(e) => setNewGroupIsPaid(e.target.checked)}
-                    className="w-4 h-4 rounded border-white/30 text-[#D4AF37] focus:ring-[#D4AF37]"
+                    className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
                   />
-                  <span className="font-bold text-white text-xs">
+                  <span className="font-bold text-foreground text-xs">
                     Paid Membership Group (e.g. Foundation School)
                   </span>
                 </label>
@@ -2910,24 +2906,24 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                 {newGroupIsPaid && (
                   <div className="grid grid-cols-2 gap-3 pt-1">
                     <div>
-                      <label className="block font-semibold text-white/70 mb-1">Price (USD)</label>
+                      <label className="block font-semibold text-muted-foreground mb-1">Price (USD)</label>
                       <input
                         type="number"
                         min="1"
                         value={newGroupPrice}
                         onChange={(e) => setNewGroupPrice(Number(e.target.value))}
-                        className="w-full bg-[#001933] border border-white/20 rounded-xl p-2 text-white focus:outline-none focus:border-[#D4AF37]"
+                        className="w-full bg-background border border-border rounded-lg p-2 text-foreground focus:outline-none focus:border-primary"
                       />
                     </div>
                     <div>
-                      <label className="block font-semibold text-white/70 mb-1">Duration (Months)</label>
+                      <label className="block font-semibold text-muted-foreground mb-1">Duration (Months)</label>
                       <input
                         type="number"
                         min="1"
                         max="12"
                         value={newGroupDuration}
                         onChange={(e) => setNewGroupDuration(Number(e.target.value))}
-                        className="w-full bg-[#001933] border border-white/20 rounded-xl p-2 text-white focus:outline-none focus:border-[#D4AF37]"
+                        className="w-full bg-background border border-border rounded-lg p-2 text-foreground focus:outline-none focus:border-primary"
                       />
                     </div>
                   </div>
@@ -2935,19 +2931,19 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-white/90 mb-1">Pinned Welcome Notice</label>
+                <label className="block font-bold text-foreground mb-1">Pinned Welcome Notice</label>
                 <input
                   type="text"
                   value={newGroupPinnedNotice}
                   onChange={(e) => setNewGroupPinnedNotice(e.target.value)}
                   placeholder="e.g. Welcome in Jesus' name! Iron sharpens iron."
-                  className="w-full bg-[#001122] border border-white/20 rounded-xl p-2.5 text-white focus:outline-none focus:border-[#D4AF37]"
+                  className="w-full bg-background border border-border rounded-lg p-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder:text-muted-foreground"
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-2.5 rounded-xl bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] font-black uppercase tracking-wider text-xs shadow-lg transition-transform hover:scale-[1.02] mt-2"
+                className="w-full py-2.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-wider text-xs shadow-md transition-all mt-2 cursor-pointer"
               >
                 Create Church Group
               </button>
@@ -2961,41 +2957,41 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       {/* ========================================================================= */}
       {showAddMemberModal && activeGroup && (
         <div 
-          className="fixed inset-0 z-60 bg-black/85 backdrop-blur-md flex items-center justify-center p-3"
+          className="fixed inset-0 z-60 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3"
           onClick={() => setShowAddMemberModal(false)}
         >
           <div 
-            className="bg-[#001B36] border border-[#D4AF37]/50 rounded-3xl max-w-md w-full p-5 space-y-3 shadow-2xl text-white animate-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]"
+            className="bg-card border border-border rounded-2xl max-w-md w-full p-5 space-y-3 shadow-2xl text-card-foreground animate-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+            <div className="flex items-center justify-between border-b border-border pb-2.5">
               <div>
-                <h3 className="font-serif-church font-bold text-base text-[#D4AF37]">
+                <h3 className="font-serif-church font-bold text-base text-foreground">
                   Add Member to {activeGroup.name}
                 </h3>
-                <p className="text-[11px] text-white/60">Select from congregation members</p>
+                <p className="text-[11px] text-muted-foreground">Select from congregation members</p>
               </div>
               <button
                 onClick={() => setShowAddMemberModal(false)}
-                className="p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white"
+                className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-2.5 rounded-xl bg-blue-950/40 border border-blue-500/30 text-[11px] text-blue-300 leading-snug">
+            <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-700 dark:text-blue-300 leading-snug">
               <span className="font-bold">WhatsApp Protocol Notice:</span> Super Admins (Apostle Joe, Prophetess Melinda, Pastor Easter) and Developers cannot be forced into groups directly; an official invitation will be sent to their inbox for them to accept or decline.
             </div>
 
-            <div className="flex-1 overflow-y-auto divide-y divide-white/5 space-y-1">
+            <div className="flex-1 overflow-y-auto divide-y divide-border space-y-1">
               {prioritizedContacts
                 .filter(u => !activeGroup.member_ids.includes(u.id))
                 .map(contact => {
                   const isPrivileged = ['super_admin', 'developer'].includes(contact.role);
                   return (
-                    <div key={contact.id} className="p-2.5 flex items-center justify-between gap-3 hover:bg-white/5 rounded-xl">
+                    <div key={contact.id} className="p-2.5 flex items-center justify-between gap-3 hover:bg-secondary/60 rounded-lg transition-colors">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-full border border-[#D4AF37]/50 overflow-hidden bg-[#001F3F] flex items-center justify-center text-[10px] font-bold text-[#D4AF37] shrink-0">
+                        <div className="w-8 h-8 rounded-full border border-border overflow-hidden bg-secondary flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
                           {contact.avatar_url ? (
                             <img src={contact.avatar_url} alt={contact.full_name} className="w-full h-full object-cover" />
                           ) : (
@@ -3003,15 +2999,15 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-bold text-xs text-white truncate flex items-center gap-1">
+                          <p className="font-bold text-xs text-foreground truncate flex items-center gap-1">
                             <span>{contact.full_name}</span>
                             {isPrivileged && (
-                              <span className="text-[9px] px-1 rounded bg-[#D4AF37]/20 text-[#D4AF37] font-bold">
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold">
                                 {contact.role === 'super_admin' ? 'Super Admin' : 'Dev'}
                               </span>
                             )}
                           </p>
-                          <p className="text-[10px] text-white/50 truncate font-mono">
+                          <p className="text-[10px] text-muted-foreground truncate font-mono">
                             {contact.phone} • {contact.location || 'Harare'}
                           </p>
                         </div>
@@ -3019,10 +3015,10 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
                       <button
                         onClick={() => handleAddMemberToGroup(contact)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 ${
+                        className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
                           isPrivileged
-                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
-                            : 'bg-[#D4AF37] text-[#001F3F] hover:bg-amber-400'
+                            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25'
+                            : 'bg-primary text-primary-foreground hover:bg-primary/90'
                         }`}
                       >
                         {isPrivileged ? 'Send Invite' : 'Add'}
@@ -3040,33 +3036,33 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       {/* ========================================================================= */}
       {showJoinByCodeModal && (
         <div 
-          className="fixed inset-0 z-60 bg-black/85 backdrop-blur-md flex items-center justify-center p-3"
+          className="fixed inset-0 z-60 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3"
           onClick={() => setShowJoinByCodeModal(false)}
         >
           <div 
-            className="bg-[#001B36] border border-[#D4AF37]/50 rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-2xl text-white animate-in zoom-in-95 duration-150"
+            className="bg-card border border-border rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl text-card-foreground animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-white/10 pb-2">
-              <h3 className="font-serif-church font-bold text-sm text-[#D4AF37]">
+            <div className="flex items-center justify-between border-b border-border pb-2">
+              <h3 className="font-serif-church font-bold text-sm text-foreground">
                 Join via Group Link / Code
               </h3>
               <button
                 onClick={() => setShowJoinByCodeModal(false)}
-                className="p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white"
+                className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="space-y-1.5 text-xs">
-              <label className="block text-white/80 font-semibold">Paste Invite Code or Link</label>
+              <label className="block text-muted-foreground font-semibold">Paste Invite Code or Link</label>
               <input
                 type="text"
                 value={inviteCodeInput}
                 onChange={(e) => setInviteCodeInput(e.target.value)}
                 placeholder="e.g. ignite-worship-2026 or https://gatewayconnect.church/join/group?code=..."
-                className="w-full bg-[#001122] border border-white/20 rounded-xl p-2.5 text-white text-xs focus:outline-none focus:border-[#D4AF37]"
+                className="w-full bg-background border border-border rounded-lg p-2.5 text-foreground text-xs focus:outline-none focus:border-primary"
               />
             </div>
 
@@ -3077,24 +3073,24 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               return (
                 <div className="space-y-3">
                   {matched && (
-                    <div className="bg-[#001224] border border-[#D4AF37]/40 rounded-2xl p-3 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#D4AF37] to-amber-700 text-[#001F3F] font-black text-sm flex items-center justify-center shrink-0 shadow">
+                    <div className="bg-secondary/50 border border-border rounded-xl p-3 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-primary text-primary-foreground font-black text-sm flex items-center justify-center shrink-0 shadow-sm">
                         {matched.name.slice(0, 1)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-white text-xs truncate">{matched.name}</h4>
-                        <p className="text-[10px] text-white/60 truncate">{matched.description || 'Church Community Group'}</p>
-                        <p className="text-[10px] text-[#D4AF37] font-semibold">{matched.member_ids.length} members</p>
+                        <h4 className="font-bold text-foreground text-xs truncate">{matched.name}</h4>
+                        <p className="text-[10px] text-muted-foreground truncate">{matched.description || 'Church Community Group'}</p>
+                        <p className="text-[10px] text-primary font-semibold">{matched.member_ids.length} members</p>
                       </div>
                     </div>
                   )}
 
                   {/* Two Buttons at the bottom: 1st Join, 2nd Decline */}
-                  <div className="flex items-center gap-2 pt-1 border-t border-white/10">
+                  <div className="flex items-center gap-2 pt-1 border-t border-border">
                     <button
                       onClick={handleJoinByCode}
                       disabled={!inviteCodeInput.trim()}
-                      className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow disabled:opacity-40 transition-all active:scale-95"
+                      className="flex-1 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow disabled:opacity-40 transition-all active:scale-95 cursor-pointer"
                     >
                       <Check className="w-3.5 h-3.5" />
                       <span>Join</span>
@@ -3104,7 +3100,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         setShowJoinByCodeModal(false);
                         setInviteCodeInput('');
                       }}
-                      className="flex-1 py-2.5 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-500/40 text-red-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                      className="flex-1 py-2.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-foreground font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
                       <span>Decline</span>
@@ -3126,20 +3122,20 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
         return (
           <div 
-            className="fixed inset-0 z-60 bg-black/85 backdrop-blur-md flex items-center justify-center p-3"
+            className="fixed inset-0 z-60 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3"
             onClick={() => {
               setShowGroupInfoModal(false);
               setIsEditingGroupDetails(false);
             }}
           >
             <div 
-              className="bg-[#001B36] border border-[#D4AF37]/50 rounded-2xl max-w-sm w-full p-3.5 space-y-2.5 shadow-2xl text-white animate-in zoom-in-95 duration-150 max-h-[82vh] flex flex-col"
+              className="bg-card border border-border rounded-2xl max-w-sm w-full p-4 space-y-3 shadow-2xl text-card-foreground animate-in zoom-in-95 duration-150 max-h-[85vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between border-b border-white/10 pb-2">
+              <div className="flex items-center justify-between border-b border-border pb-2">
                 <div className="flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-[#D4AF37]" />
-                  <h3 className="font-serif-church font-bold text-sm text-[#D4AF37]">
+                  <ShieldCheck className="w-4 h-4 text-primary" />
+                  <h3 className="font-serif-church font-bold text-sm text-foreground">
                     Group Info
                   </h3>
                 </div>
@@ -3151,9 +3147,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         setEditGroupDesc(activeGroup.description);
                         setIsEditingGroupDetails(true);
                       }}
-                      className="p-1 px-2 rounded-lg bg-white/10 hover:bg-white/20 text-[#D4AF37] text-[11px] font-bold flex items-center gap-1"
+                      className="p-1 px-2 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
                     >
-                      <Edit3 className="w-3 h-3" />
+                      <Edit3 className="w-3 h-3 text-primary" />
                       <span>Edit</span>
                     </button>
                   )}
@@ -3162,7 +3158,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       setShowGroupInfoModal(false);
                       setIsEditingGroupDetails(false);
                     }}
-                    className="p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white"
+                    className="p-1 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -3171,29 +3167,29 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
               {/* Group Header Info / Edit Form */}
               {isEditingGroupDetails ? (
-                <div className="p-2.5 rounded-xl bg-[#001122] border border-[#D4AF37]/30 space-y-2 text-xs">
+                <div className="p-2.5 rounded-xl bg-secondary/30 border border-border space-y-2 text-xs">
                   <div>
-                    <label className="block text-[10px] font-bold text-white/70 uppercase mb-0.5">Group Name</label>
+                    <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-0.5">Group Name</label>
                     <input
                       type="text"
                       value={editGroupName}
                       onChange={(e) => setEditGroupName(e.target.value)}
-                      className="w-full bg-[#001F3F] border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-[#D4AF37]"
+                      className="w-full bg-background border border-border rounded-lg p-2 text-xs text-foreground focus:outline-none focus:border-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-white/70 uppercase mb-0.5">Description</label>
+                    <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-0.5">Description</label>
                     <textarea
                       rows={2}
                       value={editGroupDesc}
                       onChange={(e) => setEditGroupDesc(e.target.value)}
-                      className="w-full bg-[#001F3F] border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-[#D4AF37]"
+                      className="w-full bg-background border border-border rounded-lg p-2 text-xs text-foreground focus:outline-none focus:border-primary"
                     />
                   </div>
                   <div className="flex justify-end gap-1.5">
                     <button
                       onClick={() => setIsEditingGroupDetails(false)}
-                      className="px-2.5 py-1 rounded-lg bg-white/10 text-white text-xs font-semibold"
+                      className="px-2.5 py-1 rounded-lg bg-secondary text-foreground hover:bg-secondary/80 text-xs font-semibold cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -3206,7 +3202,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         refreshGroupsData();
                         setIsEditingGroupDetails(false);
                       }}
-                      className="px-3 py-1 rounded-lg bg-[#D4AF37] text-[#001F3F] text-xs font-bold shadow"
+                      className="px-3 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-bold shadow cursor-pointer"
                     >
                       Save
                     </button>
@@ -3214,50 +3210,50 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                 </div>
               ) : (
                 <div className="text-center space-y-1 py-0.5">
-                  <div className="w-12 h-12 rounded-xl border border-[#D4AF37] overflow-hidden bg-[#001F3F] mx-auto flex items-center justify-center text-base font-bold text-[#D4AF37] shadow">
+                  <div className="w-12 h-12 rounded-xl border border-border overflow-hidden bg-secondary mx-auto flex items-center justify-center text-base font-bold text-primary shadow-sm">
                     {activeGroup.avatar_url ? (
                       <img src={activeGroup.avatar_url} alt={activeGroup.name} className="w-full h-full object-cover" />
                     ) : (
                       activeGroup.name.slice(0, 2).toUpperCase()
                     )}
                   </div>
-                  <h4 className="font-bold text-sm text-white">{activeGroup.name}</h4>
-                  <p className="text-[11px] text-white/70 max-w-xs mx-auto line-clamp-2 leading-tight">{activeGroup.description}</p>
+                  <h4 className="font-bold text-sm text-foreground">{activeGroup.name}</h4>
+                  <p className="text-[11px] text-muted-foreground max-w-xs mx-auto line-clamp-2 leading-tight">{activeGroup.description}</p>
                 </div>
               )}
 
               {/* Group Meta Info */}
-              <div className="p-2 rounded-xl bg-[#001122] border border-white/10 grid grid-cols-2 gap-1.5 text-[11px]">
-                <div className="text-white/60">
-                  <span className="block text-[10px] uppercase text-white/40">Leader</span>
-                  <span className="font-semibold text-white truncate block">{activeGroup.creator_name}</span>
+              <div className="p-2.5 rounded-xl bg-secondary/40 border border-border grid grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <span className="block text-[10px] uppercase text-muted-foreground">Leader</span>
+                  <span className="font-semibold text-foreground truncate block">{activeGroup.creator_name}</span>
                 </div>
-                <div className="text-white/60">
-                  <span className="block text-[10px] uppercase text-white/40">Category</span>
-                  <span className="font-semibold text-[#D4AF37] truncate block">{activeGroup.category || 'General'}</span>
+                <div>
+                  <span className="block text-[10px] uppercase text-muted-foreground">Category</span>
+                  <span className="font-semibold text-primary truncate block">{activeGroup.category || 'General'}</span>
                 </div>
-                <div className="text-white/60">
-                  <span className="block text-[10px] uppercase text-white/40">Invite Code</span>
-                  <span className="font-mono font-semibold text-white/90 truncate block">{activeGroup.invite_code}</span>
+                <div>
+                  <span className="block text-[10px] uppercase text-muted-foreground">Invite Code</span>
+                  <span className="font-mono font-semibold text-foreground truncate block">{activeGroup.invite_code}</span>
                 </div>
                 {activeGroup.is_paid && (
-                  <div className="text-white/60">
-                    <span className="block text-[10px] uppercase text-white/40">Membership</span>
-                    <span className="font-semibold text-amber-400 truncate block">${activeGroup.price_usd || 150}</span>
+                  <div>
+                    <span className="block text-[10px] uppercase text-muted-foreground">Membership</span>
+                    <span className="font-semibold text-amber-600 dark:text-amber-400 truncate block">${activeGroup.price_usd || 150}</span>
                   </div>
                 )}
               </div>
 
               {/* Admin Permissions Controls (WhatsApp Style) */}
               {isUserGroupAdmin && (
-                <div className="p-2 rounded-xl bg-[#001830] border border-[#D4AF37]/30 space-y-1.5 text-xs">
-                  <div className="flex items-center gap-1 text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider">
+                <div className="p-2.5 rounded-xl bg-secondary/40 border border-border space-y-2 text-xs">
+                  <div className="flex items-center gap-1 text-[10px] font-bold text-primary uppercase tracking-wider">
                     <Shield className="w-3 h-3" />
                     <span>Admin Controls</span>
                   </div>
 
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-white/80">Only Admins Post Messages</span>
+                    <span className="text-foreground font-medium">Only Admins Post Messages</span>
                     <button
                       onClick={() => {
                         StorageService.updateGroupSettings(activeGroup.id, {
@@ -3265,18 +3261,18 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         });
                         refreshGroupsData();
                       }}
-                      className={`w-9 h-5 rounded-full transition-colors relative ${
-                        activeGroup.only_admins_can_send_messages ? 'bg-[#D4AF37]' : 'bg-white/20'
+                      className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${
+                        activeGroup.only_admins_can_send_messages ? 'bg-primary' : 'bg-muted'
                       }`}
                     >
-                      <span className={`block w-3.5 h-3.5 rounded-full bg-[#001F3F] transition-transform ${
+                      <span className={`block w-3.5 h-3.5 rounded-full bg-background shadow transition-transform ${
                         activeGroup.only_admins_can_send_messages ? 'translate-x-4' : 'translate-x-0.5'
                       }`} />
                     </button>
                   </div>
 
-                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-white/5">
-                    <span className="text-white/80">Only Admins Add Members</span>
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-border">
+                    <span className="text-foreground font-medium">Only Admins Add Members</span>
                     <button
                       onClick={() => {
                         StorageService.updateGroupSettings(activeGroup.id, {
@@ -3284,11 +3280,11 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         });
                         refreshGroupsData();
                       }}
-                      className={`w-9 h-5 rounded-full transition-colors relative ${
-                        activeGroup.only_admins_can_add_members ? 'bg-[#D4AF37]' : 'bg-white/20'
+                      className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${
+                        activeGroup.only_admins_can_add_members ? 'bg-primary' : 'bg-muted'
                       }`}
                     >
-                      <span className={`block w-3.5 h-3.5 rounded-full bg-[#001F3F] transition-transform ${
+                      <span className={`block w-3.5 h-3.5 rounded-full bg-background shadow transition-transform ${
                         activeGroup.only_admins_can_add_members ? 'translate-x-4' : 'translate-x-0.5'
                       }`} />
                     </button>
@@ -3299,14 +3295,14 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               {/* Members List with Admin Badges & Promotion */}
               <div className="flex-1 overflow-y-auto space-y-1 min-h-[100px] max-h-[180px]">
                 <div className="flex items-center justify-between px-1">
-                  <h5 className="text-[10px] font-bold text-white/50 uppercase tracking-wider">
+                  <h5 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                     Members ({activeGroup.member_ids.length})
                   </h5>
-                  <span className="text-[10px] text-[#D4AF37]">
+                  <span className="text-[10px] text-primary font-semibold">
                     {(activeGroup.admin_ids || [activeGroup.created_by]).length} Admin(s)
                   </span>
                 </div>
-                <div className="divide-y divide-white/5">
+                <div className="divide-y divide-border">
                   {activeGroup.member_ids.map(mid => {
                     const mUser = StorageService.getAllUsers().find(u => u.id === mid);
                     const isMemberAdmin = (activeGroup.admin_ids || [activeGroup.created_by]).includes(mid) || mUser?.role === 'super_admin';
@@ -3315,22 +3311,22 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     return (
                       <div key={mid} className="py-1.5 px-1 flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-6 h-6 rounded-full bg-[#001F3F] border border-white/20 flex items-center justify-center text-[9px] text-[#D4AF37] font-bold shrink-0">
+                          <div className="w-6 h-6 rounded-full bg-secondary border border-border flex items-center justify-center text-[9px] text-primary font-bold shrink-0">
                             {mUser?.full_name?.slice(0, 2).toUpperCase() || 'MB'}
                           </div>
                           <div className="truncate">
-                            <span className="font-semibold text-white/90 truncate block text-[11px]">
+                            <span className="font-semibold text-foreground truncate block text-[11px]">
                               {mUser?.full_name || 'Member'}
                               {mid === currentUser.id && ' (You)'}
                             </span>
                             <div className="flex items-center gap-1 mt-0.5">
                               {isMemberAdmin && (
-                                <span className="text-[8.5px] px-1 py-0.2 rounded bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/30 font-bold">
+                                <span className="text-[8.5px] px-1 py-0.2 rounded bg-primary/15 text-primary border border-primary/25 font-bold">
                                   {isCreator ? 'Creator' : 'Admin'}
                                 </span>
                               )}
                               {mUser?.role && mUser.role !== 'member' && (
-                                <span className="text-[8.5px] px-1 py-0.2 rounded bg-white/10 text-white/60 capitalize">
+                                <span className="text-[8.5px] px-1 py-0.2 rounded bg-secondary text-muted-foreground capitalize">
                                   {mUser.role.replace('_', ' ')}
                                 </span>
                               )}
@@ -3339,7 +3335,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         </div>
 
                         <div className="flex items-center gap-1 shrink-0">
-                          {/* Direct Message (Inbox) button - ICON ONLY, no text label */}
+                          {/* Direct Message (Inbox) button - ICON ONLY */}
                           {mid !== currentUser.id && mUser && (
                             <button
                               type="button"
@@ -3348,7 +3344,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                 setActiveTab('direct');
                                 setActiveUserId(mUser.id);
                               }}
-                              className="p-1 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 transition-colors cursor-pointer"
+                              className="p-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-colors cursor-pointer"
                               title={`Direct Message ${mUser.full_name}`}
                             >
                               <MessageSquare className="w-3 h-3" />
@@ -3366,8 +3362,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                 }}
                                 className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-colors cursor-pointer ${
                                   isMemberAdmin
-                                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
-                                    : 'bg-[#D4AF37]/15 text-[#D4AF37] border-[#D4AF37]/30 hover:bg-[#D4AF37]/30'
+                                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
+                                    : 'bg-primary/10 text-primary border-primary/25 hover:bg-primary/20'
                                 }`}
                                 title={isMemberAdmin ? 'Dismiss as Admin' : 'Promote to Admin'}
                               >
@@ -3382,7 +3378,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                     refreshGroupsData();
                                   }
                                 }}
-                                className="p-0.5 px-1.5 rounded bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 text-[9px] font-bold flex items-center gap-0.5 transition-colors cursor-pointer"
+                                className="p-0.5 px-1.5 rounded bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30 text-[9px] font-bold flex items-center gap-0.5 transition-colors cursor-pointer"
                                 title={`Remove member`}
                               >
                                 <UserMinus className="w-2.5 h-2.5" />
@@ -3397,7 +3393,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               </div>
 
               {/* Bottom Actions */}
-              <div className="pt-2 border-t border-white/10 space-y-1.5">
+              <div className="pt-2 border-t border-border space-y-1.5">
                 <div className="grid grid-cols-3 gap-1.5">
                   <button
                     type="button"
@@ -3405,20 +3401,20 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       StorageService.togglePinChatGroup(activeGroup.id, currentUser.id);
                       refreshGroupsData();
                     }}
-                    className={`py-1.5 px-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1 shadow transition-colors cursor-pointer ${
+                    className={`py-1.5 px-2 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer ${
                       isGroupPinned
-                        ? 'bg-[#D4AF37]/20 border-[#D4AF37] text-[#D4AF37]'
-                        : 'bg-white/10 border-white/15 text-white hover:bg-white/15'
+                        ? 'bg-primary/15 border-primary text-primary'
+                        : 'bg-secondary border-border text-foreground hover:bg-secondary/80'
                     }`}
                   >
-                    <Pin className={`w-3 h-3 ${isGroupPinned ? 'fill-[#D4AF37]' : ''}`} />
+                    <Pin className={`w-3 h-3 ${isGroupPinned ? 'fill-primary' : ''}`} />
                     <span>{isGroupPinned ? 'Unpin' : 'Pin'}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleCopyLink(activeGroup.invite_code)}
-                    className="py-1.5 px-2 rounded-xl bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] font-bold text-[11px] flex items-center justify-center gap-1 shadow cursor-pointer"
+                    className="py-1.5 px-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-[11px] flex items-center justify-center gap-1 shadow-sm cursor-pointer"
                   >
                     <Copy className="w-3 h-3" />
                     <span>Invite</span>
@@ -3435,11 +3431,11 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         title: activeGroup.name
                       });
                     }}
-                    className="py-1.5 px-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-[11px] font-bold flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"
+                    className="py-1.5 px-2 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-foreground text-[11px] font-bold flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"
                     title="Clear chat history from your device"
                   >
-                    <Trash2 className="w-3 h-3 text-amber-400" />
-                    <span>Clear Chat</span>
+                    <Trash2 className="w-3 h-3 text-destructive" />
+                    <span>Clear</span>
                   </button>
                 </div>
 
@@ -3448,7 +3444,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowExitGroupConfirm(true)}
-                    className="w-full py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 hover:text-red-300 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                    className="w-full py-1.5 rounded-lg bg-destructive/10 hover:bg-destructive/20 border border-destructive/25 text-destructive text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     <span>Exit Group</span>
@@ -3463,19 +3459,19 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       {/* WhatsApp-Style Exit Group Confirmation Modal */}
       {showExitGroupConfirm && activeGroup && (
         <div 
-          className="fixed inset-0 z-70 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-70 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
           onClick={() => setShowExitGroupConfirm(false)}
         >
           <div 
-            className="bg-[#00172e] border border-red-500/40 rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-center text-white"
+            className="bg-card border border-destructive/30 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-center text-card-foreground"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-12 h-12 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center mx-auto">
+            <div className="w-12 h-12 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive flex items-center justify-center mx-auto">
               <LogOut className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h4 className="font-bold text-base text-white">Exit "{activeGroup.name}"?</h4>
-              <p className="text-xs text-white/60 leading-relaxed">
+              <h4 className="font-bold text-base text-foreground">Exit "{activeGroup.name}"?</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 You will no longer be a participant in this fellowship group and will stop receiving group messages. You can always rejoin later.
               </p>
             </div>
@@ -3483,14 +3479,14 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowExitGroupConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl border border-white/10 text-xs font-bold text-white/80 hover:bg-white/10 transition-colors cursor-pointer"
+                className="flex-1 py-2 rounded-lg border border-border text-xs font-semibold text-foreground hover:bg-secondary transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleExitActiveGroup}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-xs font-bold text-white transition-colors shadow-lg cursor-pointer"
+                className="flex-1 py-2 rounded-lg bg-destructive hover:bg-destructive/90 text-xs font-bold text-destructive-foreground transition-colors shadow-sm cursor-pointer"
               >
                 Exit Group
               </button>
@@ -3502,21 +3498,21 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       {/* WhatsApp-Style Delete Message Confirmation Modal */}
       {deleteConfirmModal.isOpen && (
         <div 
-          className="fixed inset-0 z-70 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-70 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
           onClick={() => setDeleteConfirmModal({ isOpen: false, isMultiple: false, canDeleteForEveryone: false, isGroup: false })}
         >
           <div 
-            className="bg-[#00172e] border border-red-500/40 rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl text-white text-center"
+            className="bg-card border border-destructive/30 rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl text-card-foreground text-center"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-11 h-11 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center mx-auto">
+            <div className="w-11 h-11 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive flex items-center justify-center mx-auto">
               <Trash2 className="w-5 h-5" />
             </div>
             <div className="space-y-1">
-              <h4 className="font-bold text-base text-white">
+              <h4 className="font-bold text-base text-foreground">
                 {deleteConfirmModal.isMultiple ? `Delete ${selectedMessageIds.length} Messages?` : 'Delete Message?'}
               </h4>
-              <p className="text-xs text-white/60 leading-relaxed">
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 Choose how you want to delete this message.
               </p>
             </div>
@@ -3525,7 +3521,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleConfirmDelete(true)}
-                  className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-xs font-bold text-white transition-colors shadow-lg cursor-pointer"
+                  className="w-full py-2.5 rounded-lg bg-destructive hover:bg-destructive/90 text-xs font-bold text-destructive-foreground transition-colors shadow-sm cursor-pointer"
                 >
                   Delete for Everyone
                 </button>
@@ -3533,14 +3529,14 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               <button
                 type="button"
                 onClick={() => handleConfirmDelete(false)}
-                className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-xs font-bold text-white transition-colors cursor-pointer"
+                className="w-full py-2.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-xs font-semibold text-foreground transition-colors cursor-pointer"
               >
                 Delete for Me
               </button>
               <button
                 type="button"
                 onClick={() => setDeleteConfirmModal({ isOpen: false, isMultiple: false, canDeleteForEveryone: false, isGroup: false })}
-                className="w-full py-2 rounded-xl text-xs font-semibold text-white/60 hover:text-white transition-colors cursor-pointer"
+                className="w-full py-2 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -3552,36 +3548,36 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       {/* Functional Clear Chat Confirmation Modal */}
       {clearChatConfirmModal.isOpen && (
         <div 
-          className="fixed inset-0 z-70 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-70 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
           onClick={() => setClearChatConfirmModal({ isOpen: false, isGroup: false, title: '' })}
         >
           <div 
-            className="bg-[#00172e] border border-amber-500/40 rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl text-white text-center"
+            className="bg-card border border-border rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl text-card-foreground text-center"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center mx-auto">
+            <div className="w-11 h-11 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive flex items-center justify-center mx-auto">
               <Trash2 className="w-5 h-5" />
             </div>
             <div className="space-y-1">
-              <h4 className="font-bold text-base text-white">
+              <h4 className="font-bold text-base text-foreground">
                 Clear chats from your end?
               </h4>
-              <p className="text-xs text-white/70 leading-relaxed">
-                Messages in <span className="font-semibold text-amber-300">{clearChatConfirmModal.title}</span> will be cleared from your view on this device.
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Messages in <span className="font-semibold text-foreground">{clearChatConfirmModal.title}</span> will be cleared from your view on this device.
               </p>
             </div>
             <div className="flex items-center gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setClearChatConfirmModal({ isOpen: false, isGroup: false, title: '' })}
-                className="flex-1 py-2.5 rounded-xl border border-white/10 text-xs font-bold text-white/80 hover:bg-white/10 transition-colors cursor-pointer"
+                className="flex-1 py-2 rounded-lg border border-border text-xs font-semibold text-foreground hover:bg-secondary transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleExecuteClearChat}
-                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-xs font-bold text-[#001F3F] transition-colors shadow-lg cursor-pointer"
+                className="flex-1 py-2 rounded-lg bg-destructive hover:bg-destructive/90 text-xs font-bold text-destructive-foreground transition-colors shadow-sm cursor-pointer"
               >
                 Clear Chat
               </button>

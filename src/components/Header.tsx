@@ -11,7 +11,9 @@ import {
   Send,
   Radio,
   Bell,
-  Terminal
+  Terminal,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { User, PushNotification, NotificationSettings } from '../types';
 import { StorageService } from '../services/storageService';
@@ -55,9 +57,24 @@ export const Header: React.FC<HeaderProps> = ({
   const isGuest = currentUser.role === 'guest';
 
   const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => StorageService.getTheme());
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>(() =>
     StorageService.getNotificationSettings(currentUser?.id)
   );
+
+  useEffect(() => {
+    StorageService.initTheme();
+    const handleThemeChange = (e: any) => {
+      if (e?.detail?.theme) setTheme(e.detail.theme);
+    };
+    window.addEventListener('gcz_theme_changed', handleThemeChange);
+    return () => window.removeEventListener('gcz_theme_changed', handleThemeChange);
+  }, []);
+
+  const handleToggleTheme = () => {
+    const next = StorageService.toggleTheme();
+    setTheme(next);
+  };
 
   useEffect(() => {
     const updateSettingsAndCount = () => {
@@ -101,113 +118,128 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 h-16 sm:h-20 bg-[#001F3F] border-b border-[#D4AF37]/40 flex items-center justify-between px-3 sm:px-6 shrink-0 transition-all shadow-xl">
+    <header className="sticky top-0 z-40 h-16 sm:h-20 bg-background/85 backdrop-blur-xl border-b border-border flex items-center justify-between px-3 sm:px-6 shrink-0 transition-all shadow-sm">
       
-      {/* Brand & Ministry Logo - Apostle Joe Daniels Silhouette with Matching Palette */}
+      {/* Brand & Ministry Logo */}
       <div className="flex items-center gap-2.5 sm:gap-3">
-        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[#001122] border border-[#D4AF37]/50 flex items-center justify-center p-1.5 shadow-md shadow-[#D4AF37]/15 shrink-0">
+        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-secondary/60 border border-border flex items-center justify-center p-1.5 shadow-sm shrink-0">
           <img 
             src="/assets/apostle_silhouette.svg" 
             alt="Apostle Joe Daniels Ministry" 
-            className="w-full h-full object-contain filter drop-shadow"
+            className="w-full h-full object-contain filter drop-shadow opacity-90"
           />
         </div>
         <div className="flex flex-col">
-          <span className="text-[#D4AF37] font-bold text-sm sm:text-base tracking-wide leading-tight">
+          <span className="text-primary font-bold text-sm sm:text-base tracking-wide leading-tight">
             GATEWAY
           </span>
-          <span className="text-[10px] sm:text-[11px] text-white/70 font-medium tracking-widest uppercase">
+          <span className="text-[10px] sm:text-[11px] text-muted-foreground font-semibold tracking-widest uppercase">
             HARARE
           </span>
         </div>
       </div>
 
       {/* Action Controls & User Identity */}
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-1.5 sm:gap-2">
         
-        {/* Live Sermon Broadcast Button (Controlled by Live Streams notification preference) */}
+        {/* Live Sermon Broadcast Button */}
         {isLiveSermon && notifSettings.liveStreams && onOpenLiveSermon && (
           <button
             id="btn-live-sermon-header"
             onClick={onOpenLiveSermon}
             title="Apostle Joe Daniels Live Service • Tap to Stream"
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-md shadow-red-600/30 transition-all animate-pulse"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-500/15 text-rose-500 border border-rose-500/30 hover:bg-rose-500/25 transition-all text-xs font-semibold shadow-sm cursor-pointer"
           >
-            <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+            <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
             <Radio className="w-3.5 h-3.5" />
-            <span className="text-[11px] font-black uppercase tracking-wider hidden sm:inline">LIVE SERVICE</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider hidden sm:inline">LIVE SERVICE</span>
           </button>
         )}
 
-        {/* Instagram-style Direct Messages Button (Badge controlled by DM notification preference) */}
+        {/* Direct Messages Button */}
         {!isGuest && onOpenDirectMessages && (
           <button
             id="btn-direct-messages-header"
             onClick={onOpenDirectMessages}
             title="Direct Messages"
-            className="relative p-2 rounded-full bg-[#001122] border border-white/10 hover:border-[#D4AF37]/60 text-white/80 hover:text-white transition-all shadow-sm"
+            className="relative p-2 rounded-lg bg-secondary/50 border border-border hover:bg-secondary text-foreground/80 hover:text-foreground transition-all shadow-sm cursor-pointer"
           >
-            <Send className="w-4 h-4 text-[#D4AF37]" />
+            <Send className="w-4 h-4 text-primary" />
             {unreadDmsCount > 0 && notifSettings.directMessages && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center shadow">
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center shadow">
                 {unreadDmsCount}
               </span>
             )}
           </button>
         )}
 
-        {/* Notifications Bell Button - Strictly for registered members/leadership (Guest accounts have no notification tab) */}
+        {/* Notifications Bell Button */}
         {!isGuest && onOpenNotifications && (
           <button
             id="btn-notifications-header"
             onClick={onOpenNotifications}
             title="Notifications & Live Alerts"
-            className="relative p-2 rounded-full bg-[#001122] border border-white/10 hover:border-[#D4AF37]/60 text-white/80 hover:text-white transition-all shadow-sm"
+            className="relative p-2 rounded-lg bg-secondary/50 border border-border hover:bg-secondary text-foreground/80 hover:text-foreground transition-all shadow-sm cursor-pointer"
           >
-            <Bell className="w-4 h-4 text-[#D4AF37]" />
+            <Bell className="w-4 h-4 text-primary" />
             {unreadNotifsCount > 0 ? (
-              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center shadow animate-pulse">
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center shadow">
                 {unreadNotifsCount}
               </span>
             ) : (
-              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#D4AF37]/40 ring-1 ring-[#001F3F]" />
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-primary" />
             )}
           </button>
         )}
 
-        {/* Low-Data / HD Stream Toggle (Icon Only) */}
+        {/* Low-Data / HD Stream Toggle */}
         <button
           id="btn-low-data-toggle"
           onClick={onToggleLowData}
           title={lowDataMode ? "Lite Low-Data Mode Active (Click for HD)" : "HD Stream Active (Click for Lite Mode)"}
-          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer ${
             lowDataMode
-              ? 'bg-emerald-950/80 text-emerald-400 border-emerald-500/50 shadow-sm'
-              : 'bg-[#001122] text-[#D4AF37] border-[#D4AF37]/40 hover:border-[#D4AF37]'
+              ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30'
+              : 'bg-secondary/50 text-foreground/80 border-border hover:bg-secondary'
           }`}
         >
           {lowDataMode ? (
             <>
-              <WifiOff className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-[10px] font-black tracking-tight text-emerald-400">SD</span>
+              <WifiOff className="w-3.5 h-3.5 text-emerald-500" />
+              <span className="text-[10px] font-bold tracking-tight text-emerald-500">SD</span>
             </>
           ) : (
             <>
-              <Wifi className="w-3.5 h-3.5 text-[#D4AF37]" />
-              <span className="text-[10px] font-black tracking-tight text-[#D4AF37]">HD</span>
+              <Wifi className="w-3.5 h-3.5 text-primary" />
+              <span className="text-[10px] font-bold tracking-tight text-foreground">HD</span>
             </>
           )}
         </button>
 
-        {/* Flutter / Supabase SQL Modal Trigger - Strictly restricted to Developer Account */}
+        {/* Dark / Light Theme Toggle */}
+        <button
+          id="btn-theme-toggle"
+          onClick={handleToggleTheme}
+          title={theme === 'dark' ? "Switch to Light Theme" : "Switch to Dark Theme"}
+          className="flex items-center justify-center p-2 rounded-lg bg-secondary/50 border border-border hover:bg-secondary text-primary transition-all shadow-sm cursor-pointer"
+          aria-label="Toggle Dark / Light Theme"
+        >
+          {theme === 'dark' ? (
+            <Sun className="w-4 h-4 text-primary" />
+          ) : (
+            <Moon className="w-4 h-4 text-primary" />
+          )}
+        </button>
+
+        {/* Developer Button */}
         {isDeveloper && onOpenFlutterExport && (
           <button
             id="btn-flutter-export"
             onClick={onOpenFlutterExport}
-            className="flex items-center justify-center p-2 rounded-lg bg-[#001122] border border-[#D4AF37]/40 text-[#D4AF37] hover:bg-[#D4AF37]/10 text-xs transition-all shadow-sm"
+            className="flex items-center justify-center p-2 rounded-lg bg-secondary/50 border border-border text-foreground hover:bg-secondary text-xs transition-all shadow-sm cursor-pointer"
             title="Database Schema & Specs"
           >
-            <Database className="w-4 h-4 text-[#D4AF37]" />
+            <Database className="w-4 h-4 text-primary" />
           </button>
         )}
 
@@ -216,7 +248,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="btn-quick-admin"
             onClick={onOpenAdminPanel}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#D4AF37] text-[#001F3F] hover:scale-105 text-xs font-black shadow-md shadow-[#D4AF37]/30 transition-transform"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground hover:brightness-105 text-xs font-bold shadow-sm transition-all cursor-pointer"
             title="Apostolic Command Panel"
           >
             <ShieldCheck className="w-3.5 h-3.5" />
@@ -224,45 +256,43 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Dev Link if Developer - Sleek Console Icon */}
+        {/* Dev Console */}
         {isDeveloper && onOpenDevConsole && (
           <button
             id="btn-quick-dev"
             onClick={onOpenDevConsole}
-            className="p-2 rounded-xl bg-purple-900/60 hover:bg-purple-800 border border-purple-500/40 text-purple-300 hover:text-white transition-all flex items-center justify-center cursor-pointer shadow-sm"
-            title="Developer Console (mr_juice7)"
+            className="p-2 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-400 transition-all flex items-center justify-center cursor-pointer shadow-sm"
+            title="Developer Console"
             aria-label="Developer Console"
           >
-            <Terminal className="w-4 h-4 text-purple-300" />
+            <Terminal className="w-4 h-4 text-purple-400" />
           </button>
         )}
 
         {/* User Identity / Account Button */}
         {isGuest ? (
-          /* Guest Believer: Click opens Login Float directly */
           <button
             id="btn-guest-login-header"
             onClick={onOpenAuthModal}
             title="Guest Believer - Click to Log In"
-            className="flex items-center gap-2 pl-3 pr-1.5 py-1 rounded-full bg-[#001122] border border-[#D4AF37]/50 hover:border-[#D4AF37] hover:bg-[#001830] transition-all text-left shadow-sm group"
+            className="flex items-center gap-2 pl-3 pr-1.5 py-1 rounded-lg bg-secondary/50 border border-border hover:border-primary/40 hover:bg-secondary transition-all text-left shadow-sm group cursor-pointer"
           >
             <div className="flex flex-col items-end">
-              <span className="text-[9px] text-[#D4AF37] font-bold uppercase tracking-wider">Guest Believer</span>
-              <span className="text-xs text-white font-bold group-hover:text-[#D4AF37] transition-colors leading-none">Log In</span>
+              <span className="text-[9px] text-primary font-semibold uppercase tracking-wider">Guest</span>
+              <span className="text-xs text-foreground font-bold group-hover:text-primary transition-colors leading-none">Log In</span>
             </div>
-            <div className="w-7 h-7 rounded-full bg-[#D4AF37] text-[#001F3F] flex items-center justify-center font-bold text-xs shadow shrink-0">
-              <LogIn className="w-3.5 h-3.5 text-[#001F3F]" />
+            <div className="w-7 h-7 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs shadow shrink-0">
+              <LogIn className="w-3.5 h-3.5" />
             </div>
           </button>
         ) : (
-          /* Member Account Button - Profile Picture Only (Name moved to Profile) */
           <button
             id="btn-user-profile-header"
             onClick={handleProfileClick}
             title="View Member Profile & Settings"
-            className="relative p-0.5 rounded-full hover:ring-2 hover:ring-[#D4AF37] transition-all shadow-sm group shrink-0"
+            className="relative p-0.5 rounded-full hover:ring-2 hover:ring-primary/60 transition-all shadow-sm group shrink-0 cursor-pointer"
           >
-            <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 border-[#D4AF37] bg-[#001F3F] flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+            <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-border bg-card flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
               {currentUser.avatar_url ? (
                 <img 
                   src={currentUser.avatar_url} 
@@ -270,7 +300,7 @@ export const Header: React.FC<HeaderProps> = ({
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-[#D4AF37] font-bold text-xs">
+                <div className="w-full h-full flex items-center justify-center text-primary font-bold text-xs">
                   {currentUser.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'GC'}
                 </div>
               )}

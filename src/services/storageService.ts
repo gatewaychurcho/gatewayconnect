@@ -61,6 +61,7 @@ import {
   INITIAL_CHAT_GROUP_MESSAGES
 } from '../data/mockData';
 import { SupabaseSyncService } from './supabaseSyncService';
+import { CONFIG } from '../../config';
 
 export function arePhoneNumbersEqual(phone1?: string, phone2?: string): boolean {
   if (!phone1 || !phone2) return false;
@@ -116,7 +117,8 @@ const KEYS = {
   KINGDOM_STORE_CART: 'gcz_kingdom_store_cart_v1',
   GROUP_MEDIA: 'gcz_group_media_v1',
   NOTIFICATION_SETTINGS: 'gcz_notification_settings_v1',
-  RECEIPTS_ARCHIVE: 'gcz_receipts_archive_v1'
+  RECEIPTS_ARCHIVE: 'gcz_receipts_archive_v1',
+  THEME: 'gcz_theme_v1'
 };
 
 // In-memory fallback dictionary for when third-party cookies or localStorage are restricted/blocked
@@ -1821,8 +1823,8 @@ export class StorageService {
   // Supabase Config
   static getSupabaseConfig(): { url: string; anonKey: string; isLiveConnected: boolean } {
     return getLocal(KEYS.SUPABASE_CONFIG, {
-      url: (import.meta as any).env?.VITE_SUPABASE_URL || 'https://csinlqdcqdgcssdanvsr.supabase.co',
-      anonKey: (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 'sb_publishable_TJvwQ_lcZtUL0hHOm1yJmA_rfhpBKEX',
+      url: CONFIG.SUPABASE_URL,
+      anonKey: CONFIG.SUPABASE_ANON_KEY,
       isLiveConnected: true
     });
   }
@@ -1851,17 +1853,56 @@ export class StorageService {
 
   // Paynow Zimbabwe Gateway Configuration
   static getPaynowConfig(): PaynowConfig {
-    return getLocal<PaynowConfig>(KEYS.PAYNOW_CONFIG, {
-      integrationId: '',
-      integrationKey: '',
-      isLive: true,
-      merchantEmail: 'gatewaychurchzim@gmail.com',
-      isConfigured: false
-    });
+    const saved = getLocal<Partial<PaynowConfig> | null>(KEYS.PAYNOW_CONFIG, null);
+    const integrationId = saved?.integrationId || CONFIG.PAYNOW_INTEGRATION_ID;
+    const integrationKey = saved?.integrationKey || CONFIG.PAYNOW_INTEGRATION_KEY;
+    const merchantEmail = saved?.merchantEmail || CONFIG.PAYNOW_MERCHANT_EMAIL;
+
+    return {
+      integrationId,
+      integrationKey,
+      isLive: saved?.isLive !== undefined ? saved.isLive : true,
+      merchantEmail,
+      isConfigured: Boolean(integrationId && integrationKey),
+      ...(saved || {})
+    } as PaynowConfig;
   }
 
   static setPaynowConfig(config: PaynowConfig): void {
     setLocal(KEYS.PAYNOW_CONFIG, config);
+  }
+
+  // Theme Management (Dark & Light Mode)
+  static getTheme(): 'dark' | 'light' {
+    return getLocal<'dark' | 'light'>(KEYS.THEME, 'dark');
+  }
+
+  static setTheme(theme: 'dark' | 'light'): void {
+    setLocal(KEYS.THEME, theme);
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', theme);
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      } else {
+        document.documentElement.classList.add('light');
+        document.documentElement.classList.remove('dark');
+      }
+    }
+    window.dispatchEvent(new CustomEvent('gcz_theme_changed', { detail: { theme } }));
+  }
+
+  static toggleTheme(): 'dark' | 'light' {
+    const current = this.getTheme();
+    const next = current === 'dark' ? 'light' : 'dark';
+    this.setTheme(next);
+    return next;
+  }
+
+  static initTheme(): 'dark' | 'light' {
+    const theme = this.getTheme();
+    this.setTheme(theme);
+    return theme;
   }
 
   // Developer God Mode: Account Bans & Security

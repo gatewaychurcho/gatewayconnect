@@ -61,6 +61,7 @@ import { PaynowConfigModal } from '../modals/PaynowConfigModal';
 import { User, UnbanAppeal, PasswordResetRequest, StreamAttendanceRecord, LiveStreamViewer, SUPPORTED_CITIES } from '../../types';
 import type { UserRole } from '../../types';
 import { AdminCyberBackground } from '../admin/AdminCyberBackground';
+import { CONFIG } from '../../../config';
 
 /**
  * Hacker-style Matrix binary digital rain telemetry component
@@ -246,7 +247,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   const [logs, setLogs] = useState<string[]>([
     `[SYSTEM] Console opened ${new Date().toISOString()}`,
     `[CONFIG] Supabase: ${supabaseConfig.isLiveConnected ? 'configured' : 'not configured'}${supabaseConfig.url ? ` (${supabaseConfig.url})` : ''}`,
-    `[CONFIG] WebSocket: ${(import.meta as ImportMeta & { env?: { VITE_LIVE_WS_URL?: string } }).env?.VITE_LIVE_WS_URL ? 'configured' : 'not configured'}`,
+    `[CONFIG] WebSocket: ${CONFIG.LIVE_WS_URL ? 'configured' : 'not configured'}`,
     `[CONFIG] Paynow: ${paynowConfig.isConfigured ? 'configured' : 'not configured'}`
   ]);
 
@@ -272,7 +273,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
       const count = StorageService.getOnlineStreamersCount();
       setLogs(prev => {
         const next = [
-          `[${stamp}] [REALTIME_PULSE] Connected Streamers: ${count} | WebSocket: ${(import.meta as ImportMeta & { env?: { VITE_LIVE_WS_URL?: string } }).env?.VITE_LIVE_WS_URL ? 'CONFIGURED' : 'NOT_CONFIGURED'} | Supabase: ${supabaseConfig.isLiveConnected ? 'CONFIGURED' : 'NOT_CONFIGURED'}`,
+          `[${stamp}] [REALTIME_PULSE] Connected Streamers: ${count} | WebSocket: ${CONFIG.LIVE_WS_URL ? 'CONFIGURED' : 'NOT_CONFIGURED'} | Supabase: ${supabaseConfig.isLiveConnected ? 'CONFIGURED' : 'NOT_CONFIGURED'}`,
           ...prev
         ];
         return next.slice(0, 150);

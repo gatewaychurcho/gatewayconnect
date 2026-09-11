@@ -553,24 +553,24 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     <div className="space-y-4 pb-24 max-w-3xl mx-auto px-3 sm:px-4 pt-2">
       
       {/* 1. Header Banner & Sub-Tabs Switcher */}
-      <div className="bg-[#001F3F] border border-[#D4AF37]/30 rounded-2xl p-4 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-base sm:text-lg font-bold text-[#D4AF37] tracking-wide">
+          <h2 className="text-base sm:text-lg font-bold text-foreground tracking-wide">
             Gateway Community & Fellowship
           </h2>
-          <p className="text-xs text-white/70">
+          <p className="text-xs text-muted-foreground">
             Instagram Feed, Prayer Altar, Cell Groups & Church Events
           </p>
         </div>
 
-        <div className="flex items-center gap-1 bg-[#001122] p-1 rounded-xl border border-white/10 self-start sm:self-center overflow-x-auto max-w-full">
+        <div className="flex items-center gap-1 bg-secondary/80 p-1 rounded-lg border border-border self-start sm:self-center overflow-x-auto max-w-full">
           <button
             id="tab-sub-feed"
             onClick={() => setActiveSubTab('feed')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
               activeSubTab === 'feed'
-                ? 'bg-[#D4AF37] text-[#001F3F] font-bold shadow-sm'
-                : 'text-white/70 hover:text-white'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             📸 Feed & Posts
@@ -578,10 +578,10 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
           <button
             id="tab-sub-prayers"
             onClick={() => setActiveSubTab('prayers')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
               activeSubTab === 'prayers'
-                ? 'bg-[#D4AF37] text-[#001F3F] font-bold shadow-sm'
-                : 'text-white/70 hover:text-white'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             🙏 Prayer Wall ({prayerList.length})
@@ -589,10 +589,10 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
           <button
             id="tab-sub-groups"
             onClick={() => setActiveSubTab('groups')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
               activeSubTab === 'groups'
-                ? 'bg-[#D4AF37] text-[#001F3F] font-bold shadow-sm'
-                : 'text-white/70 hover:text-white'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             👥 Cell Groups
@@ -600,10 +600,10 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
           <button
             id="tab-sub-events"
             onClick={() => setActiveSubTab('events')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
               activeSubTab === 'events'
-                ? 'bg-[#D4AF37] text-[#001F3F] font-bold shadow-sm'
-                : 'text-white/70 hover:text-white'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             📅 Events
@@ -612,21 +612,21 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       </div>
 
       {/* Global Congregation Search Feature */}
-      <div className="bg-[#00172D] border border-[#D4AF37]/30 rounded-2xl p-3 shadow-md space-y-2.5">
+      <div className="bg-card border border-border rounded-xl p-3 shadow-sm space-y-2.5">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#D4AF37]" />
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-primary" />
             <input
               type="text"
               value={memberSearchQuery}
               onChange={(e) => setMemberSearchQuery(e.target.value)}
               placeholder="Find and connect with congregation members by name..."
-              className="w-full bg-[#001122] border border-white/15 rounded-xl pl-10 pr-9 py-2 text-xs sm:text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[#D4AF37] transition-all"
+              className="w-full bg-secondary/70 border border-border rounded-lg pl-10 pr-9 py-2 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-all"
             />
             {memberSearchQuery && (
               <button
                 onClick={() => setMemberSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white p-0.5"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -634,10 +634,10 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
           </div>
           <button
             onClick={() => setShowMemberDirectory(prev => !prev)}
-            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+            className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
               showMemberDirectory
-                ? 'bg-[#D4AF37] text-[#001F3F] border-[#D4AF37] shadow'
-                : 'bg-[#001F3F] text-white/80 border-white/20 hover:text-white'
+                ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                : 'bg-secondary text-foreground border-border hover:bg-secondary/80'
             }`}
             title="Toggle Member Directory"
           >
@@ -651,19 +651,19 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
           const isGuest = currentUser?.role === 'guest' || currentUser?.id === 'usr_guest' || currentUser?.id?.startsWith('usr_guest');
           if (isGuest) {
             return (
-              <div className="pt-3 border-t border-white/10">
-                <div className="p-5 bg-[#001830] border border-[#D4AF37]/30 rounded-2xl text-center space-y-2.5">
-                  <div className="w-10 h-10 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/30 flex items-center justify-center mx-auto text-[#D4AF37]">
+              <div className="pt-3 border-t border-border">
+                <div className="p-5 bg-secondary/40 border border-border rounded-xl text-center space-y-2.5">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto text-primary">
                     <Shield className="w-5 h-5" />
                   </div>
-                  <h4 className="text-white font-bold text-xs">Believers Directory Restricted</h4>
-                  <p className="text-[11px] text-white/70 max-w-sm mx-auto">
+                  <h4 className="text-foreground font-semibold text-xs">Believers Directory Restricted</h4>
+                  <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
                     Guests cannot view the believers directory. Please log in or register to connect with Gateway Cathedral members.
                   </p>
                   <button
                     type="button"
                     onClick={() => onRequireAuth()}
-                    className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-[#D4AF37] to-amber-400 text-[#001F3F] font-bold text-xs shadow hover:brightness-110 transition-all cursor-pointer inline-flex items-center gap-1.5"
+                    className="px-4 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs shadow-xs hover:opacity-90 transition-all cursor-pointer inline-flex items-center gap-1.5"
                   >
                     <LogIn className="w-3.5 h-3.5" />
                     <span>Log In to View Directory</span>
@@ -683,15 +683,15 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             : allMembers;
 
           return (
-            <div className="pt-2 border-t border-white/10 max-h-72 overflow-y-auto space-y-1.5 divide-y divide-white/5">
-              <div className="flex items-center justify-between px-1 pb-1 text-[11px] text-white/60">
-                <span className="font-semibold text-[#D4AF37]">
+            <div className="pt-2 border-t border-border max-h-72 overflow-y-auto space-y-1.5 divide-y divide-border/40">
+              <div className="flex items-center justify-between px-1 pb-1 text-[11px] text-muted-foreground">
+                <span className="font-semibold text-primary">
                   {memberSearchQuery.trim() ? `Search Results (${filteredMembers.length})` : `All Congregation Members (${allMembers.length})`}
                 </span>
                 {memberSearchQuery.trim() && (
                   <button
                     onClick={() => setMemberSearchQuery('')}
-                    className="text-[10px] text-white/50 hover:text-white"
+                    className="text-[10px] text-muted-foreground hover:text-foreground"
                   >
                     Clear
                   </button>
@@ -699,15 +699,15 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
               </div>
 
               {filteredMembers.length === 0 ? (
-                <p className="text-center py-4 text-xs text-white/50">No congregation members found matching "{memberSearchQuery}".</p>
+                <p className="text-center py-4 text-xs text-muted-foreground">No congregation members found matching "{memberSearchQuery}".</p>
               ) : (
                 filteredMembers.map((member) => (
                   <div
                     key={member.id}
-                    className="pt-1.5 flex items-center justify-between gap-2 hover:bg-white/5 p-1.5 rounded-xl transition-colors"
+                    className="pt-1.5 flex items-center justify-between gap-2 hover:bg-secondary/60 p-1.5 rounded-lg transition-colors"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-9 h-9 rounded-full border border-[#D4AF37]/50 overflow-hidden bg-[#001F3F] flex items-center justify-center text-xs font-bold text-[#D4AF37] shrink-0">
+                      <div className="w-9 h-9 rounded-full border border-border overflow-hidden bg-secondary flex items-center justify-center text-xs font-semibold text-primary shrink-0">
                         {member.avatar_url ? (
                           <img src={member.avatar_url} alt={member.full_name} className="w-full h-full object-cover" />
                         ) : (
@@ -715,16 +715,16 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                         )}
                       </div>
                       <div className="min-w-0">
-                        <h4 className="font-bold text-xs text-white flex items-center gap-1 truncate">
+                        <h4 className="font-semibold text-xs text-foreground flex items-center gap-1 truncate">
                           <span className="truncate">{member.full_name}</span>
                           {member.id === currentUser.id && (
-                            <span className="text-[10px] text-[#D4AF37]">(You)</span>
+                            <span className="text-[10px] text-primary font-bold">(You)</span>
                           )}
                           {member.role === 'super_admin' && (
-                            <span className="text-[9px] px-1 py-0.2 rounded bg-[#D4AF37]/20 text-[#D4AF37] font-bold shrink-0">Apostle</span>
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-primary/15 text-primary font-semibold shrink-0">Apostle</span>
                           )}
                         </h4>
-                        <p className="text-[10px] text-white/50 truncate font-mono">
+                        <p className="text-[10px] text-muted-foreground truncate font-mono">
                           {member.handle || `@${member.full_name.toLowerCase().replace(/\s+/g, '_')}`} • {member.location || 'Harare'}
                         </p>
                       </div>
@@ -737,7 +737,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                           setMemberSearchQuery('');
                           setShowMemberDirectory(false);
                         }}
-                        className="px-2.5 py-1.5 rounded-lg bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] text-xs font-bold transition-transform hover:scale-105 flex items-center gap-1 shrink-0 cursor-pointer shadow"
+                        className="px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold transition-transform active:scale-95 flex items-center gap-1 shrink-0 cursor-pointer shadow-xs"
                       >
                         <MessageSquare className="w-3.5 h-3.5" />
                         <span>Message</span>
@@ -753,8 +753,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       {activeSubTab === 'feed' && (
         <div className="space-y-4">
           
-          {/* Instagram-Style Stories Tray */}
-          <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-3 shadow-md">
+          {/* Stories Tray */}
+          <div className="bg-card border border-border rounded-xl p-3 shadow-sm">
             <div className="flex items-center gap-3.5 overflow-x-auto pb-1 scrollbar-none">
               
               {/* Current User: Add Story */}
@@ -769,18 +769,18 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
               >
                 <div className="relative">
-                  <div className="w-14 h-14 rounded-full p-[2px] bg-slate-800 border border-white/20 group-hover:border-[#D4AF37] transition-all">
+                  <div className="w-14 h-14 rounded-full p-[2px] bg-secondary border border-border group-hover:border-primary transition-all">
                     <img
                       src={currentUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
                       alt="Your Story"
                       className="w-full h-full rounded-full object-cover"
                     />
                   </div>
-                  <div className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-blue-500 border-2 border-[#001F3F] text-white flex items-center justify-center text-[10px] font-bold">
+                  <div className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-primary text-primary-foreground border-2 border-background flex items-center justify-center text-[10px] font-bold">
                     +
                   </div>
                 </div>
-                <span className="text-[10px] text-white/70 truncate max-w-[62px]">Your Story</span>
+                <span className="text-[10px] text-muted-foreground truncate max-w-[62px]">Your Story</span>
               </div>
 
               {/* Story 1: Apostle Joe Daniels */}
@@ -799,8 +799,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 }}
                 className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
               >
-                <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform">
-                  <div className="w-full h-full rounded-full p-[2px] bg-[#001F3F]">
+                <div className="w-14 h-14 rounded-full p-[2px] bg-primary group-hover:scale-105 transition-transform">
+                  <div className="w-full h-full rounded-full p-[2px] bg-card">
                     <img
                       src="/assets/apostle_joe_daniels_main.jpg"
                       alt="Apostle Joe"
@@ -809,7 +809,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-0.5 max-w-[66px]">
-                  <span className="text-[10px] text-white font-medium truncate">Apostle Joe</span>
+                  <span className="text-[10px] text-foreground font-medium truncate">Apostle Joe</span>
                   <VerifiedBadge type="gold" size="xs" />
                 </div>
               </div>
@@ -830,8 +830,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 }}
                 className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
               >
-                <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform">
-                  <div className="w-full h-full rounded-full p-[2px] bg-[#001F3F]">
+                <div className="w-14 h-14 rounded-full p-[2px] bg-primary group-hover:scale-105 transition-transform">
+                  <div className="w-full h-full rounded-full p-[2px] bg-card">
                     <img
                       src="/assets/apostle_joe_daniels_grad.jpg"
                       alt="Pastor Tendai"
@@ -840,7 +840,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-0.5 max-w-[66px]">
-                  <span className="text-[10px] text-white font-medium truncate">Pst Tendai</span>
+                  <span className="text-[10px] text-foreground font-medium truncate">Pst Tendai</span>
                   <VerifiedBadge type="silver" size="xs" />
                 </div>
               </div>
@@ -861,8 +861,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 }}
                 className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
               >
-                <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform">
-                  <div className="w-full h-full rounded-full p-[2px] bg-[#001F3F]">
+                <div className="w-14 h-14 rounded-full p-[2px] bg-primary group-hover:scale-105 transition-transform">
+                  <div className="w-full h-full rounded-full p-[2px] bg-card">
                     <img
                       src="/assets/apostle_joe_daniels_podcast.jpg"
                       alt="Pastor Grace"
@@ -871,7 +871,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-0.5 max-w-[66px]">
-                  <span className="text-[10px] text-white font-medium truncate">Pst Grace</span>
+                  <span className="text-[10px] text-foreground font-medium truncate">Pst Grace</span>
                   <VerifiedBadge type="gold" size="xs" />
                 </div>
               </div>
@@ -892,8 +892,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 }}
                 className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
               >
-                <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform">
-                  <div className="w-full h-full rounded-full p-[2px] bg-[#001F3F]">
+                <div className="w-14 h-14 rounded-full p-[2px] bg-primary group-hover:scale-105 transition-transform">
+                  <div className="w-full h-full rounded-full p-[2px] bg-card">
                     <img
                       src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
                       alt="Chipo Mandaza"
@@ -902,7 +902,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-0.5 max-w-[66px]">
-                  <span className="text-[10px] text-white font-medium truncate">Chipo M.</span>
+                  <span className="text-[10px] text-foreground font-medium truncate">Chipo M.</span>
                   <VerifiedBadge type="silver" size="xs" />
                 </div>
               </div>
@@ -923,8 +923,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 }}
                 className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
               >
-                <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform">
-                  <div className="w-full h-full rounded-full p-[2px] bg-[#001F3F]">
+                <div className="w-14 h-14 rounded-full p-[2px] bg-primary group-hover:scale-105 transition-transform">
+                  <div className="w-full h-full rounded-full p-[2px] bg-card">
                     <img
                       src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
                       alt="Kudakwashe"
@@ -933,7 +933,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-0.5 max-w-[66px]">
-                  <span className="text-[10px] text-white font-medium truncate">Kuda S.</span>
+                  <span className="text-[10px] text-foreground font-medium truncate">Kuda S.</span>
                   <VerifiedBadge type="blue" size="xs" />
                 </div>
               </div>
@@ -941,15 +941,15 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             </div>
           </div>
 
-          {/* Instagram Post Creation Bar */}
-          <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-sm">
+          {/* Post Creation Bar */}
+          <div className="bg-card border border-border rounded-xl p-3.5 flex items-center justify-between gap-3 shadow-sm">
             <div className="flex items-center gap-2.5">
               <img
                 src={currentUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
                 alt="Avatar"
-                className="w-9 h-9 rounded-full object-cover border border-[#D4AF37]/50"
+                className="w-9 h-9 rounded-full object-cover border border-primary/40"
               />
-              <span className="text-xs text-white/70 font-medium">
+              <span className="text-xs text-muted-foreground font-medium">
                 Share a testimony, photo, or praise report...
               </span>
             </div>
@@ -962,7 +962,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 }
                 setShowCreatePostModal(true);
               }}
-              className="px-3.5 py-1.5 rounded-xl bg-[#D4AF37] hover:bg-[#c49f2f] text-[#001F3F] text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-sm transition-all active:scale-95"
+              className="px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold flex items-center gap-1.5 shrink-0 shadow-xs transition-all active:scale-95"
             >
               <Camera className="w-3.5 h-3.5" />
               <span>Create Post</span>
@@ -970,10 +970,10 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
           </div>
 
           {/* Suggested Leaders / Members Carousel */}
-          <div className="bg-[#001F3F]/60 border border-white/10 rounded-2xl p-3 space-y-2">
+          <div className="bg-secondary/40 border border-border rounded-xl p-3 space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-white/90">Suggested for You</span>
-              <span className="text-[11px] text-[#D4AF37] font-semibold">Gateway Community</span>
+              <span className="font-semibold text-foreground">Suggested for You</span>
+              <span className="text-[11px] text-primary font-semibold">Gateway Community</span>
             </div>
             <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none">
               {INITIAL_USERS.filter(u => u.id !== currentUser.id && u.role !== 'guest').slice(0, 5).map(u => {
@@ -981,24 +981,24 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 return (
                   <div
                     key={u.id}
-                    className="w-36 shrink-0 bg-[#001122] border border-white/10 rounded-xl p-2.5 flex flex-col items-center text-center relative"
+                    className="w-36 shrink-0 bg-card border border-border rounded-lg p-2.5 flex flex-col items-center text-center relative shadow-xs"
                   >
                     <img
                       src={u.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
                       alt={u.full_name}
-                      className="w-11 h-11 rounded-full object-cover border border-white/20 mb-1.5"
+                      className="w-11 h-11 rounded-full object-cover border border-border mb-1.5"
                     />
                     <div className="flex items-center justify-center gap-1 w-full">
-                      <p className="text-xs font-bold text-white truncate">{u.full_name}</p>
+                      <p className="text-xs font-semibold text-foreground truncate">{u.full_name}</p>
                       {u.verified_badge && <VerifiedBadge type={u.verified_badge} size="xs" />}
                     </div>
-                    <p className="text-[10px] text-white/50 truncate w-full mb-2">{u.handle}</p>
+                    <p className="text-[10px] text-muted-foreground truncate w-full mb-2">{u.handle}</p>
                     <button
                       onClick={() => handleToggleFollow(u.id)}
-                      className={`w-full py-1 rounded-lg text-[11px] font-bold transition-all ${
+                      className={`w-full py-1 rounded-md text-[11px] font-semibold transition-all ${
                         isFollowing
-                          ? 'bg-white/10 text-white/80 border border-white/20'
-                          : 'bg-[#D4AF37] text-[#001F3F] hover:bg-[#c49f2f]'
+                          ? 'bg-secondary text-foreground border border-border'
+                          : 'bg-primary text-primary-foreground hover:opacity-90 shadow-xs'
                       }`}
                     >
                       {isFollowing ? 'Following' : 'Follow'}
@@ -1031,33 +1031,33 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
               return (
                 <article
                   key={post.id}
-                  className="bg-[#001F3F] border border-white/10 rounded-2xl overflow-hidden shadow-lg transition-all"
+                  className="bg-card border border-border rounded-xl overflow-hidden shadow-xs transition-all"
                 >
-                  {/* Instagram Post Header */}
-                  <div className="p-3.5 flex items-center justify-between border-b border-white/5">
+                  {/* Post Header */}
+                  <div className="p-3.5 flex items-center justify-between border-b border-border/40">
                     <div 
                       onClick={() => handleOpenUserProfile(post.user_id || post.user_handle || post.user_name)}
                       className="flex items-center gap-2.5 cursor-pointer group"
                       title="View user profile"
                     >
-                      <div className="w-10 h-10 rounded-full p-[1.5px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 transition-transform group-hover:scale-105 shrink-0">
+                      <div className="w-10 h-10 rounded-full p-[1.5px] bg-primary transition-transform group-hover:scale-105 shrink-0">
                         <img
                           src={post.user_avatar || '/assets/apostle_joe_daniels_main.jpg'}
                           alt={post.user_name}
-                          className="w-full h-full rounded-full object-cover border border-[#001F3F]"
+                          className="w-full h-full rounded-full object-cover border border-card"
                         />
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-xs sm:text-sm text-white group-hover:text-[#D4AF37] transition-colors">
+                          <span className="font-semibold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors">
                             {post.user_name}
                           </span>
                           {(post.verified_by_church || isApostlePost) && (
                             <VerifiedBadge type="gold" size="xs" />
                           )}
                         </div>
-                        <div className="flex items-center gap-1.5 text-[11px] text-white/50">
-                          <span className="text-white/70 font-medium">
+                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <span className="font-medium">
                             {post.user_handle || `@${post.user_name.toLowerCase().replace(/\s+/g, '_')}`}
                           </span>
                           <span>•</span>
@@ -1071,7 +1071,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                       {isMrDaniels && (
                         <button
                           onClick={() => setPostToEditImage(post)}
-                          className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-[#D4AF37] hover:text-[#001F3F] text-white/80 text-[11px] font-semibold flex items-center gap-1.5 transition-all"
+                          className="px-2.5 py-1 rounded-lg bg-secondary hover:bg-primary hover:text-primary-foreground text-foreground text-[11px] font-semibold flex items-center gap-1.5 transition-all"
                           title="Apostle Joe Daniels: Update post photo"
                         >
                           <Camera className="w-3.5 h-3.5" />
@@ -1081,18 +1081,18 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
                       <button
                         onClick={() => setSelectedPostOptions(post)}
-                        className="p-1 rounded-full text-white/50 hover:text-white transition-colors"
+                        className="p-1 rounded-lg text-muted-foreground hover:text-foreground transition-colors"
                       >
                         <MoreHorizontal className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
 
-                  {/* Instagram Post Media (Double Tap to Like) */}
+                  {/* Post Media (Double Tap to Like) */}
                   {post.image_url ? (
                     <div 
                       onDoubleClick={() => handleDoubleTap(post.id)}
-                      className="w-full bg-black/40 flex items-center justify-center max-h-[460px] overflow-hidden relative cursor-pointer select-none group"
+                      className="w-full bg-secondary/30 flex items-center justify-center max-h-[460px] overflow-hidden relative cursor-pointer select-none group"
                     >
                       <img
                         src={post.image_url}
@@ -1115,7 +1115,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                             e.stopPropagation();
                             setPostToEditImage(post);
                           }}
-                          className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/75 hover:bg-[#D4AF37] hover:text-[#001F3F] text-white backdrop-blur-md text-xs font-bold flex items-center gap-1.5 border border-white/20 shadow-lg transition-all z-10"
+                          className="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-background/80 hover:bg-primary hover:text-primary-foreground text-foreground backdrop-blur-md text-xs font-semibold flex items-center gap-1.5 border border-border shadow-md transition-all z-10"
                         >
                           <Camera className="w-3.5 h-3.5" />
                           <span>Change Photo</span>
@@ -1124,7 +1124,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     </div>
                   ) : null}
 
-                  {/* Instagram Action Icons Row */}
+                  {/* Action Icons Row */}
                   <div className="p-3.5 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
@@ -1139,7 +1139,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                             className={`w-5 h-5 transition-colors ${
                               isLikedByMe 
                                 ? 'text-rose-500 fill-rose-500' 
-                                : 'text-white hover:text-rose-400'
+                                : 'text-foreground hover:text-rose-500'
                             }`} 
                           />
                         </button>
@@ -1147,7 +1147,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                         {/* Comment Icon */}
                         <button
                           onClick={() => handleToggleComments(post.id)}
-                          className="text-white hover:text-white/70 transition-transform active:scale-110"
+                          className="text-foreground hover:text-primary transition-transform active:scale-110"
                           title="Comment on post"
                         >
                           <MessageCircle className="w-5 h-5" />
@@ -1156,7 +1156,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                         {/* Direct Share / WhatsApp button */}
                         <button
                           onClick={() => handleSharePostWhatsApp(post)}
-                          className="text-white hover:text-emerald-400 transition-transform active:scale-110"
+                          className="text-foreground hover:text-emerald-500 transition-transform active:scale-110"
                           title="Share to WhatsApp"
                         >
                           <Send className="w-5 h-5 -rotate-12" />
@@ -1169,14 +1169,14 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                         className="transition-transform active:scale-110"
                         title="Save to bookmarks"
                       >
-                        <Bookmark className={`w-5 h-5 ${isSaved ? 'text-[#D4AF37] fill-[#D4AF37]' : 'text-white hover:text-white/70'}`} />
+                        <Bookmark className={`w-5 h-5 ${isSaved ? 'text-primary fill-primary' : 'text-foreground hover:text-primary'}`} />
                       </button>
                     </div>
 
-                    {/* Instagram Likes Counter (Real user accounts display) */}
-                    <div className="text-xs text-white/90">
+                    {/* Likes Counter */}
+                    <div className="text-xs text-foreground">
                       {likesCount === 0 ? (
-                        <p className="text-white/50 text-[11px]">
+                        <p className="text-muted-foreground text-[11px]">
                           0 likes • Be the first to like this
                         </p>
                       ) : (
@@ -1186,16 +1186,16 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                         >
                           {likesCount === 1 && firstLikerHandle ? (
                             <span>
-                              Liked by <strong className="font-bold text-white">{firstLikerHandle}</strong>
+                              Liked by <strong className="font-semibold text-foreground">{firstLikerHandle}</strong>
                             </span>
                           ) : firstLikerHandle ? (
                             <span>
-                              Liked by <strong className="font-bold text-white">{firstLikerHandle}</strong> and{' '}
-                              <strong className="font-bold text-white">{likesCount - 1} others</strong>
+                              Liked by <strong className="font-semibold text-foreground">{firstLikerHandle}</strong> and{' '}
+                              <strong className="font-semibold text-foreground">{likesCount - 1} others</strong>
                             </span>
                           ) : (
                             <span>
-                              <strong className="font-bold text-white">{likesCount}</strong> likes
+                              <strong className="font-semibold text-foreground">{likesCount}</strong> likes
                             </span>
                           )}
                         </button>
@@ -1204,23 +1204,23 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
                     {/* Smart Scripture Quote Ribbon */}
                     {post.scripture_tag && (
-                      <div className="p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-[#001122] to-amber-500/5 border border-[#D4AF37]/30 flex items-center justify-between gap-2 shadow-sm">
+                      <div className="p-2.5 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-between gap-2 shadow-xs">
                         <div className="flex items-center gap-2 overflow-hidden">
-                          <div className="w-6 h-6 rounded-lg bg-[#D4AF37]/20 text-[#D4AF37] flex items-center justify-center shrink-0">
+                          <div className="w-6 h-6 rounded-md bg-primary/20 text-primary flex items-center justify-center shrink-0">
                             <BookOpen className="w-3.5 h-3.5" />
                           </div>
                           <div className="truncate">
-                            <span className="text-[11px] font-bold text-[#D4AF37] block truncate">
+                            <span className="text-[11px] font-semibold text-primary block truncate">
                               {post.scripture_tag}
                             </span>
-                            <span className="text-[10px] text-white/60 truncate block">
+                            <span className="text-[10px] text-muted-foreground truncate block">
                               Prophetic Scripture Anchor
                             </span>
                           </div>
                         </div>
                         <button
                           onClick={() => handleSharePostWhatsApp(post)}
-                          className="text-[10px] font-bold text-[#D4AF37] hover:underline shrink-0 flex items-center gap-1 bg-[#D4AF37]/10 px-2.5 py-1 rounded-lg border border-[#D4AF37]/20"
+                          className="text-[10px] font-semibold text-primary hover:underline shrink-0 flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-md border border-primary/20"
                         >
                           <span>Share Verse</span>
                           <Share2 className="w-3 h-3" />
@@ -1228,40 +1228,40 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                       </div>
                     )}
 
-                    {/* Post Caption (Handle + Title + Content + Smart Hashtags) */}
-                    <div className="text-xs text-white/90 leading-relaxed space-y-1.5">
+                    {/* Post Caption */}
+                    <div className="text-xs text-foreground leading-relaxed space-y-1.5">
                       <div>
                         <span 
                           onClick={() => handleOpenUserProfile(post.user_id || post.user_handle || post.user_name)}
-                          className="font-bold text-white hover:text-[#D4AF37] cursor-pointer mr-1.5 transition-colors"
+                          className="font-semibold text-foreground hover:text-primary cursor-pointer mr-1.5 transition-colors"
                         >
                           {post.user_handle || `@${post.user_name.toLowerCase().replace(/\s+/g, '_')}`}
                         </span>
-                        {post.title && <strong className="font-semibold text-[#D4AF37] mr-1">{post.title} — </strong>}
+                        {post.title && <strong className="font-semibold text-primary mr-1">{post.title} — </strong>}
                         <span>{post.content}</span>
                       </div>
 
                       {/* Smart Category & Aesthetic Hashtags */}
                       <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                        <span className="px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 text-[10px] font-semibold">
+                        <span className="px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-300 text-[10px] font-semibold">
                           #{post.category.replace(/[^a-zA-Z0-9]/g, '')}
                         </span>
-                        <span className="px-2 py-0.5 rounded-md bg-white/5 text-white/60 text-[10px] font-medium">
+                        <span className="px-2 py-0.5 rounded-md bg-secondary text-muted-foreground text-[10px] font-medium">
                           #GatewayHarare
                         </span>
-                        <span className="px-2 py-0.5 rounded-md bg-white/5 text-white/60 text-[10px] font-medium">
+                        <span className="px-2 py-0.5 rounded-md bg-secondary text-muted-foreground text-[10px] font-medium">
                           #ApostleJoeDaniels
                         </span>
                         {post.scripture_tag && (
-                          <span className="px-2 py-0.5 rounded-md bg-[#D4AF37]/15 text-[#D4AF37] text-[10px] font-semibold">
+                          <span className="px-2 py-0.5 rounded-md bg-primary/15 text-primary text-[10px] font-semibold">
                             #{post.scripture_tag.replace(/[^a-zA-Z0-9]/g, '')}
                           </span>
                         )}
                       </div>
                     </div>
 
-                    {/* Real Post Timestamp (Relative, e.g. '10 minutes ago') */}
-                    <p className="text-[10px] text-white/40 uppercase tracking-wider">
+                    {/* Real Post Timestamp */}
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
                       {formatTimeAgo(post.created_at || post.date, 'descriptive')}
                     </p>
 
@@ -1270,7 +1270,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                       <div className="space-y-1 pt-1">
                         <button
                           onClick={() => handleToggleComments(post.id)}
-                          className="text-[11px] text-white/50 hover:text-white transition-colors"
+                          className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                         >
                           {expandedComments[post.id] 
                             ? 'Hide comments' 
@@ -1280,9 +1280,9 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                         {/* Recent 1-2 comments visible when collapsed */}
                         {!expandedComments[post.id] && comments.slice(-1).map(c => (
                           <div key={c.id} className="text-xs flex items-baseline gap-1.5">
-                            <span className="font-bold text-white/90">{c.user_handle || c.user_name}:</span>
-                            <span className="text-white/80">{c.text}</span>
-                            <span className="text-[9px] text-white/40 ml-auto">{formatTimeAgo(c.created_at, 'short')}</span>
+                            <span className="font-semibold text-foreground">{c.user_handle || c.user_name}:</span>
+                            <span className="text-muted-foreground">{c.text}</span>
+                            <span className="text-[9px] text-muted-foreground/60 ml-auto">{formatTimeAgo(c.created_at, 'short')}</span>
                           </div>
                         ))}
                       </div>
@@ -1290,26 +1290,26 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
                     {/* Expanded Real Comments List */}
                     {expandedComments[post.id] && (
-                      <div className="bg-[#001122]/90 rounded-xl p-3 border border-white/10 space-y-2.5 mt-2">
-                        <div className="flex items-center justify-between text-xs text-white/50 pb-1 border-b border-white/5">
+                      <div className="bg-secondary/40 rounded-lg p-3 border border-border space-y-2.5 mt-2">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground pb-1 border-b border-border/40">
                           <span>Comments ({comments.length})</span>
-                          {isGuest && <span className="text-amber-400 text-[11px]">Sign in to leave a comment</span>}
+                          {isGuest && <span className="text-amber-600 dark:text-amber-400 text-[11px]">Sign in to leave a comment</span>}
                         </div>
 
                         <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
                           {comments.length === 0 ? (
-                            <p className="text-[11px] text-white/40 italic py-1">No comments yet. Start the conversation!</p>
+                            <p className="text-[11px] text-muted-foreground italic py-1">No comments yet. Start the conversation!</p>
                           ) : (
                             comments.map((comm) => (
-                              <div key={comm.id} className="text-xs bg-[#001F3F]/60 p-2.5 rounded-xl border border-white/5 flex items-start justify-between gap-2">
+                              <div key={comm.id} className="text-xs bg-card p-2.5 rounded-lg border border-border flex items-start justify-between gap-2">
                                 <div className="space-y-0.5">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="font-bold text-white text-xs">{comm.user_name}</span>
-                                    <span className="text-[10px] text-white/50">{comm.user_handle}</span>
+                                    <span className="font-semibold text-foreground text-xs">{comm.user_name}</span>
+                                    <span className="text-[10px] text-muted-foreground">{comm.user_handle}</span>
                                   </div>
-                                  <p className="text-white/90 text-xs">{comm.text}</p>
+                                  <p className="text-foreground text-xs">{comm.text}</p>
                                 </div>
-                                <span className="text-[9px] text-white/40 shrink-0">
+                                <span className="text-[9px] text-muted-foreground shrink-0">
                                   {formatTimeAgo(comm.created_at, 'short')}
                                 </span>
                               </div>
@@ -1319,12 +1319,12 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                       </div>
                     )}
 
-                    {/* Add Comment Input Bar (Always ready like Instagram) */}
-                    <form onSubmit={(e) => handleAddPostComment(post.id, e)} className="flex items-center gap-2 pt-2 border-t border-white/10">
+                    {/* Add Comment Input Bar */}
+                    <form onSubmit={(e) => handleAddPostComment(post.id, e)} className="flex items-center gap-2 pt-2 border-t border-border/40">
                       <img
                         src={currentUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
                         alt={currentUser.full_name}
-                        className="w-7 h-7 rounded-full object-cover border border-white/20 shrink-0"
+                        className="w-7 h-7 rounded-full object-cover border border-border shrink-0"
                       />
                       <input
                         type="text"
@@ -1332,13 +1332,13 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                         onChange={(e) => setCommentInputMap(prev => ({ ...prev, [post.id]: e.target.value }))}
                         placeholder={isGuest ? "Sign in to join the conversation..." : `Add a comment as ${currentUser.handle || 'user'}...`}
                         disabled={isGuest}
-                        className="flex-1 bg-[#001122] border border-white/10 rounded-full px-3.5 py-1.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
+                        className="flex-1 bg-secondary/70 border border-border rounded-lg px-3.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary disabled:opacity-50"
                       />
                       {commentInputMap[post.id]?.trim() ? (
                         <button
                           type="submit"
                           disabled={isGuest}
-                          className="px-3 py-1 bg-[#D4AF37] hover:bg-[#e5c158] text-[#001F3F] rounded-full text-xs font-bold transition-all shadow disabled:opacity-50 shrink-0"
+                          className="px-3 py-1 bg-primary hover:opacity-90 text-primary-foreground rounded-lg text-xs font-semibold transition-all shadow-xs disabled:opacity-50 shrink-0"
                         >
                           Post
                         </button>
@@ -1381,12 +1381,12 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
         <div className="space-y-4">
           
           {/* Submit Prayer CTA Bar */}
-          <div className="bg-[#001F3F] border border-[#D4AF37]/40 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-md">
+          <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-3 shadow-sm">
             <div>
-              <h3 className="font-bold text-sm text-[#D4AF37]">
+              <h3 className="font-bold text-sm text-foreground">
                 Have a burden or believing God for a miracle?
               </h3>
-              <p className="text-xs text-white/70">
+              <p className="text-xs text-muted-foreground">
                 Submit your request. Apostle Joe Daniels & intercessors pray over every altar request.
               </p>
             </div>
@@ -1399,7 +1399,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 }
                 setShowPrayerModal(true);
               }}
-              className="px-3.5 py-2 rounded-xl bg-[#D4AF37] hover:bg-[#c49f2f] text-[#001F3F] text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-md transition-all"
+              className="px-3.5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-sm transition-all"
             >
               <Plus className="w-4 h-4" />
               <span>Submit Request</span>
@@ -1411,72 +1411,72 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             {prayerList.map((prayer) => (
               <div
                 key={prayer.id}
-                className="bg-[#001F3F] border border-white/10 rounded-2xl p-4 space-y-3 shadow-sm"
+                className="bg-card border border-border rounded-xl p-4 space-y-3 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-[#001122] border border-[#D4AF37]/30 flex items-center justify-center text-[#D4AF37] text-xs font-bold">
+                    <div className="w-8 h-8 rounded-lg bg-secondary border border-border flex items-center justify-center text-primary text-xs font-bold">
                       {prayer.is_anonymous ? '?' : prayer.user_name[0]}
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-xs sm:text-sm text-white">
+                        <span className="font-bold text-xs sm:text-sm text-foreground">
                           {prayer.is_anonymous ? 'Anonymous Covenant Partner' : prayer.user_name}
                         </span>
                         {prayer.is_answered && (
-                          <span className="px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold">
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
                             ✓ Answered Prayer
                           </span>
                         )}
                       </div>
-                      <span className="text-[11px] text-[#D4AF37] font-medium">
+                      <span className="text-[11px] text-primary font-medium">
                         Tag: {prayer.category}
                       </span>
                     </div>
                   </div>
 
-                  <span className="text-[10px] text-white/40">
+                  <span className="text-[10px] text-muted-foreground">
                     {new Date(prayer.created_at).toLocaleDateString()}
                   </span>
                 </div>
 
                 {/* Request Body */}
-                <p className="text-xs text-white/80 leading-relaxed bg-[#001122] p-3 rounded-xl border border-white/5">
+                <p className="text-xs text-foreground/90 leading-relaxed bg-secondary/50 p-3 rounded-lg border border-border">
                   "{prayer.request_text}"
                 </p>
 
                 {/* Apostle Joe Daniels Prophetic Note if present */}
                 {prayer.apostle_notes && (
-                  <div className="bg-[#D4AF37]/10 border border-[#D4AF37]/30 rounded-xl p-2.5 text-xs text-[#D4AF37] flex items-start gap-2">
-                    <Shield className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
+                  <div className="bg-primary/10 border border-primary/25 rounded-lg p-2.5 text-xs text-foreground flex items-start gap-2">
+                    <Shield className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold">Apostle Joe Daniels' Decree:</span>{' '}
+                      <span className="font-bold text-primary">Apostle Joe Daniels' Decree:</span>{' '}
                       {prayer.apostle_notes}
                     </div>
                   </div>
                 )}
 
                 {/* Actions Footer */}
-                <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                <div className="flex items-center justify-between pt-1 border-t border-border">
                   <button
                     id={`btn-pray-agree-${prayer.id}`}
                     onClick={() => handlePrayerCountIncrement(prayer.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       prayer.user_prayed
-                        ? 'bg-[#D4AF37] text-[#001F3F] shadow-sm'
-                        : 'bg-white/10 text-white hover:bg-white/15'
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
                     }`}
                   >
                     <Heart className={`w-3.5 h-3.5 ${prayer.user_prayed ? 'fill-current' : ''}`} />
                     <span>{prayer.user_prayed ? 'Agreed in Prayer' : 'I Prayed For You'}</span>
-                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10 dark:bg-white/10">
                       {prayer.prayer_count}
                     </span>
                   </button>
 
                   <button
                     onClick={() => handleSharePrayerWhatsApp(prayer)}
-                    className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 font-semibold"
+                    className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 hover:opacity-80 font-semibold"
                   >
                     <Share2 className="w-3.5 h-3.5" />
                     <span>Share to Cell</span>
@@ -1493,20 +1493,20 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       {/* 4. SUB-TAB: CELL GROUPS */}
       {activeSubTab === 'groups' && (
         (currentUser?.role === 'guest' || currentUser?.id === 'usr_guest' || currentUser?.id?.startsWith('usr_guest')) ? (
-          <div className="p-8 bg-[#001830] border border-[#D4AF37]/30 rounded-3xl text-center space-y-4 my-4 max-w-lg mx-auto">
-            <div className="w-14 h-14 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/40 flex items-center justify-center mx-auto text-[#D4AF37]">
+          <div className="p-8 bg-card border border-border rounded-2xl text-center space-y-4 my-4 max-w-lg mx-auto shadow-sm">
+            <div className="w-14 h-14 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto text-primary">
               <Users className="w-7 h-7" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-white font-serif-church font-bold text-lg">Fellowship Groups Are Protected</h3>
-              <p className="text-xs text-white/70 leading-relaxed">
+              <h3 className="text-foreground font-serif-church font-bold text-lg">Fellowship Groups Are Protected</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 Cell ministrations, location branches, and youth fellowships are private community spaces reserved for verified Gateway Cathedral members. Please log in or create an account to view and participate in church groups.
               </p>
             </div>
             <button
               type="button"
               onClick={() => onRequireAuth()}
-              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#D4AF37] to-amber-400 text-[#001F3F] font-bold text-xs shadow-lg hover:brightness-110 transition-all cursor-pointer inline-flex items-center gap-2"
+              className="px-6 py-2.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs shadow-sm transition-all cursor-pointer inline-flex items-center gap-2"
             >
               <LogIn className="w-4 h-4" />
               <span>Log In to View Groups</span>
@@ -1519,10 +1519,10 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
               <button
                 key={cat}
                 onClick={() => setSelectedGroupCategory(cat)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold shrink-0 transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-all ${
                   selectedGroupCategory === cat
-                    ? 'bg-[#D4AF37] text-[#001F3F] font-bold'
-                    : 'bg-[#001F3F] border border-white/10 text-white/70 hover:text-white'
+                    ? 'bg-primary text-primary-foreground font-bold shadow-sm'
+                    : 'bg-card border border-border text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {cat}
@@ -1534,33 +1534,33 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             {filteredGroups.map(group => (
               <div
                 key={group.id}
-                className="bg-[#001F3F] border border-white/10 rounded-2xl p-4 space-y-3 shadow-sm flex flex-col justify-between"
+                className="bg-card border border-border rounded-xl p-4 space-y-3 shadow-sm flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="px-2 py-0.5 rounded-full bg-[#D4AF37]/20 text-[#D4AF37] text-[10px] font-bold">
+                    <span className="px-2 py-0.5 rounded-md bg-primary/15 text-primary text-[10px] font-bold">
                       {group.category}
                     </span>
-                    <span className="text-[11px] text-white/50">{group.member_count} Members</span>
+                    <span className="text-[11px] text-muted-foreground">{group.member_count} Members</span>
                   </div>
-                  <h4 className="font-bold text-sm text-white mb-1">{group.name}</h4>
-                  <p className="text-xs text-white/70 mb-2">{group.description}</p>
+                  <h4 className="font-bold text-sm text-foreground mb-1">{group.name}</h4>
+                  <p className="text-xs text-muted-foreground mb-2">{group.description}</p>
                   
-                  <div className="space-y-1 text-xs text-white/60">
+                  <div className="space-y-1 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-[#D4AF37]" />
-                      <span>{group.location}</span>
+                      <MapPin className="w-3.5 h-3.5 text-primary" />
+                      <span className="text-foreground">{group.location}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-[#D4AF37]" />
-                      <span>{group.meeting_time}</span>
+                      <Clock className="w-3.5 h-3.5 text-primary" />
+                      <span className="text-foreground">{group.meeting_time}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
-                  <div className="text-xs text-white/60 truncate">
-                    Leader: <strong className="text-white">{group.leader_name}</strong>
+                <div className="pt-2 border-t border-border flex items-center justify-between gap-2">
+                  <div className="text-xs text-muted-foreground truncate">
+                    Leader: <strong className="text-foreground">{group.leader_name}</strong>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {group.joined ? (
@@ -1572,7 +1572,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                               onOpenGroupChat(group.id);
                             }
                           }}
-                          className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all flex items-center gap-1"
+                          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all flex items-center gap-1"
                           title="Open Group Chat"
                         >
                           <MessageCircle className="w-3.5 h-3.5" />
@@ -1581,7 +1581,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                         <button
                           id={`btn-exit-group-${group.id}`}
                           onClick={() => handleExitGroup(group)}
-                          className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-300 hover:text-rose-100 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 flex items-center gap-1 transition-all"
+                          className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 flex items-center gap-1 transition-all"
                           title="Exit Group"
                         >
                           <LogOut className="w-3.5 h-3.5" />
@@ -1592,7 +1592,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                       <button
                         id={`btn-join-group-${group.id}`}
                         onClick={() => handleInitiateJoinGroup(group)}
-                        className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#D4AF37] hover:bg-[#c49f2e] text-[#001F3F] shadow-sm hover:scale-105 active:scale-95 transition-all flex items-center gap-1"
+                        className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all flex items-center gap-1"
                       >
                         <UserPlus className="w-3.5 h-3.5" />
                         <span>Join Group</span>
@@ -1609,11 +1609,11 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             const grp = groupList.find(g => g.id === joiningGroupId);
             if (!grp) return null;
             return (
-              <div className="fixed inset-0 z-50 bg-[#000d1a]/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
-                <div className="bg-[#00172e] border border-[#D4AF37]/50 rounded-3xl p-5 sm:p-7 max-w-sm w-[92vw] max-h-[85vh] overflow-y-auto text-center space-y-4 shadow-2xl relative animate-in zoom-in-95 duration-200">
+              <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+                <div className="bg-card border border-border rounded-2xl p-5 sm:p-7 max-w-sm w-[92vw] max-h-[85vh] overflow-y-auto text-center space-y-4 shadow-xl relative animate-in zoom-in-95 duration-200">
                   <button
                     onClick={() => setJoiningGroupId(null)}
-                    className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                    className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
                     title="Close"
                   >
                     <X className="w-4 h-4" />
@@ -1623,40 +1623,40 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                       <img
                         src={grp.image_url}
                         alt={grp.name}
-                        className="w-20 h-20 rounded-full object-cover border-2 border-[#D4AF37] shadow-lg mx-auto"
+                        className="w-20 h-20 rounded-xl object-cover border-2 border-primary shadow mx-auto"
                       />
                     ) : (
-                      <div className="w-20 h-20 rounded-full bg-[#002244] border-2 border-[#D4AF37] flex items-center justify-center text-[#D4AF37] mx-auto text-xl font-bold">
+                      <div className="w-20 h-20 rounded-xl bg-secondary border-2 border-primary flex items-center justify-center text-primary mx-auto text-xl font-bold">
                         {grp.name.charAt(0)}
                       </div>
                     )}
                     {joiningStep === 'joining' ? (
-                      <div className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-[#00172e] border border-[#D4AF37] flex items-center justify-center shadow-md">
-                        <Loader2 className="w-4 h-4 text-[#D4AF37] animate-spin" />
+                      <div className="absolute bottom-0 right-0 w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center shadow-md">
+                        <Loader2 className="w-4 h-4 text-primary animate-spin" />
                       </div>
                     ) : (
-                      <div className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md animate-in zoom-in">
+                      <div className="absolute bottom-0 right-0 w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center shadow-md animate-in zoom-in">
                         <Check className="w-4 h-4" />
                       </div>
                     )}
                   </div>
 
                   <div className="space-y-1">
-                    <span className="px-2.5 py-0.5 rounded-full bg-[#D4AF37]/20 text-[#D4AF37] text-[10px] font-bold tracking-wide uppercase">
+                    <span className="px-2.5 py-0.5 rounded-md bg-primary/15 text-primary text-[10px] font-bold tracking-wide uppercase">
                       {grp.category}
                     </span>
-                    <h3 className="text-base font-bold text-white">{grp.name}</h3>
-                    <p className="text-xs text-white/60 line-clamp-2">{grp.description}</p>
+                    <h3 className="text-base font-bold text-foreground">{grp.name}</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2">{grp.description}</p>
                   </div>
 
-                  <div className="bg-[#001222] border border-white/5 rounded-2xl p-3.5 flex items-center justify-center gap-2.5">
+                  <div className="bg-secondary/60 border border-border rounded-xl p-3.5 flex items-center justify-center gap-2.5">
                     {joiningStep === 'joining' ? (
-                      <div className="flex items-center gap-2 text-xs text-[#D4AF37] font-semibold">
-                        <Loader2 className="w-4 h-4 animate-spin text-[#D4AF37]" />
+                      <div className="flex items-center gap-2 text-xs text-primary font-semibold">
+                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
                         <span>Joining group...</span>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 text-xs text-emerald-400 font-bold">
+                      <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 font-bold">
                         <Check className="w-4 h-4" />
                         <span>Joined! Redirecting to group chat...</span>
                       </div>
@@ -1672,34 +1672,34 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             const grp = groupList.find(g => g.id === exitingGroupId);
             if (!grp) return null;
             return (
-              <div className="fixed inset-0 z-50 bg-[#000d1a]/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
-                <div className="bg-[#00172e] border border-rose-500/40 rounded-3xl p-5 sm:p-6 max-w-sm w-[92vw] max-h-[85vh] overflow-y-auto space-y-4 shadow-2xl relative animate-in zoom-in-95 duration-150">
+              <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+                <div className="bg-card border border-destructive/40 rounded-2xl p-5 sm:p-6 max-w-sm w-[92vw] max-h-[85vh] overflow-y-auto space-y-4 shadow-xl relative animate-in zoom-in-95 duration-150">
                   <button
                     onClick={() => setExitingGroupId(null)}
-                    className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                    className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
                     title="Close"
                   >
                     <X className="w-4 h-4" />
                   </button>
-                  <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center mx-auto mt-1">
+                  <div className="w-12 h-12 rounded-xl bg-destructive/15 border border-destructive/30 text-destructive flex items-center justify-center mx-auto mt-1">
                     <LogOut className="w-6 h-6" />
                   </div>
                   <div className="text-center space-y-1">
-                    <h4 className="font-bold text-base text-white">Exit {grp.name}?</h4>
-                    <p className="text-xs text-white/60">
+                    <h4 className="font-bold text-base text-foreground">Exit {grp.name}?</h4>
+                    <p className="text-xs text-muted-foreground">
                       You will leave this fellowship group and no longer receive group messages. You can rejoin at any time.
                     </p>
                   </div>
                   <div className="flex items-center gap-2 pt-2">
                     <button
                       onClick={() => setExitingGroupId(null)}
-                      className="flex-1 py-2.5 rounded-xl border border-white/10 text-xs font-bold text-white/80 hover:bg-white/10 transition-colors"
+                      className="flex-1 py-2.5 rounded-lg border border-border text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={() => handleConfirmExitGroup(grp.id)}
-                      className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white transition-colors"
+                      className="flex-1 py-2.5 rounded-lg bg-destructive hover:bg-destructive/90 text-xs font-bold text-destructive-foreground transition-colors"
                     >
                       Exit Group
                     </button>
@@ -1722,13 +1722,13 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             return (
               <div
                 key={event.id}
-                className={`bg-[#001F3F] border rounded-2xl overflow-hidden shadow-lg flex flex-col md:flex-row transition-all ${
+                className={`bg-card border rounded-xl overflow-hidden shadow-sm flex flex-col md:flex-row transition-all ${
                   countdown.isInSession 
-                    ? 'border-emerald-500/70 ring-1 ring-emerald-500/50 shadow-emerald-950/40' 
-                    : 'border-white/10 hover:border-white/20'
+                    ? 'border-emerald-500/70 ring-1 ring-emerald-500/40 shadow-sm' 
+                    : 'border-border hover:border-border/80'
                 }`}
               >
-                <div className="relative w-full md:w-56 h-44 md:h-auto shrink-0 overflow-hidden">
+                <div className="relative w-full md:w-56 h-44 md:h-auto shrink-0 overflow-hidden bg-secondary">
                   <img
                     src={event.banner_url}
                     alt={event.title}
@@ -1737,12 +1737,12 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   {/* Status Overlay Badge */}
                   <div className="absolute top-2.5 left-2.5">
                     {countdown.isInSession ? (
-                      <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-lg animate-pulse">
+                      <span className="px-2.5 py-1 rounded-md bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow animate-pulse">
                         <Radio className="w-3.5 h-3.5" />
                         <span>In Session</span>
                       </span>
                     ) : (
-                      <span className="px-2.5 py-1 rounded-full bg-[#001428]/90 backdrop-blur-md border border-[#D4AF37]/50 text-[#D4AF37] font-bold text-xs flex items-center gap-1.5 shadow-md">
+                      <span className="px-2.5 py-1 rounded-md bg-background/90 backdrop-blur-md border border-border text-primary font-bold text-xs flex items-center gap-1.5 shadow-sm">
                         <Clock className="w-3 h-3" />
                         <span>Upcoming</span>
                       </span>
@@ -1751,7 +1751,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
                   {isPermanent && (
                     <div className="absolute bottom-2.5 left-2.5">
-                      <span className="px-2 py-0.5 rounded-md bg-[#D4AF37] text-[#001F3F] font-black text-[10px] uppercase tracking-wide shadow">
+                      <span className="px-2 py-0.5 rounded-md bg-primary text-primary-foreground font-bold text-[10px] uppercase tracking-wide shadow-sm">
                         Permanent Service
                       </span>
                     </div>
@@ -1761,38 +1761,38 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between space-y-3">
                   <div>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-widest">{event.category}</span>
+                      <span className="text-[10px] font-bold text-primary uppercase tracking-widest">{event.category}</span>
                       {countdown.isInSession ? (
-                        <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
                           <span>Service Live Now</span>
                         </span>
                       ) : (
-                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-black/40 border border-[#D4AF37]/40 text-[#D4AF37] font-mono text-xs font-bold">
-                          <Timer className="w-3.5 h-3.5 text-[#D4AF37]" />
+                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-secondary border border-border text-foreground font-mono text-xs font-bold">
+                          <Timer className="w-3.5 h-3.5 text-primary" />
                           <span>{countdown.formatted}</span>
                         </div>
                       )}
                     </div>
 
-                    <h4 className="font-bold text-base text-white mt-1.5">{event.title}</h4>
-                    <p className="text-xs text-white/70 line-clamp-2 mt-1 leading-relaxed">{event.description}</p>
+                    <h4 className="font-bold text-base text-foreground mt-1.5">{event.title}</h4>
+                    <p className="text-xs text-muted-foreground line-clamp-2 mt-1 leading-relaxed">{event.description}</p>
                     
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-white/60 mt-3 pt-2 border-t border-white/5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-muted-foreground mt-3 pt-2 border-t border-border">
                       <div className="flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
-                        <span className="text-white/90 font-medium">{event.date} • {event.time}</span>
+                        <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <span className="text-foreground font-medium">{event.date} • {event.time}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
-                        <span className="truncate text-white/90">{event.location}</span>
+                        <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <span className="truncate text-foreground">{event.location}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-white/5 flex flex-wrap items-center justify-between gap-2.5">
-                    <span className="text-xs text-white/60">
-                      Minister: <strong className="text-white">{event.speaker}</strong>
+                  <div className="pt-3 border-t border-border flex flex-wrap items-center justify-between gap-2.5">
+                    <span className="text-xs text-muted-foreground">
+                      Minister: <strong className="text-foreground">{event.speaker}</strong>
                     </span>
 
                     <div className="flex flex-wrap items-center gap-2">
@@ -1801,7 +1801,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                         <button
                           id={`btn-join-stream-${event.id}`}
                           onClick={() => handleJoinStream(event)}
-                          className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-600/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 animate-pulse"
+                          className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
                         >
                           <Radio className="w-4 h-4" />
                           <span>Join Stream</span>
@@ -1814,20 +1814,20 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                           <button
                             id={`btn-request-location-${event.id}`}
                             onClick={() => handleRequestLocation(event)}
-                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 border border-white/15 text-white flex items-center gap-1.5 transition-all hover:border-[#D4AF37]/50 shadow-sm"
+                            className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-secondary hover:bg-secondary/80 border border-border text-foreground flex items-center gap-1.5 transition-all shadow-sm"
                             title="Request directions from your location to church for this service"
                           >
-                            <Compass className="w-3.5 h-3.5 text-[#D4AF37]" />
+                            <Compass className="w-3.5 h-3.5 text-primary" />
                             <span>Request Location</span>
                           </button>
 
                           <button
                             id={`btn-go-virtual-${event.id}`}
                             onClick={() => handleGoVirtual(event)}
-                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#00172e] hover:bg-[#002244] border border-blue-500/40 text-blue-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm"
+                            className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-secondary hover:bg-secondary/80 border border-border text-foreground flex items-center gap-1.5 transition-all shadow-sm"
                             title="Set reminder to stream online when service starts"
                           >
-                            <Radio className="w-3.5 h-3.5 text-blue-400" />
+                            <Radio className="w-3.5 h-3.5 text-primary" />
                             <span>Go Virtual</span>
                           </button>
                         </>
@@ -1843,20 +1843,20 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
       {/* MODAL: INSTAGRAM-STYLE CREATE POST (LOCAL STORAGE / URL / PRESETS) */}
       {showCreatePostModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-[#001F3F] border border-[#D4AF37]/40 rounded-2xl p-4 sm:p-5 w-full max-w-lg space-y-4 shadow-2xl my-auto">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-card border border-border rounded-xl p-4 sm:p-5 w-full max-w-lg space-y-4 shadow-xl my-auto">
+            <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-[#D4AF37] text-[#001F3F] flex items-center justify-center font-bold">
+                <div className="w-7 h-7 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold">
                   <Camera className="w-4 h-4" />
                 </div>
-                <h3 className="font-bold text-sm sm:text-base text-white">
+                <h3 className="font-bold text-sm sm:text-base text-foreground">
                   Create New Community Post / Testimony
                 </h3>
               </div>
               <button
                 onClick={() => setShowCreatePostModal(false)}
-                className="text-white/60 hover:text-white p-1 rounded-lg"
+                className="text-muted-foreground hover:text-foreground p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1865,16 +1865,16 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             <form onSubmit={handleCreatePost} className="space-y-3.5">
               {/* Media Selection Tabs (Only Mr Daniels gets presets/URL, regular members get device storage only) */}
               <div>
-                <label className="block text-xs font-semibold text-white/80 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Media Source
                 </label>
                 {isMrDaniels ? (
-                  <div className="grid grid-cols-3 gap-1 bg-[#001122] p-1 rounded-xl border border-white/10">
+                  <div className="grid grid-cols-3 gap-1 bg-secondary/50 p-1 rounded-lg border border-border">
                     <button
                       type="button"
                       onClick={() => setUploadMode('local')}
-                      className={`py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                        uploadMode === 'local' ? 'bg-[#D4AF37] text-[#001F3F] font-bold' : 'text-white/70 hover:text-white'
+                      className={`py-1.5 text-xs font-semibold rounded-md flex items-center justify-center gap-1.5 transition-all ${
+                        uploadMode === 'local' ? 'bg-primary text-primary-foreground font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
                       <UploadCloud className="w-3.5 h-3.5" />
@@ -1884,8 +1884,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     <button
                       type="button"
                       onClick={() => setUploadMode('url')}
-                      className={`py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                        uploadMode === 'url' ? 'bg-[#D4AF37] text-[#001F3F] font-bold' : 'text-white/70 hover:text-white'
+                      className={`py-1.5 text-xs font-semibold rounded-md flex items-center justify-center gap-1.5 transition-all ${
+                        uploadMode === 'url' ? 'bg-primary text-primary-foreground font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
                       <LinkIcon className="w-3.5 h-3.5" />
@@ -1895,8 +1895,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     <button
                       type="button"
                       onClick={() => setUploadMode('presets')}
-                      className={`py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                        uploadMode === 'presets' ? 'bg-[#D4AF37] text-[#001F3F] font-bold' : 'text-white/70 hover:text-white'
+                      className={`py-1.5 text-xs font-semibold rounded-md flex items-center justify-center gap-1.5 transition-all ${
+                        uploadMode === 'presets' ? 'bg-primary text-primary-foreground font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
                       <Sparkles className="w-3.5 h-3.5" />
@@ -1904,8 +1904,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     </button>
                   </div>
                 ) : (
-                  <div className="bg-[#001122] p-2 rounded-xl border border-white/10 text-xs text-white/70 flex items-center gap-2">
-                    <UploadCloud className="w-4 h-4 text-[#D4AF37]" />
+                  <div className="bg-secondary/50 p-2.5 rounded-lg border border-border text-xs text-muted-foreground flex items-center gap-2">
+                    <UploadCloud className="w-4 h-4 text-primary" />
                     <span>Upload an image directly from your local storage / device</span>
                   </div>
                 )}
@@ -1923,7 +1923,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   />
                   
                   {localImagePreview ? (
-                    <div className="relative rounded-xl overflow-hidden border border-[#D4AF37]/50 max-h-52 bg-black flex items-center justify-center">
+                    <div className="relative rounded-lg overflow-hidden border border-border max-h-52 bg-black flex items-center justify-center">
                       <img src={localImagePreview} alt="Preview" className="w-full object-cover max-h-52" />
                       <button
                         type="button"
@@ -1932,7 +1932,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                           setPostImageUrl('');
                           if (fileInputRef.current) fileInputRef.current.value = '';
                         }}
-                        className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-rose-500 rounded-full text-white text-xs"
+                        className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-destructive rounded-full text-white text-xs transition-colors"
                         title="Remove image"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -1941,11 +1941,11 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   ) : (
                     <div
                       onClick={() => fileInputRef.current?.click()}
-                      className="border-2 border-dashed border-white/20 hover:border-[#D4AF37]/60 rounded-xl p-6 text-center cursor-pointer bg-[#001122]/60 hover:bg-[#001122] transition-all"
+                      className="border-2 border-dashed border-border hover:border-primary/60 rounded-xl p-6 text-center cursor-pointer bg-secondary/30 hover:bg-secondary/60 transition-all"
                     >
-                      <UploadCloud className="w-8 h-8 text-[#D4AF37] mx-auto mb-2" />
-                      <div className="text-xs font-bold text-white">Click or drag image from your device</div>
-                      <div className="text-[11px] text-white/50 mt-0.5">Supports PNG, JPG, WEBP, GIF</div>
+                      <UploadCloud className="w-8 h-8 text-primary mx-auto mb-2" />
+                      <div className="text-xs font-bold text-foreground">Click or drag image from your device</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">Supports PNG, JPG, WEBP, GIF</div>
                     </div>
                   )}
                 </div>
@@ -1959,10 +1959,10 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     value={postImageUrl}
                     onChange={e => setPostImageUrl(e.target.value)}
                     placeholder="Paste direct image URL (https://...)"
-                    className="w-full bg-[#001122] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:border-[#D4AF37] outline-none"
+                    className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary outline-none"
                   />
                   {postImageUrl && (
-                    <div className="rounded-xl overflow-hidden border border-white/10 max-h-44 bg-black flex items-center justify-center">
+                    <div className="rounded-lg overflow-hidden border border-border max-h-44 bg-black flex items-center justify-center">
                       <img src={postImageUrl} alt="Preview" className="w-full object-cover max-h-44" />
                     </div>
                   )}
@@ -1985,8 +1985,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                         setPostImageUrl(photo.url);
                         setLocalImagePreview(null);
                       }}
-                      className={`relative rounded-xl overflow-hidden border-2 aspect-video transition-all ${
-                        postImageUrl === photo.url ? 'border-[#D4AF37] ring-2 ring-[#D4AF37]/50' : 'border-white/10 opacity-70 hover:opacity-100'
+                      className={`relative rounded-lg overflow-hidden border-2 aspect-video transition-all ${
+                        postImageUrl === photo.url ? 'border-primary ring-2 ring-primary/40' : 'border-border opacity-70 hover:opacity-100'
                       }`}
                     >
                       <img src={photo.url} alt={photo.label} className="w-full h-full object-cover" />
@@ -2001,13 +2001,13 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
               {/* Title, Category & Scripture Tag */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-white/80 mb-1">
+                  <label className="block text-xs font-semibold text-foreground/80 mb-1">
                     Category
                   </label>
                   <select
                     value={postCategory}
                     onChange={e => setPostCategory(e.target.value as any)}
-                    className="w-full bg-[#001122] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:border-[#D4AF37] outline-none"
+                    className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:border-primary outline-none"
                   >
                     <option value="Praise & Testimony">Praise & Testimony</option>
                     <option value="Prophetic Word">Prophetic Word</option>
@@ -2019,7 +2019,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-white/80 mb-1">
+                  <label className="block text-xs font-semibold text-foreground/80 mb-1">
                     Scripture Reference Tag
                   </label>
                   <input
@@ -2027,14 +2027,14 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     value={postScriptureTag}
                     onChange={e => setPostScriptureTag(e.target.value)}
                     placeholder="e.g. 1 Kings 18:46"
-                    className="w-full bg-[#001122] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:border-[#D4AF37] outline-none"
+                    className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary outline-none"
                   />
                 </div>
               </div>
 
               {/* Caption & Content */}
               <div>
-                <label className="block text-xs font-semibold text-white/80 mb-1">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1">
                   Post Caption / Testimony Message
                 </label>
                 <textarea
@@ -2043,22 +2043,22 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   value={postContent}
                   onChange={e => setPostContent(e.target.value)}
                   placeholder="Share what the Lord has done or write your caption..."
-                  className="w-full bg-[#001122] border border-white/15 rounded-xl p-3 text-xs text-white focus:border-[#D4AF37] outline-none"
+                  className="w-full bg-secondary border border-border rounded-lg p-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary outline-none"
                 />
               </div>
 
               {/* Footer Actions */}
-              <div className="flex justify-end gap-2 pt-1 border-t border-white/10">
+              <div className="flex justify-end gap-2 pt-1 border-t border-border">
                 <button
                   type="button"
                   onClick={() => setShowCreatePostModal(false)}
-                  className="px-4 py-2 rounded-xl bg-white/10 text-white text-xs font-semibold hover:bg-white/15"
+                  className="px-4 py-2 rounded-lg bg-secondary text-foreground text-xs font-semibold hover:bg-secondary/80"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#D4AF37] hover:bg-[#c49f2f] text-[#001F3F] text-xs font-bold flex items-center gap-1.5 shadow-md"
+                  className="px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold flex items-center gap-1.5 shadow-sm"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>Publish to Feed</span>
@@ -2071,22 +2071,22 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
       {/* MODAL: PRAYER REQUEST SUBMISSION */}
       {showPrayerModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-[#001F3F] border border-[#D4AF37]/40 rounded-2xl p-4 sm:p-5 w-full max-w-md space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-card border border-border rounded-xl p-4 sm:p-5 w-full max-w-md space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-base text-[#D4AF37]">Submit Altar Prayer Request</h3>
-              <button onClick={() => setShowPrayerModal(false)} className="text-white/60 hover:text-white">
+              <h3 className="font-bold text-base text-foreground">Submit Altar Prayer Request</h3>
+              <button onClick={() => setShowPrayerModal(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleCreatePrayer} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-white/80 mb-1">Category</label>
+                <label className="block text-xs font-semibold text-foreground/80 mb-1">Category</label>
                 <select
                   value={prayerCategory}
                   onChange={e => setPrayerCategory(e.target.value as any)}
-                  className="w-full bg-[#001122] border border-white/15 rounded-xl px-3 py-2 text-xs text-white"
+                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:border-primary outline-none"
                 >
                   <option value="Healing">Healing & Deliverance</option>
                   <option value="Financial Breakthrough">Financial & Career Breakthrough</option>
@@ -2097,14 +2097,14 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-white/80 mb-1">Your Prayer Request</label>
+                <label className="block text-xs font-semibold text-foreground/80 mb-1">Your Prayer Request</label>
                 <textarea
                   rows={4}
                   required
                   value={prayerText}
                   onChange={e => setPrayerText(e.target.value)}
                   placeholder="Describe your prayer petition..."
-                  className="w-full bg-[#001122] border border-white/15 rounded-xl p-3 text-xs text-white"
+                  className="w-full bg-secondary border border-border rounded-lg p-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary outline-none"
                 />
               </div>
 
@@ -2114,9 +2114,9 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   id="chk-anon"
                   checked={isAnonymous}
                   onChange={e => setIsAnonymous(e.target.checked)}
-                  className="rounded accent-[#D4AF37]"
+                  className="rounded accent-primary"
                 />
-                <label htmlFor="chk-anon" className="text-xs text-white/70">
+                <label htmlFor="chk-anon" className="text-xs text-muted-foreground">
                   Keep my name anonymous to public prayer wall
                 </label>
               </div>
@@ -2125,13 +2125,13 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowPrayerModal(false)}
-                  className="px-4 py-2 rounded-xl bg-white/10 text-white text-xs font-semibold"
+                  className="px-4 py-2 rounded-lg bg-secondary text-foreground text-xs font-semibold hover:bg-secondary/80"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-[#D4AF37] text-[#001F3F] text-xs font-bold"
+                  className="px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold"
                 >
                   Submit to Altar
                 </button>
@@ -2143,16 +2143,16 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
       {/* Event Feedback Toast Dialog */}
       {eventFeedbackToast && (
-        <div className="fixed inset-0 z-50 bg-[#000d1a]/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-[#00172e] border border-[#D4AF37]/50 rounded-2xl p-5 max-w-sm w-full space-y-3 shadow-2xl text-center">
-            <div className="w-12 h-12 rounded-2xl bg-[#D4AF37]/20 border border-[#D4AF37]/40 text-[#D4AF37] flex items-center justify-center mx-auto">
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-card border border-border rounded-xl p-5 max-w-sm w-full space-y-3 shadow-xl text-center">
+            <div className="w-12 h-12 rounded-xl bg-primary/15 border border-primary/30 text-primary flex items-center justify-center mx-auto">
               <Sparkles className="w-6 h-6" />
             </div>
-            <h4 className="font-bold text-base text-white">{eventFeedbackToast.title}</h4>
-            <p className="text-xs text-white/75 leading-relaxed">{eventFeedbackToast.message}</p>
+            <h4 className="font-bold text-base text-foreground">{eventFeedbackToast.title}</h4>
+            <p className="text-xs text-muted-foreground leading-relaxed">{eventFeedbackToast.message}</p>
             <button
               onClick={() => setEventFeedbackToast(null)}
-              className="w-full py-2.5 rounded-xl bg-[#D4AF37] hover:bg-amber-400 text-[#001F3F] font-bold text-xs transition-colors shadow-md"
+              className="w-full py-2.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs transition-colors shadow-sm"
             >
               Understood
             </button>
@@ -2257,13 +2257,13 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
       {/* INSTAGRAM LIKES MODAL (Real Accounts List) */}
       {activeLikesModalPost && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-[#001F3F] border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
-            <div className="p-3.5 border-b border-white/10 flex items-center justify-between">
-              <span className="font-bold text-sm text-white">Likes</span>
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-card border border-border rounded-xl overflow-hidden shadow-xl">
+            <div className="p-3.5 border-b border-border flex items-center justify-between">
+              <span className="font-bold text-sm text-foreground">Likes</span>
               <button
                 onClick={() => setActiveLikesModalPost(null)}
-                className="text-white/60 hover:text-white p-1"
+                className="text-muted-foreground hover:text-foreground p-1"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2278,19 +2278,19 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 return displayLikers.map(user => {
                   const isFollowing = followingUsers[user.id];
                   return (
-                    <div key={user.id} className="flex items-center justify-between gap-2 p-1.5 rounded-xl hover:bg-white/5 transition-colors">
+                    <div key={user.id} className="flex items-center justify-between gap-2 p-1.5 rounded-lg hover:bg-secondary/60 transition-colors">
                       <div className="flex items-center gap-2.5">
                         <img
                           src={user.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
                           alt={user.full_name}
-                          className="w-10 h-10 rounded-full object-cover border border-white/10"
+                          className="w-10 h-10 rounded-full object-cover border border-border"
                         />
                         <div>
                           <div className="flex items-center gap-1">
-                            <span className="text-xs font-bold text-white">{user.full_name}</span>
+                            <span className="text-xs font-bold text-foreground">{user.full_name}</span>
                             {user.verified_badge && <VerifiedBadge type={user.verified_badge} size="xs" />}
                           </div>
-                          <p className="text-[11px] text-white/50">{user.handle}</p>
+                          <p className="text-[11px] text-muted-foreground">{user.handle}</p>
                         </div>
                       </div>
 
@@ -2299,8 +2299,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                           onClick={() => handleToggleFollow(user.id)}
                           className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
                             isFollowing
-                              ? 'bg-white/10 text-white/80 border border-white/20'
-                              : 'bg-[#D4AF37] text-[#001F3F] hover:bg-[#c49f2f]'
+                              ? 'bg-secondary text-foreground border border-border hover:bg-secondary/80'
+                              : 'bg-primary text-primary-foreground hover:bg-primary/90'
                           }`}
                         >
                           {isFollowing ? 'Following' : 'Follow'}
@@ -2317,14 +2317,14 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
       {/* POST OPTIONS ACTION SHEET */}
       {selectedPostOptions && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-[#001122] border border-white/10 rounded-2xl overflow-hidden shadow-2xl divide-y divide-white/10 text-center text-xs">
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-card border border-border rounded-xl overflow-hidden shadow-xl divide-y divide-border text-center text-xs">
             <button
               onClick={() => {
                 handleSharePostWhatsApp(selectedPostOptions);
                 setSelectedPostOptions(null);
               }}
-              className="w-full py-3.5 font-semibold text-emerald-400 hover:bg-white/5 flex items-center justify-center gap-2"
+              className="w-full py-3.5 font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-secondary/60 flex items-center justify-center gap-2"
             >
               <Send className="w-4 h-4" />
               <span>Share to WhatsApp</span>
@@ -2334,7 +2334,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 handleToggleSavePost(selectedPostOptions.id);
                 setSelectedPostOptions(null);
               }}
-              className="w-full py-3.5 font-semibold text-white hover:bg-white/5 flex items-center justify-center gap-2"
+              className="w-full py-3.5 font-semibold text-foreground hover:bg-secondary/60 flex items-center justify-center gap-2"
             >
               <Bookmark className="w-4 h-4" />
               <span>{savedPosts[selectedPostOptions.id] ? 'Remove from Saved' : 'Save Post'}</span>
@@ -2345,7 +2345,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   setPostToEditImage(selectedPostOptions);
                   setSelectedPostOptions(null);
                 }}
-                className="w-full py-3.5 font-semibold text-[#D4AF37] hover:bg-white/5 flex items-center justify-center gap-2"
+                className="w-full py-3.5 font-semibold text-primary hover:bg-secondary/60 flex items-center justify-center gap-2"
               >
                 <Camera className="w-4 h-4" />
                 <span>Change Post Photo</span>
@@ -2353,7 +2353,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             )}
             <button
               onClick={() => setSelectedPostOptions(null)}
-              className="w-full py-3.5 font-bold text-white/60 hover:text-white hover:bg-white/5"
+              className="w-full py-3.5 font-bold text-muted-foreground hover:text-foreground hover:bg-secondary/60"
             >
               Cancel
             </button>
