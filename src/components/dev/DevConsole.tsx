@@ -136,6 +136,13 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   const [isPingingSupabase, setIsPingingSupabase] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [backgroundMode, setBackgroundMode] = useState<'off' | 'matrix' | 'binary' | 'grid' | 'terminal' | 'neon' | 'wifi' | 'typing'>(() => {
+    if (typeof window === 'undefined') return 'matrix';
+    const saved = localStorage.getItem('gcz_dev_background_mode');
+    return saved === 'off' || saved === 'matrix' || saved === 'binary' || saved === 'grid' || saved === 'terminal' || saved === 'neon' || saved === 'wifi' || saved === 'typing'
+      ? saved
+      : 'matrix';
+  });
   const paynowConfig = PaynowService.getConfig();
   const supabaseConfig = StorageService.getSupabaseConfig();
   
@@ -149,13 +156,18 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   });
 
   const handleToggleCyberBackground = () => {
-    setShowCyberBackground(prev => {
-      const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('gcz_admin_cyber_bg', String(next));
-      }
+    setBackgroundMode(prev => {
+      const next = prev === 'off' ? 'matrix' : 'off';
+      setShowCyberBackground(next !== 'off');
+      localStorage.setItem('gcz_dev_background_mode', next);
       return next;
     });
+  };
+
+  const handleBackgroundModeChange = (mode: typeof backgroundMode) => {
+    setBackgroundMode(mode);
+    setShowCyberBackground(mode !== 'off');
+    localStorage.setItem('gcz_dev_background_mode', mode);
   };
   
   // Congregation Stream Tracking State (Who is streaming now & after stream ends with locations and contact details)
@@ -450,7 +462,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
     <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col overflow-hidden text-slate-100 font-sans isolate">
       
       {/* 0. Cyber-Futuristic Matrix / Binary Background (Strictly BEHIND all cards, tables and logs) */}
-      <AdminCyberBackground enabled={showCyberBackground} />
+      <AdminCyberBackground enabled={backgroundMode !== 'off'} mode={backgroundMode === 'off' ? 'matrix' : backgroundMode} />
 
       {/* 1. Header Bar - Fully Responsive */}
       <header className="relative z-20 bg-slate-900/90 backdrop-blur-md border-b border-purple-500/30 px-3 sm:px-4 py-3 sm:py-3.5 flex items-center justify-between shadow-lg shrink-0">
@@ -480,21 +492,25 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
 
         {/* Desktop Header Actions - Compact Icon Buttons */}
         <div className="hidden md:flex items-center gap-1.5">
-          {/* Cyber Futuristic Background Toggle */}
-          <button
-            type="button"
-            onClick={handleToggleCyberBackground}
-            title={showCyberBackground ? "Turn Cyber Background OFF" : "Turn Cyber Background ON"}
-            className={`px-2.5 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
-              showCyberBackground
-                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.25)]'
-                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:bg-slate-700'
-            }`}
-          >
-            <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden sm:inline">Matrix:</span>
-            <span className="text-[11px] uppercase">{showCyberBackground ? 'ON' : 'OFF'}</span>
-          </button>
+          <label className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[10px] font-mono text-emerald-300">
+            <Terminal className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">Background</span>
+            <select
+              value={backgroundMode}
+              onChange={event => handleBackgroundModeChange(event.target.value as typeof backgroundMode)}
+              className="bg-transparent text-emerald-200 font-bold outline-none cursor-pointer"
+              title="Choose developer console background animation"
+            >
+              <option value="off" className="bg-slate-900">Off</option>
+              <option value="matrix" className="bg-slate-900">Matrix Rain</option>
+              <option value="binary" className="bg-slate-900">Binary Flow</option>
+              <option value="grid" className="bg-slate-900">Glowing Grid</option>
+              <option value="terminal" className="bg-slate-900">Terminal Logs</option>
+              <option value="neon" className="bg-slate-900">Neon Pulse</option>
+              <option value="wifi" className="bg-slate-900">Wifi Bits</option>
+              <option value="typing" className="bg-slate-900">Typing Effects</option>
+            </select>
+          </label>
 
           <button
             onClick={() => setShowPaynowModal(true)}
@@ -522,19 +538,21 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
 
         {/* Mobile Header Actions (3-Dots Tag & Exit) */}
         <div className="flex md:hidden items-center gap-1.5 relative">
-          {/* Mobile Cyber Matrix Toggle */}
-          <button
-            type="button"
-            onClick={handleToggleCyberBackground}
-            title="Toggle Matrix FX"
-            className={`p-2 rounded-xl border text-xs font-mono font-bold transition-all ${
-              showCyberBackground
-                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
-                : 'bg-slate-800 text-slate-400 border-slate-700'
-            }`}
+          <select
+            value={backgroundMode}
+            onChange={event => handleBackgroundModeChange(event.target.value as typeof backgroundMode)}
+            title="Choose background animation"
+            className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-200 border border-emerald-500/50 text-[0px] outline-none"
           >
-            <Terminal className="w-4 h-4" />
-          </button>
+            <option value="off" className="bg-slate-900 text-xs">Off</option>
+            <option value="matrix" className="bg-slate-900 text-xs">Matrix Rain</option>
+            <option value="binary" className="bg-slate-900 text-xs">Binary Flow</option>
+            <option value="grid" className="bg-slate-900 text-xs">Glowing Grid</option>
+            <option value="terminal" className="bg-slate-900 text-xs">Terminal Logs</option>
+            <option value="neon" className="bg-slate-900 text-xs">Neon Pulse</option>
+            <option value="wifi" className="bg-slate-900 text-xs">Wifi Bits</option>
+            <option value="typing" className="bg-slate-900 text-xs">Typing Effects</option>
+          </select>
 
           <button
             id="btn-dev-more-options"
