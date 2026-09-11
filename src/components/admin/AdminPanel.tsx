@@ -171,6 +171,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     .filter(d => d.currency === 'ZiG')
     .reduce((sum, d) => sum + d.amount, 0);
   const answeredPrayersCount = prayers.filter(p => p.is_answered || p.status === 'apostle_prayed').length;
+  const availableInventoryCount = products.filter(product => product.in_stock && (product.stock_quantity === undefined || product.stock_quantity > 0)).length;
+  const dataSourceLabel = StorageService.getSupabaseConfig().isLiveConnected ? 'Supabase configured' : 'Local cache';
 
   const extractYoutubeId = (urlOrId: string) => {
     const trimmed = urlOrId.trim();
@@ -219,7 +221,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     const userList = StorageService.getAllUsers();
     const csvHeader = 'Member ID,Full Name,Phone,Handle,Role,Cell Group,Verified,Premium,Joined Date\n';
     const csvRows = userList.map(u => 
-      `"${u.member_id || u.id}","${u.full_name}","${u.phone}","${u.handle}","${u.role}","${u.cell_group || 'Harare Central'}","${u.is_verified ? 'Yes' : 'No'}","${u.is_premium ? 'Yes' : 'No'}","${u.created_at || '2026-01-01'}"`
+      `"${u.member_id || u.id}","${u.full_name}","${u.phone}","${u.handle || ''}","${u.role}","${u.cell_group || ''}","${u.is_verified ? 'Yes' : 'No'}","${u.is_premium ? 'Yes' : 'No'}","${u.created_at || ''}"`
     ).join('\n');
     const csvContent = csvHeader + csvRows;
     downloadCsvForExcel(`gateway_connect_registered_members_${new Date().toISOString().slice(0, 10)}.csv`, csvContent);
@@ -346,7 +348,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                 Gateway Admin Center
               </h1>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#D4AF37]/20 text-[#D4AF37] font-semibold border border-[#D4AF37]/30">
-                ERP v2.6 • Stocky Core
+                Operations Console
               </span>
             </div>
             <p className="text-[11px] text-white/60">
@@ -452,11 +454,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       <div className="relative z-20 hidden sm:flex items-center gap-4 px-4 py-1.5 bg-[#000d1a]/90 border-b border-white/5 text-[9px] font-mono uppercase tracking-wider text-white/50 shrink-0">
         <span className="flex items-center gap-1.5 text-emerald-400">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          Control Plane Online
+          Admin Workspace Loaded
         </span>
-        <span className="flex items-center gap-1.5"><Activity className="w-3 h-3 text-cyan-300" />Operations Stream: Active</span>
-        <span className="flex items-center gap-1.5"><ShieldCheck className="w-3 h-3 text-[#D4AF37]" />RLS Guard: Armed</span>
-        <span className="ml-auto text-[#D4AF37]/70">GATEWAY://ADMIN/ROOT</span>
+        <span className="flex items-center gap-1.5"><Activity className="w-3 h-3 text-cyan-300" />Broadcast: {liveSermonStatus.isLive ? 'Live' : 'Standby'}</span>
+        <span className="flex items-center gap-1.5"><ShieldCheck className="w-3 h-3 text-[#D4AF37]" />Data: {dataSourceLabel}</span>
+        <span className="ml-auto text-[#D4AF37]/70">ADMIN / OPERATIONS</span>
       </div>
 
       {/* 2. BODY WITH SIDEBAR NAVIGATION + MAIN CONTENT */}
@@ -580,7 +582,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                     </div>
                   </div>
                   <span className="text-[11px] font-mono text-[#D4AF37]">
-                    Active Status: Connected
+                    {liveSermonStatus.isLive ? 'Broadcast Status: Live' : 'Broadcast Status: Standby'}
                   </span>
                 </div>
 
@@ -688,8 +690,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                     <Users className="w-4 h-4 text-[#D4AF37]" />
                   </div>
                   <div className="text-xl font-bold text-white">{users.length}</div>
-                  <div className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
-                    <span>↑ +18% this month</span>
+                    <div className="text-[11px] text-white/60 mt-1 flex items-center gap-1">
+                    <span>Current registered account count</span>
                   </div>
                 </div>
 
@@ -698,9 +700,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                     <span>Live Broadcast Views</span>
                     <Radio className="w-4 h-4 text-rose-400" />
                   </div>
-                  <div className="text-xl font-bold text-white">14,200</div>
+                  <div className="text-xl font-bold text-white">{streamViewers.length}</div>
                   <div className="text-[11px] text-[#D4AF37] mt-1">
-                    <span>YouTube Ingest: Active</span>
+                    <span>{liveSermonStatus.isLive ? 'Current live viewers' : 'No active broadcast'}</span>
                   </div>
                 </div>
 
@@ -721,8 +723,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                     <Package className="w-4 h-4 text-[#D4AF37]" />
                   </div>
                   <div className="text-xl font-bold text-white">{products.length} Items</div>
-                  <div className="text-[11px] text-emerald-400 mt-1">
-                    <span>Stock Level: Healthy</span>
+                  <div className="text-[11px] text-white/60 mt-1">
+                    <span>{availableInventoryCount} currently available</span>
                   </div>
                 </div>
               </div>
@@ -1076,7 +1078,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                           isLive: !liveSermonStatus.isLive,
                           title: 'Church & Politics (Controversial Issues) • Apostle Joe Daniels Live',
                           sermonId: 'sermon_church_politics',
-                          viewerCount: liveSermonStatus.isLive ? 0 : 1429,
+                          viewerCount: 0,
                           streamUrl: adminStreamUrl.trim()
                         };
                         StorageService.setLiveSermonStatus(newStatus);
@@ -1212,7 +1214,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                   <div className="bg-[#001122] border border-white/10 rounded-xl p-3">
                     <div className="text-[10px] text-white/50 uppercase font-bold">Broadcast Mode</div>
                     <div className={`text-sm font-black mt-1 ${liveSermonStatus.isLive ? 'text-red-400' : 'text-white/60'}`}>
-                      {liveSermonStatus.isLive ? '🔴 BROADCASTING LIVE' : 'Standby / Scheduled'}
+                      {liveSermonStatus.isLive ? '🔴 BROADCASTING LIVE' : 'Standby'}
                     </div>
                   </div>
 
@@ -1220,7 +1222,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                     <div className="text-[10px] text-white/50 uppercase font-bold">Active Live Streamers</div>
                     <div className="text-lg font-black text-white mt-0.5 flex items-center gap-1">
                       <Users className="w-4 h-4 text-[#D4AF37]" />
-                      <span>{streamViewers.length + (liveSermonStatus.isLive ? 42 : 0)} Believers</span>
+                      <span>{streamViewers.length} Believers</span>
                     </div>
                   </div>
 
@@ -1314,9 +1316,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
 
                         {hub.is_congregation && (
                           <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between text-[11px] text-[#D4AF37]">
-                            <span className="font-semibold">Sanctuary Fellowship Active</span>
+                            <span className="font-semibold">Congregation Formed</span>
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#D4AF37]/20 font-bold">
-                              Tier 1 Altar
+                              Official
                             </span>
                           </div>
                         )}
@@ -1389,7 +1391,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
             </div>
           )}
 
-          {/* SECTION 3: STOCKY-STYLE STORE & INVENTORY */}
+          {/* SECTION 3: STORE & INVENTORY */}
           {activeSection === 'inventory' && (
             <div className="space-y-4">
               {/* Inventory Control Header */}
@@ -1397,7 +1399,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                 <div>
                   <h3 className="font-bold text-sm text-[#D4AF37] flex items-center gap-2">
                     <Package className="w-4 h-4" />
-                    <span>Stocky Store Inventory & Catalog</span>
+                    <span>Store Inventory & Catalog</span>
                   </h3>
                   <p className="text-xs text-white/70">
                     Real-time inventory levels, multi-currency pricing (USD & ZiG), and collection tracking.
@@ -1442,7 +1444,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                 ))}
               </div>
 
-              {/* Inventory Table (Stocky Style) */}
+              {/* Inventory Table */}
               <div className="bg-[#001F3F] border border-white/10 rounded-2xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -1637,7 +1639,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                             {u.phone}
                           </td>
                           <td className="p-3 text-white/70">
-                            {u.cell_group || 'Harare Central'}
+                                            {u.cell_group || 'Not assigned'}
                           </td>
                           <td className="p-3">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -2326,7 +2328,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                   <option value="/assets/apostle_joe_daniels_main.jpg">Apostle Daniels Cover (Portrait)</option>
                   <option value="/assets/apostle_joe_daniels_grad.jpg">Apostle Daniels Gown (Academic)</option>
                   <option value="/assets/apostle_joe_daniels_preach.jpg">Preaching Artwork</option>
-                  <option value="https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=600&auto=format&fit=crop&q=80">Book Mockup</option>
+                  <option value="https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=600&auto=format&fit=crop&q=80">Book Cover Image</option>
                 </select>
               </div>
 
