@@ -6,6 +6,8 @@ import { BibleTab } from './components/tabs/BibleTab';
 import { CommunityTab } from './components/tabs/CommunityTab';
 import { StoreTab } from './components/tabs/StoreTab';
 import { MeTab } from './components/tabs/MeTab';
+import { subscribeToRealtime } from './lib/realtime';
+import { getSupabase } from './services/supabaseClient';
 import { AdminPanel } from './components/admin/AdminPanel';
 import { DevConsole } from './components/dev/DevConsole';
 import { FlutterExportModal } from './components/modals/FlutterExportModal';
