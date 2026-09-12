@@ -27,7 +27,9 @@ export type LiveEventType =
   | 'stream_reaction'
   | 'user_created'
   | 'user_banned'
-  | 'unban_user';
+  | 'unban_user'
+  | 'stream_viewer_joined'
+  | 'stream_viewer_left';
 
 export type LiveEvent = { type: LiveEventType; payload: unknown };
 
@@ -216,6 +218,8 @@ export class LiveSyncService {
       ['gcz_user_registered', 'user_created'],
       ['gcz_user_banned_broadcast', 'user_banned'],
       ['gcz_user_unbanned_broadcast', 'unban_user'],
+      ['gcz_stream_viewer_joined', 'stream_viewer_joined'],
+      ['gcz_stream_viewer_left', 'stream_viewer_left'],
     ];
 
     const handlers = eventNames.map(([name, type]) => {

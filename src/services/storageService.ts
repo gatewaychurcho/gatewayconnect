@@ -2022,6 +2022,11 @@ export class StorageService {
     });
     setLocal(KEYS.BANNED_USERS, map);
     setLocal(KEYS.ALL_USERS, allUsers);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_banned_users_updated', { detail: map }));
+      window.dispatchEvent(new CustomEvent('gcz_users_synced', { detail: allUsers }));
+      window.dispatchEvent(new CustomEvent('gcz_user_banned_broadcast', { detail: { phone: 'all', reason } }));
+    }
   }
 
   static unbanAllUsers(): void {
@@ -2032,6 +2037,11 @@ export class StorageService {
     });
     setLocal(KEYS.BANNED_USERS, {});
     setLocal(KEYS.ALL_USERS, allUsers);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_banned_users_updated', { detail: {} }));
+      window.dispatchEvent(new CustomEvent('gcz_users_synced', { detail: allUsers }));
+      window.dispatchEvent(new CustomEvent('gcz_user_unbanned_broadcast', { detail: { phone: 'all' } }));
+    }
   }
 
   // Unban Appeals (Blind Chat with Developer & Admin)
@@ -2059,6 +2069,9 @@ export class StorageService {
     };
     list.unshift(newAppeal);
     setLocal(KEYS.UNBAN_APPEALS, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_unban_appeals_updated', { detail: list }));
+    }
     return newAppeal;
   }
 
@@ -2072,6 +2085,9 @@ export class StorageService {
         this.unbanUser(item.user_phone);
       }
       setLocal(KEYS.UNBAN_APPEALS, list);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_unban_appeals_updated', { detail: list }));
+      }
     }
   }
 
@@ -2092,6 +2108,9 @@ export class StorageService {
     };
     list.unshift(req);
     setLocal(KEYS.PASSWORD_RESETS, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_password_requests_updated', { detail: list }));
+    }
     return req;
   }
 
@@ -2101,6 +2120,9 @@ export class StorageService {
     if (item) {
       item.status = 'resolved';
       setLocal(KEYS.PASSWORD_RESETS, list);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_password_requests_updated', { detail: list }));
+      }
     }
   }
 
@@ -2109,13 +2131,7 @@ export class StorageService {
     const u = allUsers.find(user => user.id === phoneOrUserId || user.phone === phoneOrUserId);
     if (u) {
       u.password = newPass;
-      setLocal(KEYS.ALL_USERS, allUsers);
-      const cur = this.getCurrentUser();
-      if (cur && (cur.id === u.id || cur.phone === u.phone)) {
-        cur.password = newPass;
-        this.setCurrentUser(cur);
-      }
-      SupabaseSyncService.syncUser(u).catch(() => {});
+      this.saveUser(u);
       return true;
     }
     return false;
@@ -2445,6 +2461,8 @@ export class StorageService {
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_stream_viewers_updated', { detail: viewers }));
+      window.dispatchEvent(new CustomEvent('gcz_stream_viewer_joined', { detail: viewerRecord }));
+      window.dispatchEvent(new CustomEvent('gcz_stream_attendance_updated', { detail: this.getStreamAttendanceHistory() }));
     }
     return viewerRecord;
   }
@@ -2471,6 +2489,8 @@ export class StorageService {
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_stream_viewers_updated', { detail: viewers }));
+      window.dispatchEvent(new CustomEvent('gcz_stream_viewer_left', { detail: { userId } }));
+      window.dispatchEvent(new CustomEvent('gcz_stream_attendance_updated', { detail: history }));
     }
   }
 
@@ -2699,6 +2719,10 @@ export class StorageService {
     }
     allUsers = allUsers.filter(u => u.id !== target.id);
     setLocal(KEYS.ALL_USERS, allUsers);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_users_synced', { detail: allUsers }));
+      window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+    }
     return { success: true };
   }
 
@@ -3689,6 +3713,10 @@ export class StorageService {
           users.push(newUser);
         }
         setLocal(KEYS.ALL_USERS, users);
+        const me = this.getCurrentUser();
+        if (me && (me.id === newUser.id || arePhoneNumbersEqual(me.phone, newUser.phone))) {
+          setLocal(KEYS.CURRENT_USER, { ...me, ...newUser });
+        }
         window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: newUser }));
         window.dispatchEvent(new CustomEvent('gcz_users_synced', { detail: users }));
       }
@@ -3722,6 +3750,54 @@ export class StorageService {
         }
         setLocal(KEYS.BANNED_USERS, currentBans);
         window.dispatchEvent(new CustomEvent('gcz_banned_users_updated', { detail: currentBans }));
+      }
+    } else if (type === 'stream_viewer_joined') {
+      const viewer = payload as LiveStreamViewer;
+      if (viewer && viewer.user_id) {
+        const viewers = this.getStreamViewers();
+        const existingIdx = viewers.findIndex(v => v.user_id === viewer.user_id || (viewer.phone && v.phone === viewer.phone));
+        if (existingIdx >= 0) {
+          viewers[existingIdx] = viewer;
+        } else {
+          viewers.push(viewer);
+        }
+        setLocal(KEYS.STREAM_VIEWERS, viewers);
+
+        const history = this.getStreamAttendanceHistory();
+        const existingHist = history.find(h => h.user_id === viewer.user_id && h.status === 'active');
+        if (!existingHist) {
+          history.unshift({
+            id: `att_${Date.now()}_${viewer.user_id}`,
+            user_id: viewer.user_id,
+            user_name: viewer.full_name,
+            user_phone: viewer.phone || '0780000000',
+            user_handle: viewer.handle || `@${viewer.full_name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+            city: viewer.city || 'Harare',
+            session_title: 'Supernatural Acceleration & Dominion Service',
+            joined_at: viewer.joined_at || new Date().toISOString(),
+            status: 'active'
+          });
+          setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, history);
+        }
+        window.dispatchEvent(new CustomEvent('gcz_stream_viewers_updated', { detail: viewers }));
+        window.dispatchEvent(new CustomEvent('gcz_stream_attendance_updated', { detail: history }));
+      }
+    } else if (type === 'stream_viewer_left') {
+      const data = payload as { userId?: string };
+      const targetUserId = data?.userId;
+      if (targetUserId) {
+        const viewers = this.getStreamViewers().filter(v => v.user_id !== targetUserId);
+        setLocal(KEYS.STREAM_VIEWERS, viewers);
+
+        const history = this.getStreamAttendanceHistory();
+        const target = history.find(h => h.user_id === targetUserId && h.status === 'active');
+        if (target) {
+          target.ended_at = new Date().toISOString();
+          target.status = 'completed';
+          setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, history);
+        }
+        window.dispatchEvent(new CustomEvent('gcz_stream_viewers_updated', { detail: viewers }));
+        window.dispatchEvent(new CustomEvent('gcz_stream_attendance_updated', { detail: history }));
       }
     } else if (type === 'stream_chat' || type === 'stream_reaction') {
       // Ephemeral stream events are handled via window listeners in HomeTab and LiveSermonModal
