@@ -91,16 +91,43 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [showMemberDirectory, setShowMemberDirectory] = useState(false);
 
+  const [allRegisteredUsers, setAllRegisteredUsers] = useState<User[]>(() => StorageService.getAllUsers());
+
+  // Real-time synchronization for community posts, prayers, groups, and members
   useEffect(() => {
+    const handleTestimoniesUpdated = () => {
+      setTestimonyList(StorageService.getTestimonies());
+    };
+    const handlePrayersUpdated = () => {
+      setPrayerList(StorageService.getPrayerRequests());
+    };
     const handleGroupsUpdated = () => {
       setGroupList(StorageService.getGroups(currentUser?.id));
     };
+    const handleUsersUpdated = () => {
+      setAllRegisteredUsers(StorageService.getAllUsers());
+    };
+    const handleLiveSync = () => {
+      setTestimonyList(StorageService.getTestimonies());
+      setPrayerList(StorageService.getPrayerRequests());
+      setGroupList(StorageService.getGroups(currentUser?.id));
+      setAllRegisteredUsers(StorageService.getAllUsers());
+    };
+
+    window.addEventListener('gcz_testimony_updated', handleTestimoniesUpdated);
+    window.addEventListener('gcz_prayer_updated', handlePrayersUpdated);
     window.addEventListener('gcz_groups_updated', handleGroupsUpdated);
+    window.addEventListener('gcz_user_registered', handleUsersUpdated);
+    window.addEventListener('gcz_users_synced', handleUsersUpdated);
+    window.addEventListener('gcz_user_profile_updated', handleUsersUpdated);
+    window.addEventListener('gcz_live_state_updated', handleLiveSync);
+    window.addEventListener('gcz_live_event_received', handleLiveSync);
 
     // Cross-device social sync
     const unsubscribe = SupabaseSyncService.subscribeToSocialMessaging({
       onUserProfileUpdated: () => {
         setGroupList(StorageService.getGroups(currentUser?.id));
+        setAllRegisteredUsers(StorageService.getAllUsers());
       },
       onGroupMemberChanged: () => {
         setGroupList(StorageService.getGroups(currentUser?.id));
@@ -114,10 +141,35 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     });
 
     return () => {
+      window.removeEventListener('gcz_testimony_updated', handleTestimoniesUpdated);
+      window.removeEventListener('gcz_prayer_updated', handlePrayersUpdated);
       window.removeEventListener('gcz_groups_updated', handleGroupsUpdated);
+      window.removeEventListener('gcz_user_registered', handleUsersUpdated);
+      window.removeEventListener('gcz_users_synced', handleUsersUpdated);
+      window.removeEventListener('gcz_user_profile_updated', handleUsersUpdated);
+      window.removeEventListener('gcz_live_state_updated', handleLiveSync);
+      window.removeEventListener('gcz_live_event_received', handleLiveSync);
       unsubscribe();
     };
   }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (initialTestimonies && initialTestimonies.length > 0) {
+      setTestimonyList(initialTestimonies);
+    }
+  }, [initialTestimonies]);
+
+  useEffect(() => {
+    if (prayers && prayers.length > 0) {
+      setPrayerList(prayers);
+    }
+  }, [prayers]);
+
+  useEffect(() => {
+    if (events && events.length > 0) {
+      setEventList(events);
+    }
+  }, [events]);
 
   useEffect(() => {
     setGroupList(StorageService.getGroups(currentUser?.id));
@@ -642,7 +694,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             title="Toggle Member Directory"
           >
             <Users className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Directory ({StorageService.getAllUsers().length})</span>
+            <span className="hidden sm:inline">Directory ({allRegisteredUsers.length})</span>
           </button>
         </div>
 
@@ -673,7 +725,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             );
           }
 
-          const allMembers = StorageService.getAllUsers();
+          const allMembers = allRegisteredUsers;
           const filteredMembers = memberSearchQuery.trim()
             ? allMembers.filter(m => 
                 m.full_name.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
