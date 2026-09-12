@@ -39,7 +39,6 @@ import confetti from 'canvas-confetti';
 import { CommunityGroup, PrayerRequest, ChurchEvent, Testimony, User } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { SupabaseSyncService } from '../../services/supabaseSyncService';
-import { INITIAL_USERS } from '../../data/mockData';
 import { ImagePickerModal } from '../modals/ImagePickerModal';
 import { VerifiedBadge } from '../common/VerifiedBadge';
 import { InstagramProfileModal } from '../modals/InstagramProfileModal';
@@ -1028,7 +1027,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
               <span className="text-[11px] text-primary font-semibold">Gateway Community</span>
             </div>
             <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none">
-              {INITIAL_USERS.filter(u => u.id !== currentUser.id && u.role !== 'guest').slice(0, 5).map(u => {
+              {allRegisteredUsers.filter(u => u.id !== currentUser.id && u.role !== 'guest').slice(0, 10).map(u => {
                 const isFollowing = followingUsers[u.id];
                 return (
                   <div
@@ -1077,7 +1076,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
               // Find handle of first liker for Instagram-style "Liked by @handle and X others"
               const firstLikerId = post.liked_user_ids?.[0];
-              const firstLiker = INITIAL_USERS.find(u => u.id === firstLikerId);
+              const firstLiker = allRegisteredUsers.find(u => u.id === firstLikerId);
               const firstLikerHandle = firstLiker ? firstLiker.handle : (post.liked_user_ids && post.liked_user_ids.length > 0 ? '@covenant_partner' : null);
 
               return (
@@ -2324,8 +2323,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             <div className="p-3 max-h-80 overflow-y-auto space-y-2.5">
               {(() => {
                 const likerIds = activeLikesModalPost.liked_user_ids || [];
-                const likers = INITIAL_USERS.filter(u => likerIds.includes(u.id));
-                const displayLikers = likers.length > 0 ? likers : INITIAL_USERS.slice(0, 3);
+                const likers = allRegisteredUsers.filter(u => likerIds.includes(u.id));
+                const displayLikers = likers.length > 0 ? likers : allRegisteredUsers.filter(u => u.role !== 'guest').slice(0, 3);
 
                 return displayLikers.map(user => {
                   const isFollowing = followingUsers[user.id];
