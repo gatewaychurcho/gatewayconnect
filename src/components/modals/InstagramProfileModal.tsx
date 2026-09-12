@@ -55,15 +55,21 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
   const [showFollowsListModal, setShowFollowsListModal] = useState<'followers' | 'following' | null>(null);
   const [followsUsersList, setFollowsUsersList] = useState<User[]>([]);
 
-  const currentUser = StorageService.getCurrentUser() || INITIAL_USERS[0];
+  const currentUser = StorageService.getCurrentUser() || StorageService.getAllUsers()[0];
   const isMe = currentUser && profileUser && currentUser.id === profileUser.id;
 
   useEffect(() => {
     if (!isOpen || !userId) return;
 
-    // Resolve user details
+    // Resolve user details from live database
     const allUsers = StorageService.getAllUsers();
-    let found = allUsers.find(u => u.id === userId || u.phone === userId || u.handle === userId);
+    let found = allUsers.find(u => 
+      u.id === userId || 
+      u.phone === userId || 
+      u.handle === userId || 
+      u.handle?.toLowerCase() === userId.toLowerCase() ||
+      u.full_name.toLowerCase() === userId.toLowerCase()
+    );
     
     // Fallback search in mock data
     if (!found) {
