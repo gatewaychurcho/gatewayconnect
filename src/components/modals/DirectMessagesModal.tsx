@@ -57,6 +57,7 @@ import { StorageService } from '../../services/storageService';
 import { SupabaseSyncService } from '../../services/supabaseSyncService';
 import { PaynowService } from '../../services/paynowService';
 import { LocalImagePicker } from '../common/LocalImagePicker';
+import { InstagramProfileModal } from './InstagramProfileModal';
 
 interface DirectMessagesModalProps {
   currentUser: User;
@@ -191,6 +192,36 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   // WhatsApp-style Real-time Typing Indicators
   const [isRecipientTyping, setIsRecipientTyping] = useState<boolean>(false);
   const [groupTypingUserName, setGroupTypingUserName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let timer: any;
+    const handleTypingEvent = (e: any) => {
+      const detail = e.detail;
+      if (!detail || detail.userId === currentUser.id) return;
+
+      if (activeUserId && (detail.userId === activeUserId || detail.targetId === currentUser.id)) {
+        setIsRecipientTyping(Boolean(detail.isTyping));
+        clearTimeout(timer);
+        if (detail.isTyping) {
+          timer = setTimeout(() => setIsRecipientTyping(false), 3000);
+        }
+      }
+
+      if (activeGroupId && detail.groupId === activeGroupId) {
+        setGroupTypingUserName(detail.isTyping ? (detail.userName || 'Member') : null);
+        clearTimeout(timer);
+        if (detail.isTyping) {
+          timer = setTimeout(() => setGroupTypingUserName(null), 3000);
+        }
+      }
+    };
+
+    window.addEventListener('gcz_user_typing', handleTypingEvent);
+    return () => {
+      window.removeEventListener('gcz_user_typing', handleTypingEvent);
+      clearTimeout(timer);
+    };
+  }, [activeUserId, activeGroupId, currentUser.id]);
 
   // WhatsApp-style Media, Links, and Docs Browser states
   const [showMediaBrowserModal, setShowMediaBrowserModal] = useState(false);
@@ -430,9 +461,19 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     ? StorageService.hasUserExitedGroup(activeGroup.id, currentUser.id)
     : false;
 
-  const isUserGroupMember = activeGroup 
-    ? (activeGroup.member_ids.includes(currentUser.id) || (!activeGroup.is_paid && !hasUserExitedActiveGroup))
+  const isDeveloper = currentUser.role === 'developer';
+  const isJoinedGroupMember = activeGroup 
+    ? Boolean(
+        (activeGroup.member_ids?.includes(currentUser.id) || 
+         activeGroup.created_by === currentUser.id ||
+         (activeGroup.admin_ids && activeGroup.admin_ids.includes(currentUser.id))) &&
+        !hasUserExitedActiveGroup &&
+        !activeGroup.removed_user_ids?.includes(currentUser.id)
+      )
     : false;
+
+  const canViewActiveGroupChats = isDeveloper || isJoinedGroupMember;
+  const isUserGroupMember = canViewActiveGroupChats;
 
   // Foundation School membership check
   const fsMembership = StorageService.getGroupMembership('group_foundation_school', currentUser.id);
@@ -1714,12 +1755,25 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             {isRecipientTyping ? (
                               <p className="text-[10px] text-emerald-500 flex items-center gap-1.5 truncate font-semibold animate-pulse">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
-                                <span className="truncate font-mono">typing...</span>
+                                <span className="truncate font-mono">{activeUser.full_name} typing...</span>
                               </p>
                             ) : (
                               <p className="text-[10px] text-muted-foreground flex items-center gap-1 truncate">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                                <span className="truncate">Active Now • {activeUser.location || 'Harare'}</span>
+                                {activeUser.role === 'developer' || activeUser.phone === '0780699988' ? (
+                                  <>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+                                    <span className="truncate">Lead Developer • Online</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    {StorageService.getUserLastSeen(activeUser) === 'online' && (
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                    )}
+                                    <span className="truncate font-medium">
+                                      {StorageService.getUserLastSeen(activeUser) || `Active • ${activeUser.location || 'Harare'}`}
+                                    </span>
+                                  </>
+                                )}
                               </p>
                             )}
                           </div>
@@ -1737,9 +1791,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         </button>
 
                         <button
-                          onClick={onClose}
+                          onClick={() => setActiveUserId(null)}
                           className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                          title="Close"
+                          title="Close Chat"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -2223,9 +2277,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         </div>
 
                         <button
-                          onClick={onClose}
+                          onClick={() => setActiveGroupId(null)}
                           className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                          title="Close"
+                          title="Close Group"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -2297,7 +2351,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         </p>
                       </div>
                     </div>
-                  ) : (activeGroup.is_paid && !activeGroupMembership && !isSuperAdminOrDev) ? (
+                  ) : (activeGroup.is_paid && !activeGroupMembership && currentUser.role !== 'developer') ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4 bg-background">
                       <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-sm">
                         <GraduationCap className="w-8 h-8" />
@@ -2321,6 +2375,28 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       >
                         <CreditCard className="w-4 h-4" />
                         <span>Enroll & Join Group (${activeGroup.price_usd || 150})</span>
+                      </button>
+                    </div>
+                  ) : (!canViewActiveGroupChats) ? (
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4 bg-background animate-in fade-in">
+                      <div className="w-16 h-16 rounded-2xl bg-secondary/80 border border-border flex items-center justify-center text-primary shadow-sm">
+                        <Lock className="w-8 h-8" />
+                      </div>
+                      <div className="max-w-md space-y-2">
+                        <h3 className="text-lg font-bold text-foreground">
+                          Private Fellowship Group
+                        </h3>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          Group conversations are private to fellowship members. Join {activeGroup.name} to view fellowship history and interact live with brethren.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleJoinGroup(activeGroup)}
+                        className="px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-bold text-sm uppercase tracking-wider shadow-sm hover:brightness-105 transition-transform flex items-center gap-2 cursor-pointer"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                        <span>Join Group Fellowship</span>
                       </button>
                     </div>
                   ) : (
@@ -2534,19 +2610,19 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             <span>Rejoin Group</span>
                           </button>
                         </div>
-                      ) : (activeGroup.is_paid && !isUserGroupMember && !isSuperAdminOrDev) ? (
+                      ) : !canViewActiveGroupChats ? (
                         <div className="p-3.5 bg-card border-t border-border text-center flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4 py-4">
                           <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
                             <Lock className="w-4 h-4 text-amber-500 shrink-0" />
-                            <span>Enrollment required to participate in {activeGroup.name}.</span>
+                            <span>Join {activeGroup.name} to send messages and participate.</span>
                           </div>
                           <button
                             type="button"
-                            onClick={() => openPaymentModal(activeGroup, `To post in ${activeGroup.name}, please complete your $${activeGroup.price_usd || 150} membership enrollment.`)}
+                            onClick={() => activeGroup.is_paid ? openPaymentModal(activeGroup) : handleJoinGroup(activeGroup)}
                             className="px-4 py-1.5 rounded-lg bg-primary hover:brightness-105 text-primary-foreground text-xs font-semibold transition-transform shrink-0 cursor-pointer shadow-sm flex items-center gap-1.5"
                           >
-                            <CreditCard className="w-3.5 h-3.5" />
-                            <span>Enroll Now (${activeGroup.price_usd || 150})</span>
+                            <UserPlus className="w-3.5 h-3.5" />
+                            <span>{activeGroup.is_paid ? 'Enroll Now' : 'Join Group Fellowship'}</span>
                           </button>
                         </div>
                       ) : (!activeGroup.only_admins_can_send_messages || 
@@ -3642,6 +3718,15 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
             </div>
           )}
         </div>
+      )}
+
+      {/* User Profile Modal when clicking View Profile in chat */}
+      {viewUserProfile && (
+        <InstagramProfileModal
+          userId={viewUserProfile.id}
+          isOpen={Boolean(viewUserProfile)}
+          onClose={() => setViewUserProfile(null)}
+        />
       )}
 
     </div>
