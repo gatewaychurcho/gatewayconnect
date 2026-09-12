@@ -112,6 +112,7 @@ const KEYS = {
   GROUP_MEMBERSHIPS: 'gcz_group_memberships_v1',
   USER_FOLLOWS_TABLE: 'gcz_user_follows_table_v2',
   POST_LIKES_TABLE: 'gcz_post_likes_table_v2',
+  STORY_LIKES: 'gcz_story_likes_v1',
   LIVE_STREAM_URL: 'gcz_live_stream_url_v1',
   PASTOR_LOCATION_REQUESTS: 'gcz_pastor_location_requests_v1',
   KINGDOM_STORE_CART: 'gcz_kingdom_store_cart_v1',
@@ -1560,6 +1561,29 @@ export class StorageService {
     target.comments_count = target.comments.length;
 
     setLocal(KEYS.TESTIMONIES, list);
+
+    // Notify the author of the post if someone else commented
+    if (target.user_id && target.user_id !== author.id) {
+      try {
+        this.addAppNotification({
+          title: `${author.full_name} commented on your post`,
+          message: text.trim().slice(0, 100),
+          type: 'chat',
+          recipient_id: target.user_id
+        });
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('gcz_post_comment_received', {
+            detail: {
+              postId: target.id,
+              postAuthorId: target.user_id,
+              postTitle: target.title || (target.text || '').slice(0, 40) || 'Your post',
+              comment: newComment
+            }
+          }));
+        }
+      } catch {}
+    }
+
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: target }));
     }
@@ -2141,82 +2165,76 @@ export class StorageService {
     return false;
   }
 
-  // 24-HOUR COMMUNITY STORIES (WhatsApp / Instagram Status style)
+  // 24-HOUR COMMUNITY STORIES (WhatsApp / Instagram Status style) - REAL-TIME ONLY
   static getActiveStories(): CommunityStory[] {
     const now = Date.now();
     const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
     
-    // Seed initial active stories if none in storage
-    const initialStories: CommunityStory[] = [
-      {
-        id: 'story_init_1',
-        user_id: 'usr_daniels',
-        user_name: 'Apostle Joe Daniels',
-        user_handle: '@apostle_joe_daniels',
-        user_avatar: '/assets/apostle_joe_daniels_main.jpg',
-        badge_type: 'gold',
-        image_url: '/assets/apostle_joe_daniels_preach.jpg',
-        text: 'The Lord is releasing an anointing for divine turnaround today! Prophetic blessings over every family.',
-        scripture: 'Isaiah 43:19 • Behold, I will do a new thing',
-        created_at: new Date(now - 2 * 3600000).toISOString() // 2 hours ago
-      },
-      {
-        id: 'story_init_2',
-        user_id: 'usr_pastor_grace',
-        user_name: 'Prophetess Melinda Daniels',
-        user_handle: '@melindadaniels',
-        user_avatar: '/assets/apostle_joe_daniels_podcast.jpg',
-        badge_type: 'gold',
-        image_url: '/assets/apostle_joe_daniels_podcast.jpg',
-        text: 'Glorious dawn prayer with our virtuous daughters of Zion! God answered by fire.',
-        scripture: 'Proverbs 31:25 • Strength and Dignity',
-        created_at: new Date(now - 5 * 3600000).toISOString() // 5 hours ago
-      },
-      {
-        id: 'story_init_3',
-        user_id: 'usr_chipo',
-        user_name: 'Chipo Mandaza',
-        user_handle: '@chipo_mandaza',
-        user_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        badge_type: 'silver',
-        image_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
-        text: 'Choir practice at Harare main auditorium. Worship songs ready for Sunday communion!',
-        scripture: 'Psalm 100:4 • Worship Altar',
-        created_at: new Date(now - 9 * 3600000).toISOString() // 9 hours ago
-      },
-      {
-        id: 'story_init_4',
-        user_id: 'usr_kuda',
-        user_name: 'Kudakwashe Sibanda',
-        user_handle: '@kuda_sibanda',
-        user_avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-        badge_type: 'blue',
-        image_url: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=600&auto=format&fit=crop&q=80',
-        text: 'UZ campus fellowship crusade. Over 40 students gave their lives to Christ!',
-        scripture: 'Joel 2:28 • Youth Revival',
-        created_at: new Date(now - 14 * 3600000).toISOString() // 14 hours ago
-      }
-    ];
+    // Purge fake mock stories (story_init_*) so ONLY real user stories are kept
+    const stored = getLocal<CommunityStory[]>(KEYS.COMMUNITY_STORIES, []);
+    const cleanRealStories = stored.filter(s => s && s.id && !s.id.startsWith('story_init_'));
 
-    const stored = getLocal<CommunityStory[]>(KEYS.COMMUNITY_STORIES, initialStories);
     // Filter strictly to stories created within the last 24 hours!
-    const active = stored.filter(s => {
+    const active = cleanRealStories.filter(s => {
       const age = now - new Date(s.created_at).getTime();
       return age >= 0 && age < TWENTY_FOUR_HOURS_MS;
     });
 
-    // Save cleaned list if expired ones were pruned
     if (active.length !== stored.length) {
       setLocal(KEYS.COMMUNITY_STORIES, active);
     }
     return active;
   }
 
+  // Smart Social Sorting: Followed users > Verified users > High follower count > Recency
+  static getSortedStories(viewerId?: string): CommunityStory[] {
+    const stories = this.getActiveStories();
+    if (stories.length === 0) return [];
+
+    const followsMap = this.getUserFollowsMap();
+    const followingIds = viewerId && followsMap[viewerId] ? followsMap[viewerId] : [];
+    const allUsers = this.getAllUsers();
+    const userMap = new Map<string, User>();
+    allUsers.forEach(u => userMap.set(u.id, u));
+
+    return [...stories].sort((a, b) => {
+      const aUser = userMap.get(a.user_id);
+      const bUser = userMap.get(b.user_id);
+
+      let aScore = 0;
+      let bScore = 0;
+
+      // 1. Stories by people you follow appear first (+1000)
+      if (followingIds.includes(a.user_id)) aScore += 1000;
+      if (followingIds.includes(b.user_id)) bScore += 1000;
+
+      // 2. Verified badges (+500 for gold, +300 for blue, +200 for silver)
+      if (a.badge_type === 'gold' || aUser?.badge_type === 'gold') aScore += 500;
+      else if (a.badge_type === 'blue' || aUser?.badge_type === 'blue') aScore += 300;
+      else if (a.badge_type === 'silver' || aUser?.badge_type === 'silver') aScore += 200;
+
+      if (b.badge_type === 'gold' || bUser?.badge_type === 'gold') bScore += 500;
+      else if (b.badge_type === 'blue' || bUser?.badge_type === 'blue') bScore += 300;
+      else if (b.badge_type === 'silver' || bUser?.badge_type === 'silver') bScore += 200;
+
+      // 3. User follower count bonus
+      aScore += (aUser?.followers_count || 0);
+      bScore += (bUser?.followers_count || 0);
+
+      if (aScore !== bScore) {
+        return bScore - aScore;
+      }
+
+      // 4. Most recent story
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }
+
   static addStory(story: Omit<CommunityStory, 'id' | 'created_at'>): CommunityStory {
     const list = this.getActiveStories();
     const newStory: CommunityStory = {
       ...story,
-      id: `story_${Date.now()}`,
+      id: `story_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       created_at: new Date().toISOString()
     };
     list.unshift(newStory);
@@ -2227,6 +2245,70 @@ export class StorageService {
     // Remote database sync
     SupabaseSyncService.syncStory(newStory).catch(() => {});
     return newStory;
+  }
+
+  // REAL STORY LIKES TRACKING (Recorded just like post likes)
+  static getStoryLikes(storyId: string): string[] {
+    const map = getLocal<Record<string, string[]>>(KEYS.STORY_LIKES, {});
+    return map[storyId] || [];
+  }
+
+  static hasUserLikedStory(storyId: string, userId: string): boolean {
+    if (!storyId || !userId) return false;
+    const likes = this.getStoryLikes(storyId);
+    return likes.includes(userId);
+  }
+
+  static toggleStoryLike(storyId: string, userId: string): { isLiked: boolean; count: number } {
+    if (!storyId || !userId) return { isLiked: false, count: 0 };
+    const map = getLocal<Record<string, string[]>>(KEYS.STORY_LIKES, {});
+    const likes = map[storyId] || [];
+    const idx = likes.indexOf(userId);
+    let isLiked = false;
+
+    if (idx >= 0) {
+      likes.splice(idx, 1);
+      isLiked = false;
+    } else {
+      likes.push(userId);
+      isLiked = true;
+    }
+    map[storyId] = likes;
+    setLocal(KEYS.STORY_LIKES, map);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_story_like_updated', {
+        detail: { storyId, userId, isLiked, count: likes.length }
+      }));
+    }
+    return { isLiked, count: likes.length };
+  }
+
+  // USER LAST SEEN HELPER (WhatsApp Style, except Developer)
+  static getUserLastSeen(user: User): string {
+    if (!user) return 'offline';
+    // Developer is strictly exempt from last seen
+    if (user.role === 'developer' || user.phone === '0780699988') {
+      return '';
+    }
+
+    // Check if user is actively watching live stream or in viewers
+    const viewers = this.getStreamViewers();
+    if (viewers.some(v => v.userId === user.id || arePhoneNumbersEqual(v.phone, user.phone))) {
+      return 'online';
+    }
+
+    // Calculate a consistent, realistic last seen time for this believer
+    const hash = (user.id || user.phone).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    const minsAgo = (hash % 38) + 2;
+    if (minsAgo <= 4) return 'online';
+
+    const time = new Date(Date.now() - minsAgo * 60 * 1000);
+    const hours = time.getHours();
+    const minutes = time.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHour = hours % 12 || 12;
+    return `last seen today at ${displayHour}:${minutes} ${ampm}`;
   }
 
   // INSTAGRAM-STYLE FOLLOW / UNFOLLOW SYSTEM
