@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Send, 
@@ -11,6 +11,7 @@ import {
   Bot
 } from 'lucide-react';
 import { StorageService } from '../../services/storageService';
+import { liveSyncService } from '../../services/liveSyncService';
 
 interface ChatDevModalProps {
   isOpen: boolean;
@@ -29,6 +30,19 @@ export const ChatDevModal: React.FC<ChatDevModalProps> = ({ isOpen, onClose }) =
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [inputText, setInputText] = useState('');
 
+  // Listen for incoming live events
+  useEffect(() => {
+    const handler = (e: any) => {
+      const event = e.detail;
+      if (event.type === 'direct_message') {
+        const msg = event.payload as ChatMsg;
+        setMessages(prev => [...prev, msg]);
+      }
+    };
+    window.addEventListener('gcz_live_event_received', handler);
+    return () => window.removeEventListener('gcz_live_event_received', handler);
+  }, []);
+
   if (!isOpen) return null;
 
   const handleSend = (e: React.FormEvent) => {
@@ -42,8 +56,11 @@ export const ChatDevModal: React.FC<ChatDevModalProps> = ({ isOpen, onClose }) =
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
+    // Update local state
     setMessages(prev => [...prev, userMsg]);
-    setInputText('');
+
+    // Broadcast to peers
+    liveSyncService.broadcastEvent({ type: 'direct_message', payload: userMsg });
 
     // Dispatch message to developer's inbox and trigger real notification on his bell
     StorageService.sendDirectMessage(currentUser.id, 'usr_developer', inputText.trim());
@@ -55,10 +72,14 @@ export const ChatDevModal: React.FC<ChatDevModalProps> = ({ isOpen, onClose }) =
       title: `Message from ${currentUser.full_name}`,
       message: inputText.trim()
     });
+
+    setInputText('');
   };
 
   const handleWhatsAppDev = () => {
-    const text = encodeURIComponent(`Hello Lead Developer mrjuice017 (+263780699988), I am contacting you from Gateway Connect App!`);
+    const text = encodeURIComponent(
+      `Hello Lead Developer mrjuice017 (+263780699988), I am contacting you from Gateway Connect App!`
+    );
     window.open(`https://wa.me/263780699988?text=${text}`, '_blank');
   };
 
