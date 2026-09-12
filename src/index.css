@@ -55,35 +55,35 @@
 }
 
 [data-theme="light"] {
-  --background: #f8fafc;
-  --foreground: #09090b;
+  --background: #f0f7ff;
+  --foreground: #0f172a;
   --card: #ffffff;
-  --card-foreground: #09090b;
+  --card-foreground: #0f172a;
   --popover: #ffffff;
-  --popover-foreground: #09090b;
+  --popover-foreground: #0f172a;
   --primary: #d97706;
   --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #e2e8f0;
-  --accent-foreground: #0f172a;
+  --secondary: #e0f2fe;
+  --secondary-foreground: #0369a1;
+  --muted: #e0f2fe;
+  --muted-foreground: #475569;
+  --accent: #bae6fd;
+  --accent-foreground: #0369a1;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: rgba(15, 23, 42, 0.09);
-  --border-strong: rgba(15, 23, 42, 0.18);
-  --input: rgba(15, 23, 42, 0.08);
+  --border: rgba(56, 189, 248, 0.22);
+  --border-strong: rgba(14, 165, 233, 0.35);
+  --input: rgba(56, 189, 248, 0.18);
   --ring: #d97706;
   --church-gold: #d97706;
-  --church-gold-muted: rgba(217, 119, 6, 0.1);
-  --church-navy: #f8fafc;
+  --church-gold-muted: rgba(217, 119, 6, 0.12);
+  --church-navy: #f0f7ff;
   --church-navy-surface: #ffffff;
   --church-navy-card: rgba(255, 255, 255, 0.95);
-  --bg-page: #f8fafc;
-  --text-primary: #09090b;
-  --text-muted: #64748b;
-  --border-subtle: rgba(15, 23, 42, 0.09);
+  --bg-page: #f0f7ff;
+  --text-primary: #0f172a;
+  --text-muted: #475569;
+  --border-subtle: rgba(56, 189, 248, 0.22);
 }
 
 body {
