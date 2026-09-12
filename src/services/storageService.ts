@@ -889,7 +889,8 @@ export class StorageService {
       actor_id: 'pastor_office',
       actor_name: "Apostle Joe Daniels' Pastoral Office",
       title: `Directions Request Received: ${params.eventTitle}`,
-      message: `We received your request for directions to ${params.eventTitle} from ${params.user.location || 'your area'}. A pastoral minister will reach out to you at ${params.user.phone || 'your phone number'}.`
+      message: `We received your request for directions to ${params.eventTitle} from ${params.user.location || 'your area'}. A pastoral minister will reach out to you at ${params.user.phone || 'your phone number'}.`,
+      recipient_id: params.user.id
     });
 
     return newReq;
@@ -911,7 +912,8 @@ export class StorageService {
       actor_id: 'church_media',
       actor_name: 'Gateway Sanctuary Live',
       title: `Virtual Stream Reminder: ${eventTitle}`,
-      message: 'When the service starts and is online you can stream the service, The stream will be available on that streaming float.'
+      message: 'When the service starts and is online you can stream the service, The stream will be available on that streaming float.',
+      recipient_id: user.id
     });
   }
 
@@ -1496,6 +1498,38 @@ export class StorageService {
     }
     // Remote database sync
     SupabaseSyncService.syncPost(newTest).catch(() => {});
+
+    // Notify tagged users if any mentioned in post
+    try {
+      const fullText = `${newTest.title || ''} ${newTest.content || ''}`;
+      const mentions = fullText.match(/@([a-zA-Z0-9_]+)/g);
+      const allUsers = this.getAllUsers();
+      const taggedIds = new Set<string>(newTest.tagged_user_ids || []);
+      if (mentions) {
+        for (const m of mentions) {
+          const clean = m.replace('@', '').toLowerCase();
+          const found = allUsers.find(u => 
+            (u.handle && u.handle.toLowerCase().replace('@', '') === clean) ||
+            (u.full_name && u.full_name.toLowerCase().replace(/\s+/g, '_') === clean)
+          );
+          if (found && found.id !== newTest.user_id) {
+            taggedIds.add(found.id);
+          }
+        }
+      }
+      taggedIds.forEach(targetId => {
+        this.addAppNotification({
+          type: 'chat',
+          actor_id: newTest.user_id || 'usr_church',
+          actor_name: newTest.author || 'A believer',
+          actor_avatar: newTest.avatar,
+          title: `${newTest.author} tagged you in a post`,
+          message: (newTest.title || newTest.content || '').slice(0, 100),
+          recipient_id: targetId
+        });
+      });
+    } catch {}
+
     return newTest;
   }
 
@@ -1572,7 +1606,10 @@ export class StorageService {
           title: `${author.full_name} commented on your post`,
           message: text.trim().slice(0, 100),
           type: 'chat',
-          recipient_id: target.user_id
+          recipient_id: target.user_id,
+          actor_id: author.id,
+          actor_name: author.full_name,
+          actor_avatar: author.avatar_url
         });
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('gcz_post_comment_received', {
@@ -1586,6 +1623,32 @@ export class StorageService {
         }
       } catch {}
     }
+
+    // Notify tagged users if any mentioned in comment (@username)
+    try {
+      const commentMentions = text.match(/@([a-zA-Z0-9_]+)/g);
+      if (commentMentions) {
+        const allUsers = this.getAllUsers();
+        for (const m of commentMentions) {
+          const clean = m.replace('@', '').toLowerCase();
+          const tagged = allUsers.find(u => 
+            (u.handle && u.handle.toLowerCase().replace('@', '') === clean) ||
+            (u.full_name && u.full_name.toLowerCase().replace(/\s+/g, '_') === clean)
+          );
+          if (tagged && tagged.id !== author.id && tagged.id !== target.user_id) {
+            this.addAppNotification({
+              type: 'chat',
+              actor_id: author.id,
+              actor_name: author.full_name,
+              actor_avatar: author.avatar_url,
+              title: `${author.full_name} tagged you in a comment`,
+              message: text.trim().slice(0, 100),
+              recipient_id: tagged.id
+            });
+          }
+        }
+      }
+    } catch {}
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: target }));
@@ -2428,7 +2491,10 @@ export class StorageService {
         title: `Message from ${senderName}`,
         message: text.trim().slice(0, 100),
         type: 'chat',
-        recipient_id: receiverId
+        recipient_id: receiverId,
+        actor_id: senderId,
+        actor_name: senderName,
+        actor_avatar: sender?.avatar_url
       });
     } catch {
       // safe fallback
@@ -2460,7 +2526,10 @@ export class StorageService {
             title: `Message from ${senderName}`,
             message: (message.text || '').trim().slice(0, 100),
             type: 'chat',
-            recipient_id: current.id
+            recipient_id: current.id,
+            actor_id: message.sender_id,
+            actor_name: senderName,
+            actor_avatar: sender?.avatar_url
           });
         } catch {
           // safe fallback
@@ -2639,7 +2708,8 @@ export class StorageService {
     if (target) {
       target.ended_at = new Date().toISOString();
       target.status = 'completed';
-      setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, history);
+      const pruned = this.pruneStreamAttendanceHistory(history);
+      setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, pruned);
     }
 
     // Broadcast immediate count drop to all devices in realtime
@@ -2648,74 +2718,46 @@ export class StorageService {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_stream_viewers_updated', { detail: viewers }));
       window.dispatchEvent(new CustomEvent('gcz_stream_viewer_left', { detail: { userId } }));
-      window.dispatchEvent(new CustomEvent('gcz_stream_attendance_updated', { detail: history }));
+      window.dispatchEvent(new CustomEvent('gcz_stream_attendance_updated', { detail: this.getStreamAttendanceHistory() }));
     }
+  }
+
+  // Juggles streaming attendance logs, strictly limiting to maximum 3 logs per believer (join/exit/join)
+  // Deletes older 4th+ logs per user while preserving active streamer profiles
+  static pruneStreamAttendanceHistory(list: StreamAttendanceRecord[]): StreamAttendanceRecord[] {
+    const userCounts = new Map<string, number>();
+    const pruned: StreamAttendanceRecord[] = [];
+    
+    for (const item of list) {
+      if (!item || !item.user_id) continue;
+      // Purge any legacy mock seeds ('att_seed_1' etc.)
+      if (item.id && item.id.startsWith('att_seed_')) continue;
+      
+      const count = userCounts.get(item.user_id) || 0;
+      if (count < 3) {
+        pruned.push(item);
+        userCounts.set(item.user_id, count + 1);
+      }
+    }
+    return pruned.slice(0, 100);
   }
 
   // Persistent Congregation Stream Attendees Registry (Kept in database for future follow-up & congregation records)
   static getStreamAttendanceHistory(): StreamAttendanceRecord[] {
-    return getLocal<StreamAttendanceRecord[]>(KEYS.STREAM_ATTENDANCE_HISTORY, [
-      {
-        id: 'att_seed_1',
-        user_id: 'usr_tinashe',
-        user_name: 'Tinashe Chikwava',
-        user_phone: '0712345678',
-        user_handle: '@tinashe_zim',
-        city: 'Bulawayo',
-        session_title: 'Supernatural Acceleration & Prophetic Turnaround',
-        joined_at: new Date(Date.now() - 3600000).toISOString(),
-        ended_at: new Date(Date.now() - 600000).toISOString(),
-        status: 'completed'
-      },
-      {
-        id: 'att_seed_2',
-        user_id: 'usr_chipo',
-        user_name: 'Chipo Ruvimbo Mandaza',
-        user_phone: '0774334455',
-        user_handle: '@chipo_mandaza',
-        city: 'Harare',
-        session_title: 'Supernatural Acceleration & Prophetic Turnaround',
-        joined_at: new Date(Date.now() - 3600000).toISOString(),
-        ended_at: new Date(Date.now() - 600000).toISOString(),
-        status: 'completed'
-      },
-      {
-        id: 'att_seed_3',
-        user_id: 'usr_farai',
-        user_name: 'Farai Takawira',
-        user_phone: '0733221100',
-        user_handle: '@farai_taka',
-        city: 'Chitungwiza',
-        session_title: 'Supernatural Acceleration & Prophetic Turnaround',
-        joined_at: new Date(Date.now() - 3600000).toISOString(),
-        ended_at: new Date(Date.now() - 600000).toISOString(),
-        status: 'completed'
-      },
-      {
-        id: 'att_seed_4',
-        user_id: 'usr_kuda',
-        user_name: 'Kudakwashe Sibanda',
-        user_phone: '0782112244',
-        user_handle: '@kuda_sibanda',
-        city: 'Harare',
-        session_title: 'Supernatural Acceleration & Prophetic Turnaround',
-        joined_at: new Date(Date.now() - 3600000).toISOString(),
-        ended_at: new Date(Date.now() - 600000).toISOString(),
-        status: 'completed'
-      },
-      {
-        id: 'att_seed_5',
-        user_id: 'usr_tatenda',
-        user_name: 'Tatenda Blessing Chirwa',
-        user_phone: '0778556677',
-        user_handle: '@tatenda_chirwa',
-        city: 'Marondera',
-        session_title: 'Supernatural Acceleration & Prophetic Turnaround',
-        joined_at: new Date(Date.now() - 3600000).toISOString(),
-        ended_at: new Date(Date.now() - 600000).toISOString(),
-        status: 'completed'
-      }
-    ]);
+    const raw = getLocal<StreamAttendanceRecord[]>(KEYS.STREAM_ATTENDANCE_HISTORY, []);
+    const pruned = this.pruneStreamAttendanceHistory(raw);
+    if (pruned.length !== raw.length) {
+      setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, pruned);
+    }
+    return pruned;
+  }
+
+  // Clear / Delete streaming logs while live, preserving current live viewer details
+  static clearStreamAttendanceHistory(): void {
+    setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, []);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_stream_attendance_updated', { detail: [] }));
+    }
   }
 
   static recordStreamAttendance(user: User, sessionTitle?: string): void {
@@ -2728,12 +2770,13 @@ export class StorageService {
         user_name: user.full_name,
         user_phone: user.phone || '0780000000',
         user_handle: user.handle || `@${user.full_name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-        city: user.location || 'Harare',
+        city: user.location || user.city_location || 'Harare',
         session_title: sessionTitle || 'Supernatural Acceleration & Dominion Service',
         joined_at: new Date().toISOString(),
         status: 'active'
       });
-      setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, list);
+      const pruned = this.pruneStreamAttendanceHistory(list);
+      setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, pruned);
     }
   }
 
@@ -2749,7 +2792,8 @@ export class StorageService {
       }
     });
     if (updated) {
-      setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, list);
+      const pruned = this.pruneStreamAttendanceHistory(list);
+      setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, pruned);
     }
   }
 
@@ -2768,8 +2812,13 @@ export class StorageService {
       return [];
     }
 
-    // Only return notifications specifically targeted to this believer or global church announcements
-    return clean.filter(n => !n.recipient_id || n.recipient_id === targetUserId);
+    // Strictly return notifications targeted to this believer, or general broadcasts
+    return clean.filter(n => {
+      if (n.recipient_id) {
+        return n.recipient_id === targetUserId;
+      }
+      return n.type === 'broadcast';
+    });
   }
 
   static addAppNotification(notif: Omit<AppNotification, 'id' | 'created_at' | 'is_read'>): void {
@@ -2781,7 +2830,7 @@ export class StorageService {
       is_read: false
     };
     raw.unshift(newNotif);
-    setLocal(KEYS.APP_NOTIFICATIONS, raw);
+    setLocal(KEYS.APP_NOTIFICATIONS, raw.slice(0, 100));
     
     // Realtime notification sync across devices
     SupabaseSyncService.syncNotificationCreated(newNotif).catch(() => {});
@@ -2793,21 +2842,26 @@ export class StorageService {
   }
 
   static markNotificationRead(id: string): void {
-    const list = this.getAppNotifications();
-    const item = list.find(n => n.id === id);
+    const raw = getLocal<AppNotification[]>(KEYS.APP_NOTIFICATIONS, []);
+    const item = raw.find(n => n.id === id);
     if (item) {
       item.is_read = true;
-      setLocal(KEYS.APP_NOTIFICATIONS, list);
+      setLocal(KEYS.APP_NOTIFICATIONS, raw);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
       }
     }
   }
 
-  static markAllNotificationsRead(): void {
-    const list = this.getAppNotifications();
-    list.forEach(n => n.is_read = true);
-    setLocal(KEYS.APP_NOTIFICATIONS, list);
+  static markAllNotificationsRead(recipientId?: string): void {
+    const targetUserId = recipientId || this.getCurrentUser()?.id;
+    const raw = getLocal<AppNotification[]>(KEYS.APP_NOTIFICATIONS, []);
+    raw.forEach(n => {
+      if (!targetUserId || n.recipient_id === targetUserId) {
+        n.is_read = true;
+      }
+    });
+    setLocal(KEYS.APP_NOTIFICATIONS, raw);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
     }
@@ -3627,7 +3681,8 @@ export class StorageService {
       actor_avatar: '/assets/apostle_joe_daniels_main.jpg',
       title: 'Foundation School Expiry Notice',
       message: 'Your 3-month membership term is about to expire. Renew now to continue learning.',
-      target_id: 'group_foundation_school'
+      target_id: 'group_foundation_school',
+      recipient_id: userId
     });
   }
 
@@ -4052,10 +4107,11 @@ export class StorageService {
             joined_at: viewer.joined_at || new Date().toISOString(),
             status: 'active'
           });
-          setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, history);
+          const pruned = this.pruneStreamAttendanceHistory(history);
+          setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, pruned);
         }
         window.dispatchEvent(new CustomEvent('gcz_stream_viewers_updated', { detail: viewers }));
-        window.dispatchEvent(new CustomEvent('gcz_stream_attendance_updated', { detail: history }));
+        window.dispatchEvent(new CustomEvent('gcz_stream_attendance_updated', { detail: this.getStreamAttendanceHistory() }));
       }
     } else if (type === 'stream_viewer_left') {
       const data = payload as { userId?: string };
@@ -4069,10 +4125,11 @@ export class StorageService {
         if (target) {
           target.ended_at = new Date().toISOString();
           target.status = 'completed';
-          setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, history);
+          const pruned = this.pruneStreamAttendanceHistory(history);
+          setLocal(KEYS.STREAM_ATTENDANCE_HISTORY, pruned);
         }
         window.dispatchEvent(new CustomEvent('gcz_stream_viewers_updated', { detail: viewers }));
-        window.dispatchEvent(new CustomEvent('gcz_stream_attendance_updated', { detail: history }));
+        window.dispatchEvent(new CustomEvent('gcz_stream_attendance_updated', { detail: this.getStreamAttendanceHistory() }));
       }
     } else if (type === 'stream_chat' || type === 'stream_reaction') {
       // Ephemeral stream events are handled via window listeners in HomeTab and LiveSermonModal
