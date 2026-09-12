@@ -243,10 +243,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     return trimmed;
   };
 
-  const handleUpdateRole = (userId: string, newRole: UserRole) => {
-    StorageService.updateUserRole(userId, newRole);
+  const handleAssignBadge = (userId: string, badgeType: 'none' | 'silver' | 'blue' | 'gold') => {
+    const isVerified = badgeType !== 'none';
+    StorageService.developerSetVerificationBadge(userId, isVerified, badgeType);
     setUsers(StorageService.getAllUsers());
     onRefreshAppState();
+    const badgeLabel = badgeType === 'silver' ? 'Silver (VIP Member)' : badgeType === 'blue' ? 'Blue (Pastor / Moderator)' : badgeType === 'gold' ? 'Gold (Super Admin)' : 'No Badge';
+    setModerationMessage(`Assigned ${badgeLabel} badge`);
+    setTimeout(() => setModerationMessage(null), 2500);
   };
 
   // Stream Attendees & Pastoral Follow-Up Export
@@ -467,6 +471,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     (inventoryCategory === 'All' || p.category === inventoryCategory) &&
     p.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const currentUser = StorageService.getCurrentUser();
+  const isSuperAdminOrDev = currentUser?.role === 'super_admin' || currentUser?.role === 'developer';
+
+  if (!isSuperAdminOrDev) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
+        <div className="bg-[#00172e] border border-rose-500/40 rounded-2xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
+          <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 mx-auto flex items-center justify-center">
+            <ShieldAlert className="w-6 h-6" />
+          </div>
+          <h2 className="text-lg font-bold text-white">Admin Access Restricted</h2>
+          <p className="text-xs text-white/60 leading-relaxed">
+            Only accounts assigned as Super Admin by the Developer have access to the Admin Portal. Verification badges alone do not grant administrative privileges.
+          </p>
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+          >
+            Return to App
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-[#001122] flex flex-col text-white font-sans overflow-hidden isolate">
@@ -1759,7 +1788,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                         <th className="p-3">Phone & ID</th>
                         <th className="p-3">Cell Group</th>
                         <th className="p-3">Current Role</th>
-                        <th className="p-3 text-right">Assign Role</th>
+                        <th className="p-3 text-right">Verification Badge</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5 text-white/80">
@@ -1793,16 +1822,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                           </td>
                           <td className="p-3 text-right">
                             <div className="flex items-center justify-end gap-1.5">
-                              {/* Quick Role Selector */}
+                              {/* Quick Badge Selector */}
                               <select
-                                value={u.role}
-                                onChange={e => handleUpdateRole(u.id, e.target.value as UserRole)}
+                                value={u.is_verified ? (u.badge_type || 'blue') : 'none'}
+                                onChange={e => handleAssignBadge(u.id, e.target.value as any)}
                                 className="hidden sm:inline-block bg-[#001122] border border-white/15 rounded-lg px-2 py-1 text-xs text-white"
                               >
-                                <option value="member">Member</option>
-                                <option value="moderator">Pastor / Moderator</option>
-                                <option value="developer">Developer</option>
-                                <option value="super_admin">Super Admin</option>
+                                <option value="none">No Badge</option>
+                                <option value="silver">Silver (VIP Member)</option>
+                                <option value="blue">Blue (Pastor / Moderator)</option>
+                                <option value="gold">Gold (Super Admin)</option>
                               </select>
 
                               {/* 3-Dots Dropdown Menu for Member Actions */}
@@ -1817,29 +1846,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                                 </button>
 
                                 {activeMemberMenuId === u.id && (
-                                  <div className="absolute right-0 top-8 z-50 w-52 bg-[#00172e] border border-[#D4AF37]/30 rounded-xl shadow-2xl p-1.5 space-y-1 text-left font-sans animate-in fade-in zoom-in-95 duration-150">
+                                  <div className="absolute right-0 top-8 z-50 w-56 bg-[#00172e] border border-[#D4AF37]/30 rounded-xl shadow-2xl p-1.5 space-y-1 text-left font-sans animate-in fade-in zoom-in-95 duration-150">
                                     <div className="px-2 py-1 text-[10px] font-bold text-white/40 uppercase tracking-wider border-b border-white/10 truncate">
                                       {u.full_name}
                                     </div>
                                     <div className="px-2 py-0.5 text-[9px] font-mono text-[#D4AF37]">
-                                      Assign Role:
+                                      Assign Verification Badge:
                                     </div>
-                                    {(['member', 'moderator', 'developer', 'super_admin'] as UserRole[]).map(r => (
-                                      <button
-                                        key={r}
-                                        type="button"
-                                        onClick={() => {
-                                          handleUpdateRole(u.id, r);
-                                          setActiveMemberMenuId(null);
-                                        }}
-                                        className={`w-full text-left px-2 py-1 rounded-lg text-xs font-semibold flex items-center justify-between ${
-                                          u.role === r ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'text-white/80 hover:bg-white/10'
-                                        }`}
-                                      >
-                                        <span className="capitalize">{r === 'super_admin' ? 'Super Admin' : r === 'moderator' ? 'Pastor / Mod' : r}</span>
-                                        {u.role === r && <Check className="w-3 h-3 text-[#D4AF37]" />}
-                                      </button>
-                                    ))}
+                                    {[
+                                      { type: 'none', label: 'No Badge' },
+                                      { type: 'silver', label: 'Silver (VIP Member)' },
+                                      { type: 'blue', label: 'Blue (Pastor / Moderator)' },
+                                      { type: 'gold', label: 'Gold (Super Admin)' }
+                                    ].map(b => {
+                                      const currentBadge = u.is_verified ? (u.badge_type || 'blue') : 'none';
+                                      const isSelected = currentBadge === b.type;
+                                      return (
+                                        <button
+                                          key={b.type}
+                                          type="button"
+                                          onClick={() => {
+                                            handleAssignBadge(u.id, b.type as any);
+                                            setActiveMemberMenuId(null);
+                                          }}
+                                          className={`w-full text-left px-2 py-1 rounded-lg text-xs font-semibold flex items-center justify-between ${
+                                            isSelected ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'text-white/80 hover:bg-white/10'
+                                          }`}
+                                        >
+                                          <span>{b.label}</span>
+                                          {isSelected && <Check className="w-3 h-3 text-[#D4AF37]" />}
+                                        </button>
+                                      );
+                                    })}
 
                                     <div className="border-t border-white/10 my-1" />
 
@@ -1847,22 +1885,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                                       type="button"
                                       onClick={() => {
                                         const nextStatus = !u.is_verified;
-                                        StorageService.developerSetVerificationBadge(u.id, nextStatus, nextStatus ? 'blue' : 'none');
-                                        const updatedUsers = users.map(user => {
-                                          if (user.id === u.id) {
-                                            return { ...user, is_verified: nextStatus };
-                                          }
-                                          return user;
-                                        });
-                                        setUsers(updatedUsers);
+                                        handleAssignBadge(u.id, nextStatus ? 'blue' : 'none');
                                         setActiveMemberMenuId(null);
-                                        setModerationMessage(`Updated verification for ${u.full_name}`);
-                                        setTimeout(() => setModerationMessage(null), 2500);
                                       }}
                                       className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-white/90 hover:bg-white/10 flex items-center gap-1.5"
                                     >
                                       <BadgeCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
-                                      <span>{u.is_verified ? 'Remove Verified Badge' : 'Grant Verified Badge'}</span>
+                                      <span>{u.is_verified ? 'Remove Verification' : 'Grant Blue Badge'}</span>
                                     </button>
 
                                     <button
