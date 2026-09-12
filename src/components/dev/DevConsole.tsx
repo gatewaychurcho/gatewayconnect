@@ -262,6 +262,8 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
       setStreamAttendees(StorageService.getStreamAttendanceHistory());
     };
 
+    refreshAll();
+
     const handleIncomingLiveEvent = (e: Event) => {
       const customEvt = e as CustomEvent;
       const detail = customEvt.detail;
@@ -384,6 +386,15 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
       logsContainerRef.current.scrollTop = 0;
     }
   }, [logs, autoScrollLogs]);
+
+  useEffect(() => {
+    setUsersList(StorageService.getAllUsers());
+    setBannedUsersMap(StorageService.getBannedUsers());
+    setPasswordRequests(StorageService.getPasswordResetRequests());
+    setUnbanAppeals(StorageService.getUnbanAppeals());
+    setActiveStreamers(StorageService.getStreamViewers());
+    setStreamAttendees(StorageService.getStreamAttendanceHistory());
+  }, [activeTab]);
 
   const handleToggleVerificationBadge = (user: User) => {
     const nextStatus = !user.is_verified;
@@ -1453,11 +1464,18 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   {usersList
-                    .filter(u => 
-                      u.full_name.toLowerCase().includes(godmodeSearch.toLowerCase()) ||
-                      u.phone.includes(godmodeSearch) ||
-                      (u.city_location && u.city_location.toLowerCase().includes(godmodeSearch.toLowerCase()))
-                    )
+                    .filter(u => {
+                      const q = (godmodeSearch || '').toLowerCase().trim();
+                      if (!q) return true;
+                      return (
+                        (u.full_name || '').toLowerCase().includes(q) ||
+                        (u.phone || '').includes(q) ||
+                        (u.handle || '').toLowerCase().includes(q) ||
+                        (u.member_id || '').toLowerCase().includes(q) ||
+                        (u.city_location || '').toLowerCase().includes(q) ||
+                        (u.location || '').toLowerCase().includes(q)
+                      );
+                    })
                     .map(u => {
                       const isDev = u.phone === '0780699988';
                       const isCurrentUser = StorageService.getCurrentUser()?.phone === u.phone;
@@ -1781,12 +1799,18 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                       <label className="block text-slate-300 font-semibold mb-1">Role</label>
                       <select
                         value={editRole}
-                        onChange={(e) => setEditRole(e.target.value as UserRole)}
+                        onChange={(e) => {
+                          const r = e.target.value as UserRole;
+                          setEditRole(r);
+                          if (r === 'super_admin' || r === 'moderator') {
+                            setEditVerified(true);
+                          }
+                        }}
                         className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-purple-400"
                       >
                         <option value="member">Member</option>
-                        <option value="moderator">Moderator</option>
-                        <option value="super_admin">Super Admin (Pastor/Apostle)</option>
+                        <option value="moderator">Pastor / Moderator (Blue Badge)</option>
+                        <option value="super_admin">Super Admin (Gold Badge)</option>
                         <option value="developer">Developer</option>
                       </select>
                     </div>
@@ -1827,7 +1851,8 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                         value={editPassword}
                         onChange={(e) => setEditPassword(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono outline-none focus:border-purple-400"
-                      />
+                      >
+                      </input>
                     </div>
 
                     {/* God Mode Verification Badge Toggle */}
@@ -1866,12 +1891,23 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                     <button
                       type="button"
                       onClick={() => {
+                        let finalBadge: 'none' | 'silver' | 'blue' | 'gold' = editVerified ? 'blue' : 'none';
+                        let finalVerified = editVerified;
+
+                        if (editRole === 'super_admin') {
+                          finalBadge = 'gold';
+                          finalVerified = true;
+                        } else if (editRole === 'moderator') {
+                          finalBadge = 'blue';
+                          finalVerified = true;
+                        }
+
                         const updates: any = {
                           full_name: editFullName.trim(),
                           role: editRole,
                           city_location: editCity,
-                          is_verified: editVerified,
-                          badge_type: editVerified ? 'blue' : 'none'
+                          is_verified: finalVerified,
+                          badge_type: finalBadge
                         };
                         if (editPassword.trim()) {
                           updates.password = editPassword.trim();
@@ -1879,12 +1915,12 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                         const targetId = editingUser.id || editingUser.phone;
                         const res = StorageService.developerEditAccount(targetId, updates);
                         if (res.success) {
-                          StorageService.developerSetVerificationBadge(targetId, editVerified, editVerified ? 'blue' : 'none');
+                          StorageService.developerSetVerificationBadge(targetId, finalVerified, finalBadge);
                           setUsersList(StorageService.getAllUsers());
                           setEditingUser(null);
                           setPenetrateStatus(`✓ Successfully updated ${editingUser.full_name} (${targetId})`);
                           setLogs(prev => [
-                            `[${new Date().toLocaleTimeString()}] [GODMODE_EDIT] Updated account details for ${editingUser.full_name} (${targetId}) (Role: ${editRole}, Verified: ${editVerified})`,
+                            `[${new Date().toLocaleTimeString()}] [GODMODE_EDIT] Updated account details for ${editingUser.full_name} (${targetId}) (Role: ${editRole}, Verified: ${finalVerified}, Badge: ${finalBadge})`,
                             ...prev
                           ]);
                         } else {
@@ -2002,11 +2038,16 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                   <tbody className="divide-y divide-slate-800 text-slate-200">
                     {usersList
                       .filter(u => {
-                        const q = banSearch.toLowerCase().trim();
+                        const q = (banSearch || '').toLowerCase().trim();
                         if (!q) return true;
-                        return u.full_name.toLowerCase().includes(q) ||
-                          u.phone.includes(q) ||
-                          (u.handle && u.handle.toLowerCase().includes(q));
+                        return (
+                          (u.full_name || '').toLowerCase().includes(q) ||
+                          (u.phone || '').includes(q) ||
+                          (u.handle || '').toLowerCase().includes(q) ||
+                          (u.member_id || '').toLowerCase().includes(q) ||
+                          (u.city_location || '').toLowerCase().includes(q) ||
+                          (u.location || '').toLowerCase().includes(q)
+                        );
                       })
                       .map(u => {
                         const banEntry = bannedUsersMap[u.id] || (u.phone ? bannedUsersMap[u.phone] : undefined);
