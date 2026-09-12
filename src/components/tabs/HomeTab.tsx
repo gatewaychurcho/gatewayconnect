@@ -32,6 +32,7 @@ import { MOCK_PARTNER_TICKERS } from '../../data/mockData';
 import { VerifiedBadge } from '../common/VerifiedBadge';
 import { PaidBookingModal } from '../modals/PaidBookingModal';
 import { cn } from '../../lib/utils';
+import { liveSyncService } from '../../services/liveSyncService';
 
 interface HomeTabProps {
   sermons: Sermon[];
@@ -165,6 +166,38 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const isGuest = currentUser.role === 'guest';
   const isSermonUnlocked = !activeSermon.is_premium || currentUser.is_premium || currentUser.unlocked_sermon_ids?.includes(activeSermon.id);
 
+  // Live broadcast listener for remote stream reactions and chat
+  useEffect(() => {
+    const handleLiveStreamEvent = (e: any) => {
+      const event = e.detail;
+      if (!event) return;
+      if (event.type === 'stream_reaction' && event.payload) {
+        const { emoji } = event.payload;
+        if (emoji) {
+          setActiveReactionCount(prev => ({
+            ...prev,
+            [emoji]: (prev[emoji] || 0) + 1
+          }));
+          confetti({
+            particleCount: 12,
+            spread: 35,
+            origin: { y: 0.7, x: 0.8 }
+          });
+        }
+      } else if (event.type === 'stream_chat' && event.payload) {
+        const incoming = event.payload;
+        setChatMessages(prev => {
+          if (prev.some(m => m.user === incoming.user && m.text === incoming.text && m.time === incoming.time)) {
+            return prev;
+          }
+          return [...prev, incoming];
+        });
+      }
+    };
+    window.addEventListener('gcz_live_event_received', handleLiveStreamEvent);
+    return () => window.removeEventListener('gcz_live_event_received', handleLiveStreamEvent);
+  }, []);
+
   const handleTriggerReaction = (emoji: string) => {
     if (isGuest) {
       onRequireAuth();
@@ -184,6 +217,11 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         particleCount: 15,
         spread: 35,
         origin: { y: 0.7, x: 0.8 }
+      });
+      // Broadcast reaction to all other connected viewers
+      liveSyncService.broadcastEvent({
+        type: 'stream_reaction',
+        payload: { emoji, user: currentUser.full_name }
       });
     }
   };
@@ -210,6 +248,11 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     };
     setChatMessages(prev => [...prev, newMsg]);
     setInputChat('');
+    // Broadcast chat to all other connected viewers
+    liveSyncService.broadcastEvent({
+      type: 'stream_chat',
+      payload: newMsg
+    });
   };
 
   const handleToggleDownload = (sermonId: string) => {
