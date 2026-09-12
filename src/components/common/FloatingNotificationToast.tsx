@@ -12,10 +12,11 @@ import {
   HandHeart,
   Calendar
 } from 'lucide-react';
-import { AppNotification } from '../../types';
+import { User, AppNotification } from '../../types';
 import { StorageService } from '../../services/storageService';
 
 interface FloatingNotificationToastProps {
+  currentUser?: User | null;
   onOpenLiveSermon: () => void;
   onOpenDirectChat: (recipientId: string) => void;
   onOpenGroupChat: (groupId: string) => void;
@@ -24,6 +25,7 @@ interface FloatingNotificationToastProps {
 }
 
 export const FloatingNotificationToast: React.FC<FloatingNotificationToastProps> = ({
+  currentUser,
   onOpenLiveSermon,
   onOpenDirectChat,
   onOpenGroupChat,
@@ -35,6 +37,27 @@ export const FloatingNotificationToast: React.FC<FloatingNotificationToastProps>
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const showNotification = (notif: AppNotification) => {
+    const activeUser = currentUser || StorageService.getCurrentUser();
+    const activeUserId = activeUser?.id;
+
+    // Strict recipient isolation:
+    // If notification has a recipient_id, ONLY display if it matches the current user
+    if (notif.recipient_id) {
+      if (!activeUserId || notif.recipient_id !== activeUserId) {
+        return;
+      }
+    } else {
+      // If no recipient_id, only general church broadcasts can appear app-wide
+      if (notif.type !== 'broadcast') {
+        return;
+      }
+    }
+
+    // Do NOT show notification to the user who triggered the action
+    if (notif.actor_id && activeUserId && notif.actor_id === activeUserId) {
+      return;
+    }
+
     if (timerRef.current) clearTimeout(timerRef.current);
     setCurrentNotif(notif);
     setIsVisible(true);
@@ -55,10 +78,12 @@ export const FloatingNotificationToast: React.FC<FloatingNotificationToastProps>
 
     window.addEventListener('gcz_new_notification' as any, handleNewNotif);
 
-    // 2. On mount, if there's an unread notification, preview the latest one once after 2.5s
+    // 2. On mount, preview the latest unread notification for this specific user
     const previewTimer = setTimeout(() => {
-      const all = StorageService.getAppNotifications();
-      const latestUnread = all.find(n => !n.is_read);
+      const activeUser = currentUser || StorageService.getCurrentUser();
+      if (!activeUser || activeUser.id === 'guest') return;
+      const all = StorageService.getAppNotifications(activeUser.id);
+      const latestUnread = all.find(n => !n.is_read && n.recipient_id === activeUser.id);
       if (latestUnread) {
         showNotification(latestUnread);
       }
@@ -69,7 +94,7 @@ export const FloatingNotificationToast: React.FC<FloatingNotificationToastProps>
       clearTimeout(previewTimer);
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, []);
+  }, [currentUser?.id]);
 
   if (!isVisible || !currentNotif) return null;
 
