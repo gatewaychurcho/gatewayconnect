@@ -173,22 +173,18 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Notifications Bell Button */}
-        {!isGuest && onOpenNotifications && (
+        {/* Notifications Bell Button (Only visible when unread notifications > 0) */}
+        {!isGuest && onOpenNotifications && unreadNotifsCount > 0 && (
           <button
             id="btn-notifications-header"
             onClick={onOpenNotifications}
             title="Notifications & Live Alerts"
-            className="relative p-2 rounded-lg bg-secondary/50 border border-border hover:bg-secondary text-foreground/80 hover:text-foreground transition-all shadow-sm cursor-pointer"
+            className="relative p-2 rounded-lg bg-secondary/50 border border-border hover:bg-secondary text-foreground/80 hover:text-foreground transition-all shadow-sm cursor-pointer animate-in fade-in"
           >
             <Bell className="w-4 h-4 text-primary" />
-            {unreadNotifsCount > 0 ? (
-              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center shadow">
-                {unreadNotifsCount}
-              </span>
-            ) : (
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-primary" />
-            )}
+            <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center shadow">
+              {unreadNotifsCount}
+            </span>
           </button>
         )}
 
