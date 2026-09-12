@@ -303,19 +303,14 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     };
     window.addEventListener('gcz_stream_viewers_updated', handleStreamersUpdated);
 
-    // 10+ seconds watch requirement: record streamer with login details
-    let watchTimer: any = null;
     if (isPlaying && currentUser && currentUser.id !== 'guest') {
-      watchTimer = setTimeout(() => {
-        StorageService.recordStreamer(currentUser, liveFeedTitle);
-        setOnlineStreamersCount(StorageService.getOnlineStreamersCount());
-      }, 10000);
+      StorageService.recordStreamer(currentUser, liveFeedTitle);
+      setOnlineStreamersCount(StorageService.getOnlineStreamersCount());
     }
 
     return () => {
       window.removeEventListener('gcz_stream_viewers_updated', handleStreamersUpdated);
-      if (watchTimer) clearTimeout(watchTimer);
-      if (currentUser?.id && currentUser.id !== 'guest') {
+      if (isPlaying && currentUser?.id && currentUser.id !== 'guest') {
         StorageService.leaveLiveStream(currentUser.id);
       }
     };
