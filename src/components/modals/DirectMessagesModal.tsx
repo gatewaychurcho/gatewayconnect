@@ -352,6 +352,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     window.addEventListener('gcz_group_messages_updated', handleGroupMsgUpdated);
     window.addEventListener('gcz_direct_messages_updated', handleDirectMsgUpdated);
     window.addEventListener('gcz_user_profile_updated', handleProfileUpdated);
+    window.addEventListener('gcz_user_registered', handleProfileUpdated);
     window.addEventListener('gcz_users_synced', handleProfileUpdated);
     window.addEventListener('gcz_groups_updated', refreshGroupsData);
 
@@ -391,6 +392,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       window.removeEventListener('gcz_group_messages_updated', handleGroupMsgUpdated);
       window.removeEventListener('gcz_direct_messages_updated', handleDirectMsgUpdated);
       window.removeEventListener('gcz_user_profile_updated', handleProfileUpdated);
+      window.removeEventListener('gcz_user_registered', handleProfileUpdated);
       window.removeEventListener('gcz_users_synced', handleProfileUpdated);
       window.removeEventListener('gcz_groups_updated', refreshGroupsData);
       unsubscribe();
