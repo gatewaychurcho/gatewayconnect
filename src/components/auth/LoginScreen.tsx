@@ -19,7 +19,8 @@ import {
   X,
   Send,
   MapPin,
-  Globe
+  Globe,
+  Calendar
 } from 'lucide-react';
 import { User as UserType, SUPPORTED_CITIES, SupportedCity, COUNTRY_CODES } from '../../types';
 import { StorageService } from '../../services/storageService';
@@ -42,6 +43,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [password, setPassword] = useState<string>('');
   const [fullName, setFullName] = useState<string>('');
   const [cityLocation, setCityLocation] = useState<SupportedCity>('Harare');
+  const [dateOfBirth, setDateOfBirth] = useState<string>('');
+  const [gender, setGender] = useState<'male' | 'female'>('male');
   const [referralCode, setReferralCode] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -144,13 +147,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       return;
     }
 
+    if (!dateOfBirth) {
+      setErrorMessage('Please select your Date of Birth.');
+      return;
+    }
+
     const fullPhone = formatPhoneWithCountryCode(phone, countryCode);
     const res = StorageService.signup(
       fullName.trim(),
       fullPhone,
       password.trim(),
       cityLocation,
-      referralCode.trim()
+      referralCode.trim(),
+      undefined,
+      dateOfBirth,
+      gender
     );
 
     if (res.success && res.user) {
@@ -424,6 +435,41 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 <p className="text-[10px] text-white/50 mt-0.5">
                   Connects you to local believers & clusters into official Congregations.
                 </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-white/80 mb-1">
+                    Date of Birth
+                  </label>
+                  <div className="relative">
+                    <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#D4AF37]" />
+                    <input
+                      type="date"
+                      required
+                      value={dateOfBirth}
+                      onChange={(e) => setDateOfBirth(e.target.value)}
+                      className="w-full bg-[#001122] border border-white/20 rounded-xl pl-9 pr-2 py-2 text-white focus:outline-none focus:border-[#D4AF37] text-xs [color-scheme:dark]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-white/80 mb-1">
+                    Sex / Gender
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#D4AF37]" />
+                    <select
+                      value={gender}
+                      onChange={(e) => setGender(e.target.value as 'male' | 'female')}
+                      className="w-full bg-[#001122] border border-white/20 rounded-xl pl-9 pr-3 py-2 text-white focus:outline-none focus:border-[#D4AF37] appearance-none cursor-pointer text-xs"
+                    >
+                      <option value="male" className="bg-[#001F3F] text-white">Male (Brother)</option>
+                      <option value="female" className="bg-[#001F3F] text-white">Female (Sister)</option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
               <div>
