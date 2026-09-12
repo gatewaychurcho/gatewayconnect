@@ -1347,6 +1347,29 @@ export class StorageService {
     };
     notifications.unshift(newNotif);
     setLocal(KEYS.PUSH_NOTIFICATIONS, notifications);
+
+    // Synchronize into user-facing App Notifications so the Bell icon rings across all connected devices in real time
+    const appNotifs = this.getAppNotifications();
+    const newAppNotif: AppNotification = {
+      id: `notif_${Date.now()}`,
+      type: 'broadcast',
+      actor_id: 'apostle_joe',
+      actor_name: 'Apostle Joe Daniels',
+      actor_avatar: '/assets/apostle_joe_daniels_main.jpg',
+      title,
+      message: body,
+      target_type: title.toLowerCase().includes('live') ? 'live' : 'url',
+      created_at: new Date().toISOString(),
+      is_read: false
+    };
+    appNotifs.unshift(newAppNotif);
+    setLocal(KEYS.APP_NOTIFICATIONS, appNotifs);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_new_notification', { detail: newAppNotif }));
+      window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
+    }
+
     return newNotif;
   }
 
