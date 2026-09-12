@@ -4,7 +4,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { CONFIG } from './config';
 
 type LiveEvent = {
-  type: 'testimony' | 'comment' | 'like' | 'direct_message' | 'fellowship_post' | 'prayer' | 'follow' | 'notification' | 'story' | 'group' | 'reaction' | 'stream' | 'pulpit';
+  type: 'testimony' | 'comment' | 'like' | 'direct_message' | 'fellowship_post' | 'prayer' | 'follow' | 'notification' | 'story' | 'group' | 'reaction' | 'stream' | 'pulpit' | 'stream_chat' | 'stream_reaction' | 'user_created' | 'user_banned' | 'unban_user';
   payload: unknown;
 };
 
@@ -20,7 +20,8 @@ const clients = new Map<WebSocket, { id: string; full_name: string; handle?: str
 const state: LiveState = { testimonies: [], prayers: [], directMessages: [], fellowshipPosts: [], activeMembers: [] };
 const knownEventTypes = new Set<LiveEvent['type']>([
   'testimony', 'comment', 'like', 'direct_message', 'fellowship_post', 'prayer',
-  'follow', 'notification', 'story', 'group', 'reaction', 'stream', 'pulpit'
+  'follow', 'notification', 'story', 'group', 'reaction', 'stream', 'pulpit',
+  'stream_chat', 'stream_reaction', 'user_created', 'user_banned', 'unban_user'
 ]);
 
 const broadcast = (message: unknown, except?: WebSocket) => {
