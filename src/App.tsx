@@ -32,7 +32,6 @@ import {
   Product, 
   PushNotification 
 } from './types';
-import { INITIAL_USERS } from './data/mockData';
 import { 
   LogIn, 
   UserPlus, 
@@ -170,9 +169,13 @@ export default function App() {
   };
 
   useEffect(() => {
+    StorageService.syncUsersWithRemote().catch(() => {});
     if (!currentUser) {
       liveSyncService.disconnect();
       return;
+    }
+    if (currentUser.id && currentUser.role !== 'guest') {
+      StorageService.hydrateFollowsFromSupabase(currentUser.id).catch(() => {});
     }
     liveSyncService.connect(currentUser);
     const unbind = liveSyncService.bindLocalEvents();
