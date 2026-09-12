@@ -3,10 +3,13 @@ import { StorageService } from './storageService';
 import { getSupabase } from './supabaseClient';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
-// Use Vercel env var if available, fallback to CONFIG
-const configuredLiveWsUrl = import.meta.env.VITE_LIVE_WS_URL || (await import('../../config')).CONFIG.LIVE_WS_URL;
+// Live WebSocket URL (from env or defaults to local hub)
+const configuredLiveWsUrl: string =
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_LIVE_WS_URL) ||
+  (typeof window !== 'undefined' && (window as any).__GCZ_WS_URL) ||
+  'ws://localhost:8787/live';
 
-type LiveEventType =
+export type LiveEventType =
   | 'testimony'
   | 'comment'
   | 'like'
@@ -19,9 +22,14 @@ type LiveEventType =
   | 'group'
   | 'reaction'
   | 'stream'
-  | 'pulpit';
+  | 'pulpit'
+  | 'stream_chat'
+  | 'stream_reaction'
+  | 'user_created'
+  | 'user_banned'
+  | 'unban_user';
 
-type LiveEvent = { type: LiveEventType; payload: unknown };
+export type LiveEvent = { type: LiveEventType; payload: unknown };
 
 type LiveState = {
   testimonies: Testimony[];
@@ -203,6 +211,11 @@ export class LiveSyncService {
       ['gcz_reactions_updated', 'reaction'],
       ['gcz_stream_url_updated', 'stream'],
       ['gcz_pulpit_scripture_updated', 'pulpit'],
+      ['gcz_stream_chat_sent', 'stream_chat'],
+      ['gcz_stream_reaction_sent', 'stream_reaction'],
+      ['gcz_user_registered', 'user_created'],
+      ['gcz_user_banned_broadcast', 'user_banned'],
+      ['gcz_user_unbanned_broadcast', 'unban_user'],
     ];
 
     const handlers = eventNames.map(([name, type]) => {
