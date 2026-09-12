@@ -328,10 +328,20 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     };
 
     const handleDirectMsgUpdated = (e: any) => {
-  console.log("🔎 Direct message event detail:", e.detail);
-  const msg = e.detail as ChatMsg;
-  setMessages(prev => [...prev, msg]);
-};
+      const msg = e.detail as DirectMessage;
+      if (!msg || !msg.id) return;
+      if (
+        activeUserId &&
+        ((msg.sender_id === activeUserId && msg.receiver_id === currentUser.id) ||
+         (msg.sender_id === currentUser.id && msg.receiver_id === activeUserId))
+      ) {
+        setMessages(prev => {
+          if (prev.some(m => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      }
+      refreshThreads();
+    };
 
 
     const handleProfileUpdated = () => {

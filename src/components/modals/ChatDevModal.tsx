@@ -59,9 +59,6 @@ export const ChatDevModal: React.FC<ChatDevModalProps> = ({ isOpen, onClose }) =
     // Update local state
     setMessages(prev => [...prev, userMsg]);
 
-    // Broadcast to peers
-    liveSyncService.broadcastEvent({ type: 'direct_message', payload: userMsg });
-
     // Dispatch message to developer's inbox and trigger real notification on his bell
     StorageService.sendDirectMessage(currentUser.id, 'usr_developer', inputText.trim());
     StorageService.addAppNotification({
