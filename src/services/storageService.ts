@@ -119,7 +119,8 @@ const KEYS = {
   GROUP_MEDIA: 'gcz_group_media_v1',
   NOTIFICATION_SETTINGS: 'gcz_notification_settings_v1',
   RECEIPTS_ARCHIVE: 'gcz_receipts_archive_v1',
-  THEME: 'gcz_theme_v1'
+  THEME: 'gcz_theme_v1',
+  DISSOLVED_GROUPS: 'gcz_dissolved_groups_v1'
 };
 
 // In-memory fallback dictionary for when third-party cookies or localStorage are restricted/blocked
@@ -683,12 +684,15 @@ export class StorageService {
 
   // Groups
   static getGroups(explicitUserId?: string): CommunityGroup[] {
+    const dissolved = new Set(getLocal<string[]>(KEYS.DISSOLVED_GROUPS, []));
     let list = getLocal<CommunityGroup[]>(KEYS.GROUPS, MOCK_COMMUNITY_GROUPS);
-    if (!list || list.length === 0 || !list.some(g => g.id === 'group_ignite_worship')) {
-      list = MOCK_COMMUNITY_GROUPS;
-      setLocal(KEYS.GROUPS, MOCK_COMMUNITY_GROUPS);
+    if (!list || list.length === 0) {
+      list = MOCK_COMMUNITY_GROUPS.filter(g => !dissolved.has(g.id));
+      setLocal(KEYS.GROUPS, list);
     }
     const chatGroups = this.getChatGroups();
+    const chatGroupIds = new Set(chatGroups.map(c => c.id));
+    list = list.filter(g => !dissolved.has(g.id) && chatGroupIds.has(g.id));
     const targetUserId = explicitUserId || this.getCurrentUser()?.id;
 
     // Return mapped copy where joined is computed dynamically for targetUserId ONLY
@@ -697,7 +701,7 @@ export class StorageService {
       const memberCount = cg ? cg.member_ids.length : (group.member_count || 0);
       const hasExited = targetUserId ? this.hasUserExitedGroup(group.id, targetUserId) : false;
       const isMember = (cg && targetUserId)
-        ? (cg.member_ids.includes(targetUserId) || (!cg.is_paid && !hasExited))
+        ? cg.member_ids.includes(targetUserId)
         : false;
       return {
         ...group,
@@ -731,8 +735,7 @@ export class StorageService {
     const chatGroups = this.getChatGroups();
     const cg = chatGroups.find(c => c.id === groupId);
     if (!cg) return false;
-    if (cg.member_ids.includes(targetUserId)) return true;
-    return !cg.is_paid;
+    return cg.member_ids.includes(targetUserId);
   }
 
   static toggleGroupJoin(groupId: string, userId?: string): boolean {
@@ -1808,7 +1811,9 @@ export class StorageService {
     password: string, 
     location?: string,
     referralCode?: string,
-    chosenHandle?: string
+    chosenHandle?: string,
+    dateOfBirth?: string,
+    gender?: 'male' | 'female' | 'other'
   ): { success: boolean; user?: User; error?: string } {
     const users = this.getAllUsers();
     
@@ -1851,6 +1856,8 @@ export class StorageService {
       location: city,
       city_location: city,
       cell_group: 'Central Fellowship',
+      date_of_birth: dateOfBirth?.trim(),
+      gender,
       referral_code: referralCode?.trim(),
       member_id: `GCZ-${role === 'developer' ? 'DEV' : 'MEM'}-${Math.floor(1000 + Math.random() * 9000)}`,
       is_verified: isVerified,
@@ -1863,6 +1870,38 @@ export class StorageService {
     this.saveUser(newUser);
     this.autoFollowSuperAdminAndDeveloper(newUser.id);
     this.setCurrentUser(newUser);
+
+    // Automatic Group Assignment based on Age & Sex (Ignite Worship is joined on your own)
+    if (dateOfBirth) {
+      const dob = new Date(dateOfBirth);
+      if (!isNaN(dob.getTime())) {
+        const today = new Date();
+        let age = today.getFullYear() - dob.getFullYear();
+        const monthDiff = today.getMonth() - dob.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+          age--;
+        }
+
+        const isMale = gender === 'male';
+        const isFemale = gender === 'female';
+
+        // 1. Below 45 -> automatically added to youth group "Gymstars Foundation"
+        if (age < 45) {
+          this.joinChatGroup('group_gymstars_foundation', newUser.id, undefined, true);
+        }
+
+        // 2. Over 30 and men -> automatically added to men's group "Pride Of Lions"
+        if (age > 30 && isMale) {
+          this.joinChatGroup('group_pride_of_lions', newUser.id, undefined, true);
+        }
+
+        // 3. Over 30 and women -> automatically added to women's group "Passion ladies"
+        if (age > 30 && isFemale) {
+          this.joinChatGroup('group_passion_ladies', newUser.id, undefined, true);
+        }
+      }
+    }
+
     return { success: true, user: newUser };
   }
 
@@ -3188,16 +3227,20 @@ export class StorageService {
   // COMMUNITY CHAT GROUPS & FOUNDATION SCHOOL MEMBERSHIP LOGIC
   // =========================================================================
   static getChatGroups(): ChatGroup[] {
-    const list = getLocal<ChatGroup[]>(KEYS.CHAT_GROUPS, INITIAL_CHAT_GROUPS);
+    const dissolved = new Set(getLocal<string[]>(KEYS.DISSOLVED_GROUPS, []));
+    let list = getLocal<ChatGroup[]>(KEYS.CHAT_GROUPS, INITIAL_CHAT_GROUPS);
     if (!list || list.length === 0) {
-      setLocal(KEYS.CHAT_GROUPS, INITIAL_CHAT_GROUPS);
-      return INITIAL_CHAT_GROUPS;
+      const initialFiltered = INITIAL_CHAT_GROUPS.filter(g => !dissolved.has(g.id));
+      setLocal(KEYS.CHAT_GROUPS, initialFiltered);
+      return initialFiltered;
     }
-    // Ensure all 5 canonical groups exist
+    // Filter out any dissolved groups
+    list = list.filter(g => !dissolved.has(g.id));
+    // Ensure all canonical groups exist unless dissolved
     const existingIds = new Set(list.map(g => g.id));
     let changed = false;
     for (const initGrp of INITIAL_CHAT_GROUPS) {
-      if (!existingIds.has(initGrp.id)) {
+      if (!existingIds.has(initGrp.id) && !dissolved.has(initGrp.id)) {
         list.push(initGrp);
         changed = true;
       }
@@ -3206,6 +3249,119 @@ export class StorageService {
       setLocal(KEYS.CHAT_GROUPS, list);
     }
     return list;
+  }
+
+  static validateGroupInviteCode(rawCode: string): { status: 'valid' | 'reset' | 'invalid'; group?: ChatGroup } {
+    if (!rawCode) return { status: 'invalid' };
+    let code = rawCode.trim();
+    if (code.includes('code=')) {
+      const parts = code.split('code=');
+      code = parts[1].split('&')[0];
+    }
+    code = code.trim();
+    if (!code) return { status: 'invalid' };
+
+    const groups = this.getChatGroups();
+
+    // Check if active code matches
+    const activeGroup = groups.find(g => g.invite_code && g.invite_code.toLowerCase() === code.toLowerCase());
+    if (activeGroup) {
+      if (activeGroup.is_invite_link_active === false) {
+        return { status: 'reset', group: activeGroup };
+      }
+      return { status: 'valid', group: activeGroup };
+    }
+
+    // Check if revoked/reset code matches
+    const revokedGroup = groups.find(g => 
+      g.revoked_invite_codes && 
+      g.revoked_invite_codes.some(rc => rc.toLowerCase() === code.toLowerCase())
+    );
+    if (revokedGroup) {
+      return { status: 'reset', group: revokedGroup };
+    }
+
+    return { status: 'invalid' };
+  }
+
+  static resetGroupInviteCode(groupId: string): { success: boolean; newCode?: string; message: string; group?: ChatGroup } {
+    const groups = this.getChatGroups();
+    const grp = groups.find(g => g.id === groupId);
+    if (!grp) return { success: false, message: 'Group not found' };
+
+    if (!grp.revoked_invite_codes) grp.revoked_invite_codes = [];
+    if (grp.invite_code && !grp.revoked_invite_codes.includes(grp.invite_code)) {
+      grp.revoked_invite_codes.push(grp.invite_code);
+    }
+
+    const baseName = grp.name.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 18);
+    const newCode = `${baseName}-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+    grp.invite_code = newCode;
+    grp.is_invite_link_active = true;
+
+    setLocal(KEYS.CHAT_GROUPS, groups);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_groups_updated', { detail: grp }));
+    }
+    return { success: true, newCode, message: 'Invite link reset successfully. Previous link is now invalid.', group: grp };
+  }
+
+  static deleteChatGroup(groupId: string): { success: boolean; message: string } {
+    // Add to dissolved groups registry
+    const dissolved = getLocal<string[]>(KEYS.DISSOLVED_GROUPS, []);
+    if (!dissolved.includes(groupId)) {
+      dissolved.push(groupId);
+      setLocal(KEYS.DISSOLVED_GROUPS, dissolved);
+    }
+
+    // Remove from chat groups
+    const rawGroups = getLocal<ChatGroup[]>(KEYS.CHAT_GROUPS, INITIAL_CHAT_GROUPS);
+    const filteredGroups = rawGroups.filter(g => g.id !== groupId);
+    setLocal(KEYS.CHAT_GROUPS, filteredGroups);
+
+    // Remove from community groups
+    const rawComm = getLocal<CommunityGroup[]>(KEYS.GROUPS, MOCK_COMMUNITY_GROUPS);
+    const filteredComm = rawComm.filter(g => g.id !== groupId);
+    setLocal(KEYS.GROUPS, filteredComm);
+
+    // Clean messages
+    const allMsgs = getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
+    if (allMsgs[groupId]) {
+      delete allMsgs[groupId];
+      setLocal(KEYS.CHAT_GROUP_MESSAGES, allMsgs);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_groups_updated'));
+    }
+
+    return { success: true, message: 'Group dissolved successfully.' };
+  }
+
+  static updateGroupSettings(groupId: string, updates: Partial<ChatGroup>): { success: boolean; group?: ChatGroup; message: string } {
+    const groups = this.getChatGroups();
+    const grp = groups.find(g => g.id === groupId);
+    if (!grp) return { success: false, message: 'Group not found' };
+
+    Object.assign(grp, updates);
+    setLocal(KEYS.CHAT_GROUPS, groups);
+
+    // Synchronize name/description in community groups if applicable
+    if (updates.name || updates.description) {
+      const comm = getLocal<CommunityGroup[]>(KEYS.GROUPS, MOCK_COMMUNITY_GROUPS);
+      const cg = comm.find(c => c.id === groupId);
+      if (cg) {
+        if (updates.name) cg.name = updates.name;
+        if (updates.description) cg.description = updates.description;
+        setLocal(KEYS.GROUPS, comm);
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_groups_updated', { detail: grp }));
+    }
+
+    return { success: true, group: grp, message: 'Group settings updated successfully.' };
   }
 
   static createChatGroup(groupData: Omit<ChatGroup, 'id' | 'created_at' | 'invite_code' | 'member_ids'> & { initial_member_ids?: string[] }): ChatGroup {
