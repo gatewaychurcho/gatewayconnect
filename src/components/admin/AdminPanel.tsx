@@ -1266,6 +1266,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                       <Radio className="w-3.5 h-3.5" />
                       <span>{liveSermonStatus.isLive ? 'End Live' : 'Go Live'}</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm('Delete streaming attendance history logs? Streamer profile details will be kept, only repetitive logs will be deleted.')) {
+                          StorageService.clearStreamAttendanceHistory();
+                          setStreamAttendees([]);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm bg-red-950/50 hover:bg-red-900/70 border border-red-500/30 text-red-300"
+                      title="Delete streaming logs while broadcasting"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Logs</span>
+                    </button>
                   </div>
                 </div>
 
@@ -1968,6 +1982,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                   >
                     {copiedAttendeeData ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                     <span className="hidden md:inline">{copiedAttendeeData ? 'Copied' : 'Copy'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm('Delete streaming attendance history logs? Active streamers information will be kept.')) {
+                        StorageService.clearStreamAttendanceHistory();
+                        setStreamAttendees([]);
+                      }
+                    }}
+                    className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-red-950/40 hover:bg-red-900/60 text-red-300 text-xs font-semibold flex items-center gap-1.5 transition-all border border-red-500/30 cursor-pointer"
+                    title="Delete all streaming attendance history logs"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Logs</span>
                   </button>
                 </div>
               </div>
