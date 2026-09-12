@@ -4,7 +4,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { CONFIG } from './config';
 
 type LiveEvent = {
-  type: 'testimony' | 'comment' | 'like' | 'direct_message' | 'fellowship_post' | 'prayer' | 'follow' | 'notification' | 'story' | 'group' | 'reaction' | 'stream' | 'pulpit' | 'stream_chat' | 'stream_reaction' | 'user_created' | 'user_banned' | 'unban_user';
+  type: 'testimony' | 'comment' | 'like' | 'direct_message' | 'fellowship_post' | 'prayer' | 'follow' | 'notification' | 'story' | 'group' | 'reaction' | 'stream' | 'pulpit' | 'stream_chat' | 'stream_reaction' | 'user_created' | 'user_banned' | 'unban_user' | 'stream_viewer_joined' | 'stream_viewer_left';
   payload: unknown;
 };
 
@@ -21,7 +21,8 @@ const state: LiveState = { testimonies: [], prayers: [], directMessages: [], fel
 const knownEventTypes = new Set<LiveEvent['type']>([
   'testimony', 'comment', 'like', 'direct_message', 'fellowship_post', 'prayer',
   'follow', 'notification', 'story', 'group', 'reaction', 'stream', 'pulpit',
-  'stream_chat', 'stream_reaction', 'user_created', 'user_banned', 'unban_user'
+  'stream_chat', 'stream_reaction', 'user_created', 'user_banned', 'unban_user',
+  'stream_viewer_joined', 'stream_viewer_left'
 ]);
 
 const broadcast = (message: unknown, except?: WebSocket) => {
