@@ -827,47 +827,7 @@ export const MOCK_PRODUCTS: Product[] = [
   }
 ];
 
-export const MOCK_DONATIONS: Donation[] = [
-  {
-    id: 'don_101',
-    donor_name: 'Covenant Partner (Private)',
-    amount: 150,
-    currency: 'USD',
-    fund_type: 'Tithe',
-    payment_method: 'EcoCash',
-    status: 'completed',
-    receipt_number: 'GCZ-RC-2026-8891',
-    created_at: '2026-09-01T16:20:00Z',
-    impact_tag: 'Harare Evangelism Outreaches',
-    is_anonymous: false
-  },
-  {
-    id: 'don_102',
-    donor_name: 'Diaspora Partner UK',
-    amount: 250,
-    currency: 'GBP',
-    fund_type: 'Building Foundation',
-    payment_method: 'Stripe',
-    status: 'completed',
-    receipt_number: 'GCZ-RC-2026-8892',
-    created_at: '2026-09-01T18:45:00Z',
-    impact_tag: 'Cathedral Roofing Phase',
-    is_anonymous: true
-  },
-  {
-    id: 'don_103',
-    donor_name: 'Faithful Seed Partner',
-    amount: 1200,
-    currency: 'ZiG',
-    fund_type: 'Seed Faith',
-    payment_method: 'Paynow',
-    status: 'completed',
-    receipt_number: 'GCZ-RC-2026-8893',
-    created_at: '2026-09-02T02:10:00Z',
-    impact_tag: 'Chitungwiza Food Outreach',
-    is_anonymous: false
-  }
-];
+export const MOCK_DONATIONS: Donation[] = [];
 
 export const MOCK_BOOKINGS: ServiceBooking[] = [
   {
