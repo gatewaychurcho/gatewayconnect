@@ -327,10 +327,10 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       refreshGroupsData();
     };
 
-    const handleDirectMsgUpdated = () => {
-      refreshMessages();
-      refreshThreads();
-    };
+    const handleDirectMsgUpdated = (e: any) => {
+  const msg = e.detail as ChatMsg;
+  setMessages(prev => [...prev, msg]);
+};
 
     const handleProfileUpdated = () => {
       refreshThreads();
