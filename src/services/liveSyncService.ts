@@ -43,12 +43,15 @@ export class LiveSyncService {
     this.currentUser = user;
     this.stopped = false;
 
-    // Connect via Supabase Realtime Channel (Serverless Vercel Architecture)
+    // Connect via Supabase Realtime Channel
     this.connectSupabaseRealtime();
 
-    // If an external custom WebSocket server is explicitly specified via env var, also bridge to it
+    // Also connect to external WebSocket hub if configured
     if (configuredLiveWsUrl) {
+      console.log("🔌 Attempting WebSocket connection to:", configuredLiveWsUrl);
       this.connectWebSocket();
+    } else {
+      console.warn("⚠️ No external WebSocket URL configured");
     }
   }
 
@@ -68,10 +71,6 @@ export class LiveSyncService {
     }
   }
 
-  /**
-   * Native Supabase Realtime Hub (Vercel-compatible)
-   * Uses Broadcast and Presence channels so all users sync instantly without maintaining a Node server.
-   */
   private connectSupabaseRealtime(): void {
     const supabase = getSupabase();
     if (!supabase || !this.currentUser) return;
@@ -84,14 +83,13 @@ export class LiveSyncService {
         },
       });
 
-      // Listen for peer broadcast events
       channel.on('broadcast', { event: 'live_event' }, (envelope: any) => {
         if (envelope?.payload) {
+          console.log("📡 Supabase broadcast received:", envelope.payload);
           this.handleLiveEvent(envelope.payload as LiveEvent);
         }
       });
 
-      // Presence tracking (active church members online)
       channel.on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState();
         const activeMembers: Array<{ id: string; full_name: string; handle?: string }> = [];
@@ -100,11 +98,13 @@ export class LiveSyncService {
             if (p.id) activeMembers.push(p);
           });
         });
+        console.log("👥 Supabase presence updated:", activeMembers);
         window.dispatchEvent(new CustomEvent('gcz_live_presence_updated', { detail: activeMembers }));
       });
 
       channel.subscribe(async (status) => {
         if (status === 'SUBSCRIBED' && this.currentUser) {
+          console.log("✅ Supabase channel subscribed for user:", this.currentUser);
           await channel.track({
             id: this.currentUser.id,
             full_name: this.currentUser.full_name,
@@ -115,57 +115,59 @@ export class LiveSyncService {
 
       this.supabaseChannel = channel;
     } catch (err) {
-      console.warn('Supabase Realtime Hub initialization note:', err);
+      console.warn('Supabase Realtime Hub initialization error:', err);
     }
   }
 
-  /**
-   * Optional custom WebSocket gateway connection
-   */
   private connectWebSocket(): void {
     if (!configuredLiveWsUrl || this.stopped || !this.currentUser) return;
     try {
       this.socket = new WebSocket(configuredLiveWsUrl);
       this.socket.onopen = () => {
+        console.log("✅ Connected to Gateway Connect hub:", configuredLiveWsUrl);
         this.sendWs({ type: 'hello', user: this.currentUser });
       };
       this.socket.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+          console.log("📩 Message from hub:", msg);
           if (msg.type === 'event' && msg.payload) {
             this.handleLiveEvent(msg.payload);
           } else if (msg.type === 'presence') {
+            console.log("👥 Presence update from hub:", msg.payload);
             window.dispatchEvent(new CustomEvent('gcz_live_presence_updated', { detail: msg.payload }));
           }
-        } catch {
-          // ignore malformed payloads
+        } catch (err) {
+          console.error("❌ Malformed hub payload:", err);
         }
       };
       this.socket.onclose = () => {
+        console.warn("🔌 Hub WebSocket closed, reconnecting...");
         this.socket = null;
         if (!this.stopped) {
           this.reconnectTimer = window.setTimeout(() => this.connectWebSocket(), 5000);
         }
       };
-    } catch {
-      // ignore
+      this.socket.onerror = (err) => {
+        console.error("❌ Hub WebSocket error:", err);
+      };
+    } catch (err) {
+      console.error("❌ Failed to connect to hub:", err);
     }
   }
 
   private sendWs(message: unknown): void {
     if (this.socket?.readyState === WebSocket.OPEN) {
+      console.log("➡️ Sending to hub:", message);
       this.socket.send(JSON.stringify(message));
     }
   }
 
-  /**
-   * Broadcast an event across all connected devices
-   */
   broadcastEvent(event: LiveEvent): void {
     if (this.applyingRemote) return;
 
-    // 1. Send via Supabase Realtime broadcast
     if (this.supabaseChannel) {
+      console.log("➡️ Broadcasting via Supabase:", event);
       void this.supabaseChannel.send({
         type: 'broadcast',
         event: 'live_event',
@@ -173,13 +175,13 @@ export class LiveSyncService {
       });
     }
 
-    // 2. Send via optional WebSocket if connected
     this.sendWs({ type: 'event', payload: event });
   }
 
   private handleLiveEvent(event: LiveEvent): void {
     this.applyingRemote = true;
     try {
+      console.log("📥 Applying live event:", event);
       StorageService.applyLiveEvent(event.type, event.payload);
       window.dispatchEvent(new CustomEvent('gcz_live_event_received', { detail: event }));
       window.dispatchEvent(new CustomEvent('gcz_live_state_updated'));
@@ -188,9 +190,6 @@ export class LiveSyncService {
     }
   }
 
-  /**
-   * Listens for local application actions and broadcasts them to peers
-   */
   bindLocalEvents(): () => void {
     const eventNames: Array<[string, LiveEventType]> = [
       ['gcz_testimony_updated', 'testimony'],
@@ -212,6 +211,7 @@ export class LiveSyncService {
         const detail = (event as CustomEvent).detail;
         const payload = type === 'fellowship_post' ? detail?.message : detail || { updated: true };
         if (payload) {
+          console.log("📤 Local event triggered:", type, payload);
           this.broadcastEvent({ type, payload });
         }
       };
