@@ -262,9 +262,64 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
       setStreamAttendees(StorageService.getStreamAttendanceHistory());
     };
 
+    const handleIncomingLiveEvent = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      const detail = customEvt.detail;
+      const stamp = new Date().toLocaleTimeString();
+      if (detail && detail.type) {
+        let desc = typeof detail.payload === 'object' ? JSON.stringify(detail.payload) : String(detail.payload || '');
+        if (desc.length > 80) desc = desc.slice(0, 80) + '...';
+        setLogs(prev => [
+          `[${stamp}] [REALTIME_BUS:${detail.type.toUpperCase()}] ${desc}`,
+          ...prev.slice(0, 150)
+        ]);
+      }
+      refreshAll();
+    };
+
+    const handleStreamChat = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      const chat = customEvt.detail;
+      const stamp = new Date().toLocaleTimeString();
+      setLogs(prev => [
+        `[${stamp}] [STREAM_CHAT] ${chat?.userName || 'Viewer'}: ${chat?.text || ''}`,
+        ...prev.slice(0, 150)
+      ]);
+    };
+
+    const handleStreamReaction = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      const r = customEvt.detail;
+      const stamp = new Date().toLocaleTimeString();
+      setLogs(prev => [
+        `[${stamp}] [STREAM_REACTION] Burst ${r?.reactionType || 'Amen'} from ${r?.userName || 'Viewer'} (${r?.city || 'Harare'})`,
+        ...prev.slice(0, 150)
+      ]);
+    };
+
+    const handlePresence = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      const members = (customEvt.detail as any[]) || [];
+      const stamp = new Date().toLocaleTimeString();
+      setLogs(prev => [
+        `[${stamp}] [PRESENCE_SYNC] ${members.length} active client socket node(s) connected`,
+        ...prev.slice(0, 150)
+      ]);
+    };
+
     window.addEventListener('gcz_user_profile_updated', refreshAll);
+    window.addEventListener('gcz_user_registered', refreshAll);
     window.addEventListener('gcz_users_synced', refreshAll);
+    window.addEventListener('gcz_banned_users_updated', refreshAll);
     window.addEventListener('gcz_stream_viewers_updated', refreshAll);
+    window.addEventListener('gcz_stream_attendance_updated', refreshAll);
+    window.addEventListener('gcz_password_requests_updated', refreshAll);
+    window.addEventListener('gcz_unban_appeals_updated', refreshAll);
+    window.addEventListener('gcz_live_state_updated', refreshAll);
+    window.addEventListener('gcz_live_event_received', handleIncomingLiveEvent);
+    window.addEventListener('gcz_stream_chat_sent', handleStreamChat);
+    window.addEventListener('gcz_stream_reaction_sent', handleStreamReaction);
+    window.addEventListener('gcz_live_presence_updated', handlePresence);
 
     // Heartbeat live telemetry logs
     const heartbeat = setInterval(() => {
@@ -282,11 +337,21 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
 
     return () => {
       window.removeEventListener('gcz_user_profile_updated', refreshAll);
+      window.removeEventListener('gcz_user_registered', refreshAll);
       window.removeEventListener('gcz_users_synced', refreshAll);
+      window.removeEventListener('gcz_banned_users_updated', refreshAll);
       window.removeEventListener('gcz_stream_viewers_updated', refreshAll);
+      window.removeEventListener('gcz_stream_attendance_updated', refreshAll);
+      window.removeEventListener('gcz_password_requests_updated', refreshAll);
+      window.removeEventListener('gcz_unban_appeals_updated', refreshAll);
+      window.removeEventListener('gcz_live_state_updated', refreshAll);
+      window.removeEventListener('gcz_live_event_received', handleIncomingLiveEvent);
+      window.removeEventListener('gcz_stream_chat_sent', handleStreamChat);
+      window.removeEventListener('gcz_stream_reaction_sent', handleStreamReaction);
+      window.removeEventListener('gcz_live_presence_updated', handlePresence);
       clearInterval(heartbeat);
     };
-  }, [isPausedLogs]);
+  }, [isPausedLogs, supabaseConfig.isLiveConnected]);
 
   useEffect(() => {
     if (autoScrollLogs && logsContainerRef.current) {
@@ -432,7 +497,9 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
     localStorage.removeItem('gcz_banned_users_map');
     setBannedUsersMap({});
     setUsersList(StorageService.getAllUsers());
-    setLogs(prev => [`[${new Date().toLocaleTimeString()}] [BAN_DESK] Restored all accounts to active status`, ...prev]);
+    window.dispatchEvent(new CustomEvent('gcz_banned_users_updated', { detail: {} }));
+    window.dispatchEvent(new CustomEvent('gcz_users_synced', { detail: StorageService.getAllUsers() }));
+    setLogs(prev => [`[${new Date().toLocaleTimeString()}] [BAN_DESK] Restored all accounts to active status across real-time`, ...prev]);
   };
 
   const handleResolveAppeal = (appealId: string, status: 'approved' | 'rejected') => {
