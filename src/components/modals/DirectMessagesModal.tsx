@@ -328,9 +328,11 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     };
 
     const handleDirectMsgUpdated = (e: any) => {
+  console.log("🔎 Direct message event detail:", e.detail);
   const msg = e.detail as ChatMsg;
   setMessages(prev => [...prev, msg]);
 };
+
 
     const handleProfileUpdated = () => {
       refreshThreads();
