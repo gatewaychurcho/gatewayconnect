@@ -33,11 +33,14 @@ import {
   Radio,
   Timer,
   Compass,
-  LogIn
+  LogIn,
+  Trash2,
+  Film,
+  Video
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { CommunityGroup, PrayerRequest, ChurchEvent, Testimony, User } from '../../types';
-import { StorageService } from '../../services/storageService';
+import { CommunityGroup, PrayerRequest, ChurchEvent, Testimony, User, CommunityStory } from '../../types';
+import { StorageService, arePhoneNumbersEqual } from '../../services/storageService';
 import { SupabaseSyncService } from '../../services/supabaseSyncService';
 import { ImagePickerModal } from '../modals/ImagePickerModal';
 import { VerifiedBadge } from '../common/VerifiedBadge';
@@ -201,6 +204,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   // Instagram UI/UX State
   const [doubleTapHeartPostId, setDoubleTapHeartPostId] = useState<string | null>(null);
   const [activeStoryModal, setActiveStoryModal] = useState<{
+    id: string;
+    userId: string;
     userName: string;
     userHandle: string;
     avatar: string;
@@ -209,7 +214,23 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     scripture: string;
     text: string;
     imageUrl: string;
+    isLiked?: boolean;
+    likeCount?: number;
   } | null>(null);
+  const [storyReplyText, setStoryReplyText] = useState<string>('');
+
+  // Dynamic Stories state synced with StorageService
+  const [communityStories, setCommunityStories] = useState<CommunityStory[]>(() => {
+    return StorageService.getSortedStories(currentUser?.id);
+  });
+  const [showAddStoryModal, setShowAddStoryModal] = useState<boolean>(false);
+  const [newStoryImageUrl, setNewStoryImageUrl] = useState<string>('');
+  const [newStoryScripture, setNewStoryScripture] = useState<string>('');
+  const [newStoryText, setNewStoryText] = useState<string>('');
+  const storyFileInputRef = useRef<HTMLInputElement>(null);
+
+  const canModeratePosts = currentUser.role === 'super_admin' || currentUser.role === 'developer';
+
   const [activeLikesModalPost, setActiveLikesModalPost] = useState<Testimony | null>(null);
   const [followingUsers, setFollowingUsers] = useState<Record<string, boolean>>(() => {
     const list = StorageService.getFollowingList(currentUser?.id);
@@ -240,7 +261,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   // Post Image Editing state (Mr Daniels only)
   const [postToEditImage, setPostToEditImage] = useState<Testimony | null>(null);
 
-  // Create Post Modal State (Instagram Style)
+  // Create Post Modal State (Instagram Style with Reels/Video support)
   const [showCreatePostModal, setShowCreatePostModal] = useState<boolean>(false);
   const [uploadMode, setUploadMode] = useState<'local' | 'url' | 'presets'>('local');
   const [postTitle, setPostTitle] = useState<string>('');
@@ -248,6 +269,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   const [postCategory, setPostCategory] = useState<Testimony['category']>('Praise & Testimony');
   const [postScriptureTag, setPostScriptureTag] = useState<string>('');
   const [postImageUrl, setPostImageUrl] = useState<string>('');
+  const [postVideoUrl, setPostVideoUrl] = useState<string>('');
+  const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
   const [localImagePreview, setLocalImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -273,23 +296,76 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   // Group filter
   const [selectedGroupCategory, setSelectedGroupCategory] = useState<string>('All');
 
-  // Handle local file selection (Instagram style from device)
+  // Listen for live story updates
+  useEffect(() => {
+    const handleStoryUpdate = () => {
+      setCommunityStories(StorageService.getSortedStories(currentUser?.id));
+    };
+    window.addEventListener('gcz_story_updated', handleStoryUpdate);
+    window.addEventListener('gcz_story_like_updated', handleStoryUpdate);
+    return () => {
+      window.removeEventListener('gcz_story_updated', handleStoryUpdate);
+      window.removeEventListener('gcz_story_like_updated', handleStoryUpdate);
+    };
+  }, [currentUser?.id]);
+
+  // Handle local file selection (Instagram style from device - supports photos & reels/videos)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const isVideo = file.type.startsWith('video/');
+    setMediaType(isVideo ? 'video' : 'image');
 
     setIsUploading(true);
     const reader = new FileReader();
     reader.onload = (event) => {
       const result = event.target?.result as string;
       setLocalImagePreview(result);
-      setPostImageUrl(result);
+      if (isVideo) {
+        setPostVideoUrl(result);
+        setPostImageUrl('');
+      } else {
+        setPostImageUrl(result);
+        setPostVideoUrl('');
+      }
       setIsUploading(false);
     };
     reader.onerror = () => {
       setIsUploading(false);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleCreateStory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStoryImageUrl && !localImagePreview) {
+      alert('Please upload or provide an image for your story.');
+      return;
+    }
+    const currUser = StorageService.getCurrentUser() || currentUser;
+    const finalStoryImg = newStoryImageUrl || localImagePreview || '/assets/apostle_joe_daniels_main.jpg';
+    
+    StorageService.addStory({
+      user_id: currUser.id,
+      user_name: currUser.full_name || 'Member',
+      user_handle: currUser.handle || `@${currUser.full_name.toLowerCase().replace(/\s+/g, '_')}`,
+      user_avatar: currUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg',
+      avatar_url: currUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg',
+      badge_type: currUser.verified_badge || currUser.badge_type || 'none',
+      image_url: finalStoryImg,
+      scripture: newStoryScripture.trim() || undefined,
+      text: newStoryText.trim() || undefined,
+      caption: newStoryText.trim() || undefined
+    });
+
+    setCommunityStories(StorageService.getSortedStories(currUser.id));
+    setShowAddStoryModal(false);
+    setNewStoryImageUrl('');
+    setNewStoryScripture('');
+    setNewStoryText('');
+    setLocalImagePreview(null);
+    confetti({ particleCount: 35, spread: 60 });
   };
 
   const handleCreatePost = (e: React.FormEvent) => {
@@ -301,7 +377,9 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     if (!postContent.trim()) return;
 
     const currUser = StorageService.getCurrentUser() || currentUser;
-    const finalImage = postImageUrl || localImagePreview || '/assets/apostle_joe_daniels_main.jpg';
+    const isVideo = mediaType === 'video' && (postVideoUrl || localImagePreview);
+    const finalVideo = isVideo ? (postVideoUrl || localImagePreview || undefined) : undefined;
+    const finalImage = isVideo ? undefined : (postImageUrl || localImagePreview || '/assets/apostle_joe_daniels_main.jpg');
 
     // New posts start with 0 likes and 0 comments until liked/commented by real users
     StorageService.submitTestimony({
@@ -309,10 +387,11 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       user_name: currUser.full_name || 'Covenant Member',
       user_handle: currUser.handle || `@${currUser.full_name.toLowerCase().replace(/\s+/g, '_')}`,
       user_avatar: currUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg',
-      title: postTitle.trim() || 'Supernatural Miracle Testimony',
+      title: postTitle.trim() || (isVideo ? 'Video / Reel Testimony' : 'Supernatural Miracle Testimony'),
       category: postCategory,
       content: postContent.trim(),
       image_url: finalImage,
+      video_url: finalVideo,
       scripture_tag: postScriptureTag.trim() || undefined,
     });
 
@@ -323,6 +402,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     setPostTitle('');
     setPostContent('');
     setPostImageUrl('');
+    setPostVideoUrl('');
+    setMediaType('image');
     setLocalImagePreview(null);
     setPostScriptureTag('');
 
@@ -596,7 +677,12 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
-  const filteredGroups = groupList.filter(g => 
+  const isDeveloper = currentUser?.role === 'developer' || (currentUser?.phone ? arePhoneNumbersEqual(currentUser.phone, '0780699988') : false);
+  const visibleCommunityGroups = isDeveloper 
+    ? groupList 
+    : groupList.filter(g => g.joined);
+
+  const filteredGroups = visibleCommunityGroups.filter(g => 
     selectedGroupCategory === 'All' || g.category === selectedGroupCategory
   );
 
@@ -815,7 +901,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     onRequireAuth();
                     return;
                   }
-                  setShowCreatePostModal(true);
+                  setShowAddStoryModal(true);
                 }}
                 className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
               >
@@ -834,160 +920,58 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 <span className="text-[10px] text-muted-foreground truncate max-w-[62px]">Your Story</span>
               </div>
 
-              {/* Story 1: Apostle Joe Daniels */}
-              <div 
-                onClick={() => {
-                  setActiveStoryModal({
-                    userName: 'Apostle Joe Daniels',
-                    userHandle: '@apostle_joe_daniels',
-                    avatar: '/assets/apostle_joe_daniels_main.jpg',
-                    badgeType: 'gold',
-                    timeAgo: '2h',
-                    scripture: '1 Kings 18:46 • Supernatural Acceleration',
-                    text: 'The hand of the Lord came upon Elijah, and girding his loins, he outran Ahab to Jezreel! Receive divine momentum and supernatural speed over every delayed project this month in Jesus name!',
-                    imageUrl: '/assets/apostle_joe_daniels_preach.jpg'
-                  });
-                }}
-                className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
-              >
-                <div className="w-14 h-14 rounded-full p-[2px] bg-primary group-hover:scale-105 transition-transform">
-                  <div className="w-full h-full rounded-full p-[2px] bg-card">
-                    <img
-                      src="/assets/apostle_joe_daniels_main.jpg"
-                      alt="Apostle Joe"
-                      className="w-full h-full rounded-full object-cover"
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center gap-0.5 max-w-[66px]">
-                  <span className="text-[10px] text-foreground font-medium truncate">Apostle Joe</span>
-                  <VerifiedBadge type="gold" size="xs" />
-                </div>
-              </div>
+              {/* Dynamic Real User Stories */}
+              {communityStories.map((story) => {
+                const storyUser = allRegisteredUsers.find(u => u.id === story.user_id);
+                const badge = (story.badge_type || storyUser?.verified_badge || storyUser?.badge_type || 'none') as 'gold' | 'silver' | 'blue' | 'none';
+                const avatar = story.avatar_url || story.user_avatar || storyUser?.avatar_url || '/assets/apostle_joe_daniels_main.jpg';
+                const displayName = story.user_name || storyUser?.full_name || 'Member';
+                const isLiked = StorageService.hasUserLikedStory(story.id, currentUser.id);
+                const likes = StorageService.getStoryLikes(story.id);
 
-              {/* Story 2: Pastor Tendai Moyo */}
-              <div 
-                onClick={() => {
-                  setActiveStoryModal({
-                    userName: 'Pastor Tendai Moyo',
-                    userHandle: '@pastor_tendai',
-                    avatar: '/assets/apostle_joe_daniels_grad.jpg',
-                    badgeType: 'silver',
-                    timeAgo: '4h',
-                    scripture: 'Acts 2:42 • Fellowship & Prayer',
-                    text: 'Harare Central Assembly is ready for Wednesday mid-week altar! Come fasting and ready for impartation at 5:30 PM.',
-                    imageUrl: '/assets/apostle_joe_daniels_grad.jpg'
-                  });
-                }}
-                className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
-              >
-                <div className="w-14 h-14 rounded-full p-[2px] bg-primary group-hover:scale-105 transition-transform">
-                  <div className="w-full h-full rounded-full p-[2px] bg-card">
-                    <img
-                      src="/assets/apostle_joe_daniels_grad.jpg"
-                      alt="Pastor Tendai"
-                      className="w-full h-full rounded-full object-cover"
-                    />
+                return (
+                  <div 
+                    key={story.id}
+                    onClick={() => {
+                      setActiveStoryModal({
+                        id: story.id,
+                        userId: story.user_id,
+                        userName: displayName,
+                        userHandle: story.user_handle || storyUser?.handle || `@${displayName.toLowerCase().replace(/\s+/g, '_')}`,
+                        avatar,
+                        badgeType: badge,
+                        timeAgo: formatTimeAgo(story.created_at, 'short'),
+                        scripture: story.scripture || 'Supernatural Acceleration',
+                        text: story.text || story.caption || 'Amen!',
+                        imageUrl: story.image_url,
+                        isLiked,
+                        likeCount: likes.length
+                      });
+                    }}
+                    className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
+                  >
+                    <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform">
+                      <div className="w-full h-full rounded-full p-[2px] bg-card">
+                        <img
+                          src={avatar}
+                          alt={displayName}
+                          className="w-full h-full rounded-full object-cover"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-0.5 max-w-[66px]">
+                      <span className="text-[10px] text-foreground font-medium truncate">{displayName.split(' ')[0]}</span>
+                      {badge !== 'none' && <VerifiedBadge type={badge} size="xs" />}
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-0.5 max-w-[66px]">
-                  <span className="text-[10px] text-foreground font-medium truncate">Pst Tendai</span>
-                  <VerifiedBadge type="silver" size="xs" />
-                </div>
-              </div>
+                );
+              })}
 
-              {/* Story 3: Pastor Grace Daniels */}
-              <div 
-                onClick={() => {
-                  setActiveStoryModal({
-                    userName: 'Pastor Grace Daniels',
-                    userHandle: '@pastor_grace',
-                    avatar: '/assets/apostle_joe_daniels_podcast.jpg',
-                    badgeType: 'gold',
-                    timeAgo: '6h',
-                    scripture: 'Proverbs 31:25 • Virtuous Women',
-                    text: 'Strength and dignity are her clothing, and she laughs at the time to come. Glorious prayer morning with our daughters of Zion!',
-                    imageUrl: '/assets/apostle_joe_daniels_podcast.jpg'
-                  });
-                }}
-                className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
-              >
-                <div className="w-14 h-14 rounded-full p-[2px] bg-primary group-hover:scale-105 transition-transform">
-                  <div className="w-full h-full rounded-full p-[2px] bg-card">
-                    <img
-                      src="/assets/apostle_joe_daniels_podcast.jpg"
-                      alt="Pastor Grace"
-                      className="w-full h-full rounded-full object-cover"
-                    />
-                  </div>
+              {communityStories.length === 0 && (
+                <div className="flex items-center text-muted-foreground text-[11px] px-2 py-1 italic shrink-0">
+                  <span>No 24-hr stories yet. Tap + to share!</span>
                 </div>
-                <div className="flex items-center gap-0.5 max-w-[66px]">
-                  <span className="text-[10px] text-foreground font-medium truncate">Pst Grace</span>
-                  <VerifiedBadge type="gold" size="xs" />
-                </div>
-              </div>
-
-              {/* Story 4: Chipo Mandaza */}
-              <div 
-                onClick={() => {
-                  setActiveStoryModal({
-                    userName: 'Chipo Mandaza',
-                    userHandle: '@chipo_mandaza',
-                    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-                    badgeType: 'silver',
-                    timeAgo: '8h',
-                    scripture: 'Psalm 100:4 • Worship Altar',
-                    text: 'Praise choir rehearsal was anointed beyond words! Gateway voices are lifting a sound of victory.',
-                    imageUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'
-                  });
-                }}
-                className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
-              >
-                <div className="w-14 h-14 rounded-full p-[2px] bg-primary group-hover:scale-105 transition-transform">
-                  <div className="w-full h-full rounded-full p-[2px] bg-card">
-                    <img
-                      src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
-                      alt="Chipo Mandaza"
-                      className="w-full h-full rounded-full object-cover"
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center gap-0.5 max-w-[66px]">
-                  <span className="text-[10px] text-foreground font-medium truncate">Chipo M.</span>
-                  <VerifiedBadge type="silver" size="xs" />
-                </div>
-              </div>
-
-              {/* Story 5: Kudakwashe Sibanda */}
-              <div 
-                onClick={() => {
-                  setActiveStoryModal({
-                    userName: 'Kudakwashe Sibanda',
-                    userHandle: '@kuda_sibanda',
-                    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-                    badgeType: 'blue',
-                    timeAgo: '11h',
-                    scripture: 'Joel 2:28 • Campus Fire',
-                    text: 'Over 40 students gave their lives to Jesus at the UZ campus fellowship outreach. The harvest is plentiful!',
-                    imageUrl: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=600&auto=format&fit=crop&q=80'
-                  });
-                }}
-                className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
-              >
-                <div className="w-14 h-14 rounded-full p-[2px] bg-primary group-hover:scale-105 transition-transform">
-                  <div className="w-full h-full rounded-full p-[2px] bg-card">
-                    <img
-                      src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
-                      alt="Kudakwashe"
-                      className="w-full h-full rounded-full object-cover"
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center gap-0.5 max-w-[66px]">
-                  <span className="text-[10px] text-foreground font-medium truncate">Kuda S.</span>
-                  <VerifiedBadge type="blue" size="xs" />
-                </div>
-              </div>
+              )}
 
             </div>
           </div>
@@ -1118,6 +1102,22 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {/* Super Admin / Developer Delete / Moderate Post */}
+                      {canModeratePosts && (
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Are you sure you want to delete this post from the community feed?')) {
+                              StorageService.deleteTestimony(post.id);
+                              setTestimonyList(StorageService.getTestimonies());
+                            }
+                          }}
+                          className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          title="Delete Post (Admin/Dev Moderation)"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+
                       {/* Photo Update button - STRICTLY for Mr. Daniels account only */}
                       {isMrDaniels && (
                         <button
@@ -1139,8 +1139,17 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     </div>
                   </div>
 
-                  {/* Post Media (Double Tap to Like) */}
-                  {post.image_url ? (
+                  {/* Post Media (Reel/Video or Photo with Double Tap to Like) */}
+                  {post.video_url ? (
+                    <div className="w-full bg-black flex items-center justify-center max-h-[460px] overflow-hidden relative">
+                      <video
+                        src={post.video_url}
+                        controls
+                        className="w-full max-h-[460px] object-contain"
+                        playsInline
+                      />
+                    </div>
+                  ) : post.image_url ? (
                     <div 
                       onDoubleClick={() => handleDoubleTap(post.id)}
                       className="w-full bg-secondary/30 flex items-center justify-center max-h-[460px] overflow-hidden relative cursor-pointer select-none group"
@@ -1962,29 +1971,35 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 )}
               </div>
 
-              {/* Upload Mode 1: LOCAL DEVICE / STORAGE (Instagram Style) */}
+              {/* Upload Mode 1: LOCAL DEVICE / STORAGE (Instagram Style - Photos & Reels) */}
               {uploadMode === 'local' && (
                 <div className="space-y-2">
                   <input
                     type="file"
                     ref={fileInputRef}
-                    accept="image/*"
+                    accept="image/*,video/*"
                     onChange={handleFileChange}
                     className="hidden"
                   />
                   
                   {localImagePreview ? (
                     <div className="relative rounded-lg overflow-hidden border border-border max-h-52 bg-black flex items-center justify-center">
-                      <img src={localImagePreview} alt="Preview" className="w-full object-cover max-h-52" />
+                      {mediaType === 'video' ? (
+                        <video src={localImagePreview} controls className="w-full object-contain max-h-52" />
+                      ) : (
+                        <img src={localImagePreview} alt="Preview" className="w-full object-cover max-h-52" />
+                      )}
                       <button
                         type="button"
                         onClick={() => {
                           setLocalImagePreview(null);
                           setPostImageUrl('');
+                          setPostVideoUrl('');
+                          setMediaType('image');
                           if (fileInputRef.current) fileInputRef.current.value = '';
                         }}
                         className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-destructive rounded-full text-white text-xs transition-colors"
-                        title="Remove image"
+                        title="Remove media"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -1995,8 +2010,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                       className="border-2 border-dashed border-border hover:border-primary/60 rounded-xl p-6 text-center cursor-pointer bg-secondary/30 hover:bg-secondary/60 transition-all"
                     >
                       <UploadCloud className="w-8 h-8 text-primary mx-auto mb-2" />
-                      <div className="text-xs font-bold text-foreground">Click or drag image from your device</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">Supports PNG, JPG, WEBP, GIF</div>
+                      <div className="text-xs font-bold text-foreground">Click or drag photo or video reel from your device</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">Supports PNG, JPG, MP4, MOV, WEBP</div>
                     </div>
                   )}
                 </div>
@@ -2286,22 +2301,189 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             <div className="relative z-10 p-4 pt-2 border-t border-white/10 flex items-center gap-2">
               <input
                 type="text"
+                value={storyReplyText}
+                onChange={(e) => setStoryReplyText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && storyReplyText.trim()) {
+                    StorageService.sendDirectMessage(
+                      currentUser.id,
+                      activeStoryModal.userId,
+                      `Replying to your story: "${storyReplyText.trim()}"`,
+                      undefined,
+                      undefined,
+                      currentUser.full_name
+                    );
+                    setStoryReplyText('');
+                    alert(`Reply sent to ${activeStoryModal.userName}!`);
+                  }
+                }}
                 placeholder={`Reply to ${activeStoryModal.userName}...`}
                 className="flex-1 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-4 py-2 text-xs text-white placeholder-white/60 focus:outline-none focus:border-white"
               />
               <button
+                type="button"
                 onClick={() => {
-                  confetti({
-                    particleCount: 30,
-                    spread: 60,
-                    origin: { y: 0.85 }
-                  });
+                  if (storyReplyText.trim()) {
+                    StorageService.sendDirectMessage(
+                      currentUser.id,
+                      activeStoryModal.userId,
+                      `Replying to your story: "${storyReplyText.trim()}"`,
+                      undefined,
+                      undefined,
+                      currentUser.full_name
+                    );
+                    setStoryReplyText('');
+                    alert(`Reply sent to ${activeStoryModal.userName}!`);
+                  }
                 }}
-                className="p-2 rounded-full bg-white/15 hover:bg-rose-600 text-white transition-colors"
+                className="p-2 rounded-full bg-white/15 hover:bg-primary text-white transition-colors"
+                title="Send Reply"
               >
-                <Heart className="w-5 h-5 fill-rose-500 text-rose-500" />
+                <Send className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => {
+                  const res = StorageService.toggleStoryLike(activeStoryModal.id, currentUser.id);
+                  setActiveStoryModal(prev => prev ? {
+                    ...prev,
+                    isLiked: res.isLiked,
+                    likeCount: res.count
+                  } : null);
+                  if (res.isLiked) {
+                    confetti({
+                      particleCount: 25,
+                      spread: 50,
+                      origin: { y: 0.85 }
+                    });
+                  }
+                }}
+                className={`p-2 rounded-full transition-colors ${
+                  activeStoryModal.isLiked ? 'bg-rose-500/20 text-rose-500' : 'bg-white/15 hover:bg-white/25 text-white'
+                }`}
+                title={activeStoryModal.isLiked ? 'Unlike Story' : 'Like Story'}
+              >
+                <Heart className={`w-5 h-5 transition-all ${activeStoryModal.isLiked ? 'fill-rose-500 text-rose-500 scale-110' : 'text-white'}`} />
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD STORY MODAL */}
+      {showAddStoryModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-4 space-y-3.5 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-border pb-2.5">
+              <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary" />
+                <span>Share a 24-Hour Story</span>
+              </h3>
+              <button 
+                onClick={() => {
+                  setShowAddStoryModal(false);
+                  setNewStoryImageUrl('');
+                  setNewStoryScripture('');
+                  setNewStoryText('');
+                }} 
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateStory} className="space-y-3">
+              {/* Photo Input / Upload */}
+              <input
+                type="file"
+                ref={storyFileInputRef}
+                accept="image/*"
+                onChange={handleStoryFileChange}
+                className="hidden"
+              />
+
+              {newStoryImageUrl ? (
+                <div className="relative rounded-xl overflow-hidden border border-border max-h-48 bg-black flex items-center justify-center">
+                  <img src={newStoryImageUrl} alt="Story Preview" className="w-full object-cover max-h-48" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewStoryImageUrl('');
+                      if (storyFileInputRef.current) storyFileInputRef.current.value = '';
+                    }}
+                    className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-destructive rounded-full text-white text-xs transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div
+                  onClick={() => storyFileInputRef.current?.click()}
+                  className="border-2 border-dashed border-border hover:border-primary/60 rounded-xl p-5 text-center cursor-pointer bg-secondary/30 hover:bg-secondary/60 transition-all"
+                >
+                  <Camera className="w-7 h-7 text-primary mx-auto mb-1.5" />
+                  <div className="text-xs font-bold text-foreground">Pick a photo from your device</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">Disappears automatically after 24 hours</div>
+                </div>
+              )}
+
+              {/* Or Direct Image URL */}
+              {!newStoryImageUrl && (
+                <input
+                  type="url"
+                  value={newStoryImageUrl}
+                  onChange={(e) => setNewStoryImageUrl(e.target.value)}
+                  placeholder="Or paste image URL (https://...)"
+                  className="w-full bg-secondary border border-border rounded-lg px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                />
+              )}
+
+              {/* Scripture Decree */}
+              <div>
+                <label className="block text-[11px] font-semibold text-foreground/80 mb-1">
+                  Prophetic Scripture / Topic (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={newStoryScripture}
+                  onChange={(e) => setNewStoryScripture(e.target.value)}
+                  placeholder="e.g. 1 Kings 18:46 • Divine Speed"
+                  className="w-full bg-secondary border border-border rounded-lg px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                />
+              </div>
+
+              {/* Story Text */}
+              <div>
+                <label className="block text-[11px] font-semibold text-foreground/80 mb-1">
+                  Story Decree / Message
+                </label>
+                <textarea
+                  rows={2}
+                  value={newStoryText}
+                  onChange={(e) => setNewStoryText(e.target.value)}
+                  placeholder="Share a word, declaration, or praise note..."
+                  className="w-full bg-secondary border border-border rounded-lg p-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setShowAddStoryModal(false)}
+                  className="px-3 py-1.5 rounded-lg bg-secondary text-foreground text-xs font-semibold hover:bg-secondary/80"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newStoryImageUrl}
+                  className="px-4 py-1.5 rounded-lg bg-primary hover:bg-primary/90 disabled:opacity-40 text-primary-foreground text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Share Story</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -2400,6 +2582,21 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
               >
                 <Camera className="w-4 h-4" />
                 <span>Change Post Photo</span>
+              </button>
+            )}
+            {canModeratePosts && (
+              <button
+                onClick={() => {
+                  if (window.confirm('Delete this post from the community feed?')) {
+                    StorageService.deleteTestimony(selectedPostOptions.id);
+                    setTestimonyList(StorageService.getTestimonies());
+                    setSelectedPostOptions(null);
+                  }
+                }}
+                className="w-full py-3.5 font-bold text-destructive hover:bg-destructive/10 flex items-center justify-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Post (Admin Moderation)</span>
               </button>
             )}
             <button

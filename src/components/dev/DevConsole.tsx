@@ -50,8 +50,10 @@ import {
   Binary,
   FileText,
   PlayCircle,
-  PauseCircle
+  PauseCircle,
+  Sparkles
 } from 'lucide-react';
+import { cn } from '../../lib/utils';
 import { StorageService } from '../../services/storageService';
 import { PaynowService } from '../../services/paynowService';
 import { testSupabaseConnection } from '../../services/supabaseClient';
@@ -137,12 +139,18 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   const [isPingingSupabase, setIsPingingSupabase] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [backgroundMode, setBackgroundMode] = useState<'off' | 'matrix' | 'binary' | 'grid' | 'terminal' | 'neon' | 'wifi' | 'typing'>(() => {
-    if (typeof window === 'undefined') return 'matrix';
+  const [consoleTheme, setConsoleTheme] = useState<'classic' | 'jarvis'>(() => {
+    if (typeof window === 'undefined') return 'jarvis';
+    const saved = localStorage.getItem('gcz_dev_console_theme');
+    return saved === 'classic' || saved === 'jarvis' ? saved : 'jarvis';
+  });
+
+  const [backgroundMode, setBackgroundMode] = useState<'off' | 'matrix' | 'binary' | 'grid' | 'terminal' | 'neon' | 'wifi' | 'typing' | 'jarvis'>(() => {
+    if (typeof window === 'undefined') return 'jarvis';
     const saved = localStorage.getItem('gcz_dev_background_mode');
-    return saved === 'off' || saved === 'matrix' || saved === 'binary' || saved === 'grid' || saved === 'terminal' || saved === 'neon' || saved === 'wifi' || saved === 'typing'
+    return saved === 'off' || saved === 'matrix' || saved === 'binary' || saved === 'grid' || saved === 'terminal' || saved === 'neon' || saved === 'wifi' || saved === 'typing' || saved === 'jarvis'
       ? saved
-      : 'matrix';
+      : 'jarvis';
   });
   const paynowConfig = PaynowService.getConfig();
   const supabaseConfig = StorageService.getSupabaseConfig();
@@ -156,9 +164,20 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
     return true;
   });
 
+  const handleToggleConsoleTheme = () => {
+    const next = consoleTheme === 'jarvis' ? 'classic' : 'jarvis';
+    setConsoleTheme(next);
+    localStorage.setItem('gcz_dev_console_theme', next);
+    if (next === 'jarvis') {
+      handleBackgroundModeChange('jarvis');
+    } else {
+      handleBackgroundModeChange('matrix');
+    }
+  };
+
   const handleToggleCyberBackground = () => {
     setBackgroundMode(prev => {
-      const next = prev === 'off' ? 'matrix' : 'off';
+      const next = prev === 'off' ? (consoleTheme === 'jarvis' ? 'jarvis' : 'matrix') : 'off';
       setShowCyberBackground(next !== 'off');
       localStorage.setItem('gcz_dev_background_mode', next);
       return next;
@@ -189,6 +208,14 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
     StorageService.endActiveStreamSession();
     handleRefreshStreamers();
     setLogs(prev => [`[${new Date().toLocaleTimeString()}] [STREAM_ARCHIVE] Live sermon stream session ended & archived all attendees to persistent database`, ...prev]);
+  };
+
+  const handleClearStreamAttendance = () => {
+    if (window.confirm('Delete streaming attendance history logs? Active streamer profile details are preserved.')) {
+      StorageService.clearStreamAttendanceHistory();
+      setStreamAttendees([]);
+      setLogs(prev => [`[${new Date().toLocaleTimeString()}] [STREAM_LOGS] Cleared streaming attendance logs`, ...prev.slice(0, 150)]);
+    }
   };
 
   const handleExportStreamAttendees = () => {
@@ -313,10 +340,22 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
       const customEvt = e as CustomEvent;
       const v = customEvt.detail;
       const stamp = new Date().toLocaleTimeString();
-      setLogs(prev => [
-        `[${stamp}] [STREAM_JOINED] ${v?.full_name || 'Believer'} (${v?.phone || v?.city || 'Harare'}) joined live sermon broadcast`,
-        ...prev.slice(0, 150)
-      ]);
+      const uId = v?.user_id || v?.user_name || 'Believer';
+      setLogs(prev => {
+        // Cap user-specific stream telemetry lines to maximum 3
+        let count = 0;
+        const filtered = prev.filter(l => {
+          if (l.includes(uId) && (l.includes('[STREAM_JOINED]') || l.includes('[STREAM_LEFT]'))) {
+            count++;
+            return count < 3;
+          }
+          return true;
+        });
+        return [
+          `[${stamp}] [STREAM_JOINED] ${v?.full_name || 'Believer'} (${v?.phone || v?.city || 'Harare'}) joined live sermon broadcast`,
+          ...filtered.slice(0, 150)
+        ];
+      });
       refreshAll();
     };
 
@@ -324,10 +363,21 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
       const customEvt = e as CustomEvent;
       const d = customEvt.detail;
       const stamp = new Date().toLocaleTimeString();
-      setLogs(prev => [
-        `[${stamp}] [STREAM_LEFT] User ${d?.userId || 'session'} exited live sermon broadcast`,
-        ...prev.slice(0, 150)
-      ]);
+      const uId = d?.userId || 'session';
+      setLogs(prev => {
+        let count = 0;
+        const filtered = prev.filter(l => {
+          if (l.includes(uId) && (l.includes('[STREAM_JOINED]') || l.includes('[STREAM_LEFT]'))) {
+            count++;
+            return count < 3;
+          }
+          return true;
+        });
+        return [
+          `[${stamp}] [STREAM_LEFT] User ${d?.userId || 'session'} exited live sermon broadcast`,
+          ...filtered.slice(0, 150)
+        ];
+      });
       refreshAll();
     };
 
@@ -564,28 +614,57 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col overflow-hidden text-slate-100 font-sans isolate">
+    <div className={cn(
+      "fixed inset-0 z-50 flex flex-col overflow-hidden font-sans isolate",
+      consoleTheme === 'jarvis'
+        ? "bg-[#010a14] text-cyan-100"
+        : "bg-slate-950 text-slate-100"
+    )}>
       
-      {/* 0. Cyber-Futuristic Matrix / Binary Background (Strictly BEHIND all cards, tables and logs) */}
-      <AdminCyberBackground enabled={backgroundMode !== 'off'} mode={backgroundMode === 'off' ? 'matrix' : backgroundMode} />
+      {/* 0. Cyber-Futuristic Matrix / Binary / JARVIS Background (Strictly BEHIND all cards, tables and logs) */}
+      <AdminCyberBackground 
+        enabled={backgroundMode !== 'off'} 
+        mode={backgroundMode === 'off' ? (consoleTheme === 'jarvis' ? 'jarvis' : 'matrix') : backgroundMode} 
+      />
 
-      {/* 1. Header Bar - Fully Responsive */}
-      <header className="relative z-20 bg-slate-900/90 backdrop-blur-md border-b border-purple-500/30 px-3 sm:px-4 py-3 sm:py-3.5 flex items-center justify-between shadow-lg shrink-0">
+      {/* 1. Header Bar - Fully Responsive with JARVIS HUD mode */}
+      <header className={cn(
+        "relative z-20 backdrop-blur-md px-3 sm:px-4 py-3 sm:py-3.5 flex items-center justify-between shadow-lg shrink-0 border-b",
+        consoleTheme === 'jarvis'
+          ? "bg-[#02131e]/90 border-cyan-500/30 text-cyan-100"
+          : "bg-slate-900/90 border-purple-500/30 text-slate-100"
+      )}>
         <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white font-black shadow shrink-0">
-            <Code2 className="w-5 h-5 sm:w-6 sm:h-6" />
+          <div className={cn(
+            "w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-black shadow shrink-0",
+            consoleTheme === 'jarvis'
+              ? "bg-cyan-500/20 text-cyan-300 border border-cyan-400/50 shadow-[0_0_15px_rgba(6,182,212,0.4)] animate-pulse"
+              : "bg-purple-600 text-white"
+          )}>
+            {consoleTheme === 'jarvis' ? <Cpu className="w-5 h-5 sm:w-6 sm:h-6" /> : <Code2 className="w-5 h-5 sm:w-6 sm:h-6" />}
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 sm:gap-2 truncate">
-              <h1 className="font-mono font-black text-sm sm:text-lg text-purple-400 truncate">
-                DEV-CONSOLE
+              <h1 className={cn(
+                "font-mono font-black text-sm sm:text-lg truncate",
+                consoleTheme === 'jarvis' ? "text-cyan-300 tracking-wider" : "text-purple-400"
+              )}>
+                {consoleTheme === 'jarvis' ? 'J.A.R.V.I.S. DEV HUD' : 'DEV-CONSOLE'}
               </h1>
-              <span className="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono border border-purple-500/40 shrink-0">
-                0780699988
+              <span className={cn(
+                "text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded font-mono border shrink-0",
+                consoleTheme === 'jarvis'
+                  ? "bg-cyan-500/15 text-cyan-300 border-cyan-400/40"
+                  : "bg-purple-500/20 text-purple-300 border-purple-500/40"
+              )}>
+                {consoleTheme === 'jarvis' ? 'STARK PROTOCOL' : '0780699988'}
               </span>
             </div>
-            <p className="text-[10px] sm:text-xs text-slate-400 truncate hidden sm:block">
-              Gateway Connect Flutter & Supabase Engine Telemetry
+            <p className={cn(
+              "text-[10px] sm:text-xs truncate hidden sm:block",
+              consoleTheme === 'jarvis' ? "text-cyan-400/70" : "text-slate-400"
+            )}>
+              {consoleTheme === 'jarvis' ? 'Apostolic Cyber-Intelligence & Supabase Edge Telemetry' : 'Gateway Connect Flutter & Supabase Engine Telemetry'}
             </p>
           </div>
         </div>
@@ -597,16 +676,41 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
 
         {/* Desktop Header Actions - Compact Icon Buttons */}
         <div className="hidden md:flex items-center gap-1.5">
-          <label className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[10px] font-mono text-emerald-300">
+          {/* JARVIS / MATRIX Theme Toggle Button */}
+          <button
+            type="button"
+            id="btn-toggle-dev-console-theme"
+            onClick={handleToggleConsoleTheme}
+            className={cn(
+              "px-2.5 py-1.5 rounded-xl border text-[11px] font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm",
+              consoleTheme === 'jarvis'
+                ? "bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.35)]"
+                : "bg-purple-600/20 border-purple-500/40 text-purple-300 hover:bg-purple-600/30"
+            )}
+            title="Toggle between JARVIS HUD theme and Classic Matrix Dev theme"
+          >
+            <Cpu className="w-3.5 h-3.5 animate-pulse" />
+            <span>{consoleTheme === 'jarvis' ? 'JARVIS HUD' : 'MATRIX DEV'}</span>
+          </button>
+
+          <label className={cn(
+            "flex items-center gap-1.5 px-2 py-1.5 rounded-xl border text-[10px] font-mono",
+            consoleTheme === 'jarvis'
+              ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-300"
+              : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+          )}>
             <Terminal className="w-3.5 h-3.5" />
             <span className="hidden lg:inline">Background</span>
             <select
               value={backgroundMode}
               onChange={event => handleBackgroundModeChange(event.target.value as typeof backgroundMode)}
-              className="bg-transparent text-emerald-200 font-bold outline-none cursor-pointer"
+              className={cn(
+                "bg-transparent font-bold outline-none cursor-pointer",
+                consoleTheme === 'jarvis' ? "text-cyan-200" : "text-emerald-200"
+              )}
               title="Choose developer console background animation"
             >
-              <option value="off" className="bg-slate-900">Off</option>
+              <option value="jarvis" className="bg-slate-900">J.A.R.V.I.S. Arc Reactor</option>
               <option value="matrix" className="bg-slate-900">Matrix Rain</option>
               <option value="binary" className="bg-slate-900">Binary Flow</option>
               <option value="grid" className="bg-slate-900">Glowing Grid</option>
@@ -614,6 +718,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
               <option value="neon" className="bg-slate-900">Neon Pulse</option>
               <option value="wifi" className="bg-slate-900">Wifi Bits</option>
               <option value="typing" className="bg-slate-900">Typing Effects</option>
+              <option value="off" className="bg-slate-900">Off</option>
             </select>
           </label>
 
@@ -649,6 +754,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
             title="Choose background animation"
             className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-200 border border-emerald-500/50 text-[0px] outline-none"
           >
+            <option value="jarvis" className="bg-slate-900 text-xs">J.A.R.V.I.S. Arc Reactor</option>
             <option value="off" className="bg-slate-900 text-xs">Off</option>
             <option value="matrix" className="bg-slate-900 text-xs">Matrix Rain</option>
             <option value="binary" className="bg-slate-900 text-xs">Binary Flow</option>
@@ -684,12 +790,22 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
               <button
                 onClick={() => {
                   setShowMobileMenu(false);
+                  handleToggleConsoleTheme();
+                }}
+                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-cyan-300 hover:bg-cyan-500/20 flex items-center gap-2"
+              >
+                <Cpu className="w-3.5 h-3.5" />
+                <span>Switch Theme ({consoleTheme === 'jarvis' ? 'JARVIS' : 'Matrix'})</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowMobileMenu(false);
                   handleToggleCyberBackground();
                 }}
                 className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 flex items-center gap-2"
               >
                 <Terminal className="w-3.5 h-3.5" />
-                <span>Toggle Matrix FX ({showCyberBackground ? 'ON' : 'OFF'})</span>
+                <span>Toggle FX ({showCyberBackground ? 'ON' : 'OFF'})</span>
               </button>
               <button
                 onClick={() => {
@@ -737,74 +853,117 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
         </div>
       </header>
 
-      {/* 2. Privacy Policy Banner */}
-      <div className="bg-purple-950/40 border-b border-purple-500/30 px-3 sm:px-4 py-2 flex items-center justify-between text-[11px] sm:text-xs text-purple-200 shrink-0">
+      {/* 2. Privacy Policy & JARVIS Telemetry Banner */}
+      <div className={cn(
+        "border-b px-3 sm:px-4 py-2 flex items-center justify-between text-[11px] sm:text-xs shrink-0",
+        consoleTheme === 'jarvis'
+          ? "bg-[#021827]/80 border-cyan-500/30 text-cyan-200"
+          : "bg-purple-950/40 border-purple-500/30 text-purple-200"
+      )}>
         <div className="flex items-center gap-2 truncate">
-          <Lock className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+          <Lock className={cn("w-3.5 h-3.5 shrink-0", consoleTheme === 'jarvis' ? "text-cyan-400" : "text-purple-400")} />
           <span className="truncate">
-            <strong className="text-white">RLS Zero-Knowledge Privacy:</strong> Developer barred from confidential ledgers & altar petitions.
+            <strong className={consoleTheme === 'jarvis' ? "text-cyan-300 font-bold" : "text-white"}>
+              {consoleTheme === 'jarvis' ? 'J.A.R.V.I.S. STARK SECURITY:' : 'RLS Zero-Knowledge Privacy:'}
+            </strong>{' '}
+            {consoleTheme === 'jarvis' 
+              ? 'Arc Reactor Core 100% stable • Zero-knowledge RLS protected'
+              : 'Developer barred from confidential ledgers & altar petitions.'}
           </span>
         </div>
-        <span className="text-[9px] sm:text-[10px] bg-purple-900/60 px-2 py-0.5 rounded font-mono shrink-0 ml-2">
+        <span className={cn(
+          "text-[9px] sm:text-[10px] px-2 py-0.5 rounded font-mono shrink-0 ml-2 border",
+          consoleTheme === 'jarvis'
+            ? "bg-cyan-950/70 text-cyan-300 border-cyan-400/30"
+            : "bg-purple-900/60 text-purple-300 border-purple-500/20"
+        )}>
           {supabaseConfig.isLiveConnected ? 'SUPABASE CONFIGURED' : 'SUPABASE NOT CONFIGURED'}
         </span>
       </div>
 
       {/* 3. Sub Tabs Navigation */}
       {/* Desktop Tab Bar */}
-      <div className="hidden md:flex bg-slate-950 border-b border-slate-800 px-4 py-2 items-center gap-2 text-xs font-bold overflow-x-auto shrink-0">
+      <div className={cn(
+        "hidden md:flex border-b px-4 py-2 items-center gap-2 text-xs font-bold overflow-x-auto shrink-0",
+        consoleTheme === 'jarvis'
+          ? "bg-[#02131e]/90 border-cyan-500/30"
+          : "bg-slate-950 border-slate-800"
+      )}>
         {[
-          { id: 'telemetry', label: '⚡ Telemetry & Health', icon: Activity },
-          { id: 'streamers', label: `📡 Stream Attendees (${activeStreamers.length} Live)`, icon: Radio },
-          { id: 'bans', label: '🚫 Account Bans & Suspension', icon: ShieldOff },
-          { id: 'appeals', label: `📩 Unban Appeals (${unbanAppeals.filter(a => a.status === 'pending').length})`, icon: Eye },
-          { id: 'passwords', label: `🔑 Password Recovery (${passwordRequests.filter(p => p.status === 'pending').length})`, icon: KeyRound },
-          { id: 'godmode', label: '👑 Godmode Account Control', icon: ShieldAlert },
-          { id: 'schema', label: '🗄️ Supabase Postgres Schema', icon: Database },
-          { id: 'logs', label: '📜 Live System Logs', icon: Terminal },
-          { id: 'endpoints', label: '🌐 API Endpoints & Routes', icon: Layers },
+          { id: 'telemetry', label: 'Telemetry & Health', icon: Activity },
+          { id: 'streamers', label: `Stream Attendees (${activeStreamers.length} Live)`, icon: Radio },
+          { id: 'bans', label: 'Account Bans & Suspension', icon: ShieldOff },
+          { id: 'appeals', label: `Unban Appeals (${unbanAppeals.filter(a => a.status === 'pending').length})`, icon: Eye },
+          { id: 'passwords', label: `Password Recovery (${passwordRequests.filter(p => p.status === 'pending').length})`, icon: KeyRound },
+          { id: 'godmode', label: 'Godmode Account Control', icon: ShieldAlert },
+          { id: 'schema', label: 'Supabase Postgres Schema', icon: Database },
+          { id: 'logs', label: 'Live System Logs', icon: Terminal },
+          { id: 'endpoints', label: 'API Endpoints & Routes', icon: Layers },
         ].map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            className={cn(
+              "px-3 py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer font-mono",
               activeTab === tab.id
-                ? 'bg-purple-600 text-white font-bold shadow'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-            }`}
+                ? (consoleTheme === 'jarvis'
+                    ? 'bg-cyan-500/25 text-cyan-200 border border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.35)]'
+                    : 'bg-purple-600 text-white font-bold shadow')
+                : (consoleTheme === 'jarvis'
+                    ? 'bg-[#021827]/60 text-cyan-400/60 hover:text-cyan-200 border border-cyan-900/40 hover:border-cyan-500/30'
+                    : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800')
+            )}
           >
             <tab.icon className="w-3.5 h-3.5" />
-            <span>{tab.label}</span>
+            <span>{consoleTheme === 'jarvis' ? `[ ${tab.label} ]` : tab.label}</span>
           </button>
         ))}
       </div>
 
       {/* Mobile Tab Dropdown Selector */}
-      <div className="flex md:hidden bg-slate-950 border-b border-slate-800 px-3 py-2 items-center justify-between gap-2 shrink-0">
-        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Module:</span>
+      <div className={cn(
+        "flex md:hidden border-b px-3 py-2 items-center justify-between gap-2 shrink-0",
+        consoleTheme === 'jarvis'
+          ? "bg-[#02131e] border-cyan-500/30"
+          : "bg-slate-950 border-slate-800"
+      )}>
+        <span className={cn(
+          "text-[11px] font-bold uppercase tracking-wider font-mono",
+          consoleTheme === 'jarvis' ? "text-cyan-400" : "text-slate-400"
+        )}>
+          Module:
+        </span>
         <div className="relative flex-1">
           <select
             value={activeTab}
             onChange={(e) => setActiveTab(e.target.value as any)}
-            className="w-full bg-slate-900 border border-purple-500/30 rounded-xl px-3 py-1.5 text-xs text-purple-300 font-bold appearance-none pr-8 focus:outline-none focus:border-purple-400"
+            className={cn(
+              "w-full rounded-xl px-3 py-1.5 text-xs font-bold appearance-none pr-8 focus:outline-none font-mono",
+              consoleTheme === 'jarvis'
+                ? "bg-[#021827] border border-cyan-500/40 text-cyan-300 focus:border-cyan-300"
+                : "bg-slate-900 border border-purple-500/30 text-purple-300 focus:border-purple-400"
+            )}
           >
             {[
-              { id: 'telemetry', label: '⚡ Telemetry & Health' },
-              { id: 'streamers', label: `📡 Stream Attendees (${activeStreamers.length} Live / ${streamAttendees.length} Total)` },
-              { id: 'bans', label: '🚫 Account Bans & Suspension' },
-              { id: 'appeals', label: `📩 Unban Appeals (${unbanAppeals.filter(a => a.status === 'pending').length})` },
-              { id: 'passwords', label: `🔑 Password Recovery (${passwordRequests.filter(p => p.status === 'pending').length})` },
-              { id: 'godmode', label: '👑 Godmode Account Control' },
-              { id: 'schema', label: '🗄️ Supabase Postgres Schema' },
-              { id: 'logs', label: '📜 Live System Logs' },
-              { id: 'endpoints', label: '🌐 API Endpoints & Routes' },
+              { id: 'telemetry', label: 'Telemetry & Health' },
+              { id: 'streamers', label: `Stream Attendees (${activeStreamers.length} Live / ${streamAttendees.length} Total)` },
+              { id: 'bans', label: 'Account Bans & Suspension' },
+              { id: 'appeals', label: `Unban Appeals (${unbanAppeals.filter(a => a.status === 'pending').length})` },
+              { id: 'passwords', label: `Password Recovery (${passwordRequests.filter(p => p.status === 'pending').length})` },
+              { id: 'godmode', label: 'Godmode Account Control' },
+              { id: 'schema', label: 'Supabase Postgres Schema' },
+              { id: 'logs', label: 'Live System Logs' },
+              { id: 'endpoints', label: 'API Endpoints & Routes' },
             ].map(tab => (
               <option key={tab.id} value={tab.id} className="bg-slate-900 text-white">
                 {tab.label}
               </option>
             ))}
           </select>
-          <ChevronDown className="w-4 h-4 text-purple-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <ChevronDown className={cn(
+            "w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none",
+            consoleTheme === 'jarvis' ? "text-cyan-400" : "text-purple-400"
+          )} />
         </div>
       </div>
 
@@ -936,6 +1095,16 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                 >
                   <Clock className="w-3.5 h-3.5 text-amber-400" />
                   <span>End Live Session & Archive</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleClearStreamAttendance}
+                  className="px-3 py-1.5 rounded-xl bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-500/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="Delete streaming attendance history logs while live"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Logs</span>
                 </button>
 
                 <button

@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 
 interface AdminCyberBackgroundProps {
   enabled?: boolean;
-  mode?: 'matrix' | 'binary' | 'grid' | 'terminal' | 'neon' | 'wifi' | 'typing';
+  mode?: 'matrix' | 'binary' | 'grid' | 'terminal' | 'neon' | 'wifi' | 'typing' | 'jarvis';
   className?: string;
   opacity?: number;
 }
@@ -147,6 +147,125 @@ export const AdminCyberBackground: React.FC<AdminCyberBackgroundProps> = ({
           ctx.fillText(line.slice(0, Math.min(line.length, charactersVisible)), 16, 30 + index * (fontSize + 12));
           if (charactersVisible <= line.length) ctx.fillText('_', 16 + ctx.measureText(line.slice(0, charactersVisible)).width, 30 + index * (fontSize + 12));
         });
+        return;
+      }
+
+      if (mode === 'jarvis') {
+        const cx = width * 0.5;
+        const cy = height * 0.45;
+        const maxR = Math.min(width, height) * 0.38;
+
+        // 1. Central Arc Reactor Core with Pulsing Glow
+        const pulse = (Math.sin(currentTime / 400) + 1) / 2;
+        const coreGradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR * 0.35);
+        coreGradient.addColorStop(0, `rgba(0, 240, 255, ${0.35 + pulse * 0.25})`);
+        coreGradient.addColorStop(0.5, `rgba(6, 182, 212, ${0.15 + pulse * 0.1})`);
+        coreGradient.addColorStop(1, 'rgba(2, 132, 199, 0)');
+        ctx.fillStyle = coreGradient;
+        ctx.beginPath();
+        ctx.arc(cx, cy, maxR * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Inner Core Ring
+        ctx.strokeStyle = `rgba(34, 211, 238, ${0.5 + pulse * 0.4})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, maxR * 0.15, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 8 Energy Nodes radiating from core
+        const coreRot = currentTime * 0.0006;
+        for (let k = 0; k < 8; k++) {
+          const angle = coreRot + k * (Math.PI / 4);
+          const nx = cx + Math.cos(angle) * (maxR * 0.2);
+          const ny = cy + Math.sin(angle) * (maxR * 0.2);
+          ctx.fillStyle = k % 2 === 0 ? '#38bdf8' : '#00f0ff';
+          ctx.beginPath();
+          ctx.arc(nx, ny, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // 2. Segmented Rotating Inner HUD Ring
+        const ring1Rot = currentTime * 0.0008;
+        ctx.strokeStyle = 'rgba(6, 182, 212, 0.45)';
+        ctx.lineWidth = 1.5;
+        for (let s = 0; s < 4; s++) {
+          const startA = ring1Rot + s * (Math.PI / 2);
+          const endA = startA + Math.PI / 3;
+          ctx.beginPath();
+          ctx.arc(cx, cy, maxR * 0.45, startA, endA);
+          ctx.stroke();
+        }
+
+        // 3. Telemetry Degree Marks Ring (Rotates in counter-direction)
+        const ring2Rot = -currentTime * 0.0005;
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, maxR * 0.68, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Ticks every 15 degrees
+        for (let deg = 0; deg < 360; deg += 15) {
+          const rad = ring2Rot + (deg * Math.PI) / 180;
+          const innerR = maxR * (deg % 45 === 0 ? 0.64 : 0.66);
+          const outerR = maxR * 0.68;
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(rad) * innerR, cy + Math.sin(rad) * innerR);
+          ctx.lineTo(cx + Math.cos(rad) * outerR, cy + Math.sin(rad) * outerR);
+          ctx.stroke();
+        }
+
+        // 4. Outer Target Reticle & Coordinate Ring
+        ctx.strokeStyle = 'rgba(14, 165, 233, 0.3)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, maxR * 0.92, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Crosshairs extending outward
+        ctx.strokeStyle = 'rgba(6, 182, 212, 0.5)';
+        ctx.beginPath();
+        ctx.moveTo(cx - maxR * 1.02, cy); ctx.lineTo(cx - maxR * 0.88, cy);
+        ctx.moveTo(cx + maxR * 0.88, cy); ctx.lineTo(cx + maxR * 1.02, cy);
+        ctx.moveTo(cx, cy - maxR * 1.02); ctx.lineTo(cx, cy - maxR * 0.88);
+        ctx.moveTo(cx, cy + maxR * 0.88); ctx.lineTo(cx, cy + maxR * 1.02);
+        ctx.stroke();
+
+        // 5. Sweeping Radar Scanner Line with Fade Trail
+        const radarAngle = (currentTime * 0.0012) % (Math.PI * 2);
+        ctx.strokeStyle = `rgba(0, 240, 255, ${0.4 + pulse * 0.3})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(radarAngle) * (maxR * 0.92), cy + Math.sin(radarAngle) * (maxR * 0.92));
+        ctx.stroke();
+
+        // 6. Holographic Stark / J.A.R.V.I.S HUD Telemetry Text
+        ctx.font = '10px monospace';
+        ctx.fillStyle = 'rgba(34, 211, 238, 0.7)';
+        ctx.fillText('[ J.A.R.V.I.S. PROTOCOL // MARK VII ]', 20, 32);
+        ctx.fillText(`ARC REACTOR: ${(99.4 + pulse * 0.6).toFixed(1)}% STABLE // 3.84 GW`, 20, 48);
+        ctx.fillText('STARK ENTERPRISES // SECURE NET', 20, 64);
+
+        if (width > 600) {
+          ctx.fillText('ZONE: SAMORA MACHEL AVE // HARARE', width - 260, 32);
+          ctx.fillText('APOSTOLIC DEV CORE: ONLINE', width - 260, 48);
+          ctx.fillText('TARGET: FANTASYLAND THEATRE 3', width - 260, 64);
+        }
+
+        // Corner HUD Brackets
+        const bSize = 16;
+        ctx.strokeStyle = 'rgba(6, 182, 212, 0.6)';
+        ctx.lineWidth = 1.5;
+        // Top-left
+        ctx.beginPath(); ctx.moveTo(12, 12 + bSize); ctx.lineTo(12, 12); ctx.lineTo(12 + bSize, 12); ctx.stroke();
+        // Top-right
+        ctx.beginPath(); ctx.moveTo(width - 12 - bSize, 12); ctx.lineTo(width - 12, 12); ctx.lineTo(width - 12, 12 + bSize); ctx.stroke();
+        // Bottom-left
+        ctx.beginPath(); ctx.moveTo(12, height - 12 - bSize); ctx.lineTo(12, height - 12); ctx.lineTo(12 + bSize, height - 12); ctx.stroke();
+        // Bottom-right
+        ctx.beginPath(); ctx.moveTo(width - 12 - bSize, height - 12); ctx.lineTo(width - 12, height - 12); ctx.lineTo(width - 12, height - 12 - bSize); ctx.stroke();
+
         return;
       }
 

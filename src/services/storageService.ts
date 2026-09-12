@@ -2615,7 +2615,11 @@ export class StorageService {
       }
     });
 
-    return threads.sort((a, b) => new Date(b.last_message.created_at).getTime() - new Date(a.last_message.created_at).getTime());
+    return threads.sort((a, b) => {
+      const timeB = b?.last_message?.created_at ? new Date(b.last_message.created_at).getTime() : 0;
+      const timeA = a?.last_message?.created_at ? new Date(a.last_message.created_at).getTime() : 0;
+      return timeB - timeA;
+    });
   }
 
   // LIVE SERMON NOTIFICATION & STREAMING MANAGEMENT

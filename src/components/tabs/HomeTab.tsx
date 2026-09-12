@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, 
   Pause, 
@@ -23,7 +23,10 @@ import {
   Gift,
   CheckCircle2,
   ExternalLink,
-  X
+  X,
+  ChevronDown,
+  ChevronUp,
+  Users
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Sermon, Devotional, Testimony, User } from '../../types';
@@ -39,7 +42,7 @@ interface HomeTabProps {
   devotionals: Devotional[];
   testimonies?: Testimony[];
   lowDataMode: boolean;
-  currentUser?: User;
+  currentUser?: User | null;
   onRequireAuth?: () => void;
   onOpenPremiumModal?: (sermon?: Sermon) => void;
   onNavigateToBible?: (reference?: string) => void;
@@ -65,6 +68,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [isAudioOnly, setIsAudioOnly] = useState<boolean>(lowDataMode);
   const [offlineIds, setOfflineIds] = useState<string[]>(StorageService.getOfflineSermonsList());
+  const [showArchivedVideoDropdown, setShowArchivedVideoDropdown] = useState<boolean>(false);
   const [liveTestimonies, setLiveTestimonies] = useState<Testimony[]>(testimonies);
   const [chatMessages, setChatMessages] = useState<Array<{ user: string; text: string; time: string }>>([
     { user: 'Sister Tariro (Harare)', text: 'Amen! Receiving this word of divine speed!', time: '10:04' },
@@ -107,7 +111,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const [seedAmount, setSeedAmount] = useState('20');
   const [seedCategory, setSeedCategory] = useState<'Altar Seed' | 'Tithe' | 'Apostle Blessing' | 'Building Offering' | 'First Fruits'>('Altar Seed');
   const [paymentMethod, setPaymentMethod] = useState<'ecocash' | 'innbucks' | 'onemoney' | 'card'>('ecocash');
-  const [donorPhone, setDonorPhone] = useState(currentUser.phone || '');
+  const [donorPhone, setDonorPhone] = useState(currentUser?.phone || '');
   const [currency, setCurrency] = useState<'USD' | 'ZiG'>('USD');
   const [isDonating, setIsDonating] = useState(false);
   const [donationSuccess, setDonationSuccess] = useState(false);
@@ -145,7 +149,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         category: seedCategory,
         method: paymentMethod,
         phone: donorPhone,
-        notes: `In-stream seed during live service (${activeSermon.title || 'Live Stream'})`
+        notes: `In-stream seed during live service (${activeSermon?.title || 'Live Stream'})`
       });
 
       setIsDonating(false);
@@ -163,8 +167,8 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     }, 1200);
   };
 
-  const isGuest = currentUser.role === 'guest';
-  const isSermonUnlocked = !activeSermon.is_premium || currentUser.is_premium || currentUser.unlocked_sermon_ids?.includes(activeSermon.id);
+  const isGuest = !currentUser || currentUser.role === 'guest';
+  const isSermonUnlocked = !activeSermon?.is_premium || Boolean(currentUser?.is_premium) || Boolean(currentUser?.unlocked_sermon_ids?.includes(activeSermon?.id || ''));
 
   // Live broadcast listener for remote stream reactions and chat
   useEffect(() => {
@@ -281,40 +285,79 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const [showPaidBookingModal, setShowPaidBookingModal] = useState(false);
 
   const uniqueSeries = ['All', ...Array.from(new Set(sermons.map(s => s.series).filter(Boolean)))];
-  const latestApostlePost = liveTestimonies.find(t => t.user_name.toLowerCase().includes('daniels')) || liveTestimonies[0];
+  const latestApostlePost = (liveTestimonies || []).find(t => (t?.user_name || '').toLowerCase().includes('daniels')) || liveTestimonies?.[0];
 
-  const currentStreamTarget = (overridePlayingVideo && overridePlayingVideo.youtube_id) ||
-                              liveStreamUrl || 
-                              activeSermon.youtube_id || 
-                              '-CibsaxijIk';
-  const streamEmbedInfo = StorageService.getStreamEmbedInfo(currentStreamTarget);
-  const activeVideoId = streamEmbedInfo.videoId || StorageService.extractYoutubeId(currentStreamTarget) || '-CibsaxijIk';
-  const isFacebook = streamEmbedInfo.isFacebook;
-  const liveStreamStatus = StorageService.getLiveSermonStatus();
+  const [liveStreamStatus, setLiveStreamStatus] = useState(() => StorageService.getLiveSermonStatus());
+
+  useEffect(() => {
+    const handleStatusUpdate = (e: any) => {
+      if (e?.detail) {
+        setLiveStreamStatus(e.detail);
+      } else {
+        setLiveStreamStatus(StorageService.getLiveSermonStatus());
+      }
+    };
+    window.addEventListener('gcz_live_status_updated', handleStatusUpdate);
+    return () => window.removeEventListener('gcz_live_status_updated', handleStatusUpdate);
+  }, []);
+
   const liveFeedTitle = overridePlayingVideo 
     ? overridePlayingVideo.title 
     : (liveStreamStatus.title || (isFacebook ? 'Apostle Joe Daniels - Sunday Dominion & Prophetic Broadcast (Facebook Live)' : 'Church & Politics (Controversial Issues) - Apostle Joe Daniels (YouTube Live)'));
 
+  const liveTarget = liveStreamStatus.streamUrl || liveStreamUrl || 'https://youtu.be/-CibsaxijIk';
+  const recordedTarget = (activeSermon && activeSermon.youtube_id) || '-CibsaxijIk';
+  const currentStreamTarget = (overridePlayingVideo && overridePlayingVideo.youtube_id) ||
+                              (liveStreamStatus.isLive ? liveTarget : recordedTarget);
+
+  const streamEmbedInfo = StorageService.getStreamEmbedInfo(currentStreamTarget);
+  const activeVideoId = streamEmbedInfo.videoId || StorageService.extractYoutubeId(currentStreamTarget) || '-CibsaxijIk';
+  const isFacebook = streamEmbedInfo.isFacebook;
+
+  // When live is triggered, top recorded video playing is stopped to give space to the live broadcast
+  // When live is stopped, top video pops up again and plays like normal
+  useEffect(() => {
+    if (liveStreamStatus.isLive) {
+      setIsPlaying(false);
+      setShowArchivedVideoDropdown(false);
+    } else {
+      setIsPlaying(true);
+      setShowArchivedVideoDropdown(false);
+    }
+  }, [liveStreamStatus.isLive]);
+
   const [onlineStreamersCount, setOnlineStreamersCount] = useState<number>(StorageService.getOnlineStreamersCount());
+  const hasJoinedStreamRef = useRef<boolean>(false);
 
   useEffect(() => {
     const handleStreamersUpdated = () => {
       setOnlineStreamersCount(StorageService.getOnlineStreamersCount());
     };
     window.addEventListener('gcz_stream_viewers_updated', handleStreamersUpdated);
-
-    if (isPlaying && currentUser && currentUser.id !== 'guest' && liveStreamStatus.isLive) {
-      StorageService.recordStreamer(currentUser, liveFeedTitle);
-      setOnlineStreamersCount(StorageService.getOnlineStreamersCount());
-    }
-
     return () => {
       window.removeEventListener('gcz_stream_viewers_updated', handleStreamersUpdated);
-      if (isPlaying && currentUser?.id && currentUser.id !== 'guest' && liveStreamStatus.isLive) {
+    };
+  }, []);
+
+  useEffect(() => {
+    const shouldBeJoined = Boolean(isPlaying && currentUser && currentUser.id !== 'guest' && liveStreamStatus.isLive);
+    if (shouldBeJoined && !hasJoinedStreamRef.current && currentUser) {
+      hasJoinedStreamRef.current = true;
+      StorageService.recordStreamer(currentUser, liveFeedTitle);
+    } else if (!shouldBeJoined && hasJoinedStreamRef.current && currentUser?.id) {
+      hasJoinedStreamRef.current = false;
+      StorageService.leaveLiveStream(currentUser.id);
+    }
+  }, [isPlaying, currentUser?.id, liveStreamStatus.isLive]);
+
+  useEffect(() => {
+    return () => {
+      if (hasJoinedStreamRef.current && currentUser?.id && currentUser.id !== 'guest') {
+        hasJoinedStreamRef.current = false;
         StorageService.leaveLiveStream(currentUser.id);
       }
     };
-  }, [isPlaying, currentUser?.id, liveFeedTitle, liveStreamStatus.isLive]);
+  }, [currentUser?.id]);
 
   return (
     <div className="space-y-6 pb-24 max-w-4xl mx-auto px-2 sm:px-4 pt-1">
@@ -364,9 +407,10 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             <button
               id="btn-return-live-stream"
               onClick={() => setOverridePlayingVideo(null)}
-              className="ml-2 px-2.5 py-1 rounded-md bg-secondary hover:bg-secondary/80 text-foreground border border-border text-[11px] font-semibold shrink-0 transition-colors shadow-xs cursor-pointer"
+              className="ml-2 px-2.5 py-1 rounded-md bg-secondary hover:bg-secondary/80 text-foreground border border-border text-[11px] font-semibold shrink-0 transition-colors shadow-xs cursor-pointer flex items-center gap-1.5"
             >
-              🔴 Return to Live Stream
+              <Radio className="w-3 h-3 text-red-500 animate-pulse" />
+              <span>Return to Live Stream</span>
             </button>
           </div>
         )}
@@ -474,39 +518,22 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             </div>
           )}
 
-          {/* Active Live Stream Prompt Card Overlay - Prominent Join Live Stream Button */}
+          {/* Active Live Stream Prompt Card Overlay - Watch video & join chat/reactions */}
           {liveStreamStatus.isLive && !overridePlayingVideo && (
-            <div className="absolute inset-0 z-30 bg-black/75 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
-              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-600/30 border border-red-500/50 text-red-300 text-xs font-bold mb-3 animate-pulse">
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-                <Radio className="w-3.5 h-3.5" />
-                <span>LIVE BROADCAST IN SESSION</span>
-              </div>
-              
-              <h3 className="text-white font-bold text-base sm:text-xl max-w-md mb-2 leading-snug drop-shadow-md">
-                {liveFeedTitle}
-              </h3>
-
-              <div className="flex items-center gap-3 text-xs text-white/80 mb-5">
-                <span className="flex items-center gap-1">
-                  <Users className="w-3.5 h-3.5 text-emerald-400" />
-                  <strong className="text-emerald-400 font-bold">{onlineStreamersCount}</strong> Viewers Connected
-                </span>
-                <span>•</span>
-                <span className="text-[#D4AF37] font-semibold">Harare Assembly Fantasyland</span>
-              </div>
-
+            <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
               <button
                 type="button"
+                id="btn-join-live-modal"
                 onClick={() => {
                   if (onOpenLiveModal) {
                     onOpenLiveModal();
                   }
                 }}
-                className="px-6 py-3 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 hover:brightness-110 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2.5 shadow-2xl shadow-red-600/40 hover:scale-105 active:scale-95 transition-all cursor-pointer border border-white/20"
+                className="px-3 py-1.5 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 hover:brightness-110 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg border border-white/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                title="Open interactive chat, reactions and stream details"
               >
-                <Radio className="w-4 h-4 animate-pulse" />
-                <span>Join Live Stream (Live Chat & Reactions)</span>
+                <Radio className="w-3.5 h-3.5 animate-pulse" />
+                <span>Live Chat & Reactions</span>
               </button>
             </div>
           )}
@@ -875,7 +902,11 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             
             {/* Exactly 3 Reaction Icons */}
             <div className="flex items-center gap-2">
-              {(['❤️', '🙏', '🔥'] as const).map((emoji) => {
+              {[
+                { emoji: '❤️', icon: Heart, color: 'text-rose-500' },
+                { emoji: '🙏', icon: Sparkles, color: 'text-amber-400' },
+                { emoji: '🔥', icon: Flame, color: 'text-orange-500' }
+              ].map(({ emoji, icon: Icon, color }) => {
                 const count = activeReactionCount[emoji] || 0;
                 const isReacted = userReacted[emoji];
                 return (
@@ -890,7 +921,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                         : 'bg-secondary/60 border-border hover:border-primary/40 text-foreground/90'
                     )}
                   >
-                    <span className="text-sm leading-none">{emoji}</span>
+                    <Icon className={cn("w-3.5 h-3.5", color, isReacted && "fill-current")} />
                     <span className="text-[11px] text-muted-foreground font-mono">{count}</span>
                   </button>
                 );
@@ -973,6 +1004,59 @@ export const HomeTab: React.FC<HomeTabProps> = ({
 
         </div>
       </div>
+
+      {/* 2.5 Collapsible Recorded Sermon Replay Dropdown - Hidden under dropdown during Live Stream */}
+      {liveStreamStatus.isLive && (
+        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-xs animate-in fade-in duration-200">
+          <button
+            type="button"
+            id="btn-toggle-archived-video"
+            onClick={() => setShowArchivedVideoDropdown(prev => !prev)}
+            className="w-full px-4 py-3 bg-secondary/50 hover:bg-secondary text-left flex items-center justify-between transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                <Tv className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-foreground">
+                    Recorded Sermon Replay
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-bold shrink-0">
+                    Hidden for Live Broadcast
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground truncate">
+                  {activeSermon.title || 'Church & Politics (Controversial Issues) - Apostle Joe Daniels'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-primary shrink-0 ml-2">
+              <span>{showArchivedVideoDropdown ? 'Hide Replay' : 'Show Replay'}</span>
+              {showArchivedVideoDropdown ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </div>
+          </button>
+
+          {showArchivedVideoDropdown && (
+            <div className="p-3 border-t border-border bg-background/60 space-y-2 animate-in slide-in-from-top-2 duration-200">
+              <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+                <iframe
+                  className="w-full h-full border-0"
+                  src={StorageService.getYoutubeEmbedUrl(activeSermon.youtube_id || '-CibsaxijIk')}
+                  title={activeSermon.title || 'Recorded Sermon Replay'}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+                <span className="font-semibold text-foreground truncate">{activeSermon.title}</span>
+                <span className="shrink-0">{activeSermon.speaker || 'Apostle Joe Daniels'}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 3. Sleek Grid: Daily Devotional & Partner Wall */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

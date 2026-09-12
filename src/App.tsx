@@ -18,6 +18,8 @@ import { LiveSermonModal } from './components/modals/LiveSermonModal';
 import { DirectMessagesModal } from './components/modals/DirectMessagesModal';
 import { NotificationsModal } from './components/modals/NotificationsModal';
 import { FloatingNotificationToast } from './components/common/FloatingNotificationToast';
+import { FloatingCommentReply } from './components/common/FloatingCommentReply';
+import { InstagramProfileModal } from './components/modals/InstagramProfileModal';
 import { StorageService } from './services/storageService';
 import { liveSyncService } from './services/liveSyncService';
 import { 
@@ -80,6 +82,7 @@ export default function App() {
   const [bibleReference, setBibleReference] = useState<string | undefined>(undefined);
   const [dismissedLiveNotification, setDismissedLiveNotification] = useState<boolean>(false);
   const [liveSermonStatus, setLiveSermonStatus] = useState(StorageService.getLiveSermonStatus());
+  const [globalProfileUserId, setGlobalProfileUserId] = useState<string | null>(null);
   const [unreadDmsCount, setUnreadDmsCount] = useState<number>(() => {
     const user = StorageService.getCurrentUser();
     if (!user) return 0;
@@ -93,6 +96,8 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState<string>('');
   const [authFullName, setAuthFullName] = useState<string>('');
   const [authLocation, setAuthLocation] = useState<string>('Harare');
+  const [authDateOfBirth, setAuthDateOfBirth] = useState<string>('');
+  const [authGender, setAuthGender] = useState<'male' | 'female'>('male');
   const [authReferralCode, setAuthReferralCode] = useState<string>('');
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -174,16 +179,22 @@ export default function App() {
       liveSyncService.disconnect();
       return;
     }
-    if (currentUser.id && currentUser.role !== 'guest') {
+    if (currentUser?.id && currentUser?.role !== 'guest') {
       StorageService.hydrateFollowsFromSupabase(currentUser.id).catch(() => {});
     }
     liveSyncService.connect(currentUser);
     const unbind = liveSyncService.bindLocalEvents();
     const refreshLiveState = () => refreshAppData();
+    const handleOpenProfile = (e: any) => {
+      if (e?.detail?.userId) {
+        setGlobalProfileUserId(e.detail.userId);
+      }
+    };
     window.addEventListener('gcz_live_state_updated', refreshLiveState);
     window.addEventListener('gcz_live_event_received', refreshLiveState);
     window.addEventListener('gcz_banned_users_updated', refreshLiveState);
     window.addEventListener('gcz_current_user_banned', refreshLiveState);
+    window.addEventListener('gcz_open_user_profile', handleOpenProfile);
     return () => {
       unbind();
       liveSyncService.disconnect();
@@ -191,6 +202,7 @@ export default function App() {
       window.removeEventListener('gcz_live_event_received', refreshLiveState);
       window.removeEventListener('gcz_banned_users_updated', refreshLiveState);
       window.removeEventListener('gcz_current_user_banned', refreshLiveState);
+      window.removeEventListener('gcz_open_user_profile', handleOpenProfile);
     };
   }, [currentUser?.id]);
   useEffect(() => {
@@ -274,12 +286,19 @@ export default function App() {
         setAuthError('Please fill in all required fields.');
         return;
       }
+      if (!authDateOfBirth) {
+        setAuthError('Please select your Date of Birth.');
+        return;
+      }
       const res = StorageService.signup(
         authFullName.trim(),
         authPhone.trim(),
         authPassword.trim(),
         authLocation,
-        authReferralCode.trim()
+        authReferralCode.trim(),
+        undefined,
+        authDateOfBirth,
+        authGender
       );
       if (res.success && res.user) {
         setCurrentUser(res.user);
@@ -288,6 +307,8 @@ export default function App() {
         setAuthPhone('');
         setAuthPassword('');
         setAuthReferralCode('');
+        setAuthDateOfBirth('');
+        setAuthGender('male');
         confetti({ particleCount: 40, spread: 70 });
       } else {
         setAuthError(res.error || 'Failed to create account.');
@@ -337,7 +358,10 @@ export default function App() {
 
   // Check if current user is banned - blocks entire app and renders dedicated Banned Screen
   const bannedMap = StorageService.getBannedUsers();
-  const isUserBanned = currentUser.is_banned || Boolean(bannedMap[currentUser.id] || bannedMap[currentUser.phone]);
+  const isUserBanned = currentUser?.is_banned || Boolean(
+    (currentUser?.id && bannedMap[currentUser.id]) ||
+    (currentUser?.phone && bannedMap[currentUser.phone])
+  );
   if (isUserBanned) {
     return (
       <BannedScreen
@@ -389,7 +413,7 @@ export default function App() {
                 <p className="text-[11px] text-white/70 truncate mt-0.5 flex items-center gap-1.5">
                   <span className="text-emerald-400 font-semibold">{StorageService.getStreamViewers().length + 42} Believers Streaming</span>
                   <span>•</span>
-                  <span className="text-[#D4AF37]">Streaming with your {currentUser.location || currentUser.city_location || 'Harare'} congregation</span>
+                  <span className="text-[#D4AF37]">Streaming with your {currentUser?.location || currentUser?.city_location || 'Harare'} congregation</span>
                 </p>
               </div>
             </div>
@@ -432,6 +456,7 @@ export default function App() {
               setAuthMode('login');
               setShowAuthModal(true);
             }}
+            onOpenLiveModal={() => setShowLiveSermonModal(true)}
             onOpenDevConsole={() => setShowDevConsole(true)}
             onOpenAdminPanel={() => setShowAdminPanel(true)}
           />
@@ -624,6 +649,7 @@ export default function App() {
 
       {/* Floating Notification Toast (Redirects to exact place message comes from) */}
       <FloatingNotificationToast
+        currentUser={currentUser}
         onOpenLiveSermon={() => setShowLiveSermonModal(true)}
         onOpenDirectChat={(recipientId) => {
           if (!currentUser || currentUser.role === 'guest' || currentUser.id.startsWith('usr_guest')) {
@@ -650,6 +676,29 @@ export default function App() {
         }}
         onOpenAllNotifications={() => setShowNotificationsModal(true)}
       />
+
+      {/* Floating Comment Reply Float */}
+      {currentUser && <FloatingCommentReply currentUser={currentUser} />}
+
+      {/* Global Instagram Profile Modal */}
+      {globalProfileUserId && (
+        <InstagramProfileModal
+          userId={globalProfileUserId}
+          isOpen={Boolean(globalProfileUserId)}
+          onClose={() => setGlobalProfileUserId(null)}
+          onOpenDirectChat={(recipientId) => {
+            setGlobalProfileUserId(null);
+            if (!currentUser || currentUser.role === 'guest' || currentUser.id.startsWith('usr_guest')) {
+              setAuthMode('login');
+              setShowAuthModal(true);
+              return;
+            }
+            setDirectMessageRecipientId(recipientId);
+            setDirectMessageGroupId(undefined);
+            setShowDirectMessagesModal(true);
+          }}
+        />
+      )}
 
       {/* Notifications Modal */}
       {showNotificationsModal && (
@@ -776,6 +825,35 @@ export default function App() {
                         </option>
                       ))}
                     </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block font-semibold text-white/80 mb-1">
+                        Date of Birth
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={authDateOfBirth}
+                        onChange={(e) => setAuthDateOfBirth(e.target.value)}
+                        className="w-full bg-[#001122] border border-white/20 rounded-xl p-2.5 text-white focus:outline-none focus:border-[#D4AF37] text-xs [color-scheme:dark]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-white/80 mb-1">
+                        Sex / Gender
+                      </label>
+                      <select
+                        value={authGender}
+                        onChange={(e) => setAuthGender(e.target.value as 'male' | 'female')}
+                        className="w-full bg-[#001122] border border-white/20 rounded-xl p-2.5 text-white focus:outline-none focus:border-[#D4AF37] text-xs"
+                      >
+                        <option value="male" className="bg-[#001F3F] text-white">Male (Brother)</option>
+                        <option value="female" className="bg-[#001F3F] text-white">Female (Sister)</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div>
