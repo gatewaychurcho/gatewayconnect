@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, 
   Users, 
@@ -41,7 +41,13 @@ import {
   Play,
   Terminal,
   MoreVertical,
-  BadgeCheck
+  BadgeCheck,
+  Crown,
+  Ban,
+  KeyRound,
+  Shield,
+  RotateCcw,
+  Lock
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -61,7 +67,8 @@ import {
   CongregationUnit,
   StreamViewer,
   StreamAttendanceRecord,
-  SUPPORTED_CITIES
+  SUPPORTED_CITIES,
+  UnbanAppeal
 } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { downloadCsvForExcel } from '../../utils/exportUtils';
@@ -73,7 +80,7 @@ interface AdminPanelProps {
   onRefreshAppState: () => void;
 }
 
-type AdminSection = 'overview' | 'congregations' | 'stream_attendees' | 'broadcast' | 'content_moderation' | 'inventory' | 'members' | 'prayers' | 'push' | 'finances' | 'vibes';
+type AdminSection = 'overview' | 'godmode' | 'bans' | 'congregations' | 'stream_attendees' | 'broadcast' | 'content_moderation' | 'inventory' | 'members' | 'prayers' | 'push' | 'finances' | 'vibes';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppState }) => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
@@ -124,9 +131,51 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   const [joeVibes, setJoeVibes] = useState<JoeVibesSubmission[]>(StorageService.getJoeVibes());
   const [notifications, setNotifications] = useState<PushNotification[]>(StorageService.getPushNotifications());
 
-  // Content Moderation States (Bans, Appeals, and Password Recovery are now exclusively in Dev Console)
+  // Content Moderation States & Live Event Subscriptions
   const [testimonies, setTestimonies] = useState<Testimony[]>(StorageService.getTestimonies());
   const [moderationMessage, setModerationMessage] = useState<string | null>(null);
+
+  // Real-time Moderation & Godmode States
+  const [bannedUsersMap, setBannedUsersMap] = useState<Record<string, { banned_at: string; reason: string }>>(() => StorageService.getBannedUsers());
+  const [unbanAppeals, setUnbanAppeals] = useState<UnbanAppeal[]>(() => StorageService.getUnbanAppeals());
+  const [godmodeSearch, setGodmodeSearch] = useState<string>('');
+  const [banTargetPhone, setBanTargetPhone] = useState<string>('');
+  const [banTargetReason, setBanTargetReason] = useState<string>('Violation of Community Guidelines');
+  const [editPasswordUser, setEditPasswordUser] = useState<User | null>(null);
+  const [newPasswordInput, setNewPasswordInput] = useState<string>('');
+
+  // Live real-time event listeners for Admin Panel
+  useEffect(() => {
+    const refreshAdminData = () => {
+      setUsers(StorageService.getAllUsers());
+      setBannedUsersMap(StorageService.getBannedUsers());
+      setUnbanAppeals(StorageService.getUnbanAppeals());
+      setDonations(StorageService.getDonations());
+      setCongregationUnits(StorageService.getCongregationUnits());
+      setStreamViewers(StorageService.getStreamViewers());
+      setStreamAttendees(StorageService.getStreamAttendanceHistory());
+    };
+
+    window.addEventListener('gcz_user_profile_updated', refreshAdminData);
+    window.addEventListener('gcz_user_registered', refreshAdminData);
+    window.addEventListener('gcz_users_synced', refreshAdminData);
+    window.addEventListener('gcz_banned_users_updated', refreshAdminData);
+    window.addEventListener('gcz_donations_updated', refreshAdminData);
+    window.addEventListener('gcz_donation_updated', refreshAdminData);
+    window.addEventListener('gcz_live_state_updated', refreshAdminData);
+    window.addEventListener('gcz_live_event_received', refreshAdminData);
+
+    return () => {
+      window.removeEventListener('gcz_user_profile_updated', refreshAdminData);
+      window.removeEventListener('gcz_user_registered', refreshAdminData);
+      window.removeEventListener('gcz_users_synced', refreshAdminData);
+      window.removeEventListener('gcz_banned_users_updated', refreshAdminData);
+      window.removeEventListener('gcz_donations_updated', refreshAdminData);
+      window.removeEventListener('gcz_donation_updated', refreshAdminData);
+      window.removeEventListener('gcz_live_state_updated', refreshAdminData);
+      window.removeEventListener('gcz_live_event_received', refreshAdminData);
+    };
+  }, []);
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
