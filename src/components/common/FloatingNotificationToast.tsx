@@ -95,8 +95,17 @@ export const FloatingNotificationToast: React.FC<FloatingNotificationToastProps>
       return;
     }
 
-    // 3. Direct Message / Follow
-    if (currentNotif.target_type === 'dm' || currentNotif.type === 'chat' || currentNotif.type === 'follow') {
+    // 3. User Profile (Follow notifications)
+    if (currentNotif.type === 'follow' || currentNotif.target_type === 'profile') {
+      const targetUserId = currentNotif.target_id || currentNotif.actor_id;
+      if (targetUserId) {
+        window.dispatchEvent(new CustomEvent('gcz_open_user_profile', { detail: { userId: targetUserId } }));
+        return;
+      }
+    }
+
+    // 4. Direct Message
+    if (currentNotif.target_type === 'dm' || currentNotif.type === 'chat') {
       const targetUserId = currentNotif.target_id || currentNotif.actor_id;
       if (targetUserId) {
         onOpenDirectChat(targetUserId);
