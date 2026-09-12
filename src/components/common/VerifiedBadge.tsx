@@ -32,7 +32,7 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
     return (
       <span 
         className={`inline-flex items-center gap-1 align-middle ${className}`} 
-        title="Gold Verified: Apostolic Directorate & Founder"
+        title="Gold Badge: Super Admin"
       >
         <svg viewBox="0 0 24 24" className={`${sizeStyles[size]} shrink-0 drop-shadow-sm`} fill="none">
           <defs>
@@ -47,7 +47,7 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
         </svg>
         {showLabel && (
           <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-500/40">
-            Apostolic
+            Super Admin
           </span>
         )}
       </span>
@@ -58,7 +58,7 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
     return (
       <span 
         className={`inline-flex items-center gap-1 align-middle ${className}`} 
-        title="Silver Verified: Church Moderator"
+        title="Silver Badge: VIP Member"
       >
         <svg viewBox="0 0 24 24" className={`${sizeStyles[size]} shrink-0 drop-shadow-sm`} fill="none">
           <defs>
@@ -73,7 +73,7 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
         </svg>
         {showLabel && (
           <span className="text-[10px] font-black uppercase tracking-wider text-slate-200 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600">
-            Moderator
+            VIP Member
           </span>
         )}
       </span>
@@ -84,7 +84,7 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
     return (
       <span 
         className={`inline-flex items-center gap-1 align-middle ${className}`} 
-        title="Verified: Kingdom Partner & Leader"
+        title="Blue Badge: Pastor / Moderator"
       >
         <svg viewBox="0 0 24 24" className={`${sizeStyles[size]} shrink-0 drop-shadow-sm`} fill="none">
           {/* Authentic Instagram / Meta Blue (#0095F6) */}
@@ -93,7 +93,7 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
         </svg>
         {showLabel && (
           <span className="text-[10px] font-black uppercase tracking-wider text-sky-300 bg-sky-950/60 px-1.5 py-0.5 rounded border border-sky-500/40">
-            Verified
+            Pastor / Moderator
           </span>
         )}
       </span>
