@@ -1813,6 +1813,8 @@ export class StorageService {
     const isDevPhone = arePhoneNumbersEqual(phone, '0780699988');
     const role: UserRole = isDevPhone ? 'developer' : 'member';
     const badge: BadgeType = isDevPhone ? 'gold' : 'none';
+    const isVerified = isDevPhone;
+    const city = location?.trim() || 'Harare';
 
     const newUser: User = {
       id: `usr_${Date.now()}`,
@@ -1822,10 +1824,12 @@ export class StorageService {
       handle,
       role,
       badge_type: badge,
-      location: location?.trim() || 'Harare',
+      location: city,
+      city_location: city,
+      cell_group: 'Central Fellowship',
       referral_code: referralCode?.trim(),
       member_id: `GCZ-${role === 'developer' ? 'DEV' : 'MEM'}-${Math.floor(1000 + Math.random() * 9000)}`,
-      is_verified: true,
+      is_verified: isVerified,
       created_at: new Date().toISOString(),
       saved_verses: ['John 1:1', 'Isaiah 40:31'],
       followers_count: 0,
@@ -2294,6 +2298,21 @@ export class StorageService {
 
     SupabaseSyncService.syncDirectMessage(newMsg).catch(() => {});
 
+    // Create real-time notification alert for message recipient
+    try {
+      const allUsers = this.getAllUsers();
+      const sender = allUsers.find(u => u.id === senderId || arePhoneNumbersEqual(u.phone, senderId));
+      const senderName = sender?.full_name || 'A believer';
+      this.addAppNotification({
+        title: `Message from ${senderName}`,
+        message: text.trim().slice(0, 100),
+        type: 'chat',
+        recipient_id: receiverId
+      });
+    } catch {
+      // safe fallback
+    }
+
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_direct_messages_updated', { detail: newMsg }));
       window.dispatchEvent(new CustomEvent('gcz_dms_updated'));
@@ -2309,6 +2328,24 @@ export class StorageService {
     if (!exists) {
       all.push(message);
       setLocal(KEYS.DIRECT_MESSAGES, all);
+
+      const current = this.getCurrentUser();
+      if (current && (current.id === message.receiver_id || arePhoneNumbersEqual(current.phone, message.receiver_id))) {
+        try {
+          const allUsers = this.getAllUsers();
+          const sender = allUsers.find(u => u.id === message.sender_id || arePhoneNumbersEqual(u.phone, message.sender_id));
+          const senderName = sender?.full_name || 'A believer';
+          this.addAppNotification({
+            title: `Message from ${senderName}`,
+            message: (message.text || '').trim().slice(0, 100),
+            type: 'chat',
+            recipient_id: current.id
+          });
+        } catch {
+          // safe fallback
+        }
+      }
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('gcz_direct_messages_updated', { detail: message }));
         window.dispatchEvent(new CustomEvent('gcz_dms_updated'));
