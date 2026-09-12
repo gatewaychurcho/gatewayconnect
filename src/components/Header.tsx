@@ -80,7 +80,7 @@ export const Header: React.FC<HeaderProps> = ({
     const updateSettingsAndCount = () => {
       const settings = StorageService.getNotificationSettings(currentUser?.id);
       setNotifSettings(settings);
-      const list = StorageService.getAppNotifications();
+      const list = StorageService.getAppNotifications(currentUser?.id);
       const count = list.filter(n => {
         if (n.is_read) return false;
         if (n.title.toLowerCase().includes('milestone') || n.message.toLowerCase().includes('milestone')) return false;
