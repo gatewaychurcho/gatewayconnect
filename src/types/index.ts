@@ -28,6 +28,8 @@ export interface User {
   offline_sermon_ids?: string[];
   followers_count?: number;
   following_count?: number;
+  date_of_birth?: string;
+  gender?: 'male' | 'female' | 'other';
   is_banned?: boolean;
   ban_reason?: string;
 }
@@ -511,6 +513,8 @@ export interface ChatGroup {
   duration_months?: number; // e.g. 3 months for Foundation School
   category?: 'Worship' | 'Men' | 'Women' | 'Youth' | 'School' | 'General';
   invite_code: string;
+  revoked_invite_codes?: string[];
+  is_invite_link_active?: boolean;
   created_at: string;
   member_ids: string[];
   removed_user_ids?: string[]; // Users removed by admin who cannot rejoin with invite code
