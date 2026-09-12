@@ -67,7 +67,8 @@ export const ChatDevModal: React.FC<ChatDevModalProps> = ({ isOpen, onClose }) =
       actor_name: currentUser.full_name,
       actor_avatar: currentUser.avatar_url,
       title: `Message from ${currentUser.full_name}`,
-      message: inputText.trim()
+      message: inputText.trim(),
+      recipient_id: 'usr_developer'
     });
 
     setInputText('');
