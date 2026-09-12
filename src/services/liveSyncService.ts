@@ -1,8 +1,10 @@
 import { DirectMessage, PrayerRequest, Testimony, ChatGroupMessage, User } from '../types';
 import { StorageService } from './storageService';
 import { getSupabase } from './supabaseClient';
-import { CONFIG } from '../../config';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+
+// Use Vercel env var if available, fallback to CONFIG
+const configuredLiveWsUrl = import.meta.env.VITE_LIVE_WS_URL || (await import('../../config')).CONFIG.LIVE_WS_URL;
 
 type LiveEventType =
   | 'testimony'
@@ -28,8 +30,6 @@ type LiveState = {
   fellowshipPosts: ChatGroupMessage[];
   activeMembers: Array<{ id: string; full_name: string; handle?: string }>;
 };
-
-const configuredLiveWsUrl = CONFIG.LIVE_WS_URL;
 
 export class LiveSyncService {
   private socket: WebSocket | null = null;
