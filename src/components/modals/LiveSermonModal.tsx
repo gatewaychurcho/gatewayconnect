@@ -440,6 +440,24 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
                 </span>
               </div>
 
+              {/* Modern Instagram / TikTok Live Floating On-Screen Comments Overlay */}
+              <div className="absolute bottom-16 left-3 sm:left-4 z-20 pointer-events-none max-w-[280px] sm:max-w-xs space-y-2 flex flex-col justify-end overflow-hidden">
+                {chatMessages.slice(-4).map((msg) => (
+                  <div 
+                    key={msg.id}
+                    className="bg-black/65 backdrop-blur-md border border-white/15 text-white px-3 py-1.5 rounded-2xl text-xs flex items-start gap-2 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300 pointer-events-auto"
+                  >
+                    <div className="w-5 h-5 rounded-full bg-[#D4AF37] text-[#001F3F] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                      {msg.sender_name.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <span className="font-bold text-[#D4AF37] mr-1.5 text-[11px]">{msg.sender_name}</span>
+                      <span className="text-white/90 text-[11px] leading-tight break-words">{msg.message}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               {/* Floating Facebook Action Pill (if Facebook Live) */}
               {streamEmbedInfo.isFacebook && (
                 <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2">

@@ -53,7 +53,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { User, DirectMessage, DmThread, ChatGroup, ChatGroupMessage, GroupMembership, GroupInvite } from '../../types';
-import { StorageService } from '../../services/storageService';
+import { StorageService, arePhoneNumbersEqual } from '../../services/storageService';
 import { SupabaseSyncService } from '../../services/supabaseSyncService';
 import { PaynowService } from '../../services/paynowService';
 import { LocalImagePicker } from '../common/LocalImagePicker';
@@ -126,6 +126,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   const [showJoinByCodeModal, setShowJoinByCodeModal] = useState(false);
   const [inviteCodeInput, setInviteCodeInput] = useState('');
   const [declinedInviteCodes, setDeclinedInviteCodes] = useState<string[]>([]);
+  const [joiningGroup, setJoiningGroup] = useState<ChatGroup | null>(null);
+  const [inviteLinkError, setInviteLinkError] = useState<string | null>(null);
 
   // Payment form state
   const [paymentMethod, setPaymentMethod] = useState<'ecocash' | 'innbucks' | 'card'>('ecocash');
@@ -450,7 +452,15 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
   const activeThread = threads.find(t => t.other_user.id === activeUserId);
   const activeUser = activeThread?.other_user || (activeUserId ? StorageService.getAllUsers().find(u => u.id === activeUserId) : null);
-  const activeGroup = groups.find(g => g.id === activeGroupId) || (typeof window !== 'undefined' && !isMobile ? groups[0] : null);
+
+  const isDeveloper = currentUser.role === 'developer' || arePhoneNumbersEqual(currentUser.phone, '0780699988');
+
+  // Strict Group Visibility: only show groups user is added to, unless Developer
+  const visibleGroups = isDeveloper
+    ? groups
+    : groups.filter(g => g.member_ids && g.member_ids.includes(currentUser.id));
+
+  const activeGroup = groups.find(g => g.id === activeGroupId) || (typeof window !== 'undefined' && !isMobile ? (visibleGroups[0] || null) : null);
 
   const activeGroupMembership = activeGroup 
     ? StorageService.getGroupMembership(activeGroup.id, currentUser.id) 
@@ -461,7 +471,6 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     ? StorageService.hasUserExitedGroup(activeGroup.id, currentUser.id)
     : false;
 
-  const isDeveloper = currentUser.role === 'developer';
   const isJoinedGroupMember = activeGroup 
     ? Boolean(
         (activeGroup.member_ids?.includes(currentUser.id) || 
@@ -474,6 +483,18 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
   const canViewActiveGroupChats = isDeveloper || isJoinedGroupMember;
   const isUserGroupMember = canViewActiveGroupChats;
+
+  const triggerJoiningAnimation = (group: ChatGroup) => {
+    setJoiningGroup(group);
+    confetti({ particleCount: 35, spread: 70 });
+    setTimeout(() => {
+      StorageService.joinChatGroup(group.id, currentUser.id);
+      refreshGroupsData();
+      setActiveTab('groups');
+      setActiveGroupId(group.id);
+      setJoiningGroup(null);
+    }, 1300);
+  };
 
   // Foundation School membership check
   const fsMembership = StorageService.getGroupMembership('group_foundation_school', currentUser.id);
@@ -760,10 +781,21 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     }
   };
 
-  // WhatsApp-style Group Input change with autocomplete detection
+  // WhatsApp-style Group Input change with autocomplete detection & typing indicator
   const handleGroupInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setGroupInputText(val);
+
+    if (activeGroupId) {
+      window.dispatchEvent(new CustomEvent('gcz_user_typing', {
+        detail: {
+          userId: currentUser.id,
+          userName: currentUser.full_name,
+          groupId: activeGroupId,
+          isTyping: val.length > 0
+        }
+      }));
+    }
 
     const lastAt = val.lastIndexOf('@');
     if (lastAt !== -1) {
@@ -857,12 +889,14 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     // Extract group code or matching group
     const codeMatch = msg.text.match(/code=([a-zA-Z0-9_-]+)/);
     const code = codeMatch ? codeMatch[1].toLowerCase() : null;
-    const matchedGroup = groups.find(g => 
+    const inviteValidation = code ? StorageService.validateGroupInviteCode(code) : null;
+    const isLinkReset = inviteValidation?.status === 'reset';
+    const matchedGroup = (inviteValidation?.group) || groups.find(g => 
       (code && g.invite_code.toLowerCase() === code) || 
       msg.text.toLowerCase().includes(g.name.toLowerCase())
     );
 
-    const isMember = matchedGroup ? (matchedGroup.member_ids.includes(currentUser.id) || isSuperAdminOrDev) : false;
+    const isMember = matchedGroup ? matchedGroup.member_ids.includes(currentUser.id) : false;
     const isDeclined = matchedGroup ? declinedInviteCodes.includes(matchedGroup.id) : false;
     const matchingPendingInvite = matchedGroup ? pendingInvites.find(inv => inv.group_id === matchedGroup.id) : null;
 
@@ -886,7 +920,15 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               </div>
             </div>
 
-            {isMember ? (
+            {isLinkReset ? (
+              <div className="bg-red-950/70 border border-red-500/40 rounded-xl p-2.5 text-center text-xs text-red-300 font-semibold space-y-1">
+                <div className="flex items-center justify-center gap-1.5 text-red-400 font-bold">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>Invite Link Reset</span>
+                </div>
+                <p className="text-[11px]">Can't join because this invite link was reset.</p>
+              </div>
+            ) : isMember ? (
               <div className="bg-emerald-950/70 border border-emerald-500/40 rounded-xl p-2 text-center text-[11px] text-emerald-300 font-bold flex items-center justify-center gap-1.5">
                 <Check className="w-3.5 h-3.5" />
                 <span>You are an active member of this group</span>
@@ -901,7 +943,12 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     if (matchingPendingInvite) {
                       handleRespondToInvite(matchingPendingInvite.id, true);
                     } else {
-                      handleJoinGroup(matchedGroup);
+                      const validation = StorageService.validateGroupInviteCode(code || matchedGroup.invite_code);
+                      if (validation.status === 'reset') {
+                        alert("Can't join because this invite link was reset.");
+                        return;
+                      }
+                      triggerJoiningAnimation(matchedGroup);
                     }
                   }}
                   className="text-[10px] text-[#D4AF37] underline font-bold hover:text-amber-300"
@@ -918,10 +965,15 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     if (matchingPendingInvite) {
                       handleRespondToInvite(matchingPendingInvite.id, true);
                     } else {
-                      handleJoinGroup(matchedGroup);
+                      const validation = StorageService.validateGroupInviteCode(code || matchedGroup.invite_code);
+                      if (validation.status === 'reset') {
+                        alert("Can't join because this invite link was reset.");
+                        return;
+                      }
+                      triggerJoiningAnimation(matchedGroup);
                     }
                   }}
-                  className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md transition-all active:scale-95"
+                  className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer"
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>Join</span>
@@ -1176,31 +1228,39 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
   const handleJoinByCode = () => {
     if (!inviteCodeInput.trim()) return;
-    const cleanCode = inviteCodeInput.trim().toLowerCase();
-    const grp = groups.find(g => g.invite_code.toLowerCase() === cleanCode || cleanCode.includes(g.invite_code.toLowerCase()));
-    
-    if (!grp) {
-      alert('Invalid group invite link or code. Please check with group admin.');
+    setInviteLinkError(null);
+    const result = StorageService.validateGroupInviteCode(inviteCodeInput.trim());
+
+    if (result.status === 'reset') {
+      setInviteLinkError("Can't join because this invite link was reset.");
+      return;
+    }
+
+    if (result.status === 'invalid' || !result.group) {
+      setInviteLinkError("Invalid group invite link or code. Please check with group admin.");
+      return;
+    }
+
+    const grp = result.group;
+
+    // If user was removed from this group by an admin
+    if (grp.removed_user_ids?.includes(currentUser.id)) {
+      setInviteLinkError(`You were removed from ${grp.name} by an admin. You cannot rejoin via invite.`);
+      return;
+    }
+
+    // If user is already in this group
+    if (grp.member_ids.includes(currentUser.id)) {
+      setShowJoinByCodeModal(false);
+      setInviteCodeInput('');
+      setActiveGroupId(grp.id);
+      setActiveTab('groups');
       return;
     }
 
     setShowJoinByCodeModal(false);
     setInviteCodeInput('');
-    setActiveGroupId(grp.id);
-
-    // If user is already in this group
-    if (grp.member_ids.includes(currentUser.id)) {
-      alert(`You are already in ${grp.name}!`);
-      return;
-    }
-
-    // If user was removed from this group by an admin
-    if (grp.removed_user_ids?.includes(currentUser.id)) {
-      alert(`You were removed from ${grp.name} by an admin. You cannot rejoin via invite.`);
-      return;
-    }
-
-    handleJoinGroup(grp);
+    triggerJoiningAnimation(grp);
   };
 
   // Contacts filtering and sorting
@@ -1238,7 +1298,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       return bP - aP;
     });
 
-  const filteredGroups = groups
+  const filteredGroups = visibleGroups
     .filter(g =>
       g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       g.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1296,11 +1356,11 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               >
                 <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span>Church Groups</span>
-                {groups.length > 0 && (
+                {visibleGroups.length > 0 && (
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                     activeTab === 'groups' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-secondary text-foreground'
                   }`}>
-                    {groups.length}
+                    {visibleGroups.length}
                   </span>
                 )}
                 {pendingInvites.length > 0 && (
@@ -1557,7 +1617,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                 {/* Groups List */}
                 {filteredGroups.map(grp => {
                   const isSelected = grp.id === activeGroupId;
-                  const isMember = grp.member_ids.includes(currentUser.id) || isSuperAdminOrDev;
+                  const isMember = grp.member_ids.includes(currentUser.id);
                   const isFs = grp.id === 'group_foundation_school';
 
                   return (
@@ -2022,7 +2082,20 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     <input
                       type="text"
                       value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setInputText(val);
+                        if (activeUserId) {
+                          window.dispatchEvent(new CustomEvent('gcz_user_typing', {
+                            detail: {
+                              userId: currentUser.id,
+                              userName: currentUser.full_name,
+                              targetId: activeUserId,
+                              isTyping: val.length > 0
+                            }
+                          }));
+                        }
+                      }}
                       placeholder={`Message ${activeUser.full_name}...`}
                       className="flex-1 bg-secondary border border-border rounded-lg px-4 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                     />
@@ -2202,7 +2275,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                   <span>Export Chat (.txt)</span>
                                 </button>
 
-                                {isUserGroupMember && (
+                                {(isUserGroupMember || isDeveloper) && (
                                   <button
                                     onClick={() => {
                                       setShowAddMemberModal(true);
@@ -3145,24 +3218,45 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               </button>
             </div>
 
+            {inviteLinkError && (
+              <div className="p-2.5 rounded-lg bg-red-950/70 border border-red-500/40 text-red-300 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{inviteLinkError}</span>
+              </div>
+            )}
+
             <div className="space-y-1.5 text-xs">
               <label className="block text-muted-foreground font-semibold">Paste Invite Code or Link</label>
               <input
                 type="text"
                 value={inviteCodeInput}
-                onChange={(e) => setInviteCodeInput(e.target.value)}
+                onChange={(e) => {
+                  setInviteCodeInput(e.target.value);
+                  setInviteLinkError(null);
+                }}
                 placeholder="e.g. ignite-worship-2026 or https://gatewayconnect.church/join/group?code=..."
                 className="w-full bg-background border border-border rounded-lg p-2.5 text-foreground text-xs focus:outline-none focus:border-primary"
               />
             </div>
 
             {(() => {
-              const cleanInput = inviteCodeInput.trim().toLowerCase();
-              const matched = cleanInput ? groups.find(g => g.invite_code.toLowerCase() === cleanInput || cleanInput.includes(g.invite_code.toLowerCase())) : null;
+              const validation = inviteCodeInput.trim() ? StorageService.validateGroupInviteCode(inviteCodeInput.trim()) : null;
+              const isReset = validation?.status === 'reset';
+              const matched = validation?.group;
 
               return (
                 <div className="space-y-3">
-                  {matched && (
+                  {isReset && (
+                    <div className="bg-red-950/60 border border-red-500/40 rounded-xl p-3 text-red-300 text-xs flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                      <div>
+                        <p className="font-bold">Can't join because this invite link was reset.</p>
+                        <p className="text-[10px] text-red-400/80">Please request a fresh invitation link from the group leader.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {matched && !isReset && (
                     <div className="bg-secondary/50 border border-border rounded-xl p-3 flex items-center gap-3">
                       <div className="w-10 h-10 rounded-lg bg-primary text-primary-foreground font-black text-sm flex items-center justify-center shrink-0 shadow-sm">
                         {matched.name.slice(0, 1)}
@@ -3179,7 +3273,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   <div className="flex items-center gap-2 pt-1 border-t border-border">
                     <button
                       onClick={handleJoinByCode}
-                      disabled={!inviteCodeInput.trim()}
+                      disabled={!inviteCodeInput.trim() || isReset}
                       className="flex-1 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow disabled:opacity-40 transition-all active:scale-95 cursor-pointer"
                     >
                       <Check className="w-3.5 h-3.5" />
@@ -3189,6 +3283,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       onClick={() => {
                         setShowJoinByCodeModal(false);
                         setInviteCodeInput('');
+                        setInviteLinkError(null);
                       }}
                       className="flex-1 py-2.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-foreground font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                     >
@@ -3207,7 +3302,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       {/* MODAL: GROUP INFO & DETAILS */}
       {/* ========================================================================= */}
       {showGroupInfoModal && activeGroup && (() => {
-        const isUserGroupAdmin = (activeGroup.admin_ids || [activeGroup.created_by]).includes(currentUser.id) || isSuperAdminOrDev;
+        const isUserGroupAdmin = isDeveloper || (activeGroup.admin_ids || [activeGroup.created_by]).includes(currentUser.id) || isSuperAdminOrDev;
         const isGroupPinned = activeGroup.pinned_by_users?.includes(currentUser.id);
 
         return (
@@ -3379,6 +3474,55 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       }`} />
                     </button>
                   </div>
+
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-border">
+                    <div className="truncate pr-2">
+                      <span className="text-foreground font-medium block">Reset Invite Link</span>
+                      <span className="text-[9px] text-muted-foreground">Previous links will immediately be revoked</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const res = StorageService.resetGroupInviteCode(activeGroup.id);
+                        if (res.success) {
+                          refreshGroupsData();
+                          alert(`Invite link reset! New code: ${res.newCode}. Previous links can no longer be used.`);
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[10px] font-bold shrink-0 cursor-pointer"
+                    >
+                      Reset Link
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Developer Group Controls */}
+              {isDeveloper && (
+                <div className="p-2.5 rounded-xl bg-red-950/40 border border-red-500/40 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-red-400 flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      Developer Group Controls
+                    </span>
+                    <span className="text-[9px] text-red-300 font-mono px-1.5 py-0.5 rounded bg-red-900/50">Root</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`DEVELOPER OVERRIDE: Are you sure you want to permanently DISSOLVE "${activeGroup.name}"? This action deletes the group completely and purges its messages.`)) {
+                        StorageService.deleteChatGroup(activeGroup.id);
+                        setShowGroupInfoModal(false);
+                        setActiveGroupId(undefined);
+                        refreshGroupsData();
+                        alert(`Group "${activeGroup.name}" has been dissolved.`);
+                      }
+                    }}
+                    className="w-full py-2 px-3 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Dissolve Group</span>
+                  </button>
                 </div>
               )}
 
@@ -3388,9 +3532,24 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   <h5 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                     Members ({activeGroup.member_ids.length})
                   </h5>
-                  <span className="text-[10px] text-primary font-semibold">
-                    {(activeGroup.admin_ids || [activeGroup.created_by]).length} Admin(s)
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {(isUserGroupMember || isDeveloper) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowGroupInfoModal(false);
+                          setShowAddMemberModal(true);
+                        }}
+                        className="text-[10px] text-emerald-500 font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <UserPlus className="w-3 h-3" />
+                        <span>Add Member</span>
+                      </button>
+                    )}
+                    <span className="text-[10px] text-primary font-semibold">
+                      {(activeGroup.admin_ids || [activeGroup.created_by]).length} Admin(s)
+                    </span>
+                  </div>
                 </div>
                 <div className="divide-y divide-border">
                   {activeGroup.member_ids.map(mid => {
@@ -3442,7 +3601,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           )}
 
                           {/* Admin Actions: Promote / Dismiss / Remove */}
-                          {isUserGroupAdmin && mid !== currentUser.id && !isCreator && (
+                          {(isDeveloper || (isUserGroupAdmin && mid !== currentUser.id && !isCreator)) && (
                             <>
                               <button
                                 type="button"
@@ -3717,6 +3876,35 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               </p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Joining Group WhatsApp Animation Overlay */}
+      {joiningGroup && (
+        <div className="fixed inset-0 z-70 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-[#001F3F] border border-[#D4AF37]/60 rounded-3xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border-4 border-[#D4AF37]/20 border-t-[#D4AF37] animate-spin" />
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#D4AF37] to-amber-700 text-[#001F3F] flex items-center justify-center font-black text-xl shadow-lg">
+                {joiningGroup.name.slice(0, 1).toUpperCase()}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <span className="text-[10px] uppercase font-bold tracking-widest text-[#D4AF37]">
+                Joining Official Fellowship
+              </span>
+              <h3 className="font-serif-church font-bold text-lg text-white">
+                {joiningGroup.name}
+              </h3>
+              <p className="text-xs text-white/60">
+                Verifying covenant invite & connecting to members...
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 text-xs text-emerald-400 font-semibold pt-1">
+              <Sparkles className="w-4 h-4 animate-pulse" />
+              <span>Redirecting into group chat...</span>
+            </div>
+          </div>
         </div>
       )}
 

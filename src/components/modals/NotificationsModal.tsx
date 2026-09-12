@@ -78,8 +78,18 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
       }
     }
 
-    // 3. Direct Message / Follower
-    if (n.target_type === 'dm' || n.type === 'chat' || n.type === 'follow') {
+    // 3. User Profile (Follower notification)
+    if (n.type === 'follow' || n.target_type === 'profile') {
+      const targetUserId = n.target_id || n.actor_id;
+      if (targetUserId) {
+        window.dispatchEvent(new CustomEvent('gcz_open_user_profile', { detail: { userId: targetUserId } }));
+        onClose();
+        return;
+      }
+    }
+
+    // 4. Direct Message
+    if (n.target_type === 'dm' || n.type === 'chat') {
       const targetUserId = n.target_id || n.actor_id;
       if (targetUserId && onOpenDirectChat) {
         onOpenDirectChat(targetUserId);
