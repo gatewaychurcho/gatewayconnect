@@ -376,6 +376,85 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     u.role.includes(searchQuery)
   );
 
+  const filteredGodmodeUsers = users.filter(u => 
+    !godmodeSearch.trim() ||
+    u.full_name.toLowerCase().includes(godmodeSearch.toLowerCase()) ||
+    u.phone.includes(godmodeSearch) ||
+    (u.handle && u.handle.toLowerCase().includes(godmodeSearch.toLowerCase())) ||
+    (u.member_id && u.member_id.toLowerCase().includes(godmodeSearch.toLowerCase()))
+  );
+
+  const handleGodmodeImpersonate = (user: User) => {
+    StorageService.setCurrentUser(user);
+    onRefreshAppState();
+    confetti({ particleCount: 30, spread: 60 });
+    setModerationMessage(`Switched active session to ${user.full_name} (${user.phone}).`);
+  };
+
+  const handleGodmodeRoleChange = (userId: string, newRole: UserRole) => {
+    StorageService.updateUserRole(userId, newRole);
+    setUsers(StorageService.getAllUsers());
+    onRefreshAppState();
+    setModerationMessage(`Role updated to ${newRole.toUpperCase()}. Synced across real-time.`);
+  };
+
+  const handleGodmodeToggleBadge = (user: User) => {
+    const nextStatus = !user.is_verified;
+    StorageService.developerSetVerificationBadge(user.id, nextStatus, nextStatus ? 'blue' : 'none');
+    setUsers(StorageService.getAllUsers());
+    onRefreshAppState();
+  };
+
+  const handleGodmodeResetPassword = (user: User) => {
+    const newPwd = prompt(`Enter new password for ${user.full_name} (${user.phone}):`, 'Gateway2026!');
+    if (!newPwd || newPwd.trim().length < 4) return;
+    const res = StorageService.changePassword(user.id, user.password || '', newPwd.trim());
+    if (res.success) {
+      alert(`Password successfully updated to "${newPwd.trim()}" for ${user.full_name}.`);
+      setUsers(StorageService.getAllUsers());
+    } else {
+      alert(res.error || 'Failed to update password.');
+    }
+  };
+
+  const handleEnforceBan = (phoneOrId: string, reason?: string) => {
+    const target = phoneOrId.trim();
+    if (!target) return;
+    StorageService.banUser(target, reason || 'Administrative sanction by ministry.');
+    setBannedUsersMap(StorageService.getBannedUsers());
+    setUsers(StorageService.getAllUsers());
+    onRefreshAppState();
+    setBanTargetPhone('');
+    setModerationMessage(`Account ${target} has been suspended and terminated across real-time.`);
+  };
+
+  const handleLiftBan = (phoneOrId: string) => {
+    StorageService.unbanUser(phoneOrId);
+    setBannedUsersMap(StorageService.getBannedUsers());
+    setUsers(StorageService.getAllUsers());
+    onRefreshAppState();
+    setModerationMessage(`Suspension lifted for ${phoneOrId}. Account restored.`);
+  };
+
+  const handleApproveUnbanAppeal = (appealId: string, phone: string) => {
+    StorageService.approveUnbanAppeal(appealId);
+    setBannedUsersMap(StorageService.getBannedUsers());
+    setUnbanAppeals(StorageService.getUnbanAppeals());
+    setUsers(StorageService.getAllUsers());
+    onRefreshAppState();
+    setModerationMessage(`Appeal approved and account ${phone} restored.`);
+  };
+
+  const handleResetLedger = () => {
+    if (window.confirm('Reset all donation and financial records to $0.00? This clears past ledgers for a clean start.')) {
+      StorageService.resetFinancesToZero();
+      setDonations([]);
+      onRefreshAppState();
+      confetti({ particleCount: 25, spread: 60 });
+      setModerationMessage('Financial ledger successfully reset to $0.00 USD / 0 ZiG.');
+    }
+  };
+
   const filteredProducts = products.filter(p => 
     (inventoryCategory === 'All' || p.category === inventoryCategory) &&
     p.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -527,6 +606,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
             >
               {[
                 { id: 'overview', label: '📊 Dashboard KPI' },
+                { id: 'godmode', label: `👑 Godmode Account Control (${users.length} Users)` },
+                { id: 'bans', label: `🚫 Account Ban & Suspension (${Object.keys(bannedUsersMap).length} Banned)` },
                 { id: 'congregations', label: `⛪ Congregations & Streaming (${congregationUnits.filter(c => c.is_congregation).length} Hubs)` },
                 { id: 'stream_attendees', label: `📡 Streamers & Attendees (${streamAttendees.length} Logged)` },
                 { id: 'content_moderation', label: `🛡️ Community Post Moderation (${testimonies.length} Posts)` },
@@ -555,6 +636,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
 
           {[
             { id: 'overview', label: 'Dashboard KPI', icon: Activity, badge: null },
+            { id: 'godmode', label: 'Godmode Control', icon: Crown, badge: `${users.length}` },
+            { id: 'bans', label: 'Bans & Suspension', icon: Ban, badge: `${Object.keys(bannedUsersMap).length}` },
             { id: 'congregations', label: 'Congregations & Stream', icon: Tv, badge: `${congregationUnits.filter(c => c.is_congregation).length} Hubs` },
             { id: 'stream_attendees', label: 'Stream Attendees Log', icon: Users, badge: `${streamAttendees.length}` },
             { id: 'content_moderation', label: 'Post Moderation', icon: Trash2, badge: `${testimonies.length}` },
@@ -900,6 +983,370 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                     ))}
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION: GODMODE ACCOUNT CONTROL */}
+          {activeSection === 'godmode' && (
+            <div className="space-y-4">
+              <div className="bg-gradient-to-r from-[#00172e] via-[#001F3F] to-[#00172e] border border-purple-500/40 rounded-2xl p-4 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-purple-400 shrink-0">
+                      <Crown className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-base text-white flex items-center gap-2">
+                        <span>Godmode Master Account Control</span>
+                        <span className="px-2 py-0.5 rounded-full bg-purple-600 text-white text-[10px] font-black uppercase tracking-wider">
+                          Live Sync
+                        </span>
+                      </h3>
+                      <p className="text-xs text-white/60">
+                        Full administrative authority over all real accounts & members. Penetrate sessions, modify roles, verify badges, or reset credentials.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleDownloadMembersExcel}
+                      className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Export Members CSV</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search Bar */}
+                <div className="mt-4 flex flex-col sm:flex-row gap-3 items-center justify-between">
+                  <div className="relative w-full sm:w-80">
+                    <Search className="w-4 h-4 absolute left-3 top-3 text-white/40" />
+                    <input
+                      type="text"
+                      placeholder="Search by name, phone, handle..."
+                      value={godmodeSearch}
+                      onChange={(e) => setGodmodeSearch(e.target.value)}
+                      className="w-full bg-[#001122] border border-purple-500/30 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-purple-400"
+                    />
+                  </div>
+                  <div className="text-xs text-white/60 font-mono">
+                    Showing <strong className="text-purple-300">{filteredGodmodeUsers.length}</strong> of <strong className="text-white">{users.length}</strong> total registered accounts
+                  </div>
+                </div>
+              </div>
+
+              {/* Members Godmode Table */}
+              <div className="bg-[#001F3F] border border-white/10 rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs font-sans">
+                    <thead>
+                      <tr className="bg-[#001122]/90 text-white/50 border-b border-white/10">
+                        <th className="p-3.5">User / Member</th>
+                        <th className="p-3.5">Phone & Handle</th>
+                        <th className="p-3.5">System Role</th>
+                        <th className="p-3.5">Badge</th>
+                        <th className="p-3.5">Location</th>
+                        <th className="p-3.5 text-right">Master Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {filteredGodmodeUsers.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-white/40">
+                            No accounts found matching "{godmodeSearch}"
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredGodmodeUsers.map((u) => {
+                          const isBanned = !!bannedUsersMap[u.phone] || !!bannedUsersMap[u.id];
+                          const isCurrentUser = currentUser?.id === u.id;
+
+                          return (
+                            <tr key={u.id} className="hover:bg-white/[0.03] transition-colors">
+                              <td className="p-3.5">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="relative">
+                                    <img
+                                      src={u.avatar_url || '/assets/avatar_melinda.jpg'}
+                                      alt={u.full_name}
+                                      className="w-8 h-8 rounded-full object-cover border border-white/10"
+                                      onError={(e) => { (e.target as HTMLImageElement).src = '/assets/avatar_melinda.jpg'; }}
+                                    />
+                                    <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#001F3F] ${
+                                      isBanned ? 'bg-rose-500' : isCurrentUser ? 'bg-emerald-400' : 'bg-blue-400'
+                                    }`} />
+                                  </div>
+                                  <div>
+                                    <div className="font-bold text-white flex items-center gap-1.5">
+                                      <span>{u.full_name}</span>
+                                      {isCurrentUser && (
+                                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">
+                                          YOU
+                                        </span>
+                                      )}
+                                      {isBanned && (
+                                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-400 font-mono">
+                                          BANNED
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] text-white/40 font-mono">{u.member_id || u.id}</span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="p-3.5">
+                                <div className="text-white font-mono">{u.phone}</div>
+                                <div className="text-[11px] text-[#D4AF37] font-mono">{u.handle || '@believer'}</div>
+                              </td>
+                              <td className="p-3.5">
+                                <select
+                                  value={u.role}
+                                  onChange={(e) => handleGodmodeRoleChange(u.id, e.target.value as UserRole)}
+                                  className="bg-[#001122] border border-white/20 rounded-lg px-2 py-1 text-[11px] text-white focus:outline-none focus:border-purple-400 font-bold"
+                                >
+                                  <option value="user">Believer (User)</option>
+                                  <option value="cell_leader">Cell Leader</option>
+                                  <option value="moderator">Moderator</option>
+                                  <option value="admin">Administrator</option>
+                                  <option value="super_admin">Super Admin</option>
+                                  <option value="developer">Developer</option>
+                                </select>
+                              </td>
+                              <td className="p-3.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleGodmodeToggleBadge(u)}
+                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all border ${
+                                    u.is_verified
+                                      ? 'bg-blue-500/20 text-blue-300 border-blue-500/40 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/40'
+                                      : 'bg-white/5 text-white/50 border-white/10 hover:bg-blue-500/20 hover:text-blue-300'
+                                  }`}
+                                  title={u.is_verified ? 'Click to revoke badge' : 'Click to grant verification'}
+                                >
+                                  <BadgeCheck className="w-3.5 h-3.5" />
+                                  <span>{u.is_verified ? 'Verified' : 'None'}</span>
+                                </button>
+                              </td>
+                              <td className="p-3.5 text-white/60">
+                                {u.city_location || 'Harare'}
+                              </td>
+                              <td className="p-3.5 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleGodmodeImpersonate(u)}
+                                    title="Impersonate / Penetrate this account"
+                                    className="px-2 py-1 rounded-lg bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/30 text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>Penetrate</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleGodmodeResetPassword(u)}
+                                    title="Directly Reset Password"
+                                    className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <KeyRound className="w-3 h-3" />
+                                    <span>Password</span>
+                                  </button>
+
+                                  {isBanned ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleLiftBan(u.phone)}
+                                      title="Lift Ban & Restore Account"
+                                      className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-white border border-emerald-500/40 text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <RotateCcw className="w-3 h-3" />
+                                      <span>Restore</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEnforceBan(u.phone, 'Suspended by Administrator')}
+                                      title="Ban / Suspend Account"
+                                      className="px-2 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white border border-rose-500/40 text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Ban className="w-3 h-3" />
+                                      <span>Ban</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION: BANS & SUSPENSIONS */}
+          {activeSection === 'bans' && (
+            <div className="space-y-4">
+              <div className="bg-gradient-to-r from-[#00172e] via-[#001F3F] to-[#00172e] border border-rose-500/40 rounded-2xl p-4 shadow-xl space-y-3">
+                <div className="flex items-center gap-3 border-b border-white/10 pb-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-600/20 border border-rose-500/40 flex items-center justify-center text-rose-400 shrink-0">
+                    <Ban className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-white flex items-center gap-2">
+                      <span>Account Ban & Real-Time Suspension Hub</span>
+                      <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black uppercase tracking-wider">
+                        Enforcement
+                      </span>
+                    </h3>
+                    <p className="text-xs text-white/60">
+                      Instantly terminate accounts violating church guidelines. Banned users are instantly kicked from sessions and locked out across all connected tabs.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Enforce Ban Form */}
+                <div className="bg-[#001122] border border-rose-500/20 rounded-xl p-3.5 space-y-3">
+                  <h4 className="font-bold text-xs text-rose-300 uppercase tracking-wider flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-rose-400" />
+                    <span>Enforce Immediate Account Sanction</span>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] text-white/60 mb-1">Target Phone Number or ID</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 0771234567 or user_123"
+                        value={banTargetPhone}
+                        onChange={(e) => setBanTargetPhone(e.target.value)}
+                        className="w-full bg-[#001F3F] border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-rose-400 font-mono"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] text-white/60 mb-1">Official Sanction Reason</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="e.g. Inappropriate conduct during live stream / community feed"
+                          value={banTargetReason}
+                          onChange={(e) => setBanTargetReason(e.target.value)}
+                          className="flex-1 bg-[#001F3F] border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-rose-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleEnforceBan(banTargetPhone, banTargetReason)}
+                          disabled={!banTargetPhone.trim()}
+                          className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow flex items-center gap-1.5 cursor-pointer shrink-0"
+                        >
+                          <Ban className="w-3.5 h-3.5" />
+                          <span>Enforce Ban</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Active Bans Grid */}
+              <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-4 shadow-sm space-y-3">
+                <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                  <h4 className="font-bold text-xs text-white uppercase tracking-wider flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-rose-400" />
+                    <span>Active Account Bans ({Object.keys(bannedUsersMap).length})</span>
+                  </h4>
+                  <span className="text-[11px] text-white/50 font-mono">Real-time synchronized</span>
+                </div>
+
+                {Object.keys(bannedUsersMap).length === 0 ? (
+                  <div className="p-6 text-center text-white/40 text-xs bg-[#001122]/50 rounded-xl border border-white/5">
+                    No active account suspensions. Ministry community is clean and in order.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {Object.entries(bannedUsersMap).map(([phone, info]) => {
+                      const matchedUser = users.find(u => u.phone === phone || u.id === phone);
+                      return (
+                        <div key={phone} className="bg-[#001122] border border-rose-500/30 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-white">{matchedUser?.full_name || 'Member Account'}</span>
+                              <span className="font-mono text-rose-400 font-semibold">{phone}</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 font-mono">
+                                SUSPENDED
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-white/60 mt-0.5">
+                              Reason: <span className="text-white/80">{info.reason || 'Violation of community policies'}</span>
+                              {info.banned_at && <span className="ml-2 text-white/40">({new Date(info.banned_at).toLocaleString()})</span>}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleLiftBan(phone)}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-white border border-emerald-500/40 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer self-end sm:self-center shrink-0"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Lift Ban</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Unban Appeals Section */}
+              <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-4 shadow-sm space-y-3">
+                <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                  <h4 className="font-bold text-xs text-[#D4AF37] uppercase tracking-wider flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-[#D4AF37]" />
+                    <span>Unban Appeals Under Pastoral Review ({unbanAppeals.filter(a => a.status === 'pending').length})</span>
+                  </h4>
+                </div>
+
+                {unbanAppeals.length === 0 ? (
+                  <div className="p-6 text-center text-white/40 text-xs bg-[#001122]/50 rounded-xl border border-white/5">
+                    No unban appeals submitted.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {unbanAppeals.map((a) => (
+                      <div key={a.id} className="bg-[#001122] border border-white/10 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-white font-bold">{a.phone}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded font-mono uppercase ${
+                              a.status === 'pending' ? 'bg-amber-500/20 text-amber-300' :
+                              a.status === 'approved' ? 'bg-emerald-500/20 text-emerald-300' :
+                              'bg-rose-500/20 text-rose-300'
+                            }`}>
+                              {a.status}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-white/70 italic">"{a.reason}"</p>
+                          <span className="text-[10px] text-white/40">{new Date(a.submitted_at).toLocaleString()}</span>
+                        </div>
+                        {a.status === 'pending' && (
+                          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleApproveUnbanAppeal(a.id, a.phone)}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold transition-all shadow flex items-center gap-1 cursor-pointer"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Approve & Lift Ban</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -2222,44 +2669,96 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
           {/* SECTION 7: FINANCES & CATHEDRAL PROJECT */}
           {activeSection === 'finances' && (
             <div className="space-y-4">
-              <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-4 shadow-sm space-y-3">
-                <h3 className="font-bold text-sm text-[#D4AF37] flex items-center gap-2">
-                  <DollarSign className="w-4 h-4 text-emerald-400" />
-                  <span>Cathedral Foundation & Kingdom Seed Auditing</span>
-                </h3>
+              <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-4 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+                  <div>
+                    <h3 className="font-bold text-sm text-[#D4AF37] flex items-center gap-2">
+                      <DollarSign className="w-4 h-4 text-emerald-400" />
+                      <span>Financial Ledger & Kingdom Seed Auditing</span>
+                    </h3>
+                    <p className="text-xs text-white/60">
+                      Real-time ledger tracking tithes, offerings, cathedral pledges, and store revenue.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResetLedger}
+                    className="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                    title="Reset all past records to $0.00"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset Ledger to $0.00</span>
+                  </button>
+                </div>
+
+                {/* KPI Overview */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="bg-[#001122] border border-white/10 rounded-xl p-3">
+                    <span className="text-[11px] text-white/50 block">Total USD Giving</span>
+                    <span className="text-xl font-mono font-bold text-emerald-400">
+                      ${totalGivingUsd.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="bg-[#001122] border border-white/10 rounded-xl p-3">
+                    <span className="text-[11px] text-white/50 block">Total ZiG Giving</span>
+                    <span className="text-xl font-mono font-bold text-[#D4AF37]">
+                      {totalGivingZig.toFixed(2)} ZiG
+                    </span>
+                  </div>
+                  <div className="bg-[#001122] border border-white/10 rounded-xl p-3">
+                    <span className="text-[11px] text-white/50 block">Recorded Transactions</span>
+                    <span className="text-xl font-mono font-bold text-white">
+                      {donations.length}
+                    </span>
+                  </div>
+                </div>
 
                 <div className="bg-[#001122] p-4 rounded-xl border border-white/10 space-y-2">
                   <div className="flex justify-between text-xs">
                     <span className="text-white/70">Gateway Cathedral Project (Phase 2):</span>
-                    <span className="font-bold text-[#D4AF37]">78% Funded ($390,000 / $500,000)</span>
+                    <span className="font-bold text-[#D4AF37]">Active Ledger ($0 Base / Target $500,000)</span>
                   </div>
                   <div className="w-full bg-white/10 rounded-full h-2.5 overflow-hidden">
-                    <div className="bg-[#D4AF37] h-full rounded-full w-[78%]"></div>
+                    <div className="bg-[#D4AF37] h-full rounded-full w-[2%]"></div>
                   </div>
                 </div>
               </div>
 
               {/* Transactions Log */}
               <div className="bg-[#001F3F] border border-white/10 rounded-2xl p-4 shadow-sm space-y-3">
-                <h4 className="font-bold text-xs text-white uppercase tracking-wider">
-                  Audited Contributions Log ({donations.length})
-                </h4>
-                <div className="space-y-2">
-                  {donations.map(d => (
-                    <div key={d.id} className="bg-[#001122]/60 border border-white/5 rounded-xl p-3 flex items-center justify-between text-xs">
-                      <div>
-                        <div className="font-bold text-white">{d.is_anonymous ? 'Anonymous Seed' : d.donor_name}</div>
-                        <div className="text-[11px] text-white/60">{d.fund_type} • {d.payment_method}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold text-emerald-400">
-                          {d.currency === 'USD' ? `$${d.amount}` : `${d.amount} ${d.currency}`}
-                        </div>
-                        <span className="text-[10px] text-white/40">{d.receipt_number}</span>
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                  <h4 className="font-bold text-xs text-white uppercase tracking-wider">
+                    Audited Contributions Log ({donations.length})
+                  </h4>
+                  <span className="text-[11px] text-emerald-400 font-mono">Live Auditing Active</span>
                 </div>
+
+                {donations.length === 0 ? (
+                  <div className="p-8 text-center space-y-2 bg-[#001122]/50 rounded-xl border border-white/5">
+                    <DollarSign className="w-8 h-8 text-emerald-400/50 mx-auto" />
+                    <p className="text-xs text-white/80 font-bold">Ledger Reset to $0.00 USD / 0 ZiG</p>
+                    <p className="text-[11px] text-white/40">
+                      All past records have been cleared. New live seeds, tithes, and Paynow transactions will appear here instantly.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {donations.map(d => (
+                      <div key={d.id} className="bg-[#001122]/60 border border-white/5 rounded-xl p-3 flex items-center justify-between text-xs">
+                        <div>
+                          <div className="font-bold text-white">{d.is_anonymous ? 'Anonymous Seed' : d.donor_name}</div>
+                          <div className="text-[11px] text-white/60">{d.fund_type} • {d.payment_method}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold text-emerald-400">
+                            {d.currency === 'USD' ? `$${d.amount}` : `${d.amount} ${d.currency}`}
+                          </div>
+                          <span className="text-[10px] text-white/40">{d.receipt_number}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
