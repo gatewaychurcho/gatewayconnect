@@ -303,18 +303,18 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     };
     window.addEventListener('gcz_stream_viewers_updated', handleStreamersUpdated);
 
-    if (isPlaying && currentUser && currentUser.id !== 'guest') {
+    if (isPlaying && currentUser && currentUser.id !== 'guest' && liveStreamStatus.isLive) {
       StorageService.recordStreamer(currentUser, liveFeedTitle);
       setOnlineStreamersCount(StorageService.getOnlineStreamersCount());
     }
 
     return () => {
       window.removeEventListener('gcz_stream_viewers_updated', handleStreamersUpdated);
-      if (isPlaying && currentUser?.id && currentUser.id !== 'guest') {
+      if (isPlaying && currentUser?.id && currentUser.id !== 'guest' && liveStreamStatus.isLive) {
         StorageService.leaveLiveStream(currentUser.id);
       }
     };
-  }, [isPlaying, currentUser?.id, liveFeedTitle]);
+  }, [isPlaying, currentUser?.id, liveFeedTitle, liveStreamStatus.isLive]);
 
   return (
     <div className="space-y-6 pb-24 max-w-4xl mx-auto px-2 sm:px-4 pt-1">
@@ -471,6 +471,43 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                   <span>Switch to YouTube</span>
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Active Live Stream Prompt Card Overlay - Prominent Join Live Stream Button */}
+          {liveStreamStatus.isLive && !overridePlayingVideo && (
+            <div className="absolute inset-0 z-30 bg-black/75 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-600/30 border border-red-500/50 text-red-300 text-xs font-bold mb-3 animate-pulse">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                <Radio className="w-3.5 h-3.5" />
+                <span>LIVE BROADCAST IN SESSION</span>
+              </div>
+              
+              <h3 className="text-white font-bold text-base sm:text-xl max-w-md mb-2 leading-snug drop-shadow-md">
+                {liveFeedTitle}
+              </h3>
+
+              <div className="flex items-center gap-3 text-xs text-white/80 mb-5">
+                <span className="flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5 text-emerald-400" />
+                  <strong className="text-emerald-400 font-bold">{onlineStreamersCount}</strong> Viewers Connected
+                </span>
+                <span>•</span>
+                <span className="text-[#D4AF37] font-semibold">Harare Assembly Fantasyland</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenLiveModal) {
+                    onOpenLiveModal();
+                  }
+                }}
+                className="px-6 py-3 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 hover:brightness-110 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2.5 shadow-2xl shadow-red-600/40 hover:scale-105 active:scale-95 transition-all cursor-pointer border border-white/20"
+              >
+                <Radio className="w-4 h-4 animate-pulse" />
+                <span>Join Live Stream (Live Chat & Reactions)</span>
+              </button>
             </div>
           )}
 
@@ -697,23 +734,32 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             </div>
           )}
 
-          {/* Live Overlay Badges */}
+          {/* Stream Overlay Badges */}
           <div className="absolute top-4 left-4 flex items-center gap-2 pointer-events-none z-10">
-            {streamEmbedInfo.isFacebook ? (
-              <span className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-[#1877F2] text-white text-xs font-bold animate-pulse shadow-lg">
-                <Radio className="w-3.5 h-3.5" />
-                FB LIVE
-              </span>
+            {liveStreamStatus.isLive ? (
+              <>
+                {streamEmbedInfo.isFacebook ? (
+                  <span className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-[#1877F2] text-white text-xs font-bold animate-pulse shadow-lg">
+                    <Radio className="w-3.5 h-3.5" />
+                    FB LIVE
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-red-600 text-white text-xs font-bold animate-pulse shadow-lg">
+                    <Radio className="w-3.5 h-3.5" />
+                    YOUTUBE LIVE
+                  </span>
+                )}
+                <span className="px-2.5 py-1 rounded-md bg-background/85 backdrop-blur-md text-foreground text-xs font-medium border border-border shadow-xs flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>{onlineStreamersCount} {onlineStreamersCount === 1 ? 'Streamer Online' : 'Streamers Online'}</span>
+                </span>
+              </>
             ) : (
-              <span className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-red-600 text-white text-xs font-bold animate-pulse shadow-lg">
-                <Radio className="w-3.5 h-3.5" />
-                YOUTUBE LIVE
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-background/85 backdrop-blur-md text-foreground border border-border text-xs font-semibold shadow-md">
+                <Tv className="w-3.5 h-3.5 text-primary" />
+                RECORDED SERMON REPLAY
               </span>
             )}
-            <span className="px-2.5 py-1 rounded-md bg-background/85 backdrop-blur-md text-foreground text-xs font-medium border border-border shadow-xs flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>{onlineStreamersCount} {onlineStreamersCount === 1 ? 'Streamer Online' : 'Streamers Online'}</span>
-            </span>
           </div>
 
           {/* Player Mode Switcher & Expand */}
