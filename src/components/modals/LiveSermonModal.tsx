@@ -78,19 +78,17 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
   const [streamersCount, setStreamersCount] = useState<number>(StorageService.getOnlineStreamersCount());
 
   useEffect(() => {
-    // 10+ seconds watch requirement:
-    // If a user watches a video for 10+ seconds, record them as a streamer with their login details.
-    const watchTimer = setTimeout(() => {
-      StorageService.recordStreamer(currentUser, status.title || 'Live Apostolic Broadcast');
-      setStreamersCount(StorageService.getOnlineStreamersCount());
-      setCongregations(StorageService.getCongregationUnits());
-    }, 10000);
+    // Record streamer immediately so real-time attendance and viewers update across all dashboards
+    StorageService.recordStreamer(currentUser, status.title || 'Live Apostolic Broadcast');
+    setStreamersCount(StorageService.getOnlineStreamersCount());
+    setCongregations(StorageService.getCongregationUnits());
 
     const handleStreamersUpdated = () => {
       setStreamersCount(StorageService.getOnlineStreamersCount());
       setCongregations(StorageService.getCongregationUnits());
     };
     window.addEventListener('gcz_stream_viewers_updated', handleStreamersUpdated);
+    window.addEventListener('gcz_stream_attendance_updated', handleStreamersUpdated);
 
     setCongregations(StorageService.getCongregationUnits());
     const timer = setInterval(() => {
@@ -107,10 +105,10 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
     window.addEventListener('gcz_stream_url_updated', handleStreamUrlUpdate);
 
     return () => {
-      clearTimeout(watchTimer);
       clearInterval(timer);
       window.removeEventListener('gcz_stream_url_updated', handleStreamUrlUpdate);
       window.removeEventListener('gcz_stream_viewers_updated', handleStreamersUpdated);
+      window.removeEventListener('gcz_stream_attendance_updated', handleStreamersUpdated);
       // When a user exits a group or stream, the count drops immediately
       StorageService.leaveLiveStream(currentUser.id);
     };
