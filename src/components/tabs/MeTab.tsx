@@ -41,7 +41,7 @@ import {
 import { User, Sermon, NotificationSettings } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { PaynowService } from '../../services/paynowService';
-import { INITIAL_USERS, MOCK_SERMONS } from '../../data/mockData';
+import { MOCK_SERMONS } from '../../data/mockData';
 import { ImagePickerModal } from '../modals/ImagePickerModal';
 import { UpgradeModal } from '../modals/UpgradeModal';
 import { PaynowConfigModal } from '../modals/PaynowConfigModal';
@@ -1006,7 +1006,7 @@ export const MeTab: React.FC<MeTabProps> = ({
                   <span className="text-[10px] text-muted-foreground font-mono">Dev ID: 0780699988</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  {INITIAL_USERS.map(u => (
+                  {StorageService.getAllUsers().map(u => (
                     <button
                       key={u.id}
                       onClick={() => {
