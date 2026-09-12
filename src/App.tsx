@@ -179,11 +179,15 @@ export default function App() {
     const refreshLiveState = () => refreshAppData();
     window.addEventListener('gcz_live_state_updated', refreshLiveState);
     window.addEventListener('gcz_live_event_received', refreshLiveState);
+    window.addEventListener('gcz_banned_users_updated', refreshLiveState);
+    window.addEventListener('gcz_current_user_banned', refreshLiveState);
     return () => {
       unbind();
       liveSyncService.disconnect();
       window.removeEventListener('gcz_live_state_updated', refreshLiveState);
       window.removeEventListener('gcz_live_event_received', refreshLiveState);
+      window.removeEventListener('gcz_banned_users_updated', refreshLiveState);
+      window.removeEventListener('gcz_current_user_banned', refreshLiveState);
     };
   }, [currentUser?.id]);
   useEffect(() => {
