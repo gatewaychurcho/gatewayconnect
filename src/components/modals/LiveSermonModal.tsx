@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { User, CongregationUnit } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { liveSyncService } from '../../services/liveSyncService';
 import confetti from 'canvas-confetti';
 
 interface LiveSermonModalProps {
@@ -119,6 +120,32 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
+  // Listen for remote live reactions and stream chat messages
+  useEffect(() => {
+    const handleLiveStreamEvent = (e: any) => {
+      const event = e.detail;
+      if (!event) return;
+      if (event.type === 'stream_reaction' && event.payload) {
+        setLikeCount((prev) => prev + 1);
+        confetti({
+          particleCount: 12,
+          spread: 45,
+          origin: { y: 0.8 }
+        });
+      } else if (event.type === 'stream_chat' && event.payload) {
+        const incoming = event.payload as LiveChatMessage;
+        setChatMessages((prev) => {
+          if (prev.some(m => m.id === incoming.id || (m.sender_name === incoming.sender_name && m.message === incoming.message))) {
+            return prev;
+          }
+          return [...prev, incoming];
+        });
+      }
+    };
+    window.addEventListener('gcz_live_event_received', handleLiveStreamEvent);
+    return () => window.removeEventListener('gcz_live_event_received', handleLiveStreamEvent);
+  }, []);
+
   const streamEmbedInfo = StorageService.getStreamEmbedInfo(streamUrl || status.streamUrl);
   const youtubeVideoId = streamEmbedInfo.videoId || StorageService.extractYoutubeId(streamUrl || status.streamUrl);
 
@@ -136,6 +163,12 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
 
     setChatMessages((prev) => [...prev, newMsg]);
     setNewChatText('');
+
+    // Broadcast chat to all other connected viewers
+    liveSyncService.broadcastEvent({
+      type: 'stream_chat',
+      payload: newMsg
+    });
   };
 
   const handleBurstAmen = () => {
@@ -144,6 +177,12 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
       particleCount: 15,
       spread: 45,
       origin: { y: 0.8 }
+    });
+
+    // Broadcast decree reaction to all connected viewers
+    liveSyncService.broadcastEvent({
+      type: 'stream_reaction',
+      payload: { emoji: '🙏', user: currentUser.full_name }
     });
   };
 
