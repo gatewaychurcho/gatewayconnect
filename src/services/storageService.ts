@@ -298,6 +298,8 @@ export class StorageService {
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: user }));
+      window.dispatchEvent(new CustomEvent('gcz_user_registered', { detail: user }));
+      window.dispatchEvent(new CustomEvent('gcz_users_synced', { detail: users }));
     }
   }
 
@@ -1106,6 +1108,17 @@ export class StorageService {
       window.dispatchEvent(new CustomEvent('gcz_donation_updated', { detail: donation }));
     }
     return donation;
+  }
+
+  static resetFinancesToZero(): void {
+    setLocal(KEYS.DONATIONS, []);
+    setLocal(KEYS.RECEIPTS, []);
+    setLocal(KEYS.ORDERS, []);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_donations_updated'));
+      window.dispatchEvent(new CustomEvent('gcz_donation_updated'));
+      window.dispatchEvent(new CustomEvent('gcz_receipts_updated'));
+    }
   }
 
   // Bookings
@@ -1941,6 +1954,11 @@ export class StorageService {
       u.ban_reason = reason;
       setLocal(KEYS.ALL_USERS, allUsers);
     }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_banned_users_updated', { detail: map }));
+      window.dispatchEvent(new CustomEvent('gcz_user_banned_broadcast', { detail: { phone: userIdOrPhone, reason } }));
+      window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+    }
   }
 
   static unbanUser(userIdOrPhone: string): void {
@@ -1961,6 +1979,11 @@ export class StorageService {
       u.is_banned = false;
       u.ban_reason = undefined;
       setLocal(KEYS.ALL_USERS, allUsers);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_banned_users_updated', { detail: map }));
+      window.dispatchEvent(new CustomEvent('gcz_user_unbanned_broadcast', { detail: { phone: userIdOrPhone } }));
+      window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
     }
   }
 
@@ -3621,20 +3644,76 @@ export class StorageService {
         setLocal(KEYS.TESTIMONIES, testimonies);
       }
       window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: testimony }));
+    } else if (type === 'notification') {
+      const notif = payload as AppNotification;
+      if (notif && notif.id) {
+        const list = this.getAppNotifications();
+        if (!list.some(n => n.id === notif.id)) {
+          list.unshift(notif);
+          setLocal(KEYS.APP_NOTIFICATIONS, list);
+        }
+      }
+      window.dispatchEvent(new CustomEvent('gcz_new_notification', { detail: payload }));
+      window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
+    } else if (type === 'user_created') {
+      const newUser = payload as User;
+      if (newUser && newUser.id) {
+        const users = this.getAllUsers();
+        const idx = users.findIndex(u => u.id === newUser.id || arePhoneNumbersEqual(u.phone, newUser.phone));
+        if (idx >= 0) {
+          users[idx] = { ...users[idx], ...newUser };
+        } else {
+          users.push(newUser);
+        }
+        setLocal(KEYS.ALL_USERS, users);
+        window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: newUser }));
+        window.dispatchEvent(new CustomEvent('gcz_users_synced', { detail: users }));
+      }
+    } else if (type === 'user_banned') {
+      const banData = payload as { phone: string; reason?: string };
+      if (banData?.phone) {
+        const currentBans = this.getBannedUsers();
+        currentBans[banData.phone] = {
+          phone: banData.phone,
+          reason: banData.reason || 'Account suspended by ministry administrator.',
+          banned_at: new Date().toISOString()
+        };
+        setLocal(KEYS.BANNED_USERS, currentBans);
+        window.dispatchEvent(new CustomEvent('gcz_banned_users_updated', { detail: currentBans }));
+        // If the banned account is currently active in this session, trigger immediate lockdown
+        const me = this.getCurrentUser();
+        if (me && arePhoneNumbersEqual(me.phone, banData.phone)) {
+          window.dispatchEvent(new CustomEvent('gcz_current_user_banned', { detail: banData }));
+        }
+      }
+    } else if (type === 'unban_user') {
+      const unbanData = payload as { phone: string };
+      if (unbanData?.phone) {
+        const currentBans = this.getBannedUsers();
+        delete currentBans[unbanData.phone];
+        const clean = unbanData.phone.replace(/[^0-9]/g, '');
+        for (const k of Object.keys(currentBans)) {
+          if (k === unbanData.phone || (clean && k.replace(/[^0-9]/g, '') === clean)) {
+            delete currentBans[k];
+          }
+        }
+        setLocal(KEYS.BANNED_USERS, currentBans);
+        window.dispatchEvent(new CustomEvent('gcz_banned_users_updated', { detail: currentBans }));
+      }
+    } else if (type === 'stream_chat' || type === 'stream_reaction') {
+      // Ephemeral stream events are handled via window listeners in HomeTab and LiveSermonModal
     } else {
       const eventName = type === 'follow'
         ? 'gcz_follow_updated'
-        : type === 'notification'
-          ? 'gcz_new_notification'
-          : type === 'story'
-            ? 'gcz_story_updated'
-            : type === 'group'
-              ? 'gcz_groups_updated'
-              : type === 'reaction'
-                ? 'gcz_reactions_updated'
-                : type === 'pulpit'
-                  ? 'gcz_pulpit_scripture_updated'
-                  : 'gcz_stream_url_updated';
+        : type === 'story'
+          ? 'gcz_story_updated'
+          : type === 'group'
+            ? 'gcz_groups_updated'
+            : type === 'reaction'
+              ? 'gcz_reactions_updated'
+              : type === 'pulpit'
+                ? 'gcz_pulpit_scripture_updated'
+                : 'gcz_stream_url_updated';
         if (type === 'group' && payload && typeof payload === 'object' && 'id' in payload) {
           const groups = this.getChatGroups();
           const group = payload as ChatGroup;
