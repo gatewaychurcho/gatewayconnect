@@ -307,12 +307,36 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
       ]);
     };
 
+    const handleStreamViewerJoined = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      const v = customEvt.detail;
+      const stamp = new Date().toLocaleTimeString();
+      setLogs(prev => [
+        `[${stamp}] [STREAM_JOINED] ${v?.full_name || 'Believer'} (${v?.phone || v?.city || 'Harare'}) joined live sermon broadcast`,
+        ...prev.slice(0, 150)
+      ]);
+      refreshAll();
+    };
+
+    const handleStreamViewerLeft = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      const d = customEvt.detail;
+      const stamp = new Date().toLocaleTimeString();
+      setLogs(prev => [
+        `[${stamp}] [STREAM_LEFT] User ${d?.userId || 'session'} exited live sermon broadcast`,
+        ...prev.slice(0, 150)
+      ]);
+      refreshAll();
+    };
+
     window.addEventListener('gcz_user_profile_updated', refreshAll);
     window.addEventListener('gcz_user_registered', refreshAll);
     window.addEventListener('gcz_users_synced', refreshAll);
     window.addEventListener('gcz_banned_users_updated', refreshAll);
     window.addEventListener('gcz_stream_viewers_updated', refreshAll);
     window.addEventListener('gcz_stream_attendance_updated', refreshAll);
+    window.addEventListener('gcz_stream_viewer_joined', handleStreamViewerJoined);
+    window.addEventListener('gcz_stream_viewer_left', handleStreamViewerLeft);
     window.addEventListener('gcz_password_requests_updated', refreshAll);
     window.addEventListener('gcz_unban_appeals_updated', refreshAll);
     window.addEventListener('gcz_live_state_updated', refreshAll);
@@ -342,6 +366,8 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
       window.removeEventListener('gcz_banned_users_updated', refreshAll);
       window.removeEventListener('gcz_stream_viewers_updated', refreshAll);
       window.removeEventListener('gcz_stream_attendance_updated', refreshAll);
+      window.removeEventListener('gcz_stream_viewer_joined', handleStreamViewerJoined);
+      window.removeEventListener('gcz_stream_viewer_left', handleStreamViewerLeft);
       window.removeEventListener('gcz_password_requests_updated', refreshAll);
       window.removeEventListener('gcz_unban_appeals_updated', refreshAll);
       window.removeEventListener('gcz_live_state_updated', refreshAll);
@@ -1850,14 +1876,15 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                         if (editPassword.trim()) {
                           updates.password = editPassword.trim();
                         }
-                        const res = StorageService.developerEditAccount(editingUser.phone, updates);
+                        const targetId = editingUser.id || editingUser.phone;
+                        const res = StorageService.developerEditAccount(targetId, updates);
                         if (res.success) {
-                          StorageService.developerSetVerificationBadge(editingUser.phone, editVerified, editVerified ? 'blue' : 'none');
+                          StorageService.developerSetVerificationBadge(targetId, editVerified, editVerified ? 'blue' : 'none');
                           setUsersList(StorageService.getAllUsers());
                           setEditingUser(null);
-                          setPenetrateStatus(`✓ Successfully updated ${editingUser.phone}`);
+                          setPenetrateStatus(`✓ Successfully updated ${editingUser.full_name} (${targetId})`);
                           setLogs(prev => [
-                            `[${new Date().toLocaleTimeString()}] [GODMODE_EDIT] Updated account details for ${editingUser.phone} (Verified: ${editVerified})`,
+                            `[${new Date().toLocaleTimeString()}] [GODMODE_EDIT] Updated account details for ${editingUser.full_name} (${targetId}) (Role: ${editRole}, Verified: ${editVerified})`,
                             ...prev
                           ]);
                         } else {
