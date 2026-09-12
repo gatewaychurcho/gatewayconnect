@@ -472,58 +472,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             </form>
           )}
 
-          {/* Quick Demo Sign-in for immediate testing */}
-          <div className="pt-3 border-t border-white/10 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-amber-400/80 flex items-center gap-1">
-                <Sparkles className="w-3 h-3" />
-                <span>Instant Test Access</span>
-              </span>
-              <span className="text-[10px] text-white/40">1-Click Sign In</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const users = StorageService.getAllUsers();
-                  const apostle = users.find((u) => u.id === 'usr_apostle_joe') || users[0];
-                  if (apostle) {
-                    StorageService.setCurrentUser(apostle);
-                    onLoginSuccess(apostle);
-                    confetti({ particleCount: 25, spread: 50 });
-                  }
-                }}
-                className="p-2 rounded-xl bg-amber-400/10 hover:bg-amber-400/20 border border-amber-400/30 text-amber-200 text-left transition-all group cursor-pointer"
-              >
-                <div className="text-[11px] font-bold flex items-center gap-1 text-white group-hover:text-amber-300">
-                  <Crown className="w-3 h-3 text-amber-400" />
-                  <span>Apostle Joe</span>
-                </div>
-                <div className="text-[9px] text-white/60">Super Admin</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const users = StorageService.getAllUsers();
-                  const dev = users.find((u) => u.id === 'usr_developer' || u.handle === '@mr_juice7') || users[0];
-                  if (dev) {
-                    StorageService.setCurrentUser(dev);
-                    onLoginSuccess(dev);
-                    confetti({ particleCount: 25, spread: 50 });
-                  }
-                }}
-                className="p-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-400/30 text-blue-200 text-left transition-all group cursor-pointer"
-              >
-                <div className="text-[11px] font-bold flex items-center gap-1 text-white group-hover:text-blue-300">
-                  <ShieldCheck className="w-3 h-3 text-blue-400" />
-                  <span>Lead Developer</span>
-                </div>
-                <div className="text-[9px] text-white/60">mr_juice7</div>
-              </button>
-            </div>
-          </div>
-
           {/* Guest Access Option */}
           <div className="pt-2 border-t border-white/10 flex items-center justify-center">
             <button
