@@ -27,7 +27,14 @@ import {
   Zap,
   X,
   Book,
-  HelpCircle
+  HelpCircle,
+  Wifi,
+  WifiOff,
+  HardDriveDownload,
+  Database,
+  DownloadCloud,
+  Check,
+  Trash2
 } from 'lucide-react';
 import { BibleVersion, BibleBook, ReadingPlan } from '../../types';
 import { 
@@ -39,6 +46,7 @@ import {
   getVerseInterpretationData
 } from '../../data/bibleData';
 import { StorageService } from '../../services/storageService';
+import { bibleOfflineService, CachedChapterRecord } from '../../services/bibleOfflineService';
 
 interface BibleTabProps {
   initialReference?: string;
@@ -95,6 +103,26 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
   const [realVerses, setRealVerses] = useState<Array<{ verseNum: number; text: string }>>([]);
   const [isLoadingBible, setIsLoadingBible] = useState<boolean>(false);
 
+  // IndexedDB Offline Bible States
+  const [isOfflineMode, setIsOfflineMode] = useState<boolean>(() => bibleOfflineService.isOfflineModeActive());
+  const [isChapterCached, setIsChapterCached] = useState<boolean>(false);
+  const [isCachingChapter, setIsCachingChapter] = useState<boolean>(false);
+  const [isCachingBook, setIsCachingBook] = useState<boolean>(false);
+  const [cacheProgress, setCacheProgress] = useState<{ current: number; total: number; percent: number } | null>(null);
+  const [showCacheDropdown, setShowCacheDropdown] = useState<boolean>(false);
+  const [showOfflineLibraryModal, setShowOfflineLibraryModal] = useState<boolean>(false);
+  const [cachedChaptersList, setCachedChaptersList] = useState<CachedChapterRecord[]>([]);
+  const [offlineToast, setOfflineToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+
+  // Check if active chapter is cached in IndexedDB
+  useEffect(() => {
+    let active = true;
+    bibleOfflineService.isChapterCached(selectedBook, selectedChapter, version).then(cached => {
+      if (active) setIsChapterCached(cached);
+    });
+    return () => { active = false; };
+  }, [selectedBook, selectedChapter, version]);
+
   // Apostolic Interpreter & Biblical Lexicon Modal state
   const [activeStudyVerse, setActiveStudyVerse] = useState<{
     verseKey: string;
@@ -141,54 +169,91 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
 
   const currentBookObj = BIBLE_BOOKS.find(b => b.name === selectedBook) || BIBLE_BOOKS[0];
 
-  // Dynamic Real Bible Loading Effect
+  // Dynamic Real Bible Loading Effect with IndexedDB Offline Support
   useEffect(() => {
     let isMounted = true;
 
-    // 1. Check local static sample data
-    const bookData = SAMPLE_VERSES_DATA[selectedBook];
-    const chapterData = bookData ? bookData[String(selectedChapter)] : null;
-    if (chapterData) {
-      const vList: Array<{ verseNum: number; text: string }> = [];
-      Object.keys(chapterData).forEach(vNum => {
-        const num = parseInt(vNum, 10);
-        const vObj = chapterData[num];
-        const text = vObj[version] || vObj['KJV'] || '';
-        vList.push({
-          verseNum: num,
-          text
+    async function loadScripture() {
+      // 1. Check local static sample data
+      const bookData = SAMPLE_VERSES_DATA[selectedBook];
+      const chapterData = bookData ? bookData[String(selectedChapter)] : null;
+      if (chapterData) {
+        const vList: Array<{ verseNum: number; text: string }> = [];
+        Object.keys(chapterData).forEach(vNum => {
+          const num = parseInt(vNum, 10);
+          const vObj = chapterData[num];
+          const text = vObj[version] || vObj['KJV'] || '';
+          vList.push({
+            verseNum: num,
+            text
+          });
         });
-      });
-      setRealVerses(vList);
-      setIsLoadingBible(false);
-      return;
-    }
-
-    // 2. Check localStorage cache
-    const cacheKey = `gcz_bible_v4_${selectedBook}_${selectedChapter}_${version}`;
-    try {
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setRealVerses(parsed);
+        if (isMounted) {
+          setRealVerses(vList);
           setIsLoadingBible(false);
+          setIsChapterCached(true);
+        }
+        // Save to IndexedDB in background
+        bibleOfflineService.cacheChapter(selectedBook, selectedChapter, version, vList);
+        return;
+      }
+
+      // 2. Check IndexedDB offline cache
+      try {
+        const idbCached = await bibleOfflineService.getCachedChapter(selectedBook, selectedChapter, version);
+        if (idbCached && idbCached.length > 0) {
+          if (isMounted) {
+            setRealVerses(idbCached);
+            setIsLoadingBible(false);
+            setIsChapterCached(true);
+          }
           return;
         }
+      } catch (e) {
+        console.warn('IndexedDB check error:', e);
       }
-    } catch {
-      // Ignore cache read errors
-    }
 
-    // 3. Fetch Authentic Scripture from bible-api.com
-    setIsLoadingBible(true);
-    const translationParam = version === 'NIV' ? 'web' : (version === 'ESV' ? 'almeida' : 'kjv');
-    const apiUrl = `https://bible-api.com/${encodeURIComponent(selectedBook)}+${selectedChapter}?translation=${translationParam}`;
+      // 3. Check localStorage cache
+      const cacheKey = `gcz_bible_v4_${selectedBook}_${selectedChapter}_${version}`;
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            if (isMounted) {
+              setRealVerses(parsed);
+              setIsLoadingBible(false);
+              setIsChapterCached(true);
+            }
+            // Populate IndexedDB from localStorage
+            bibleOfflineService.cacheChapter(selectedBook, selectedChapter, version, parsed);
+            return;
+          }
+        }
+      } catch {
+        // Ignore cache read errors
+      }
 
-    fetch(apiUrl)
-      .then(res => res.json())
-      .then(data => {
+      // 4. If Offline Mode is Active or navigator is offline, do NOT fetch from network
+      if (isOfflineMode || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        if (isMounted) {
+          setRealVerses([]);
+          setIsLoadingBible(false);
+          setIsChapterCached(false);
+        }
+        return;
+      }
+
+      // 5. Fetch Authentic Scripture from bible-api.com
+      if (isMounted) setIsLoadingBible(true);
+      const translationParam = version === 'NIV' ? 'web' : (version === 'ESV' ? 'almeida' : 'kjv');
+      const apiUrl = `https://bible-api.com/${encodeURIComponent(selectedBook)}+${selectedChapter}?translation=${translationParam}`;
+
+      try {
+        const res = await fetch(apiUrl);
+        const data = await res.json();
         if (!isMounted) return;
+
         if (data && Array.isArray(data.verses) && data.verses.length > 0) {
           const loaded = data.verses.map((v: { verse: number; text: string }) => ({
             verseNum: v.verse,
@@ -196,6 +261,9 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
           }));
 
           setRealVerses(loaded);
+          setIsChapterCached(true);
+          // Automatically save to IndexedDB for seamless future offline reading
+          await bibleOfflineService.cacheChapter(selectedBook, selectedChapter, version, loaded);
           try {
             localStorage.setItem(cacheKey, JSON.stringify(loaded));
           } catch {
@@ -203,30 +271,37 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
           }
         } else {
           // Fallback authentic verses
-          setRealVerses([
+          const fallback = [
             { verseNum: 1, text: `The Word of the Lord in ${selectedBook} ${selectedChapter}: Blessed is the one who trusts in the LORD, whose confidence is in Him.` },
             { verseNum: 2, text: `For the LORD gives wisdom; from His mouth come knowledge and understanding.` },
             { verseNum: 3, text: `He stores up sound wisdom for the upright; He is a shield to those who walk in integrity.` }
-          ]);
+          ];
+          setRealVerses(fallback);
+          await bibleOfflineService.cacheChapter(selectedBook, selectedChapter, version, fallback);
+          setIsChapterCached(true);
         }
-      })
-      .catch(() => {
+      } catch {
         if (!isMounted) return;
-        // Offline authentic verses
-        setRealVerses([
+        // Offline fallback verses
+        const fallback = [
           { verseNum: 1, text: `Scripture passage in ${selectedBook} ${selectedChapter}: "Trust in the Lord with all your heart, and do not lean on your own understanding."` },
           { verseNum: 2, text: `"In all your ways acknowledge Him, and He will make straight your paths."` },
           { verseNum: 3, text: `"Be not wise in your own eyes; fear the Lord, and turn away from evil."` }
-        ]);
-      })
-      .finally(() => {
+        ];
+        setRealVerses(fallback);
+        await bibleOfflineService.cacheChapter(selectedBook, selectedChapter, version, fallback);
+        setIsChapterCached(true);
+      } finally {
         if (isMounted) setIsLoadingBible(false);
-      });
+      }
+    }
+
+    loadScripture();
 
     return () => {
       isMounted = false;
     };
-  }, [selectedBook, selectedChapter, version]);
+  }, [selectedBook, selectedChapter, version, isOfflineMode]);
 
   const versesForChapter = realVerses;
 
@@ -280,6 +355,106 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
     });
 
     setQuickSearchResults(results.slice(0, 10));
+  };
+
+  // Offline Mode and IndexedDB cache handlers
+  const handleToggleOfflineMode = async () => {
+    const nextState = !isOfflineMode;
+    setIsOfflineMode(nextState);
+    await bibleOfflineService.setOfflineMode(nextState);
+    setOfflineToast({
+      type: nextState ? 'info' : 'success',
+      message: nextState 
+        ? 'Offline Mode Active. Holy Scripture will be served exclusively from IndexedDB.'
+        : 'Online Mode Active. Scripture network downloading enabled.'
+    });
+    setTimeout(() => setOfflineToast(null), 4000);
+  };
+
+  const handleCacheCurrentChapter = async () => {
+    if (versesForChapter.length === 0) return;
+    setIsCachingChapter(true);
+    try {
+      const ok = await bibleOfflineService.cacheChapter(selectedBook, selectedChapter, version, versesForChapter);
+      if (ok) {
+        setIsChapterCached(true);
+        setOfflineToast({
+          type: 'success',
+          message: `Saved ${selectedBook} ${selectedChapter} (${version}) to IndexedDB offline storage!`
+        });
+      }
+    } catch {
+      setOfflineToast({
+        type: 'error',
+        message: 'Could not save chapter to IndexedDB.'
+      });
+    } finally {
+      setIsCachingChapter(false);
+      setShowCacheDropdown(false);
+      setTimeout(() => setOfflineToast(null), 4000);
+    }
+  };
+
+  const handleCacheEntireBook = async () => {
+    setIsCachingBook(true);
+    setShowCacheDropdown(false);
+    setCacheProgress({ current: 0, total: currentBookObj.chaptersCount, percent: 0 });
+    
+    try {
+      const res = await bibleOfflineService.cacheEntireBook(
+        selectedBook,
+        currentBookObj.chaptersCount,
+        version,
+        (current, total) => {
+          const percent = Math.round((current / total) * 100);
+          setCacheProgress({ current, total, percent });
+        }
+      );
+
+      setIsChapterCached(true);
+      setOfflineToast({
+        type: 'success',
+        message: `Successfully cached all ${res.cachedCount} chapters of ${selectedBook} (${version}) in IndexedDB!`
+      });
+    } catch {
+      setOfflineToast({
+        type: 'error',
+        message: `Could not finish caching ${selectedBook}.`
+      });
+    } finally {
+      setIsCachingBook(false);
+      setCacheProgress(null);
+      setTimeout(() => setOfflineToast(null), 5000);
+    }
+  };
+
+  const handleOpenOfflineLibrary = async () => {
+    const chapters = await bibleOfflineService.getAllCachedChapters();
+    setCachedChaptersList(chapters);
+    setShowOfflineLibraryModal(true);
+    setShowCacheDropdown(false);
+  };
+
+  const handleDeleteCachedChapter = async (book: string, chapter: number, ver: BibleVersion) => {
+    await bibleOfflineService.removeChapterCache(book, chapter, ver);
+    const updated = await bibleOfflineService.getAllCachedChapters();
+    setCachedChaptersList(updated);
+    if (book === selectedBook && chapter === selectedChapter && ver === version) {
+      setIsChapterCached(false);
+    }
+  };
+
+  const handleClearAllOfflineStorage = async () => {
+    if (window.confirm('Are you sure you want to clear all offline Bible chapters stored in IndexedDB?')) {
+      await bibleOfflineService.clearAllOfflineCache();
+      setCachedChaptersList([]);
+      setIsChapterCached(false);
+      setOfflineToast({
+        type: 'info',
+        message: 'Cleared all IndexedDB offline Bible chapters.'
+      });
+      setTimeout(() => setOfflineToast(null), 3000);
+    }
   };
 
   const handleToggleHighlight = (verseKey: string, color: 'gold' | 'emerald' | 'blue' | 'rose') => {
@@ -440,8 +615,101 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
             ))}
           </div>
 
-          {/* Settings & Audio Controls */}
+          {/* Settings & Audio & Offline Controls */}
           <div className="flex items-center gap-1.5">
+            {/* Offline Mode Toggle Button */}
+            <button
+              id="btn-toggle-offline-mode"
+              onClick={handleToggleOfflineMode}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5 ${
+                isOfflineMode
+                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-400 font-bold shadow-xs'
+                  : 'bg-secondary hover:bg-secondary/80 text-muted-foreground border-border'
+              }`}
+              title={isOfflineMode ? 'Offline Mode Active: Reading strictly from IndexedDB' : 'Click to activate Offline Mode'}
+            >
+              {isOfflineMode ? <WifiOff className="w-3.5 h-3.5 text-amber-500" /> : <Wifi className="w-3.5 h-3.5" />}
+              <span className="hidden xs:inline">{isOfflineMode ? 'Offline' : 'Online'}</span>
+              <span className={`w-2 h-2 rounded-full ${isOfflineMode ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
+            </button>
+
+            {/* IndexedDB Cache & Download Actions */}
+            <div className="relative">
+              <button
+                id="btn-cache-menu"
+                onClick={() => setShowCacheDropdown(!showCacheDropdown)}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5 ${
+                  isChapterCached
+                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 font-bold'
+                    : 'bg-secondary hover:bg-secondary/80 text-foreground border-border'
+                }`}
+                title="Offline Storage & IndexedDB Caching"
+              >
+                {isCachingChapter || isCachingBook ? (
+                  <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                ) : isChapterCached ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                ) : (
+                  <HardDriveDownload className="w-3.5 h-3.5 text-primary" />
+                )}
+                <span className="hidden sm:inline">
+                  {isCachingBook ? 'Saving...' : isChapterCached ? 'Cached' : 'Cache'}
+                </span>
+                <ChevronDown className="w-3 h-3 text-muted-foreground" />
+              </button>
+
+              {showCacheDropdown && (
+                <div className="absolute right-0 mt-1.5 w-64 bg-card border border-border rounded-xl p-2 shadow-xl z-50 text-xs space-y-1 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-2 py-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between border-b border-border pb-1 mb-1">
+                    <span className="flex items-center gap-1"><Database className="w-3 h-3 text-primary" /> IndexedDB Cache</span>
+                    <span className={isChapterCached ? 'text-emerald-500 font-semibold' : 'text-muted-foreground'}>
+                      {isChapterCached ? 'Ch. Cached' : 'Not Cached'}
+                    </span>
+                  </div>
+
+                  {/* Action 1: Cache current chapter */}
+                  <button
+                    disabled={isCachingChapter || isCachingBook || versesForChapter.length === 0}
+                    onClick={handleCacheCurrentChapter}
+                    className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-secondary flex items-center gap-2 text-foreground disabled:opacity-50 transition-colors"
+                  >
+                    <HardDriveDownload className="w-4 h-4 text-primary shrink-0" />
+                    <div>
+                      <div className="font-semibold">Cache Current Chapter</div>
+                      <div className="text-[10px] text-muted-foreground">Save {selectedBook} {selectedChapter} ({version}) to IndexedDB</div>
+                    </div>
+                  </button>
+
+                  {/* Action 2: Cache entire book */}
+                  <button
+                    disabled={isCachingChapter || isCachingBook}
+                    onClick={handleCacheEntireBook}
+                    className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-secondary flex items-center gap-2 text-foreground disabled:opacity-50 transition-colors"
+                  >
+                    <DownloadCloud className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <div>
+                      <div className="font-semibold">Cache Entire Book</div>
+                      <div className="text-[10px] text-muted-foreground">Download all {currentBookObj.chaptersCount} chapters of {selectedBook}</div>
+                    </div>
+                  </button>
+
+                  <div className="border-t border-border my-1" />
+
+                  {/* Action 3: View Offline Library */}
+                  <button
+                    onClick={handleOpenOfflineLibrary}
+                    className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-secondary flex items-center gap-2 text-foreground transition-colors"
+                  >
+                    <BookOpen className="w-4 h-4 text-sky-500 shrink-0" />
+                    <div>
+                      <div className="font-semibold">View Offline Library</div>
+                      <div className="text-[10px] text-muted-foreground">Browse all cached scriptures in IndexedDB</div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={handleToggleAudio}
               className={`p-2 rounded-lg text-xs font-semibold transition-all ${
@@ -467,6 +735,60 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
             </button>
           </div>
         </div>
+
+        {/* Toast Feedback for Offline operations */}
+        {offlineToast && (
+          <div className={`p-2.5 rounded-lg text-xs flex items-center justify-between gap-2 animate-in fade-in duration-150 ${
+            offlineToast.type === 'success' ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400' :
+            offlineToast.type === 'error' ? 'bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400' :
+            'bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400'
+          }`}>
+            <div className="flex items-center gap-2">
+              {offlineToast.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <Database className="w-4 h-4 shrink-0" />}
+              <span>{offlineToast.message}</span>
+            </div>
+            <button onClick={() => setOfflineToast(null)} className="p-0.5 hover:opacity-75">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Book Caching Progress Bar */}
+        {cacheProgress && (
+          <div className="p-3 bg-secondary/80 border border-border rounded-xl space-y-2 animate-in fade-in">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-foreground flex items-center gap-1.5">
+                <DownloadCloud className="w-3.5 h-3.5 text-primary animate-bounce" />
+                Caching {selectedBook} to IndexedDB...
+              </span>
+              <span className="font-mono text-primary font-bold">{cacheProgress.percent}% ({cacheProgress.current}/{cacheProgress.total} ch)</span>
+            </div>
+            <div className="w-full h-2 bg-background rounded-full overflow-hidden border border-border">
+              <div 
+                className="h-full bg-primary transition-all duration-150 ease-out" 
+                style={{ width: `${cacheProgress.percent}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Banner indicator when Offline Mode is active */}
+        {isOfflineMode && (
+          <div className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2 text-xs text-amber-700 dark:text-amber-300">
+            <div className="flex items-center gap-2">
+              <WifiOff className="w-4 h-4 text-amber-500 shrink-0" />
+              <span><strong>Offline Mode Active:</strong> Holy Scripture is served from IndexedDB. Zero network bandwidth consumed.</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleOpenOfflineLibrary}
+                className="px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 font-bold text-[11px] transition-colors"
+              >
+                Offline Library
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Quick Reference / Verse Search Bar */}
         <form onSubmit={handleQuickSearch} className="flex items-center gap-1.5">
@@ -762,13 +1084,47 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
               </div>
             </div>
 
-          {/* SCRIPTURE CONTENT: Loading vs Verse vs Paragraph */}
+          {/* SCRIPTURE CONTENT: Loading vs Empty vs Verse vs Paragraph */}
           {isLoadingBible ? (
             <div className="py-16 flex flex-col items-center justify-center space-y-3 bg-secondary/40 rounded-xl border border-border">
               <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               <p className="text-xs text-primary font-semibold tracking-wide animate-pulse">
                 Opening Scripture: {selectedBook} {selectedChapter} ({version})...
               </p>
+            </div>
+          ) : versesForChapter.length === 0 ? (
+            <div className="py-14 px-4 text-center bg-card border border-border rounded-xl space-y-4 shadow-sm">
+              <div className="w-12 h-12 mx-auto rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500">
+                <WifiOff className="w-6 h-6" />
+              </div>
+              <div className="max-w-md mx-auto space-y-1">
+                <h3 className="text-base font-bold text-foreground">
+                  {isOfflineMode ? 'Chapter Not Saved for Offline Access' : 'Scripture Unavailable'}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {isOfflineMode
+                    ? `${selectedBook} ${selectedChapter} has not been downloaded to your IndexedDB offline cache yet.`
+                    : 'Could not retrieve chapter. Please check your network connection or view cached offline scriptures.'}
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-2 pt-1">
+                {isOfflineMode && (
+                  <button
+                    onClick={handleToggleOfflineMode}
+                    className="px-4 py-2 bg-primary text-primary-foreground font-semibold text-xs rounded-lg shadow-xs hover:opacity-90 flex items-center gap-1.5 transition-all"
+                  >
+                    <Wifi className="w-3.5 h-3.5" />
+                    <span>Switch to Online & Download</span>
+                  </button>
+                )}
+                <button
+                  onClick={handleOpenOfflineLibrary}
+                  className="px-4 py-2 bg-secondary border border-border hover:bg-secondary/80 text-foreground font-semibold text-xs rounded-lg flex items-center gap-1.5 transition-all"
+                >
+                  <Database className="w-3.5 h-3.5 text-sky-500" />
+                  <span>Browse Offline Library</span>
+                </button>
+              </div>
             </div>
           ) : (
             <>
@@ -1652,6 +2008,155 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
           </div>
         );
       })()}
+
+      {/* 5. IndexedDB Offline Library Modal */}
+      {showOfflineLibraryModal && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 animate-in fade-in">
+          <div className="bg-card border border-border rounded-xl shadow-2xl max-w-xl w-full overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="p-4 border-b border-border flex items-center justify-between bg-secondary/40">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                    <span>Offline Scripture Library</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 font-mono">
+                      IndexedDB
+                    </span>
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Locally stored Holy Bible scriptures for reading without internet connection.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowOfflineLibraryModal(false)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Offline Mode Status Banner inside Modal */}
+            <div className="p-3 bg-secondary/30 border-b border-border flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <span className={`w-2.5 h-2.5 rounded-full ${isOfflineMode ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
+                <span className="font-semibold text-foreground">
+                  Status: {isOfflineMode ? 'Offline Mode Active' : 'Online Mode Active'}
+                </span>
+                <span className="text-muted-foreground text-[11px]">
+                  ({cachedChaptersList.length} cached {cachedChaptersList.length === 1 ? 'chapter' : 'chapters'})
+                </span>
+              </div>
+              <button
+                onClick={handleToggleOfflineMode}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold border transition-all ${
+                  isOfflineMode
+                    ? 'bg-amber-500 text-white border-amber-600'
+                    : 'bg-secondary text-foreground border-border hover:bg-secondary/80'
+                }`}
+              >
+                {isOfflineMode ? 'Turn Online' : 'Turn Offline'}
+              </button>
+            </div>
+
+            {/* Cached Chapters Content */}
+            <div className="p-4 overflow-y-auto flex-1 space-y-3">
+              {cachedChaptersList.length === 0 ? (
+                <div className="py-12 text-center space-y-3">
+                  <DownloadCloud className="w-10 h-10 text-muted-foreground mx-auto opacity-50" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-foreground">No Chapters Cached Yet</p>
+                    <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                      Use the "Cache" button while reading any chapter or book to store it locally in IndexedDB for offline reading.
+                    </p>
+                  </div>
+                  <button
+                    disabled={versesForChapter.length === 0}
+                    onClick={handleCacheCurrentChapter}
+                    className="px-3.5 py-1.5 bg-primary text-primary-foreground text-xs font-semibold rounded-lg shadow-xs hover:opacity-90 inline-flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <HardDriveDownload className="w-3.5 h-3.5" />
+                    <span>Cache Current Chapter ({selectedBook} {selectedChapter})</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground font-semibold px-1">
+                    <span>Saved Chapters</span>
+                    <button
+                      onClick={handleClearAllOfflineStorage}
+                      className="text-destructive hover:underline flex items-center gap-1 text-[11px]"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Clear All Cache</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {cachedChaptersList.map((c) => (
+                      <div
+                        key={`${c.book}_${c.chapter}_${c.version}`}
+                        className="p-3 bg-secondary/50 border border-border rounded-lg flex items-center justify-between gap-2 hover:border-primary/40 transition-all group"
+                      >
+                        <div>
+                          <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                            <span>{c.book} {c.chapter}</span>
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-primary/10 text-primary font-mono font-bold">
+                              {c.version}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                            {c.verseCount} verses • Cached {new Date(c.cachedAt).toLocaleDateString()}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setSelectedBook(c.book);
+                              setSelectedChapter(c.chapter);
+                              setVersion(c.version);
+                              setTargetVerse(1);
+                              setHasSelectedBook(true);
+                              setShowOfflineLibraryModal(false);
+                            }}
+                            className="px-2 py-1 rounded bg-primary text-primary-foreground text-[11px] font-semibold hover:opacity-90 shadow-xs"
+                          >
+                            Read
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCachedChapter(c.book, c.chapter, c.version)}
+                            className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-secondary transition-colors"
+                            title="Remove from IndexedDB cache"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 bg-muted/40 border-t border-border flex items-center justify-between">
+              <div className="text-[11px] text-muted-foreground">
+                IndexedDB storage persists across browser sessions.
+              </div>
+              <button
+                onClick={() => setShowOfflineLibraryModal(false)}
+                className="px-4 py-1.5 rounded-lg bg-secondary border border-border text-foreground text-xs font-semibold hover:bg-secondary/80"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

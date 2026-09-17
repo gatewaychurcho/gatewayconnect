@@ -461,3 +461,4 @@ body { background: var(--gcz-v2-bg) !important; color: var(--gcz-v2-text); }
 .gcz-dev-console { background: #060b12 !important; }
 .gcz-dev-console > header { background: #0b131d !important; border-bottom: 1px solid rgba(125,211,252,.16) !important; }
 .gcz-dev-console .rounded-2xl, .gcz-dev-console .rounded-xl { border-radius: 15px !important; }
+

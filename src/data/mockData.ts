@@ -615,7 +615,10 @@ export const MOCK_COMMUNITY_GROUPS: CommunityGroup[] = [
     member_count: 8,
     image_url: '/assets/apostle_joe_daniels_grad.jpg',
     description: 'Enroll to learn about Christ, discipleship, spiritual foundation, and how to build yourself and mature in the Kingdom.',
-    joined: false
+    joined: false,
+    is_paid: true,
+    price_usd: 150,
+    duration_months: 3
   },
   {
     id: 'group_gymstars_foundation',
@@ -631,8 +634,8 @@ export const MOCK_COMMUNITY_GROUPS: CommunityGroup[] = [
     joined: false
   },
   {
-    id: 'group_isn_mentorship',
-    name: 'ISN International School of Mentorship',
+    id: 'group_international_school_of_mentorship',
+    name: 'International School of Mentoship',
     category: 'School',
     location: 'Apostolic Academy & Global Portal',
     leader_name: 'Apostle Joe Daniels & Apostolic Leadership',
@@ -640,8 +643,11 @@ export const MOCK_COMMUNITY_GROUPS: CommunityGroup[] = [
     meeting_time: 'Mondays @ 7:00 PM CAT & Virtual Modules',
     member_count: 12,
     image_url: '/assets/apostle_grad_dark_1788354117156.jpg',
-    description: 'International School of Mentorship (ISN) - Intensive apostolic mentorship, prophetic impartation, and global kingdom leadership academy.',
-    joined: false
+    description: 'International School of Mentorship - Intensive apostolic mentorship, prophetic impartation, and global kingdom leadership academy.',
+    joined: false,
+    is_paid: true,
+    price_usd: 150,
+    duration_months: 3
   }
 ];
 
@@ -1291,21 +1297,21 @@ export const INITIAL_CHAT_GROUPS: ChatGroup[] = [
     pinned_notice: 'Raising a generation without compromise! Junior fellowship every Saturday morning.'
   },
   {
-    id: 'group_isn_mentorship',
-    name: 'ISN International School of Mentorship',
-    description: 'International School of Mentorship (ISN) - Intensive apostolic mentorship, prophetic impartation, and global kingdom leadership academy.',
+    id: 'group_international_school_of_mentorship',
+    name: 'International School of Mentoship',
+    description: 'International School of Mentorship - Intensive apostolic mentorship, prophetic impartation, and global kingdom leadership academy.',
     category: 'School',
     is_paid: true,
     price_usd: 150,
     duration_months: 3,
-    invite_code: 'isn-mentorship-2026',
+    invite_code: 'mentorship-2026',
     created_by: 'usr_apostle_joe',
     creator_name: 'Apostle Joe Daniels',
     admin_ids: ['usr_apostle_joe', 'usr_prophetess_melinda', 'usr_pastor_easter', 'usr_developer'],
     avatar_url: '/assets/apostle_grad_dark_1788354117156.jpg',
     created_at: '2026-03-01T00:00:00Z',
     member_ids: ['usr_apostle_joe', 'usr_prophetess_melinda', 'usr_pastor_easter', 'usr_developer', 'usr_pastor_tendai'],
-    pinned_notice: 'Welcome to ISN International School of Mentorship. Classes, live modules, and prophetic assignments begin every Monday.'
+    pinned_notice: 'Welcome to International School of Mentoship. Classes, live modules, and prophetic assignments begin every Monday.'
   }
 ];
 
@@ -1401,23 +1407,23 @@ export const INITIAL_CHAT_GROUP_MESSAGES: Record<string, ChatGroupMessage[]> = {
       created_at: new Date(Date.now() - 3600000 * 7).toISOString()
     }
   ],
-  group_isn_mentorship: [
+  group_international_school_of_mentorship: [
     {
-      id: 'msg_isn_1',
-      group_id: 'group_isn_mentorship',
+      id: 'msg_mentorship_1',
+      group_id: 'group_international_school_of_mentorship',
       sender_id: 'usr_apostle_joe',
       sender_name: 'Apostle Joe Daniels',
       sender_role: 'super_admin',
-      text: 'Welcome to the ISN International School of Mentorship. This portal is consecrated for discipleship, leadership calibration, and spiritual acceleration. Prepare your spirits for deep revelation.',
+      text: 'Welcome to the International School of Mentoship. This portal is consecrated for discipleship, leadership calibration, and spiritual acceleration. Prepare your spirits for deep revelation.',
       created_at: new Date(Date.now() - 3600000 * 6).toISOString()
     },
     {
-      id: 'msg_isn_2',
-      group_id: 'group_isn_mentorship',
+      id: 'msg_mentorship_2',
+      group_id: 'group_international_school_of_mentorship',
       sender_id: 'usr_developer',
       sender_name: 'mr_juice7',
       sender_role: 'developer',
-      text: 'ISN Mentorship portal and secure curriculum channels are online. All enrolled ministers and students have synchronized access.',
+      text: 'International School of Mentoship portal and secure curriculum channels are online. All enrolled ministers and students have synchronized access.',
       created_at: new Date(Date.now() - 3600000 * 3).toISOString()
     }
   ]

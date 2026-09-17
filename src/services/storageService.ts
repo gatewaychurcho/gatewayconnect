@@ -759,33 +759,74 @@ export class StorageService {
     const defaultFollows = [
       { follower_id: 'usr_tinashe', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_tinashe', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_tinashe', following_id: 'usr_prophetess_melinda', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_developer', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_developer', following_id: 'usr_prophetess_melinda', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_pastor_tendai', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_pastor_tendai', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_pastor_tendai', following_id: 'usr_prophetess_melinda', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_pastor_grace', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_pastor_grace', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_pastor_grace', following_id: 'usr_prophetess_melinda', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_chipo', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_chipo', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_chipo', following_id: 'usr_prophetess_melinda', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_kuda', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_kuda', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_kuda', following_id: 'usr_prophetess_melinda', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_tatenda', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_tatenda', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_tatenda', following_id: 'usr_prophetess_melinda', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_nyasha', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_nyasha', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_nyasha', following_id: 'usr_prophetess_melinda', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_farai', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_farai', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_farai', following_id: 'usr_prophetess_melinda', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_apostle_joe', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_apostle_joe', following_id: 'usr_prophetess_melinda', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_prophetess_melinda', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_prophetess_melinda', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_pastor_easter', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_pastor_easter', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' }
+      { follower_id: 'usr_pastor_easter', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_pastor_easter', following_id: 'usr_prophetess_melinda', created_at: '2026-01-01T00:00:00Z' }
     ];
     let records = getLocal<{ follower_id: string; following_id: string; created_at: string }[] | null>(KEYS.USER_FOLLOWS_TABLE, null);
     if (!records) {
       records = [...defaultFollows];
       setLocal(KEYS.USER_FOLLOWS_TABLE, records);
     }
+
+    // MANDATE: Look at users following the account of super admin (usr_apostle_joe).
+    // Add them to follow Prophetess Melinda Daniels (usr_prophetess_melinda) as well.
+    let recordsModified = false;
+    const superAdminFollowers = new Set<string>();
+    records.forEach(r => {
+      if (r.following_id === 'usr_apostle_joe' || r.following_id === 'usr_daniels' || r.following_id === 'usr_pastor_joe') {
+        superAdminFollowers.add(r.follower_id);
+      }
+    });
+
+    superAdminFollowers.forEach(followerId => {
+      if (followerId !== 'usr_prophetess_melinda') {
+        const alreadyFollowsMelinda = records.some(
+          r => r.follower_id === followerId && r.following_id === 'usr_prophetess_melinda'
+        );
+        if (!alreadyFollowsMelinda) {
+          records.push({
+            follower_id: followerId,
+            following_id: 'usr_prophetess_melinda',
+            created_at: new Date().toISOString()
+          });
+          recordsModified = true;
+        }
+      }
+    });
+
+    if (recordsModified) {
+      setLocal(KEYS.USER_FOLLOWS_TABLE, records);
+    }
+
     return records;
   }
 
@@ -935,6 +976,21 @@ export class StorageService {
     return { isLiked, count: likes.length, likerUsers };
   }
 
+  static incrementBroadcastLike(userId?: string): { isLiked: boolean; count: number; likerUsers: User[] } {
+    const uid = userId || this.getCurrentUser()?.id || 'guest';
+    const likes = this.getBroadcastLikes();
+    likes.push(`${uid}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`);
+    setLocal(KEYS.BROADCAST_LIKES_TABLE, likes);
+    const allUsers = this.getAllUsers();
+    const likerUsers = allUsers.filter(u => likes.includes(u.id));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_broadcast_likes_updated', {
+        detail: { isLiked: true, count: likes.length, likerUsers }
+      }));
+    }
+    return { isLiked: true, count: likes.length, likerUsers };
+  }
+
   static async hydrateFollowsFromSupabase(userId: string): Promise<void> {
     if (!userId || userId === 'guest') return;
     try {
@@ -1026,9 +1082,12 @@ export class StorageService {
     prayers.forEach(p => {
       if (p.user_id && !p.is_anonymous) {
         const u = allUsers.find(usr => usr.id === p.user_id);
-        if (u) {
+        if (u && u.full_name) {
           p.user_name = u.full_name;
         }
+      }
+      if (!p.user_name || typeof p.user_name !== 'string' || !p.user_name.trim()) {
+        p.user_name = p.is_anonymous ? 'Anonymous Covenant Partner' : 'Covenant Partner';
       }
     });
     return prayers;
@@ -1036,8 +1095,10 @@ export class StorageService {
 
   static submitPrayer(request: Omit<PrayerRequest, 'id' | 'prayer_count' | 'created_at' | 'status' | 'is_answered'>): PrayerRequest {
     const prayers = this.getPrayerRequests();
+    const fallbackName = request.is_anonymous ? 'Anonymous Partner' : 'Covenant Partner';
     const newPrayer: PrayerRequest = {
       ...request,
+      user_name: (request.user_name && request.user_name.trim()) ? request.user_name.trim() : fallbackName,
       id: `pray_${Date.now()}`,
       prayer_count: 1,
       is_answered: false,
@@ -1090,6 +1151,23 @@ export class StorageService {
       list = MOCK_COMMUNITY_GROUPS.filter(g => !dissolved.has(g.id));
       setLocal(KEYS.GROUPS, list);
     }
+
+    // Clean up deprecated ISN group and ensure International School of Mentoship exists
+    if (list.some(g => g.id === 'group_isn_mentorship')) {
+      list = list.filter(g => g.id !== 'group_isn_mentorship');
+      if (!list.some(g => g.id === 'group_international_school_of_mentorship')) {
+        const newMentorship = MOCK_COMMUNITY_GROUPS.find(g => g.id === 'group_international_school_of_mentorship');
+        if (newMentorship) list.push(newMentorship);
+      }
+      setLocal(KEYS.GROUPS, list);
+    } else if (!list.some(g => g.id === 'group_international_school_of_mentorship') && !dissolved.has('group_international_school_of_mentorship')) {
+      const newMentorship = MOCK_COMMUNITY_GROUPS.find(g => g.id === 'group_international_school_of_mentorship');
+      if (newMentorship) {
+        list.push(newMentorship);
+        setLocal(KEYS.GROUPS, list);
+      }
+    }
+
     const chatGroups = this.getChatGroups();
     const chatGroupIds = new Set(chatGroups.map(c => c.id));
     list = list.filter(g => !dissolved.has(g.id) && chatGroupIds.has(g.id));
@@ -1097,7 +1175,7 @@ export class StorageService {
 
     // Return mapped copy where joined is computed dynamically for targetUserId ONLY
     return list.map(group => {
-      if (group.id === 'group_isn_mentorship' && (!group.image_url || group.image_url.includes('/assets/images/'))) {
+      if ((group.id === 'group_international_school_of_mentorship' || group.id === 'group_isn_mentorship') && (!group.image_url || group.image_url.includes('/assets/images/'))) {
         group.image_url = '/assets/apostle_grad_dark_1788354117156.jpg';
       }
       const cg = chatGroups.find(c => c.id === group.id);
@@ -1106,8 +1184,14 @@ export class StorageService {
       const isMember = (cg && targetUserId)
         ? cg.member_ids.includes(targetUserId)
         : false;
+      const isPaid = Boolean(cg?.is_paid || group.is_paid);
+      const priceUsd = cg?.price_usd ?? group.price_usd ?? (isPaid ? 150 : undefined);
+      const durationMonths = cg?.duration_months ?? group.duration_months ?? (isPaid ? 3 : undefined);
       return {
         ...group,
+        is_paid: isPaid,
+        price_usd: priceUsd,
+        duration_months: durationMonths,
         member_count: memberCount,
         joined: isMember,
         member_ids: cg ? cg.member_ids : []
@@ -1222,6 +1306,9 @@ export class StorageService {
     if (!evt) return false;
     Object.assign(evt, updated);
     setLocal(KEYS.EVENTS, events);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_events_updated'));
+    }
     return true;
   }
 
@@ -1239,8 +1326,37 @@ export class StorageService {
 
   static addEvent(event: ChurchEvent): void {
     const events = this.getEvents();
-    events.push(event);
+    const existingIndex = events.findIndex(e => e.id === event.id);
+    if (existingIndex >= 0) {
+      events[existingIndex] = event;
+    } else {
+      events.push(event);
+    }
     setLocal(KEYS.EVENTS, events);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_events_updated'));
+    }
+  }
+
+  static saveEvent(event: ChurchEvent): void {
+    this.addEvent(event);
+  }
+
+  static deleteEvent(eventId: string): boolean {
+    let events = this.getEvents();
+    if (eventId === 'evt_sunday' || eventId === 'evt_wednesday') {
+      return false; // Permanent church services
+    }
+    const prevCount = events.length;
+    events = events.filter(e => e.id !== eventId);
+    if (events.length !== prevCount) {
+      setLocal(KEYS.EVENTS, events);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_events_updated'));
+      }
+      return true;
+    }
+    return false;
   }
 
   // Pastor Location & Church Directions Requests
@@ -1973,6 +2089,37 @@ export class StorageService {
     return { user_liked: target.user_liked, likes_count: target.likes_count };
   }
 
+  static incrementTestimonyLikes(id: string, userId?: string): { user_liked: boolean; likes_count: number } {
+    const list = getLocal<Testimony[]>(KEYS.TESTIMONIES, MOCK_TESTIMONIES);
+    const target = list.find(t => t.id === id);
+    if (!target) return { user_liked: false, likes_count: 0 };
+
+    const currUser = this.getCurrentUser();
+    const effectiveUserId = userId || currUser?.id || 'usr_guest';
+
+    const postLikes = this.getPostLikesRecords();
+    postLikes.push({
+      post_id: id,
+      user_id: `${effectiveUserId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      created_at: new Date().toISOString()
+    });
+    setLocal(KEYS.POST_LIKES_TABLE, postLikes);
+
+    target.likes_count = (target.likes_count || 0) + 1;
+    target.user_liked = true;
+    if (!target.liked_user_ids) target.liked_user_ids = [];
+    if (!target.liked_user_ids.includes(effectiveUserId)) {
+      target.liked_user_ids.push(effectiveUserId);
+    }
+
+    setLocal(KEYS.TESTIMONIES, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: target }));
+    }
+    SupabaseSyncService.syncReaction(id, effectiveUserId, 'like').catch(() => {});
+    return { user_liked: true, likes_count: target.likes_count };
+  }
+
   static addCommentToTestimony(postId: string, text: string, user?: User | null): PostComment | null {
     const list = this.getTestimonies();
     const target = list.find(t => t.id === postId);
@@ -2111,13 +2258,85 @@ export class StorageService {
   static subscribePremium(months: number): User | null {
     const expiry = new Date();
     expiry.setMonth(expiry.getMonth() + months);
+    const expiryStr = expiry.toISOString().split('T')[0];
     
     const updated = this.updateUserProfile({
       is_premium: true,
+      is_verified: true,
       badge_type: 'blue',
-      premium_expires_at: expiry.toISOString().split('T')[0]
+      verified_badge: 'blue',
+      premium_expires_at: expiryStr,
+      badge_expires_at: expiryStr
     });
     return updated;
+  }
+
+  // Check if a user currently has active premium unlocked via a non-expired badge or admin/dev role
+  static isUserPremiumActive(user?: User | null): boolean {
+    const u = user !== undefined ? user : this.getCurrentUser();
+    if (!u) return false;
+    if (u.role === 'super_admin' || u.role === 'developer' || u.role === 'admin') return true;
+
+    // Check expiration if set
+    const expiryStr = u.premium_expires_at || u.badge_expires_at;
+    if (expiryStr) {
+      const expiryTime = new Date(expiryStr).getTime();
+      if (!isNaN(expiryTime) && Date.now() > expiryTime) {
+        // Badge / Premium has expired!
+        return false;
+      }
+    }
+
+    // Must have an active non-expired verified badge
+    const hasBadge = Boolean(
+      (u.badge_type && u.badge_type !== 'none') ||
+      (u.verified_badge && u.verified_badge !== 'none')
+    );
+
+    return hasBadge || Boolean(u.is_premium && !expiryStr);
+  }
+
+  // Get detailed status of verification badge and expiration
+  static getBadgeStatus(user?: User | null): {
+    hasBadge: boolean;
+    isActive: boolean;
+    isExpired: boolean;
+    badgeType?: string;
+    expiresAt?: string;
+  } {
+    const u = user !== undefined ? user : this.getCurrentUser();
+    if (!u) return { hasBadge: false, isActive: false, isExpired: false };
+    if (u.role === 'super_admin' || u.role === 'developer' || u.role === 'admin') {
+      return { hasBadge: true, isActive: true, isExpired: false, badgeType: 'gold' };
+    }
+    const badge = (u.badge_type && u.badge_type !== 'none') ? u.badge_type : (u.verified_badge && u.verified_badge !== 'none' ? u.verified_badge : undefined);
+    const expiryStr = u.premium_expires_at || u.badge_expires_at;
+    if (!badge && !u.is_premium) {
+      return { hasBadge: false, isActive: false, isExpired: false };
+    }
+    if (expiryStr) {
+      const expiryTime = new Date(expiryStr).getTime();
+      if (!isNaN(expiryTime) && Date.now() > expiryTime) {
+        return { hasBadge: true, isActive: false, isExpired: true, badgeType: badge, expiresAt: expiryStr };
+      }
+    }
+    return { hasBadge: true, isActive: true, isExpired: false, badgeType: badge, expiresAt: expiryStr };
+  }
+
+  // Purchase/renew verification badge with expiration
+  static purchaseBadge(badge: 'silver' | 'blue' | 'gold', months = 1): User | null {
+    const expiry = new Date();
+    expiry.setMonth(expiry.getMonth() + months);
+    const expiryStr = expiry.toISOString().split('T')[0];
+
+    return this.updateUserProfile({
+      is_premium: true,
+      is_verified: true,
+      badge_type: badge,
+      verified_badge: badge,
+      premium_expires_at: expiryStr,
+      badge_expires_at: expiryStr
+    });
   }
 
   // Auth: Login, Signup, & Logout
@@ -2132,7 +2351,7 @@ export class StorageService {
     delete memoryStore[KEYS.CURRENT_USER];
   }
 
-  // Auto-follow Super Admin and Developer on login or registration
+  // Auto-follow Super Admin, Developer, and Prophetess Melinda Daniels on login or registration
   static autoFollowSuperAdminAndDeveloper(userId: string): void {
     if (!userId || userId === 'guest') return;
 
@@ -2140,56 +2359,61 @@ export class StorageService {
     const newUser = allUsers.find(u => u.id === userId);
     if (!newUser) return;
 
-    // Identify all super admins and lead developer accounts
-    const leaders = allUsers.filter(u => 
-      u.id !== userId && (
-        u.role === 'super_admin' || 
-        u.role === 'developer' || 
-        u.id === 'usr_apostle_joe' || 
-        u.id === 'usr_prophetess_melinda' || 
-        u.id === 'usr_pastor_easter' || 
-        u.id === 'usr_developer' || 
-        u.phone === '0780699988'
-      )
-    );
+    // The 3 primary accounts with auto-follow privilege:
+    // 1. Apostle Joe Daniels (usr_apostle_joe)
+    // 2. Lead Developer (usr_developer)
+    // 3. Prophetess Melinda Daniels (usr_prophetess_melinda)
+    const privilegedLeaderIds = ['usr_apostle_joe', 'usr_developer', 'usr_prophetess_melinda'];
+
+    // Also include any other super admin or developer if present
+    const additionalLeaders = allUsers.filter(u =>
+      u.id !== userId &&
+      !privilegedLeaderIds.includes(u.id) &&
+      (u.role === 'super_admin' || u.role === 'developer' || arePhoneNumbersEqual(u.phone, '0780699988'))
+    ).map(u => u.id);
+
+    const targetLeaderIds = Array.from(new Set([...privilegedLeaderIds, ...additionalLeaders])).filter(id => id !== userId);
 
     const records = this.getUserFollowsRecords();
     const followingKey = `following_list_${userId}`;
     const currentFollowing = getLocal<string[]>(followingKey, []);
     let changed = false;
 
-    leaders.forEach(leader => {
+    targetLeaderIds.forEach(leaderId => {
+      const leader = allUsers.find(u => u.id === leaderId);
       const alreadyInRecords = records.some(
-        r => r.follower_id === userId && (r.following_id === leader.id || (leader.role === 'super_admin' && r.following_id === 'usr_apostle_joe'))
+        r => r.follower_id === userId && r.following_id === leaderId
       );
 
       if (!alreadyInRecords) {
         records.push({
           follower_id: userId,
-          following_id: leader.id,
+          following_id: leaderId,
           created_at: new Date().toISOString()
         });
         changed = true;
 
         // Interactive Notification dispatched to leader
-        this.addAppNotification({
-          type: 'follow',
-          actor_id: newUser.id,
-          actor_name: newUser.full_name,
-          actor_avatar: newUser.avatar_url,
-          title: 'New Disciple / Follower',
-          message: `${newUser.full_name} (@${newUser.handle?.replace('@', '') || newUser.phone}) joined Gateway Connect and is now following you.`,
-          recipient_id: leader.id,
-          link_tab: 'profile',
-          meta_id: newUser.id
-        });
+        if (leader) {
+          this.addAppNotification({
+            type: 'follow',
+            actor_id: newUser.id,
+            actor_name: newUser.full_name,
+            actor_avatar: newUser.avatar_url,
+            title: 'New Disciple / Follower',
+            message: `${newUser.full_name} (@${newUser.handle?.replace('@', '') || newUser.phone}) joined Gateway Connect and is now following you.`,
+            recipient_id: leader.id,
+            link_tab: 'profile',
+            meta_id: newUser.id
+          });
+        }
 
         // Sync to Supabase in background
-        SupabaseSyncService.syncFollowState(userId, leader.id, true).catch(() => {});
+        SupabaseSyncService.syncFollowState(userId, leaderId, true).catch(() => {});
       }
 
-      if (!currentFollowing.includes(leader.id)) {
-        currentFollowing.push(leader.id);
+      if (!currentFollowing.includes(leaderId)) {
+        currentFollowing.push(leaderId);
         changed = true;
       }
     });
@@ -2199,11 +2423,11 @@ export class StorageService {
       setLocal(followingKey, currentFollowing);
 
       // Recalculate followers count for all affected leaders
-      leaders.forEach(leader => {
-        const exactFollowers = records.filter(
-          r => r.following_id === leader.id || (leader.role === 'super_admin' && r.following_id === 'usr_apostle_joe')
-        ).length;
-        leader.followers_count = exactFollowers;
+      allUsers.forEach(u => {
+        if (targetLeaderIds.includes(u.id)) {
+          const exactFollowers = records.filter(r => r.following_id === u.id).length;
+          u.followers_count = exactFollowers;
+        }
       });
 
       // Recalculate following count for new user
@@ -3912,9 +4136,17 @@ export class StorageService {
     }
     // Filter out any dissolved groups
     list = list.filter(g => !dissolved.has(g.id));
+
+    let changed = false;
+
+    // Remove obsolete ISN group if present in saved storage
+    if (list.some(g => g.id === 'group_isn_mentorship')) {
+      list = list.filter(g => g.id !== 'group_isn_mentorship');
+      changed = true;
+    }
+
     // Ensure all canonical groups exist unless dissolved
     const existingIds = new Set(list.map(g => g.id));
-    let changed = false;
     for (const initGrp of INITIAL_CHAT_GROUPS) {
       if (!existingIds.has(initGrp.id) && !dissolved.has(initGrp.id)) {
         list.push(initGrp);
@@ -3944,7 +4176,7 @@ export class StorageService {
             changed = true;
           }
         });
-      } else if (['group_ignite_worship', 'group_pride_of_lions', 'group_foundation_school', 'group_gymstars_foundation', 'group_isn_mentorship'].includes(g.id)) {
+      } else if (['group_ignite_worship', 'group_pride_of_lions', 'group_foundation_school', 'group_gymstars_foundation', 'group_international_school_of_mentorship'].includes(g.id)) {
         if (g.created_by !== 'usr_apostle_joe') {
           g.created_by = 'usr_apostle_joe';
           g.creator_name = 'Apostle Joe Daniels';
@@ -3957,7 +4189,7 @@ export class StorageService {
             changed = true;
           }
         });
-        if (g.id === 'group_isn_mentorship' && !g.admin_ids.includes('usr_prophetess_melinda')) {
+        if ((g.id === 'group_international_school_of_mentorship' || g.id === 'group_isn_mentorship') && !g.admin_ids.includes('usr_prophetess_melinda')) {
           g.admin_ids.push('usr_prophetess_melinda');
           changed = true;
         }
@@ -3968,11 +4200,11 @@ export class StorageService {
             changed = true;
           }
         });
-        if (g.id === 'group_isn_mentorship' && !g.member_ids.includes('usr_prophetess_melinda')) {
+        if ((g.id === 'group_international_school_of_mentorship' || g.id === 'group_isn_mentorship') && !g.member_ids.includes('usr_prophetess_melinda')) {
           g.member_ids.push('usr_prophetess_melinda');
           changed = true;
         }
-        if (g.id === 'group_isn_mentorship' && (!g.avatar_url || g.avatar_url.includes('/assets/images/'))) {
+        if ((g.id === 'group_international_school_of_mentorship' || g.id === 'group_isn_mentorship') && (!g.avatar_url || g.avatar_url.includes('/assets/images/'))) {
           g.avatar_url = '/assets/apostle_grad_dark_1788354117156.jpg';
           changed = true;
         }
@@ -3996,6 +4228,7 @@ export class StorageService {
     list.forEach(g => {
       const isDiscipleship = 
         g.id === 'group_foundation_school' ||
+        g.id === 'group_international_school_of_mentorship' ||
         g.id === 'group_isn_mentorship' ||
         (g.category && ['School', 'Discipleship', 'Mentorship'].includes(g.category)) ||
         (g.name && /foundation|mentorship|discipleship|curriculum/i.test(g.name)) ||
@@ -4403,7 +4636,7 @@ export class StorageService {
 
     // If user is a super admin or developer, guarantee active status in discipleship groups
     if (['usr_apostle_joe', 'usr_prophetess_melinda', 'usr_pastor_easter', 'usr_developer'].includes(userId)) {
-      if (groupId === 'group_foundation_school' || groupId === 'group_isn_mentorship') {
+      if (groupId === 'group_foundation_school' || groupId === 'group_international_school_of_mentorship' || groupId === 'group_isn_mentorship') {
         return {
           user_id: userId,
           group_id: groupId,
@@ -4414,7 +4647,7 @@ export class StorageService {
       }
     }
     const user = this.getAllUsers().find(u => u.id === userId);
-    if ((user?.role === 'super_admin' || user?.role === 'developer') && (groupId === 'group_foundation_school' || groupId === 'group_isn_mentorship')) {
+    if ((user?.role === 'super_admin' || user?.role === 'developer') && (groupId === 'group_foundation_school' || groupId === 'group_international_school_of_mentorship' || groupId === 'group_isn_mentorship')) {
       return {
         user_id: userId,
         group_id: groupId,
@@ -5470,6 +5703,34 @@ export class StorageService {
     }
     setLocal(KEYS.PAGE_POSTS, all);
     return !isLiked;
+  }
+
+  // Reset entire application to clean essential defaults
+  static resetAppToDefaults(): void {
+    // 1. Reset feed posts/testimonies to clean verified MOCK_TESTIMONIES
+    setLocal(KEYS.TESTIMONIES, MOCK_TESTIMONIES);
+    // 2. Reset sermons to clean verified MOCK_SERMONS
+    setLocal(KEYS.SERMONS, MOCK_SERMONS);
+    // 3. Reset devotionals to MOCK_DEVOTIONALS
+    setLocal(KEYS.DEVOTIONALS, MOCK_DEVOTIONALS);
+    // 4. Reset groups to clean MOCK_COMMUNITY_GROUPS
+    setLocal(KEYS.GROUPS, MOCK_COMMUNITY_GROUPS);
+    // 5. Reset users list to verified INITIAL_USERS
+    setLocal(KEYS.ALL_USERS, INITIAL_USERS);
+    // 6. Reset chat groups to INITIAL_CHAT_GROUPS
+    setLocal(KEYS.CHAT_GROUPS, INITIAL_CHAT_GROUPS);
+    // 7. Clear temporary clutter
+    setLocal(KEYS.COMMUNITY_STORIES, []);
+    setLocal(KEYS.DISSOLVED_GROUPS, []);
+    
+    // Broadcast updates across the applet
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_app_data_reset'));
+      window.dispatchEvent(new CustomEvent('gcz_testimonies_updated'));
+      window.dispatchEvent(new CustomEvent('gcz_sermons_updated'));
+      window.dispatchEvent(new CustomEvent('gcz_groups_updated'));
+      window.dispatchEvent(new CustomEvent('gcz_users_synced'));
+    }
   }
 }
 

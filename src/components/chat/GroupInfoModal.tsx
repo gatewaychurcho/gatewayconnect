@@ -1093,20 +1093,22 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
                 )}
               </div>
 
-              {/* Developer Dissolve Override */}
-              {isDeveloper && (
+              {/* Admin & Developer Dissolve Group Controls */}
+              {(isDeveloper || isSuperAdmin || currentUser.role === 'admin') && (
                 <div className="p-3.5 rounded-2xl bg-red-950/30 border border-red-500/40 space-y-2.5 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-red-400 flex items-center gap-1.5">
                       <AlertTriangle className="w-3.5 h-3.5" />
-                      Developer Group Controls
+                      Administrative Controls
                     </span>
-                    <span className="text-[9px] text-red-300 font-mono px-1.5 py-0.5 rounded bg-red-900/50">Root</span>
+                    <span className="text-[9px] text-red-300 font-mono px-1.5 py-0.5 rounded bg-red-900/50">
+                      {isDeveloper ? 'Developer' : 'Admin'}
+                    </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
-                      if (confirm(`DEVELOPER OVERRIDE: Permanently DISSOLVE "${group.name}"? This will delete the fellowship and wipe group messages.`)) {
+                      if (confirm(`ADMIN / DEV ACTION: Permanently DELETE and DISSOLVE "${group.name}"? This will dissolve the fellowship, wipe messages, and cancel active memberships.`)) {
                         StorageService.deleteChatGroup(group.id);
                         onClose();
                         onUpdateGroup();
@@ -1116,7 +1118,7 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
                     className="w-full py-2 px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>Dissolve Group</span>
+                    <span>Delete & Dissolve Group</span>
                   </button>
                 </div>
               )}

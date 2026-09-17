@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Heart } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sparkles } from 'lucide-react';
 
 export interface PoppingLiveComment {
   id: string;
@@ -13,102 +13,96 @@ export interface PoppingLiveComment {
 }
 
 interface LivePouringCommentsProps {
-  initialComments?: { sender_name: string; message: string; city?: string; is_decree?: boolean }[];
   isLive?: boolean;
   className?: string;
-  simulatePouring?: boolean;
 }
 
-const LIVE_SAMPLE_COMMENTS = [
-  { sender_name: 'Pastor Tendai', message: 'Hallelujah! The altar is on fire! 🔥', city: 'Harare', is_decree: true },
-  { sender_name: 'Sister Chipo', message: 'I receive my supernatural speed! Amen! 🙏', city: 'Harare', is_decree: true },
-  { sender_name: 'Tinashe M', message: 'Bulawayo connected in covenant faith! 🇿🇼', city: 'Bulawayo' },
-  { sender_name: 'Grace Daniels', message: 'Dominion over every limitation today!', city: 'Harare' },
-  { sender_name: 'Kuda Sibanda', message: 'Apostolic speed in this season! Fire! 🔥', city: 'Chitungwiza', is_decree: true },
-  { sender_name: 'Nyasha C', message: 'Amen and Amen! Glory to God! 🕊️', city: 'Mutare' },
-  { sender_name: 'Farai G', message: 'Taking notes from Gweru! Powerful teaching 📖', city: 'Gweru' },
-  { sender_name: 'Rudo Moyo', message: 'Lord make a way! Standing in faith! 🙏', city: 'Harare' }
-];
-
 export const LivePouringComments: React.FC<LivePouringCommentsProps> = ({
-  initialComments,
   isLive = true,
-  className = '',
-  simulatePouring = true
+  className = ''
 }) => {
   const [poppingComments, setPoppingComments] = useState<PoppingLiveComment[]>([]);
-  const sampleIndexRef = useRef(0);
 
-  // Helper to add a comment that pops up for exactly 1 second
+  // Add a real comment to pop up on video screen
   const addPoppingComment = (comment: Omit<PoppingLiveComment, 'id' | 'created_at'>) => {
+    // Only display if the stream is live
+    if (!isLive) return;
+
     const newEntry: PoppingLiveComment = {
       ...comment,
-      id: `pop_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: `live_pop_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       created_at: Date.now()
     };
 
     setPoppingComments((prev) => {
-      // Keep up to 4 comments at a time so they "pour" smoothly without crowding the video
+      // Keep up to 3 recent real comments on screen so they don't block the video
       const updated = [...prev, newEntry];
-      return updated.slice(-4);
+      return updated.slice(-3);
     });
 
-    // Exactly 1 second (1000ms) lifespan: remove this specific comment after 1 second
+    // Display for 4 seconds, then smoothly dismiss
     setTimeout(() => {
       setPoppingComments((prev) => prev.filter((c) => c.id !== newEntry.id));
-    }, 1100);
+    }, 4200);
   };
 
-  // Listen for real comment submissions anywhere in the app
+  // Listen for real comment submissions dispatched from the comments box
   useEffect(() => {
     const handleCommentPopEvent = (e: any) => {
+      if (!isLive) return;
       const detail = e.detail;
       if (!detail || !detail.message) return;
+
       addPoppingComment({
         sender_name: detail.sender_name || detail.user || 'Believer',
         message: detail.message || detail.text,
-        city: detail.city || 'Harare',
-        is_decree: detail.is_decree || Boolean(detail.message?.toLowerCase().includes('amen') || detail.message?.toLowerCase().includes('receive')),
+        city: detail.city,
+        is_decree: detail.is_decree || Boolean(
+          detail.message?.toLowerCase().includes('amen') || 
+          detail.message?.toLowerCase().includes('receive') ||
+          detail.message?.toLowerCase().includes('hallelujah')
+        ),
         is_current_user: Boolean(detail.is_current_user),
         avatar_url: detail.avatar_url
       });
     };
 
+    // Listen for liveSyncService remote comments
+    const handleLiveStreamEvent = (e: any) => {
+      if (!isLive) return;
+      const event = e.detail;
+      if (!event) return;
+
+      if (event.type === 'stream_chat' && event.payload) {
+        const payload = event.payload;
+        addPoppingComment({
+          sender_name: payload.user || payload.sender_name || 'Believer',
+          message: payload.text || payload.message || '',
+          city: payload.city,
+          is_decree: Boolean(payload.is_decree),
+          is_current_user: false,
+          avatar_url: payload.avatar_url
+        });
+      }
+    };
+
     window.addEventListener('gcz_live_comment_pop', handleCommentPopEvent);
-    return () => window.removeEventListener('gcz_live_comment_pop', handleCommentPopEvent);
-  }, []);
+    window.addEventListener('gcz_live_event_received', handleLiveStreamEvent);
 
-  // Show a couple of initial comments when opening stream
-  useEffect(() => {
-    if (initialComments && initialComments.length > 0) {
-      initialComments.slice(0, 2).forEach((c, idx) => {
-        setTimeout(() => {
-          addPoppingComment(c);
-        }, 400 + idx * 600);
-      });
-    }
-  }, []);
+    return () => {
+      window.removeEventListener('gcz_live_comment_pop', handleCommentPopEvent);
+      window.removeEventListener('gcz_live_event_received', handleLiveStreamEvent);
+    };
+  }, [isLive]);
 
-  // Periodic simulated live pouring comments (every 2.5 to 4 seconds) to mimic TikTok / Instagram Live
-  useEffect(() => {
-    if (!simulatePouring || !isLive) return;
-
-    const interval = setInterval(() => {
-      const sample = LIVE_SAMPLE_COMMENTS[sampleIndexRef.current % LIVE_SAMPLE_COMMENTS.length];
-      sampleIndexRef.current += 1;
-      addPoppingComment(sample);
-    }, 2800);
-
-    return () => clearInterval(interval);
-  }, [simulatePouring, isLive]);
-
-  if (poppingComments.length === 0) {
+  // NEVER show comments if not actively live or if there are no real comments
+  if (!isLive || poppingComments.length === 0) {
     return null;
   }
 
   return (
     <div 
-      className={`pointer-events-none flex flex-col justify-end space-y-1.5 overflow-hidden z-30 transition-all ${className}`}
+      className={`pointer-events-none flex flex-col justify-end space-y-2 overflow-hidden z-25 transition-all ${className}`}
       aria-live="polite"
     >
       {poppingComments.map((comment) => {
@@ -118,39 +112,50 @@ export const LivePouringComments: React.FC<LivePouringCommentsProps> = ({
         return (
           <div
             key={comment.id}
-            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-full text-xs shadow-2xl backdrop-blur-md border animate-in fade-in slide-in-from-bottom-3 duration-200 transition-all ${
+            className={`flex items-start gap-2 px-3 py-2 rounded-2xl text-xs shadow-2xl backdrop-blur-md border animate-in fade-in slide-in-from-bottom-3 duration-300 transition-all ${
               isSelf
-                ? 'bg-primary/90 text-primary-foreground border-amber-300/40 shadow-primary/30'
-                : 'bg-black/75 text-white border-white/20'
+                ? 'bg-amber-950/85 text-white border-amber-400/50 shadow-amber-500/20'
+                : 'bg-black/75 text-white border-white/20 shadow-black/60'
             }`}
           >
-            {/* Avatar or Initial circle */}
-            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+            {/* User Avatar */}
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 shadow-sm overflow-hidden ${
               isSelf 
-                ? 'bg-amber-300 text-slate-950 shadow-xs' 
-                : 'bg-gradient-to-tr from-primary to-amber-400 text-primary-foreground'
+                ? 'bg-amber-400 text-slate-950 ring-1 ring-amber-300' 
+                : 'bg-gradient-to-tr from-amber-500 to-primary text-slate-950 ring-1 ring-white/30'
             }`}>
               {comment.avatar_url ? (
-                <img src={comment.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                <img 
+                  src={comment.avatar_url} 
+                  alt="" 
+                  className="w-full h-full object-cover" 
+                  onError={(e) => {
+                    // Fallback to initial
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
               ) : (
                 <span>{initial}</span>
               )}
             </div>
 
-            {/* Sender and message */}
-            <div className="flex items-center gap-1.5 min-w-0 max-w-[220px] sm:max-w-[260px] truncate">
-              <span className={`font-bold text-[11px] shrink-0 truncate ${isSelf ? 'text-white' : 'text-primary'}`}>
-                {isSelf ? 'You' : comment.sender_name}
-              </span>
-              <span className="text-white/95 text-[11px] leading-tight truncate">
+            {/* Sender and real message */}
+            <div className="flex flex-col min-w-0 max-w-[210px] sm:max-w-[280px]">
+              <div className="flex items-center gap-1.5 leading-none mb-0.5">
+                <span className={`font-black text-[11px] truncate ${isSelf ? 'text-amber-300' : 'text-primary'}`}>
+                  {isSelf ? 'You' : comment.sender_name}
+                </span>
+                {comment.city && (
+                  <span className="text-[9px] text-white/50 truncate">• {comment.city}</span>
+                )}
+                {comment.is_decree && (
+                  <Sparkles className="w-3 h-3 text-amber-300 shrink-0 animate-pulse" />
+                )}
+              </div>
+              <span className="text-white/95 text-[11px] leading-snug break-words">
                 {comment.message}
               </span>
             </div>
-
-            {/* Emoji or decree sparkle */}
-            {comment.is_decree && (
-              <Sparkles className="w-3 h-3 text-amber-300 shrink-0 animate-pulse ml-0.5" />
-            )}
           </div>
         );
       })}

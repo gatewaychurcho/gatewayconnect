@@ -20,6 +20,7 @@ export interface User {
   verified_badge?: BadgeType;
   is_premium?: boolean;
   premium_expires_at?: string;
+  badge_expires_at?: string;
   unlocked_sermon_ids?: string[];
   member_id: string;
   baptism_date?: string;
@@ -165,6 +166,9 @@ export interface CommunityGroup {
   image_url: string;
   description: string;
   joined?: boolean;
+  is_paid?: boolean;
+  price_usd?: number;
+  duration_months?: number;
 }
 
 export interface PrayerRequest {

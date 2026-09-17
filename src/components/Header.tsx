@@ -13,7 +13,8 @@ import {
   Bell,
   Terminal,
   Sun,
-  Moon
+  Moon,
+  LogOut
 } from 'lucide-react';
 import { User, PushNotification, NotificationSettings } from '../types';
 import { StorageService } from '../services/storageService';
@@ -276,10 +277,23 @@ export const Header: React.FC<HeaderProps> = ({
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-primary font-bold text-xs">
-                  {currentUser.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'GC'}
+                  {(currentUser?.full_name || 'GC').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'GC'}
                 </div>
               )}
             </div>
+          </button>
+        )}
+
+        {/* Quick Log Out Action */}
+        {!isGuest && onLogout && (
+          <button
+            id="btn-header-quick-logout"
+            onClick={onLogout}
+            title="Log Out of Account"
+            aria-label="Log Out of Account"
+            className="p-1.5 sm:p-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 hover:border-rose-500/40 transition-all cursor-pointer shrink-0"
+          >
+            <LogOut className="w-4 h-4" />
           </button>
         )}
 

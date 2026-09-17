@@ -2102,7 +2102,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                 {filteredGroups.map(grp => {
                   const isSelected = grp.id === activeGroupId;
                   const isMember = grp.member_ids.includes(currentUser.id);
-                  const isFs = grp.id === 'group_foundation_school' || grp.id === 'group_isn_mentorship';
+                  const isFs = grp.id === 'group_foundation_school' || grp.id === 'group_international_school_of_mentorship' || grp.id === 'group_isn_mentorship';
                   const grpUnread = StorageService.getUnreadGroupMessagesCount(grp.id, currentUser.id);
                   const grpMsgs = StorageService.getChatGroupMessagesForUser(grp.id, currentUser.id);
                   const lastMsg = grpMsgs[grpMsgs.length - 1];
@@ -3929,7 +3929,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   <h3 className="font-serif-church font-bold text-base text-foreground">
                     Create Church Group
                   </h3>
-                  <p className="text-[11px] text-muted-foreground">WhatsApp-style Fellowship Cell</p>
+                  <p className="text-[11px] text-muted-foreground">Fellowship Group</p>
                 </div>
               </div>
               <button
@@ -4106,8 +4106,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               </button>
             </div>
 
-            <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-700 dark:text-blue-300 leading-snug">
-              <span className="font-bold">WhatsApp Protocol Notice:</span> Super Admins (Apostle Joe, Prophetess Melinda, Pastor Easter) and Developers cannot be forced into groups directly; an official invitation will be sent to their inbox for them to accept or decline.
+            <div className="px-3 py-1.5 rounded-full bg-secondary text-[11px] text-muted-foreground flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span className="truncate">Admins receive an invitation to join.</span>
             </div>
 
             <div className="flex-1 overflow-y-auto divide-y divide-border space-y-1">

@@ -67,12 +67,12 @@ export const FloatingLiveBroadcast: React.FC<FloatingLiveBroadcastProps> = ({
       <div 
         id="floating-live-minimized"
         onClick={() => setIsMinimized(false)}
-        className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-40 flex items-center gap-2 px-3 py-2 rounded-full bg-red-600 text-white shadow-2xl cursor-pointer hover:scale-105 active:scale-95 transition-all border border-white/20 animate-bounce"
-        title="Live Broadcast Active - Click to expand"
+        className="fixed bottom-16 sm:bottom-20 right-3 z-40 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white shadow-lg cursor-pointer hover:scale-105 active:scale-95 transition-all border border-white/20"
+        title="Live Broadcast Active"
       >
-        <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
-        <Radio className="w-4 h-4 animate-pulse" />
-        <span className="text-xs font-black tracking-wide uppercase">LIVE</span>
+        <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+        <Radio className="w-3 h-3 animate-pulse" />
+        <span className="text-[10px] font-black tracking-wider uppercase">LIVE</span>
       </div>
     );
   }
@@ -80,90 +80,46 @@ export const FloatingLiveBroadcast: React.FC<FloatingLiveBroadcastProps> = ({
   return (
     <aside
       id="floating-live-broadcast-card"
-      aria-label="Live Sanctuary Broadcast Notification"
-      className="fixed bottom-20 right-3 sm:bottom-6 sm:right-6 z-40 w-[calc(100vw-24px)] max-w-[340px] bg-card/95 backdrop-blur-xl border border-destructive/50 rounded-2xl p-3.5 text-foreground shadow-xl transition-all"
+      aria-label="Live Sanctuary Broadcast"
+      className="fixed bottom-16 sm:bottom-20 right-3 z-40 bg-card/95 backdrop-blur-md border border-red-500/40 rounded-full pl-2.5 pr-1.5 py-1 text-foreground shadow-lg transition-all flex items-center gap-2 max-w-[260px] sm:max-w-[300px]"
     >
-      {/* Header bar with LIVE pulse and Dismiss */}
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-destructive"></span>
-          </span>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-destructive flex items-center gap-1">
-            <Radio className="w-3.5 h-3.5 animate-pulse" />
-            LIVE BROADCAST NOW
-          </span>
-        </div>
-
-        <div className="flex items-center gap-1">
-          <button
-            id="btn-live-float-minimize"
-            onClick={() => setIsMinimized(true)}
-            className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-secondary text-xs transition-colors"
-            title="Minimize"
-          >
-            _
-          </button>
-          <button
-            id="btn-live-float-close"
-            onClick={() => setIsDismissed(true)}
-            className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-secondary transition-colors"
-            title="Dismiss until next session"
-            aria-label="Close"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
+      <div 
+        onClick={() => {
+          if (onOpenInteractiveModal) onOpenInteractiveModal();
+          if (onOpenStream) onOpenStream();
+          window.dispatchEvent(new CustomEvent('gcz_open_live_stream'));
+        }}
+        className="flex items-center gap-1.5 cursor-pointer min-w-0"
+      >
+        <span className="relative flex h-2 w-2 shrink-0">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+        </span>
+        <span className="text-[9px] font-black tracking-wider uppercase text-white bg-red-600 px-1.5 py-0.5 rounded-xs shrink-0">
+          LIVE
+        </span>
+        <span className="text-[11px] font-medium text-foreground truncate max-w-[140px] sm:max-w-[170px]">
+          {liveStatus.title ? liveStatus.title.split('•')[0].trim() : 'Sanctuary Live'}
+        </span>
       </div>
 
-      {/* Broadcast Title */}
-      <div className="space-y-1 mb-3">
-        <h4 className="text-xs font-semibold text-foreground line-clamp-2 leading-snug">
-          {liveStatus.title || 'Church & Politics • Apostle Joe Daniels Live Broadcast'}
-        </h4>
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-1 text-emerald-500 font-semibold">
-            <Users className="w-3 h-3 text-emerald-500" />
-            <span>{viewerCount} believers watching</span>
-          </span>
-          <span>•</span>
-          <span className="text-primary font-semibold flex items-center gap-0.5">
-            <Sparkles className="w-2.5 h-2.5" />
-            Sanctuary
-          </span>
-        </div>
-      </div>
-
-      {/* Stream Action Buttons */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="flex items-center gap-0.5 shrink-0">
         <button
-          id="btn-live-float-stream"
-          onClick={() => {
-            if (onOpenInteractiveModal) onOpenInteractiveModal();
-            if (onOpenStream) onOpenStream();
-            window.dispatchEvent(new CustomEvent('gcz_open_live_stream'));
-          }}
-          className="w-full py-2 px-3 rounded-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+          id="btn-live-float-minimize"
+          onClick={() => setIsMinimized(true)}
+          className="text-muted-foreground hover:text-foreground p-1 rounded-full hover:bg-secondary transition-colors"
+          title="Minimize"
         >
-          <Tv className="w-3.5 h-3.5" />
-          <span>Stream Now</span>
+          <span className="text-[10px] leading-none block -mt-1 font-bold">_</span>
         </button>
-
         <button
-          id="btn-live-float-watch-top"
-          onClick={() => {
-            if (onWatchLive) {
-              onWatchLive();
-            } else {
-              window.dispatchEvent(new CustomEvent('gcz_navigate_tab', { detail: 'home' }));
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }
-          }}
-          className="w-full py-2 px-3 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground border border-border font-semibold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
+          id="btn-live-float-close"
+          onClick={() => setIsDismissed(true)}
+          className="text-muted-foreground hover:text-foreground p-1 rounded-full hover:bg-secondary transition-colors"
+          title="Dismiss"
+          aria-label="Close"
         >
-          <span>Watch on Top</span>
-          <ChevronRight className="w-3.5 h-3.5" />
+          <X className="w-3 h-3" />
         </button>
       </div>
     </aside>

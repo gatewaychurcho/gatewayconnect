@@ -320,15 +320,15 @@ export class SupabaseSyncService {
         const combined = [...prayers.map((p: any) => ({
           id: p.id,
           user_id: p.user_id || 'usr_remote',
-          user_name: p.author_name || 'Church Believer',
-          request_text: p.request_text,
+          user_name: p.author_name || p.user_name || (p.is_anonymous ? 'Anonymous Believer' : 'Church Believer'),
+          request_text: p.request_text || '',
           category: p.category || 'General',
-          is_anonymous: false,
+          is_anonymous: Boolean(p.is_anonymous),
           is_public: true,
           prayer_count: p.prayer_count || 1,
-          created_at: p.created_at,
+          created_at: p.created_at || new Date().toISOString(),
           status: p.apostle_prayed ? ('apostle_prayed' as const) : ('approved' as const),
-          is_answered: p.is_answered
+          is_answered: Boolean(p.is_answered)
         })), ...localPrayers.filter(lp => !prayers.some((rp: any) => rp.id === lp.id))];
 
         localStorage.setItem('gcz_prayers', JSON.stringify(combined));

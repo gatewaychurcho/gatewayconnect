@@ -41,7 +41,8 @@ import {
   Search,
   CheckCircle2,
   UserCheck,
-  Flag
+  Flag,
+  RotateCcw
 } from 'lucide-react';
 import { User, Sermon, NotificationSettings, Testimony, PostComment, ChurchPage } from '../../types';
 import { StorageService } from '../../services/storageService';
@@ -1525,7 +1526,7 @@ export const MeTab: React.FC<MeTabProps> = ({
                     {editAvatarUrl ? (
                       <img src={editAvatarUrl} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <span className="text-2xl font-bold text-primary">{editFullName[0] || 'G'}</span>
+                      <span className="text-2xl font-bold text-primary">{editFullName?.[0] || 'G'}</span>
                     )}
                   </div>
                 </div>
@@ -2059,7 +2060,7 @@ export const MeTab: React.FC<MeTabProps> = ({
                 {localUser.avatar_url ? (
                   <img src={localUser.avatar_url} alt="" className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-3xl font-bold text-primary">{localUser.full_name[0] || 'G'}</span>
+                  <span className="text-3xl font-bold text-primary">{localUser.full_name?.[0] || 'G'}</span>
                 )}
               </div>
             </div>
@@ -2154,6 +2155,19 @@ export const MeTab: React.FC<MeTabProps> = ({
                 <Settings className="w-4 h-4 text-muted-foreground" />
                 <span>Settings & Notifications</span>
               </div>
+            </button>
+
+            {/* Reset App to Clean Defaults */}
+            <button
+              onClick={() => {
+                setShowOptionsSheet(false);
+                StorageService.resetAppToDefaults();
+                showToast('Application reset to essential defaults');
+              }}
+              className="w-full p-3 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-left text-amber-500 font-semibold flex items-center gap-2.5 transition-colors cursor-pointer border border-amber-500/25"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Reset App to Defaults</span>
             </button>
 
             {onLogout && (

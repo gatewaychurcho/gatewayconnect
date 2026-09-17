@@ -37,7 +37,9 @@ import {
   Trash2,
   Film,
   Video,
-  Flag
+  Flag,
+  FileEdit,
+  Crown
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { CommunityGroup, PrayerRequest, ChurchEvent, Testimony, User, CommunityStory, ChurchPage } from '../../types';
@@ -51,6 +53,9 @@ import { WhatsAppShareModal } from '../modals/WhatsAppShareModal';
 import { ChurchPagesSection } from '../common/ChurchPagesSection';
 import { ChurchPageViewModal } from '../modals/ChurchPageViewModal';
 import { FacebookStreamPlayer } from '../common/FacebookStreamPlayer';
+import { InViewAutoPlayVideo } from '../common/InViewAutoPlayVideo';
+import { PaidGroupBillingModal } from '../modals/PaidGroupBillingModal';
+import { cn } from '../../lib/utils';
 import { formatTimeAgo } from '../../utils/timeAgo';
 import { getEventCountdown } from '../../utils/eventCountdown';
 
@@ -95,6 +100,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   const [joiningGroupId, setJoiningGroupId] = useState<string | null>(null);
   const [joiningStep, setJoiningStep] = useState<'joining' | 'joined'>('joining');
   const [exitingGroupId, setExitingGroupId] = useState<string | null>(null);
+  const [selectedPaidGroupForBilling, setSelectedPaidGroupForBilling] = useState<CommunityGroup | null>(null);
 
   // Global Congregation Member Search Feature
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
@@ -161,6 +167,11 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       setAllRegisteredUsers(StorageService.getAllUsers());
     };
 
+    const handleEventsUpdated = () => {
+      setEventList(StorageService.getEvents());
+    };
+
+    window.addEventListener('gcz_events_updated', handleEventsUpdated);
     window.addEventListener('gcz_testimony_updated', handleTestimoniesUpdated);
     window.addEventListener('gcz_prayer_updated', handlePrayersUpdated);
     window.addEventListener('gcz_groups_updated', handleGroupsUpdated);
@@ -174,9 +185,6 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     // Cross-device social sync
     const unsubscribe = SupabaseSyncService.subscribeToSocialMessaging({
       onUserProfileUpdated: () => {
-        // Pull the new/updated account from Supabase and merge it into local
-        // storage first — re-reading local storage alone won't show accounts
-        // that registered on another device, or photo changes made elsewhere.
         StorageService.syncUsersWithRemote().finally(() => {
           setGroupList(StorageService.getGroups(currentUser?.id));
           setAllRegisteredUsers(StorageService.getAllUsers());
@@ -194,6 +202,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     });
 
     return () => {
+      window.removeEventListener('gcz_events_updated', handleEventsUpdated);
       window.removeEventListener('gcz_testimony_updated', handleTestimoniesUpdated);
       window.removeEventListener('gcz_prayer_updated', handlePrayersUpdated);
       window.removeEventListener('gcz_groups_updated', handleGroupsUpdated);
@@ -337,6 +346,45 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   // Countdown Timer & Event Interaction States
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [eventFeedbackToast, setEventFeedbackToast] = useState<{ title: string; message: string } | null>(null);
+
+  // Admin & Developer Event Governance States
+  const [showEventModal, setShowEventModal] = useState<boolean>(false);
+  const [editingEvent, setEditingEvent] = useState<ChurchEvent | null>(null);
+  const [eventForm, setEventForm] = useState({
+    title: '',
+    date: '',
+    time: '',
+    location: 'Fantasyland Cinema Number 3 / Samora Machel Ave West, Harare',
+    description: '',
+    banner_url: '/assets/apostle_joe_daniels_preach.jpg',
+    category: 'Conference',
+    speaker: 'Apostle Joe Daniels'
+  });
+
+  const handleSaveEvent = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventForm.title.trim()) return;
+
+    const eventToSave: ChurchEvent = {
+      id: editingEvent ? editingEvent.id : `evt_${Date.now()}`,
+      title: eventForm.title.trim(),
+      date: eventForm.date.trim() || 'Upcoming',
+      time: eventForm.time.trim() || '18:00 - 20:00 CAT',
+      location: eventForm.location.trim() || 'Gateway Cathedral, Harare',
+      description: eventForm.description.trim(),
+      banner_url: eventForm.banner_url || '/assets/apostle_joe_daniels_preach.jpg',
+      category: eventForm.category,
+      speaker: eventForm.speaker.trim() || 'Apostle Joe Daniels',
+      is_featured: editingEvent?.is_featured ?? false,
+      is_permanent: editingEvent?.is_permanent ?? false,
+      ticket_required: editingEvent?.ticket_required ?? false
+    };
+
+    StorageService.saveEvent(eventToSave);
+    setEventList(StorageService.getEvents());
+    setShowEventModal(false);
+    setEditingEvent(null);
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -518,6 +566,20 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     if (onRefreshData) onRefreshData();
   };
 
+  // Instagram Real-time Like Incrementer (rapid-fire likes on repeated press or pressing number)
+  const handleIncrementLike = (postId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (isGuest) {
+      onRequireAuth();
+      return;
+    }
+    const currUser = StorageService.getCurrentUser() || currentUser;
+    StorageService.incrementTestimonyLikes(postId, currUser.id);
+    setTestimonyList(StorageService.getTestimonies());
+    setDoubleTapHeartPostId(postId);
+    setTimeout(() => setDoubleTapHeartPostId(null), 700);
+  };
+
   // Real Instagram Like Handler (stored persistently, tied to actual accounts)
   const handleLikePost = (postId: string) => {
     if (isGuest) {
@@ -525,9 +587,19 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       return;
     }
     const currUser = StorageService.getCurrentUser() || currentUser;
+    const post = testimonyList.find(p => p.id === postId);
+    const alreadyLiked = post?.liked_user_ids?.includes(currUser.id) || post?.user_liked;
+
+    if (alreadyLiked) {
+      handleIncrementLike(postId);
+      return;
+    }
+
     const result = StorageService.likeTestimony(postId, currUser.id);
     setTestimonyList(StorageService.getTestimonies());
     if (result.user_liked) {
+      setDoubleTapHeartPostId(postId);
+      setTimeout(() => setDoubleTapHeartPostId(null), 700);
       confetti({
         particleCount: 20,
         spread: 45,
@@ -542,11 +614,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       onRequireAuth();
       return;
     }
-    setDoubleTapHeartPostId(postId);
-    setTimeout(() => setDoubleTapHeartPostId(null), 900);
-    const currUser = StorageService.getCurrentUser() || currentUser;
-    StorageService.likeTestimony(postId, currUser.id);
-    setTestimonyList(StorageService.getTestimonies());
+    handleIncrementLike(postId);
     confetti({
       particleCount: 25,
       spread: 50,
@@ -703,15 +771,15 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       return;
     }
     if (!prayerText.trim()) return;
-    const currUser = StorageService.getCurrentUser();
+    const currUser = StorageService.getCurrentUser() || currentUser;
 
     StorageService.submitPrayer({
-      user_name: isAnonymous ? 'Anonymous Partner' : currUser.full_name,
+      user_name: isAnonymous ? 'Anonymous Partner' : (currUser?.full_name || 'Covenant Partner'),
       is_anonymous: isAnonymous,
       category: prayerCategory,
       request_text: prayerText.trim(),
       is_public: isPublic,
-      user_id: currUser.id
+      user_id: currUser?.id || 'usr_anonymous'
     });
 
     setPrayerList(StorageService.getPrayerRequests());
@@ -746,6 +814,12 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       return;
     }
 
+    // MANDATE: When user says join on a paid group, bill them via Paynow modal!
+    if (group.is_paid) {
+      setSelectedPaidGroupForBilling(group);
+      return;
+    }
+
     // Check if user was removed from group by admin
     const chatGrps = StorageService.getChatGroups();
     const targetChatGrp = chatGrps.find(g => g.id === group.id);
@@ -774,6 +848,25 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
         }
       }, 650);
     }, 950);
+  };
+
+  const handleDeleteGroup = (group: CommunityGroup) => {
+    const isDev = currentUser?.role === 'developer' || (currentUser?.phone ? arePhoneNumbersEqual(currentUser.phone, '0780699988') : false);
+    const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+    if (!isAdmin && !isDev) {
+      alert('Only Administrators and Developers have permissions to delete and dissolve groups.');
+      return;
+    }
+
+    const confirmMessage = group.is_paid
+      ? `Permanently delete and dissolve the Premium Paid Group "${group.name}" ($${group.price_usd || 150})? All member access and chat records will be purged.`
+      : `Permanently delete and dissolve "${group.name}"? All member records and group data will be purged.`;
+
+    if (window.confirm(confirmMessage)) {
+      const res = StorageService.deleteChatGroup(group.id);
+      setGroupList(StorageService.getGroups(currentUser?.id));
+      alert(res.message || `Group "${group.name}" has been permanently deleted.`);
+    }
   };
 
   const handleExitGroup = (group: CommunityGroup) => {
@@ -829,13 +922,20 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   };
 
   const isDeveloper = currentUser?.role === 'developer' || (currentUser?.phone ? arePhoneNumbersEqual(currentUser.phone, '0780699988') : false);
-  const visibleCommunityGroups = isDeveloper 
-    ? groupList 
-    : groupList.filter(g => g.joined);
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+  const isAdminOrDev = isAdmin || isDeveloper;
 
-  const filteredGroups = visibleCommunityGroups.filter(g => 
-    selectedGroupCategory === 'All' || g.category === selectedGroupCategory
-  );
+  // USER MANDATE: "Every Paid Group" Should Be available when a user opens the "cell group part"
+  // plus any groups user has joined, or all groups for admin/developer
+  const visibleCommunityGroups = isAdminOrDev 
+    ? groupList 
+    : groupList.filter(g => g.joined || g.is_paid);
+
+  const filteredGroups = visibleCommunityGroups.filter(g => {
+    if (selectedGroupCategory === 'All') return true;
+    if (selectedGroupCategory === '⭐ Paid & Pro') return g.is_paid;
+    return g.category === selectedGroupCategory;
+  });
 
   return (
     <div className="space-y-4 pb-20 max-w-3xl mx-auto px-0 sm:px-2 pt-1 w-full max-w-full">
@@ -1414,11 +1514,11 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                           allowFullScreen
                         />
                       ) : (
-                        <video
+                        <InViewAutoPlayVideo
                           src={post.video_url}
-                          controls
-                          className="w-full max-h-[460px] object-contain"
-                          playsInline
+                          poster={post.image_url}
+                          title={post.title}
+                          className="w-full max-h-[460px]"
                         />
                       )}
                     </div>
@@ -1516,31 +1616,37 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     </div>
 
                     {/* Likes Counter */}
-                    <div className="text-xs text-foreground">
+                    <div className="text-xs text-foreground flex items-center justify-between">
                       {likesCount === 0 ? (
-                        <p className="text-muted-foreground text-[11px]">
-                          0 likes • Be the first to like this
-                        </p>
-                      ) : (
                         <button
-                          onClick={() => setActiveLikesModalPost(post)}
-                          className="hover:underline text-left"
+                          onClick={(e) => handleIncrementLike(post.id, e)}
+                          className="text-muted-foreground text-[11px] hover:text-foreground cursor-pointer transition-colors active:scale-95"
+                          title="Click to like"
                         >
-                          {likesCount === 1 && firstLikerHandle ? (
-                            <span>
-                              Liked by <strong className="font-semibold text-foreground">{firstLikerHandle}</strong>
-                            </span>
-                          ) : firstLikerHandle ? (
-                            <span>
-                              Liked by <strong className="font-semibold text-foreground">{firstLikerHandle}</strong> and{' '}
-                              <strong className="font-semibold text-foreground">{likesCount - 1} others</strong>
-                            </span>
-                          ) : (
-                            <span>
-                              <strong className="font-semibold text-foreground">{likesCount}</strong> likes
-                            </span>
-                          )}
+                          0 likes • Be the first to like this
                         </button>
+                      ) : (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <button
+                            onClick={(e) => handleIncrementLike(post.id, e)}
+                            className="font-bold text-foreground hover:text-rose-500 cursor-pointer select-none active:scale-125 transition-transform inline-flex items-center gap-1"
+                            title="Press repeatedly to add likes in real-time"
+                          >
+                            <span className="text-rose-500">❤️</span>
+                            <strong>{likesCount}</strong> {likesCount === 1 ? 'like' : 'likes'}
+                          </button>
+
+                          {firstLikerHandle && (
+                            <button
+                              onClick={() => setActiveLikesModalPost(post)}
+                              className="text-muted-foreground hover:text-foreground text-[11px] hover:underline cursor-pointer"
+                              title="View likers"
+                            >
+                              • Liked by <strong className="font-semibold text-foreground">{firstLikerHandle}</strong>
+                              {likesCount > 1 ? ` and others` : ''}
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
 
@@ -1780,85 +1886,124 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
           </div>
 
           {/* Prayer Requests Feed */}
-          <div className="space-y-3">
-            {prayerList.map((prayer) => (
-              <div
-                key={prayer.id}
-                className="bg-card border border-border rounded-xl p-4 space-y-3 shadow-sm"
+          {prayerList.length === 0 ? (
+            <div className="text-center py-12 px-4 bg-card border border-border rounded-xl space-y-3 shadow-xs">
+              <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/25 flex items-center justify-center text-primary mx-auto">
+                <Heart className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-foreground">No Petitions on the Altar Yet</h4>
+                <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                  Be the first to submit a prayer request. Apostle Joe Daniels and our covenant intercessors stand in agreement with you.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  if (isGuest) {
+                    onRequireAuth();
+                    return;
+                  }
+                  setShowPrayerModal(true);
+                }}
+                className="px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold inline-flex items-center gap-1.5 shadow-xs"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-secondary border border-border flex items-center justify-center text-primary text-xs font-bold">
-                      {prayer.is_anonymous ? '?' : prayer.user_name[0]}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-xs sm:text-sm text-foreground">
-                          {prayer.is_anonymous ? 'Anonymous Covenant Partner' : prayer.user_name}
-                        </span>
-                        {prayer.is_answered && (
-                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
-                            ✓ Answered Prayer
+                <Plus className="w-4 h-4" />
+                <span>Submit Prayer Request</span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {prayerList.filter(Boolean).map((prayer) => {
+                const displayName = prayer.is_anonymous
+                  ? 'Anonymous Covenant Partner'
+                  : (prayer.user_name && prayer.user_name.trim() ? prayer.user_name.trim() : 'Covenant Partner');
+                const initialChar = prayer.is_anonymous
+                  ? '?'
+                  : (displayName.charAt(0).toUpperCase() || 'P');
+                const formattedDate = prayer.created_at
+                  ? new Date(prayer.created_at).toLocaleDateString()
+                  : 'Recent';
+
+                return (
+                  <div
+                    key={prayer.id || Math.random().toString()}
+                    className="bg-card border border-border rounded-xl p-4 space-y-3 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-secondary border border-border flex items-center justify-center text-primary text-xs font-bold shrink-0">
+                          {initialChar}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-xs sm:text-sm text-foreground">
+                              {displayName}
+                            </span>
+                            {prayer.is_answered && (
+                              <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
+                                ✓ Answered Prayer
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-primary font-medium">
+                            Tag: {prayer.category || 'General'}
                           </span>
-                        )}
+                        </div>
                       </div>
-                      <span className="text-[11px] text-primary font-medium">
-                        Tag: {prayer.category}
+
+                      <span className="text-[10px] text-muted-foreground">
+                        {formattedDate}
                       </span>
                     </div>
-                  </div>
 
-                  <span className="text-[10px] text-muted-foreground">
-                    {new Date(prayer.created_at).toLocaleDateString()}
-                  </span>
-                </div>
+                    {/* Request Body */}
+                    <p className="text-xs text-foreground/90 leading-relaxed bg-secondary/50 p-3 rounded-lg border border-border">
+                      "{prayer.request_text || 'Praying for breakthrough and divine favor.'}"
+                    </p>
 
-                {/* Request Body */}
-                <p className="text-xs text-foreground/90 leading-relaxed bg-secondary/50 p-3 rounded-lg border border-border">
-                  "{prayer.request_text}"
-                </p>
+                    {/* Apostle Joe Daniels Prophetic Note if present */}
+                    {prayer.apostle_notes && (
+                      <div className="bg-primary/10 border border-primary/25 rounded-lg p-2.5 text-xs text-foreground flex items-start gap-2">
+                        <Shield className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold text-primary">Apostle Joe Daniels' Decree:</span>{' '}
+                          {prayer.apostle_notes}
+                        </div>
+                      </div>
+                    )}
 
-                {/* Apostle Joe Daniels Prophetic Note if present */}
-                {prayer.apostle_notes && (
-                  <div className="bg-primary/10 border border-primary/25 rounded-lg p-2.5 text-xs text-foreground flex items-start gap-2">
-                    <Shield className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold text-primary">Apostle Joe Daniels' Decree:</span>{' '}
-                      {prayer.apostle_notes}
+                    {/* Actions Footer */}
+                    <div className="flex items-center justify-between pt-1 border-t border-border">
+                      <button
+                        id={`btn-pray-agree-${prayer.id}`}
+                        onClick={() => handlePrayerCountIncrement(prayer.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          prayer.user_prayed
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                        }`}
+                      >
+                        <Heart className={`w-3.5 h-3.5 ${prayer.user_prayed ? 'fill-current' : ''}`} />
+                        <span>{prayer.user_prayed ? 'Agreed in Prayer' : 'I Prayed For You'}</span>
+                        <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10 dark:bg-white/10">
+                          {prayer.prayer_count || 1}
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => handleSharePrayerWhatsApp(prayer)}
+                        className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 hover:opacity-80 font-semibold"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        <span>Share to Cell</span>
+                      </button>
                     </div>
+
                   </div>
-                )}
-
-                {/* Actions Footer */}
-                <div className="flex items-center justify-between pt-1 border-t border-border">
-                  <button
-                    id={`btn-pray-agree-${prayer.id}`}
-                    onClick={() => handlePrayerCountIncrement(prayer.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      prayer.user_prayed
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                    }`}
-                  >
-                    <Heart className={`w-3.5 h-3.5 ${prayer.user_prayed ? 'fill-current' : ''}`} />
-                    <span>{prayer.user_prayed ? 'Agreed in Prayer' : 'I Prayed For You'}</span>
-                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10 dark:bg-white/10">
-                      {prayer.prayer_count}
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => handleSharePrayerWhatsApp(prayer)}
-                    className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 hover:opacity-80 font-semibold"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    <span>Share to Cell</span>
-                  </button>
-                </div>
-
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
         </div>
       )}
@@ -1888,7 +2033,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
         ) : (
         <div className="space-y-4">
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-            {['All', 'Location', 'Youth', 'Business', 'Diaspora'].map(cat => (
+            {['All', '⭐ Paid & Pro', 'School', 'Location', 'Youth', 'Business', 'Diaspora'].map(cat => (
               <button
                 key={cat}
                 onClick={() => setSelectedGroupCategory(cat)}
@@ -1907,25 +2052,52 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             {filteredGroups.map(group => (
               <div
                 key={group.id}
-                className="bg-card border border-border rounded-xl p-4 space-y-3 shadow-sm flex flex-col justify-between w-full min-w-0 overflow-hidden box-border"
+                className={cn(
+                  "rounded-xl p-4 space-y-3 flex flex-col justify-between w-full min-w-0 overflow-hidden box-border transition-all duration-300 relative",
+                  group.is_paid
+                    ? "bg-gradient-to-br from-amber-500/15 via-card to-amber-500/5 border-2 border-amber-400 dark:border-amber-400/90 shadow-[0_0_24px_rgba(245,158,11,0.28)] ring-1 ring-amber-400/50"
+                    : "bg-card border border-border shadow-sm"
+                )}
               >
+                {/* Shining Premium Gold Banner for Paid Groups */}
+                {group.is_paid && (
+                  <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500 text-slate-950 shadow-md font-black -mt-1 -mx-1 mb-1 animate-pulse">
+                    <span className="flex items-center gap-1.5 text-[10px] tracking-wider uppercase">
+                      <Crown className="w-3.5 h-3.5 fill-current" />
+                      <span>PREMIUM CELL GROUP</span>
+                    </span>
+                    <span className="text-xs bg-slate-950/15 px-2 py-0.5 rounded-md font-black">
+                      ${group.price_usd || 150} USD / {group.duration_months || 3} mo
+                    </span>
+                  </div>
+                )}
+
                 <div className="min-w-0">
                   <div className="flex items-center justify-between mb-1.5 min-w-0">
-                    <span className="px-2 py-0.5 rounded-md bg-primary/15 text-primary text-[10px] font-bold shrink-0">
-                      {group.category}
+                    <span className={cn(
+                      "px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 flex items-center gap-1",
+                      group.is_paid
+                        ? "bg-amber-400/20 text-amber-600 dark:text-amber-400 border border-amber-400/40"
+                        : "bg-primary/15 text-primary"
+                    )}>
+                      {group.is_paid && <Sparkles className="w-3 h-3 fill-current text-amber-500" />}
+                      <span>{group.category}</span>
                     </span>
                     <span className="text-[11px] text-muted-foreground shrink-0">{group.member_count} Members</span>
                   </div>
-                  <h4 className="font-bold text-sm text-foreground mb-1 break-words line-clamp-2 min-w-0">{group.name}</h4>
+                  <h4 className="font-bold text-sm text-foreground mb-1 break-words line-clamp-2 min-w-0 flex items-center gap-1.5">
+                    {group.is_paid && <Crown className="w-3.5 h-3.5 text-amber-500 fill-current shrink-0" />}
+                    <span>{group.name}</span>
+                  </h4>
                   <p className="text-xs text-muted-foreground mb-2 line-clamp-3 break-words">{group.description}</p>
                   
                   <div className="space-y-1 text-xs text-muted-foreground min-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <MapPin className={cn("w-3.5 h-3.5 shrink-0", group.is_paid ? "text-amber-500" : "text-primary")} />
                       <span className="text-foreground truncate">{group.location}</span>
                     </div>
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <Clock className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <Clock className={cn("w-3.5 h-3.5 shrink-0", group.is_paid ? "text-amber-500" : "text-primary")} />
                       <span className="text-foreground truncate">{group.meeting_time}</span>
                     </div>
                   </div>
@@ -1936,6 +2108,43 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     Leader: <strong className="text-foreground truncate">{group.leader_name}</strong>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Admin/Developer Delete Button - Works on even paid groups */}
+                    {isAdminOrDev && (
+                      <button
+                        id={`btn-delete-group-${group.id}`}
+                        onClick={() => handleDeleteGroup(group)}
+                        className="p-1.5 rounded-lg text-rose-500 hover:text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all cursor-pointer shrink-0"
+                        title={`Delete & Dissolve ${group.is_paid ? 'Paid ' : ''}Group`}
+                        aria-label={`Delete ${group.name}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
+                    {(currentUser?.role === 'super_admin' || currentUser?.role === 'developer') && (
+                      <button
+                        id={`btn-schedule-event-${group.id}`}
+                        onClick={() => {
+                          setEditingEvent(null);
+                          setEventForm({
+                            title: `${group.name} - Special Gathering`,
+                            date: group.meeting_time || 'Next Scheduled Gathering',
+                            time: '18:00 - 20:00 CAT',
+                            location: group.location || 'Gateway Cathedral, Harare',
+                            description: `Official gathering for ${group.name}. Coordinated by ${group.leader_name}.`,
+                            banner_url: group.image_url || '/assets/apostle_joe_daniels_preach.jpg',
+                            category: group.category === 'School' ? 'Seminar' : 'Conference',
+                            speaker: group.leader_name || 'Apostle Joe Daniels'
+                          });
+                          setShowEventModal(true);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-secondary hover:bg-secondary/80 text-foreground border border-border flex items-center gap-1 transition-all"
+                        title="Schedule Event for this Group"
+                      >
+                        <Calendar className="w-3.5 h-3.5 text-primary" />
+                        <span className="hidden sm:inline">Event</span>
+                      </button>
+                    )}
                     {group.joined ? (
                       <>
                         <button
@@ -1945,11 +2154,16 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                               onOpenGroupChat(group.id);
                             }
                           }}
-                          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all flex items-center gap-1"
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1",
+                            group.is_paid 
+                              ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/30"
+                              : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25"
+                          )}
                           title="Open Group Chat"
                         >
                           <MessageCircle className="w-3.5 h-3.5" />
-                          <span>Open Chat</span>
+                          <span>{group.is_paid ? 'Pro Chat' : 'Open Chat'}</span>
                         </button>
                         <button
                           id={`btn-exit-group-${group.id}`}
@@ -1965,10 +2179,24 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                       <button
                         id={`btn-join-group-${group.id}`}
                         onClick={() => handleInitiateJoinGroup(group)}
-                        className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all flex items-center gap-1"
+                        className={cn(
+                          "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm",
+                          group.is_paid
+                            ? "bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:brightness-110 text-slate-950 font-black shadow-[0_0_14px_rgba(245,158,11,0.4)] border border-amber-300"
+                            : "bg-primary hover:bg-primary/90 text-primary-foreground"
+                        )}
                       >
-                        <UserPlus className="w-3.5 h-3.5" />
-                        <span>Join Group</span>
+                        {group.is_paid ? (
+                          <>
+                            <Crown className="w-3.5 h-3.5 fill-current" />
+                            <span>Join • ${group.price_usd || 150}</span>
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="w-3.5 h-3.5" />
+                            <span>Join Group</span>
+                          </>
+                        )}
                       </button>
                     )}
                   </div>
@@ -2088,6 +2316,42 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       {/* 5. SUB-TAB: EVENTS & SERVICES */}
       {activeSubTab === 'events' && (
         <div className="space-y-4">
+          {/* Admin & Developer Event Governance Header */}
+          {(currentUser?.role === 'super_admin' || currentUser?.role === 'developer') && (
+            <div className="p-3.5 sm:p-4 rounded-xl bg-primary/10 border border-primary/25 flex items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-foreground">Church & School Events Management</h4>
+                  <p className="text-[11px] text-muted-foreground">Admin / Developer controls: schedule, update, or remove church & mentorship events.</p>
+                </div>
+              </div>
+              <button
+                id="btn-create-church-event"
+                onClick={() => {
+                  setEditingEvent(null);
+                  setEventForm({
+                    title: '',
+                    date: '',
+                    time: '',
+                    location: 'Fantasyland Cinema Number 3 / Samora Machel Ave West, Harare',
+                    description: '',
+                    banner_url: '/assets/apostle_joe_daniels_preach.jpg',
+                    category: 'Conference',
+                    speaker: 'Apostle Joe Daniels'
+                  });
+                  setShowEventModal(true);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Create Event</span>
+              </button>
+            </div>
+          )}
+
           {eventList.map(event => {
             const countdown = getEventCountdown(event, currentTime);
             const isPermanent = event.is_permanent || event.id === 'evt_sunday' || event.id === 'evt_wednesday';
@@ -2169,6 +2433,50 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     </span>
 
                     <div className="flex flex-wrap items-center gap-2">
+                      {/* Admin/Dev Edit & Delete actions */}
+                      {(currentUser?.role === 'super_admin' || currentUser?.role === 'developer') && (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            id={`btn-edit-event-${event.id}`}
+                            onClick={() => {
+                              setEditingEvent(event);
+                              setEventForm({
+                                title: event.title,
+                                date: event.date,
+                                time: event.time,
+                                location: event.location,
+                                description: event.description,
+                                banner_url: event.banner_url,
+                                category: event.category,
+                                speaker: event.speaker
+                              });
+                              setShowEventModal(true);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-secondary hover:bg-secondary/80 text-foreground border border-border flex items-center gap-1 transition-all"
+                            title="Edit Event"
+                          >
+                            <FileEdit className="w-3 h-3 text-primary" />
+                            <span>Edit</span>
+                          </button>
+                          {!isPermanent && (
+                            <button
+                              id={`btn-delete-event-${event.id}`}
+                              onClick={() => {
+                                if (window.confirm(`Are you sure you want to delete the event "${event.title}"?`)) {
+                                  StorageService.deleteEvent(event.id);
+                                  setEventList(StorageService.getEvents());
+                                }
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 flex items-center gap-1 transition-all"
+                              title="Delete Event"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Delete</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+
                       {/* For the 2 permanent events (Sunday & Wednesday): Request Location and Go Virtual */}
                       {isPermanent && (
                         <>
@@ -3013,6 +3321,196 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
           onUpdatePage={(updated) => {
             setSelectedViewChurchPage(updated);
             setTestimonyList(StorageService.getTestimonies());
+          }}
+        />
+      )}
+
+      {/* EVENT CREATION & EDITING MODAL (Admin & Dev Governance) */}
+      {showEventModal && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-card border border-border rounded-2xl p-5 sm:p-6 w-full max-w-lg space-y-4 shadow-2xl my-auto">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base text-foreground font-serif-church">
+                    {editingEvent ? 'Edit Church Event' : 'Schedule Church / Mentorship Event'}
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground">Admin & Developer Governance</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowEventModal(false);
+                  setEditingEvent(null);
+                }}
+                className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-secondary transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEvent} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-semibold text-foreground mb-1">Event Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={eventForm.title}
+                  onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
+                  placeholder="e.g. International School of Mentorship - Masterclass"
+                  className="w-full bg-background border border-border rounded-lg p-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">Category</label>
+                  <select
+                    value={eventForm.category}
+                    onChange={(e) => setEventForm({ ...eventForm, category: e.target.value as any })}
+                    className="w-full bg-background border border-border rounded-lg p-2.5 text-foreground focus:outline-none focus:border-primary"
+                  >
+                    <option value="Conference">Conference</option>
+                    <option value="Seminar">Seminar</option>
+                    <option value="School of Mentorship">School of Mentorship</option>
+                    <option value="Sunday Service">Sunday Service</option>
+                    <option value="Wednesday Service">Wednesday Service</option>
+                    <option value="Youth Ignite">Youth Ignite</option>
+                    <option value="All-Night Prayer">All-Night Prayer</option>
+                    <option value="Cell Rally">Cell Rally</option>
+                    <option value="Fellowship">Fellowship</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">Minister / Speaker</label>
+                  <input
+                    type="text"
+                    value={eventForm.speaker}
+                    onChange={(e) => setEventForm({ ...eventForm, speaker: e.target.value })}
+                    placeholder="Apostle Joe Daniels"
+                    className="w-full bg-background border border-border rounded-lg p-2.5 text-foreground focus:outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">Date</label>
+                  <input
+                    type="text"
+                    value={eventForm.date}
+                    onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
+                    placeholder="e.g. Every Saturday / 24 Oct 2026"
+                    className="w-full bg-background border border-border rounded-lg p-2.5 text-foreground focus:outline-none focus:border-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">Time</label>
+                  <input
+                    type="text"
+                    value={eventForm.time}
+                    onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
+                    placeholder="e.g. 18:00 - 20:00 CAT"
+                    className="w-full bg-background border border-border rounded-lg p-2.5 text-foreground focus:outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-foreground mb-1">Location / Venue</label>
+                <input
+                  type="text"
+                  value={eventForm.location}
+                  onChange={(e) => setEventForm({ ...eventForm, location: e.target.value })}
+                  placeholder="e.g. Fantasyland Cinema Number 3 / Samora Machel Ave West, Harare"
+                  className="w-full bg-background border border-border rounded-lg p-2.5 text-foreground focus:outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-foreground mb-1">Banner Poster Image</label>
+                <div className="flex gap-2 mb-2 overflow-x-auto pb-1">
+                  {[
+                    { label: 'Preach', url: '/assets/apostle_joe_daniels_preach.jpg' },
+                    { label: 'Mentorship/Grad', url: '/assets/apostle_grad_dark_1788354117156.jpg' },
+                    { label: 'Podcast', url: '/assets/apostle_joe_daniels_podcast.jpg' },
+                    { label: 'Cathedral Main', url: '/assets/apostle_joe_daniels_main.jpg' }
+                  ].map((preset) => (
+                    <button
+                      key={preset.url}
+                      type="button"
+                      onClick={() => setEventForm({ ...eventForm, banner_url: preset.url })}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-semibold shrink-0 transition-all border ${
+                        eventForm.banner_url === preset.url
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-secondary border-border text-foreground hover:bg-secondary/80'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={eventForm.banner_url}
+                  onChange={(e) => setEventForm({ ...eventForm, banner_url: e.target.value })}
+                  placeholder="Image URL..."
+                  className="w-full bg-background border border-border rounded-lg p-2 text-foreground font-mono text-[11px] focus:outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-foreground mb-1">Description / Key Focus</label>
+                <textarea
+                  rows={3}
+                  value={eventForm.description}
+                  onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
+                  placeholder="Details about this gathering, mentorship topic, or service order..."
+                  className="w-full bg-background border border-border rounded-lg p-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEventModal(false);
+                    setEditingEvent(null);
+                  }}
+                  className="px-4 py-2 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-sm transition-all"
+                >
+                  {editingEvent ? 'Update Event' : 'Save & Publish Event'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Paynow Billing Modal for Paid Cell Groups */}
+      {selectedPaidGroupForBilling && (
+        <PaidGroupBillingModal
+          isOpen={!!selectedPaidGroupForBilling}
+          onClose={() => setSelectedPaidGroupForBilling(null)}
+          group={selectedPaidGroupForBilling}
+          currentUser={currentUser}
+          onJoinSuccess={(groupId) => {
+            setSelectedPaidGroupForBilling(null);
+            setGroupList(StorageService.getGroups(currentUser?.id));
+            if (onOpenGroupChat) {
+              onOpenGroupChat(groupId);
+            }
           }}
         />
       )}

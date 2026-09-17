@@ -122,7 +122,7 @@ export const ProfileBadgesModal: React.FC<ProfileBadgesModalProps> = ({
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-primary font-bold text-2xl">
-                    {currentUser.full_name[0] || 'G'}
+                    {currentUser?.full_name?.[0] || 'G'}
                   </div>
                 )}
               </div>
@@ -268,7 +268,7 @@ export const ProfileBadgesModal: React.FC<ProfileBadgesModalProps> = ({
                             <img src={rec.avatar_url} alt={rec.full_name} className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-primary font-semibold text-xs">
-                              {rec.full_name[0]}
+                              {rec.full_name?.[0] || 'U'}
                             </div>
                           )}
                         </div>
@@ -317,7 +317,7 @@ export const ProfileBadgesModal: React.FC<ProfileBadgesModalProps> = ({
                             <img src={user.avatar_url} alt={user.full_name} className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-primary font-semibold text-sm">
-                              {user.full_name[0]}
+                              {user.full_name?.[0] || 'U'}
                             </div>
                           )}
                         </div>
@@ -442,7 +442,7 @@ export const ProfileBadgesModal: React.FC<ProfileBadgesModalProps> = ({
                         <img src={follower.avatar_url} alt={follower.full_name} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-primary font-semibold text-sm">
-                              {follower.full_name[0]}
+                              {follower.full_name?.[0] || 'U'}
                         </div>
                       )}
                     </div>

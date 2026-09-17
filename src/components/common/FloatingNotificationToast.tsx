@@ -255,12 +255,12 @@ export const FloatingNotificationToast: React.FC<FloatingNotificationToastProps>
   return (
     <aside 
       aria-label="New Alert"
-      className="fixed top-18 right-3 sm:right-6 z-50 max-w-sm w-[calc(100vw-24px)] animate-in slide-in-from-top-4 fade-in duration-300"
+      className="fixed top-14 sm:top-16 left-1/2 -translate-x-1/2 z-50 max-w-[360px] w-[calc(100vw-32px)] animate-in slide-in-from-top-3 fade-in duration-200"
       onMouseEnter={() => {
         if (timerRef.current) clearTimeout(timerRef.current);
       }}
       onMouseLeave={() => {
-        timerRef.current = setTimeout(() => setIsVisible(false), 4000);
+        timerRef.current = setTimeout(() => setIsVisible(false), 3500);
       }}
     >
       <div 
@@ -274,67 +274,45 @@ export const FloatingNotificationToast: React.FC<FloatingNotificationToastProps>
             handleRedirect();
           }
         }}
-        className="group relative bg-card border border-primary/40 hover:border-primary text-foreground rounded-2xl p-3.5 shadow-xl backdrop-blur-md cursor-pointer transition-all hover:scale-[1.02] flex items-start gap-3 text-left"
+        className="group relative bg-card/95 border border-border hover:border-primary/60 text-foreground rounded-full pl-2 pr-3 py-1.5 shadow-lg backdrop-blur-md cursor-pointer transition-all hover:scale-[1.01] active:scale-98 flex items-center gap-2.5 text-left"
       >
-        {/* Glow accent */}
-        <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-primary animate-ping" />
-
-        {/* Icon / Avatar */}
-        <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shrink-0 shadow-xs">
+        {/* Avatar / Icon */}
+        <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0 overflow-hidden">
           {currentNotif.actor_avatar ? (
             <img 
               src={currentNotif.actor_avatar} 
               alt={currentNotif.actor_name || 'User'} 
-              className="w-10 h-10 rounded-xl object-cover"
+              className="w-full h-full object-cover"
               onError={(e) => {
-                // fallback to icon if image fails
                 (e.currentTarget as HTMLElement).style.display = 'none';
               }}
             />
           ) : (
-            <Icon className="w-5 h-5" />
+            <Icon className="w-4 h-4 text-primary" />
           )}
         </div>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex items-center justify-between gap-1">
-            <span className={cn(
-              "text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded",
-              currentNotif.target_type === 'group'
-                ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
-                : "bg-primary/10 text-primary border border-primary/20"
-            )}>
-              {currentNotif.target_type === 'group' ? 'Group Message' : 'New Notification'}
+        {/* 1-line Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-foreground truncate">
+              {currentNotif.title}
             </span>
-            <button
-              id="btn-dismiss-floating-toast"
-              onClick={handleDismiss}
-              className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-              title="Dismiss"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
           </div>
-
-          <h4 className="text-xs font-semibold text-foreground truncate group-hover:text-primary transition-colors">
-            {currentNotif.title}
-          </h4>
-
-          <p className="text-xs text-muted-foreground line-clamp-2 leading-snug">
+          <p className="text-[11px] text-muted-foreground truncate leading-tight">
             {currentNotif.message}
           </p>
-
-          <div className="pt-1 flex items-center justify-between">
-            <span className="text-[10px] text-muted-foreground">
-              Tap float to redirect
-            </span>
-            <div className="flex items-center gap-1 text-[11px] text-primary font-semibold group-hover:translate-x-1 transition-transform">
-              <span>{actionLabel}</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </div>
-          </div>
         </div>
+
+        <button
+          id="btn-dismiss-floating-toast"
+          onClick={handleDismiss}
+          className="p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shrink-0"
+          title="Dismiss"
+          aria-label="Dismiss"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
       </div>
     </aside>
   );

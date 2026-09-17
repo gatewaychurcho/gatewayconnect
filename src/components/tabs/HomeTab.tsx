@@ -31,6 +31,7 @@ import {
   MoreHorizontal,
   Plus,
   Lock,
+  Crown,
   Music,
   Film
 } from 'lucide-react';
@@ -40,6 +41,7 @@ import { StorageService } from '../../services/storageService';
 import { MOCK_PARTNER_TICKERS } from '../../data/mockData';
 import { VerifiedBadge } from '../common/VerifiedBadge';
 import { PaidBookingModal } from '../modals/PaidBookingModal';
+import { UpgradeModal } from '../modals/UpgradeModal';
 import { FacebookStreamPlayer } from '../common/FacebookStreamPlayer';
 import { cn } from '../../lib/utils';
 import { liveSyncService } from '../../services/liveSyncService';
@@ -157,6 +159,25 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const [userReacted, setUserReacted] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedSeries, setSelectedSeries] = useState<string>('All');
+  const [showBadgeUpgradeModal, setShowBadgeUpgradeModal] = useState<boolean>(false);
+  const [currentUserState, setCurrentUserState] = useState<User>(() => currentUser || StorageService.getCurrentUser() || ({} as User));
+
+  useEffect(() => {
+    const handleUserUpdate = () => {
+      const u = StorageService.getCurrentUser();
+      if (u) setCurrentUserState(u);
+    };
+    window.addEventListener('gcz_user_updated', handleUserUpdate);
+    window.addEventListener('gcz_user_profile_updated', handleUserUpdate);
+    return () => {
+      window.removeEventListener('gcz_user_updated', handleUserUpdate);
+      window.removeEventListener('gcz_user_profile_updated', handleUserUpdate);
+    };
+  }, []);
+
+  const activeUser = currentUserState?.id ? currentUserState : currentUser;
+  const isPremiumActive = StorageService.isUserPremiumActive(activeUser);
+  const badgeStatus = StorageService.getBadgeStatus(activeUser);
 
   // Instagram-style Home state
   const [activeStory, setActiveStory] = useState<HomeStory | null>(null);
@@ -335,27 +356,22 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       onRequireAuth();
       return;
     }
-    const alreadyReacted = userReacted[emoji];
+    // Allow continuous repeated taps like Facebook Live
     setActiveReactionCount(prev => ({
       ...prev,
-      [emoji]: (prev[emoji] || 0) + (alreadyReacted ? -1 : 1)
+      [emoji]: (prev[emoji] || 0) + 1
     }));
     setUserReacted(prev => ({
       ...prev,
-      [emoji]: !alreadyReacted
+      [emoji]: true
     }));
-    if (!alreadyReacted) {
-      confetti({
-        particleCount: 15,
-        spread: 35,
-        origin: { y: 0.7, x: 0.8 }
-      });
-      // Broadcast reaction to all other connected viewers
-      liveSyncService.broadcastEvent({
-        type: 'stream_reaction',
-        payload: { emoji, user: currentUser.full_name }
-      });
-    }
+    
+    // Broadcast reaction across live stream so floating bubbles rise up
+    const reactionType = emoji === '❤️' ? 'love' : emoji === '🙏' ? 'amen' : emoji === '🔥' ? 'fire' : 'like';
+    liveSyncService.broadcastEvent({
+      type: 'stream_reaction',
+      payload: { emoji, reactionType, user: currentUser.full_name }
+    });
   };
 
   const handleToggleComments = () => {
@@ -420,16 +436,19 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   };
 
   const handleTogglePostHeart = () => {
-    const res = StorageService.toggleBroadcastLike(currentUser?.id);
-    setIsPostLiked(res.isLiked);
+    // Like and broadcast reaction in real-time
+    const res = StorageService.incrementBroadcastLike(currentUser?.id);
+    setIsPostLiked(true);
     setBroadcastLikes(StorageService.getBroadcastLikes());
     setBroadcastLikers(res.likerUsers);
-    if (res.isLiked) {
-      setHeartAnim(true);
-      setTimeout(() => setHeartAnim(false), 800);
-      confetti({ particleCount: 20, spread: 50 });
-      showToast('Amen! You liked this apostolic broadcast');
-    }
+    setHeartAnim(true);
+    setTimeout(() => setHeartAnim(false), 500);
+
+    // Broadcast reaction across stream
+    liveSyncService.broadcastEvent({
+      type: 'stream_reaction',
+      payload: { emoji: '❤️', reactionType: 'love', user: currentUser?.full_name || 'Believer' }
+    });
   };
 
   const handleToggleSaveSermon = () => {
@@ -704,12 +723,9 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         </div>
       </div>
 
-      {/* 2. Hero Featured Sermon & Sermon Player Card with Platform Dynamic Theme */}
+      {/* 2. Hero Featured Sermon & Sermon Player Card */}
       <div 
-        className={cn(
-          'backdrop-blur-md rounded-2xl border overflow-hidden relative shadow-md transition-all bg-card border-border',
-          isFacebook ? 'border-blue-500/30' : 'border-border'
-        )}
+        className="rounded-2xl overflow-hidden relative transition-all duration-200 bg-card border border-border shadow-xs"
       >
         {/* Instagram Post Header */}
         <div className="px-3.5 py-2.5 flex items-center justify-between border-b border-border bg-card">
@@ -921,6 +937,45 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             </div>
           )}
 
+          {/* Locked Premium Sermon Overlay on Stream Player */}
+          {overridePlayingVideo && !isPremiumActive && (
+            <div className="absolute inset-0 z-30 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center text-white animate-in fade-in">
+              <div className="w-12 h-12 rounded-full bg-amber-500/20 border border-amber-400/60 flex items-center justify-center text-amber-400 mb-2.5 shadow-lg">
+                <Crown className="w-6 h-6 fill-current" />
+              </div>
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[11px] font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Crown className="w-3.5 h-3.5 fill-current text-amber-400" />
+                Buy Pro to Unlock
+              </span>
+              <h4 className="text-sm sm:text-base font-bold max-w-md line-clamp-1 mb-1">
+                {overridePlayingVideo.title}
+              </h4>
+              <p className="text-xs text-white/75 max-w-sm mb-4 leading-relaxed">
+                Archived sermon messages and downloads require Pro membership.
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBadgeUpgradeModal(true)}
+                  className="px-4 py-2 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 font-black text-xs shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Crown className="w-3.5 h-3.5 fill-current" />
+                  <span>Buy Pro</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOverridePlayingVideo(null);
+                    StorageService.setOverridePlayingVideo(null);
+                  }}
+                  className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold border border-white/20 transition-all cursor-pointer"
+                >
+                  Return to Live
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Facebook Live External Link Pill (non-blocking) */}
           {streamEmbedInfo.isFacebook && (
             <div className="absolute top-2 right-2 z-20 flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-blue-500/40">
@@ -972,9 +1027,9 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             </div>
           )}
 
-          {/* Live Pouring Comments (Pop up for 1 second like TikTok / Instagram Live) */}
+          {/* Live Pouring Comments (Pop up on screen only during live, real comments only) */}
           <LivePouringComments 
-            isLive={liveStreamStatus.isLive} 
+            isLive={liveStreamStatus.isLive && !overridePlayingVideo} 
             className="absolute bottom-12 left-3 sm:left-4 z-20 max-w-[260px] sm:max-w-xs" 
           />
 
@@ -1638,7 +1693,11 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               )}
 
               {/* Likes Counter (Real registered believers) */}
-              <div className="text-xs font-semibold text-foreground pt-1 flex items-center gap-1.5">
+              <div 
+                onClick={handleTogglePostHeart}
+                className="text-xs font-semibold text-foreground pt-1 flex items-center gap-1.5 cursor-pointer select-none active:scale-95 transition-transform"
+                title="Tap to like"
+              >
                 {broadcastLikers.length > 0 ? (
                   <>
                     <div className="flex -space-x-1.5 overflow-hidden">
@@ -1866,11 +1925,25 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h3 className="text-base sm:text-xl font-bold text-foreground">
-              Sermon Archive & Messages
+            <h3 className="text-base sm:text-xl font-bold text-foreground flex items-center gap-2">
+              <span>Sermon Archive & Messages</span>
+              {!isPremiumActive ? (
+                <button
+                  onClick={() => setShowBadgeUpgradeModal(true)}
+                  className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-400/40 flex items-center gap-1 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+                >
+                  <Crown className="w-3 h-3 fill-current" />
+                  <span>Buy Pro</span>
+                </button>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  <span>Unlocked</span>
+                </span>
+              )}
             </h3>
             <p className="text-xs text-muted-foreground">
-              Download messages for offline playback on 2G/3G connections.
+              Prophetic teachings, apostolic archives, and offline playback.
             </p>
           </div>
 
@@ -1893,6 +1966,50 @@ export const HomeTab: React.FC<HomeTabProps> = ({
           </div>
         </div>
 
+        {/* Premium Verification Status Banner */}
+        {!isPremiumActive ? (
+          <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/15 border border-amber-400/50 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0 border border-amber-400/50 shadow-sm">
+                <Crown className="w-4 h-4 fill-current" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-foreground">
+                  <span>Pro Video Messages</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-400/25 text-amber-600 dark:text-amber-400 border border-amber-400/40">
+                    Pro
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
+                  Unlock all sermon archives and offline downloads with Pro.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowBadgeUpgradeModal(true)}
+              className="px-4 py-2 rounded-full bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 font-bold text-xs shadow-sm hover:brightness-110 active:scale-95 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
+            >
+              <Crown className="w-3.5 h-3.5 fill-current" />
+              <span>Buy Pro</span>
+            </button>
+          </div>
+        ) : (
+          <div className="px-3.5 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <Crown className="w-4 h-4 text-emerald-500 fill-current" />
+              <span className="font-semibold text-foreground">
+                Sermon Archive Unlocked • {badgeStatus.badgeType ? `${badgeStatus.badgeType.toUpperCase()} Badge Active` : 'Verified Partner Active'}
+              </span>
+            </div>
+            {badgeStatus.expiresAt && (
+              <span className="text-[11px] text-muted-foreground">
+                Expires: {new Date(badgeStatus.expiresAt).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Sermons Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {filteredSermons.map((sermon) => {
@@ -1903,13 +2020,17 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               <div
                 key={sermon.id}
                 className={cn(
-                  'group rounded-xl border bg-card text-card-foreground shadow-xs transition-all flex flex-col justify-between overflow-hidden hover:shadow-md hover:border-primary/50',
-                  isCurrent ? 'border-primary ring-1 ring-primary/30' : 'border-border'
+                  'group rounded-xl border bg-card text-card-foreground shadow-xs transition-all flex flex-col justify-between overflow-hidden hover:shadow-md hover:border-border/80',
+                  isCurrent ? 'border-primary' : 'border-border'
                 )}
               >
                 <div className="p-3 sm:p-4 space-y-2.5">
                   <div 
                     onClick={() => {
+                      if (!isPremiumActive) {
+                        setShowBadgeUpgradeModal(true);
+                        return;
+                      }
                       setActiveSermon(sermon);
                       setOverridePlayingVideo({
                         id: sermon.id,
@@ -1926,24 +2047,49 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       loading="lazy"
                     />
-                    <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 flex items-center justify-center transition-colors">
-                      <div className="w-11 h-11 rounded-full bg-background/80 backdrop-blur-md text-foreground flex items-center justify-center shadow-md group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
-                        <Play className="w-4.5 h-4.5 fill-current ml-0.5" />
-                      </div>
+
+                    {/* Subtle Golden Crown Badge representing Pro */}
+                    <div 
+                      className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-xs border border-amber-400/40 text-amber-400 text-[10px] font-bold tracking-wider uppercase shadow-xs z-15"
+                      title="Pro Sermon Video"
+                    >
+                      <Crown className="w-3 h-3 fill-current text-amber-400" />
+                      <span>PRO</span>
                     </div>
+
+                    {/* Premium Lock Overlay for Non-Premium / Expired Users */}
+                    {!isPremiumActive ? (
+                      <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px] flex flex-col items-center justify-center p-3 text-center transition-all group-hover:bg-slate-950/80 z-10">
+                        <div className="w-9 h-9 rounded-full bg-amber-500/20 border border-amber-400/50 flex items-center justify-center mb-1 text-amber-400 shadow-xs">
+                          <Crown className="w-4 h-4 fill-current" />
+                        </div>
+                        <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1">
+                          Buy Pro
+                        </span>
+                        <span className="text-[10px] text-muted-foreground mt-0.5">
+                          Tap to unlock sermon archive
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="absolute inset-0 bg-black/30 group-hover:bg-black/15 flex items-center justify-center transition-colors">
+                        <div className="w-10 h-10 rounded-full bg-background/90 backdrop-blur-xs text-foreground flex items-center justify-center shadow-md group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-200">
+                          <Play className="w-4 h-4 fill-current ml-0.5" />
+                        </div>
+                      </div>
+                    )}
                     
                     {/* Duration badge */}
-                    <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-background/85 backdrop-blur-md text-[10px] font-semibold text-foreground border border-border">
+                    <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-background/85 backdrop-blur-md text-[10px] font-semibold text-foreground border border-border z-15">
                       {sermon.duration}
                     </span>
 
                     {/* Offline or Active Playing badge */}
                     {overridePlayingVideo?.id === sermon.id ? (
-                      <span className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary text-[10px] font-bold text-primary-foreground shadow-xs animate-pulse">
+                      <span className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary text-[10px] font-bold text-primary-foreground shadow-xs animate-pulse z-15">
                         ▶ NOW PLAYING
                       </span>
                     ) : isDownloaded ? (
-                      <span className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/90 text-[10px] font-bold text-white shadow-xs">
+                      <span className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/90 text-[10px] font-bold text-white shadow-xs z-15">
                         <Check className="w-3 h-3" />
                         Downloaded
                       </span>
@@ -1954,7 +2100,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                     <span className="text-[10px] font-bold text-primary uppercase tracking-wider">
                       {sermon.series}
                     </span>
-                    <h4 className="text-xs sm:text-sm font-semibold text-foreground line-clamp-2 mt-0.5">
+                    <h4 className="text-xs sm:text-sm font-semibold text-foreground line-clamp-2 mt-1">
                       {sermon.title}
                     </h4>
                     <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
@@ -1964,9 +2110,13 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 </div>
 
                 {/* Card Action Footer */}
-                <div className="px-4 py-2.5 bg-secondary/40 border-t border-border flex items-center justify-between">
+                <div className="px-4 py-2.5 bg-secondary/30 border-t border-border flex items-center justify-between">
                   <button
                     onClick={() => {
+                      if (!isPremiumActive) {
+                        setShowBadgeUpgradeModal(true);
+                        return;
+                      }
                       setActiveSermon(sermon);
                       setOverridePlayingVideo({
                         id: sermon.id,
@@ -1981,29 +2131,52 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
                     className={cn(
-                      "p-2 rounded-lg transition-all cursor-pointer flex items-center justify-center",
-                      overridePlayingVideo?.id === sermon.id
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "bg-secondary hover:bg-secondary/80 text-primary border border-border"
+                      "px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 text-xs font-semibold",
+                      !isPremiumActive
+                        ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-400/30"
+                        : overridePlayingVideo?.id === sermon.id
+                          ? "bg-primary text-primary-foreground shadow-xs"
+                          : "bg-secondary hover:bg-secondary/80 text-foreground border border-border"
                     )}
-                    title={overridePlayingVideo?.id === sermon.id ? "Now Playing" : `Play ${sermon.title}`}
-                    aria-label={overridePlayingVideo?.id === sermon.id ? "Now Playing" : `Play ${sermon.title}`}
+                    title={!isPremiumActive ? "Unlock with Kingdom Badge" : overridePlayingVideo?.id === sermon.id ? "Now Playing" : `Play ${sermon.title}`}
+                    aria-label={!isPremiumActive ? "Unlock with Kingdom Badge" : overridePlayingVideo?.id === sermon.id ? "Now Playing" : `Play ${sermon.title}`}
                   >
-                    <Play className="w-4 h-4 fill-current" />
+                    {!isPremiumActive ? (
+                      <>
+                        <Lock className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Unlock Pro</span>
+                      </>
+                    ) : overridePlayingVideo?.id === sermon.id ? (
+                      <>
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Now Playing</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Watch Sermon</span>
+                      </>
+                    )}
                   </button>
 
                   <div className="flex items-center gap-1.5">
                     <button
                       id={`btn-download-sermon-${sermon.id}`}
-                      onClick={() => handleToggleDownload(sermon.id)}
+                      onClick={() => {
+                        if (!isPremiumActive) {
+                          setShowBadgeUpgradeModal(true);
+                          return;
+                        }
+                        handleToggleDownload(sermon.id);
+                      }}
                       className={cn(
                         'p-2 rounded-lg transition-all cursor-pointer flex items-center justify-center',
                         isDownloaded 
                           ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30' 
                           : 'bg-secondary hover:bg-secondary/80 text-foreground border border-border'
                       )}
-                      title={isDownloaded ? "Remove from offline storage" : "Save for offline listening"}
-                      aria-label={isDownloaded ? "Remove from offline storage" : "Save for offline listening"}
+                      title={!isPremiumActive ? "Buy Pro to download" : isDownloaded ? "Remove from offline storage" : "Save for offline listening"}
+                      aria-label={!isPremiumActive ? "Buy Pro to download" : isDownloaded ? "Remove from offline storage" : "Save for offline listening"}
                     >
                       {isDownloaded ? <Check className="w-4 h-4" /> : <Download className="w-4 h-4" />}
                     </button>
@@ -2057,6 +2230,19 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         isOpen={showPaidBookingModal}
         onClose={() => setShowPaidBookingModal(false)}
       />
+
+      {/* Kingdom Verification Badge Upgrade Modal */}
+      {activeUser && (
+        <UpgradeModal
+          isOpen={showBadgeUpgradeModal}
+          onClose={() => setShowBadgeUpgradeModal(false)}
+          currentUser={activeUser}
+          onUpdateUser={(updated) => {
+            setCurrentUserState(updated);
+            setShowBadgeUpgradeModal(false);
+          }}
+        />
+      )}
 
     </div>
   );

@@ -68,49 +68,43 @@ export const FloatingCommentReply: React.FC<FloatingCommentReplyProps> = ({ curr
       />
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="fixed bottom-28 sm:bottom-24 right-3 sm:right-6 z-50 w-[calc(100vw-24px)] max-w-sm bg-card/95 backdrop-blur-md border border-primary/30 rounded-xl p-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-200"
+        className="fixed bottom-20 sm:bottom-24 right-3 sm:right-6 z-50 w-[calc(100vw-24px)] max-w-[300px] bg-card/95 backdrop-blur-md border border-primary/30 rounded-2xl p-2.5 shadow-xl animate-in slide-in-from-bottom-3 duration-200"
       >
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-border">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-6 h-6 rounded-md bg-primary/20 text-primary flex items-center justify-center shrink-0">
-            <MessageSquare className="w-3.5 h-3.5" />
+      <div className="flex items-center justify-between gap-1.5 pb-1.5 mb-1.5 border-b border-border">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0">
+            <MessageSquare className="w-3 h-3" />
           </div>
-          <div className="truncate">
-            <p className="text-[11px] font-bold text-foreground truncate">
-              New Comment on Your Post
-            </p>
-            <p className="text-[10px] text-muted-foreground truncate">
-              "{activeItem.postTitle}"
-            </p>
-          </div>
+          <span className="text-[11px] font-bold text-foreground truncate">
+            Reply to Comment
+          </span>
         </div>
 
         <button
           onClick={() => setActiveItem(null)}
-          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shrink-0"
-          title="Dismiss (x)"
+          className="p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shrink-0"
+          title="Dismiss"
           aria-label="Close"
         >
-          <X className="w-4 h-4" />
+          <X className="w-3 h-3" />
         </button>
       </div>
 
       {/* Incoming Comment Card */}
-      <div className="bg-secondary/60 rounded-lg p-2.5 mb-2.5 flex items-start gap-2 border border-border/40">
+      <div className="bg-secondary/60 rounded-xl p-2 mb-2 flex items-start gap-2 border border-border/40 text-xs">
         <img
           src={activeItem.comment.author_avatar || activeItem.comment.user_avatar || '/assets/apostle_joe_daniels_main.jpg'}
           alt={activeItem.comment.author_name || activeItem.comment.user_name || 'Believer'}
-          className="w-7 h-7 rounded-md object-cover shrink-0 mt-0.5"
+          className="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5"
         />
-        <div className="min-w-0 flex-1 text-xs">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-foreground text-[11px]">
+            <span className="font-semibold text-foreground text-[11px] truncate">
               {activeItem.comment.author_name || activeItem.comment.user_name || 'Believer'}
             </span>
-            <span className="text-[10px] text-muted-foreground">Just now</span>
           </div>
-          <p className="text-foreground/90 mt-0.5 text-xs leading-snug break-words">
+          <p className="text-foreground/90 mt-0.5 text-[11px] leading-snug line-clamp-2">
             {activeItem.comment.text}
           </p>
         </div>
@@ -118,9 +112,9 @@ export const FloatingCommentReply: React.FC<FloatingCommentReplyProps> = ({ curr
 
       {/* Reply Action */}
       {isSent ? (
-        <div className="py-2 text-center text-xs font-bold text-emerald-500 animate-in fade-in flex items-center justify-center gap-1.5">
-          <CornerDownRight className="w-3.5 h-3.5" />
-          <span>Reply posted successfully!</span>
+        <div className="py-1 text-center text-xs font-bold text-emerald-500 animate-in fade-in flex items-center justify-center gap-1">
+          <CornerDownRight className="w-3 h-3" />
+          <span>Reply sent</span>
         </div>
       ) : (
         <form onSubmit={handleSendReply} className="flex items-center gap-1.5">
@@ -128,17 +122,17 @@ export const FloatingCommentReply: React.FC<FloatingCommentReplyProps> = ({ curr
             type="text"
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
-            placeholder={`Reply to ${(activeItem.comment.author_name || activeItem.comment.user_name || 'Member').split(' ')[0]}...`}
-            className="flex-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+            placeholder="Reply..."
+            className="flex-1 bg-secondary border border-border rounded-full px-3 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
             autoFocus
           />
           <button
             type="submit"
             disabled={!replyText.trim()}
-            className="p-1.5 rounded-lg bg-primary text-primary-foreground disabled:opacity-40 hover:bg-primary/90 transition-colors shrink-0"
+            className="p-1.5 rounded-full bg-primary text-primary-foreground disabled:opacity-40 hover:bg-primary/90 transition-colors shrink-0"
             title="Send reply"
           >
-            <Send className="w-3.5 h-3.5" />
+            <Send className="w-3 h-3" />
           </button>
         </form>
       )}

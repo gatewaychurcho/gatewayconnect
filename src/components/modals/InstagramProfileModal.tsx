@@ -220,6 +220,7 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
 
   // 3-dots Profile Options Sheet
   const [showProfileOptions, setShowProfileOptions] = useState<boolean>(false);
+  const [showLogoutConfirmModal, setShowLogoutConfirmModal] = useState<boolean>(false);
   const [showMemberIdCard, setShowMemberIdCard] = useState<boolean>(false);
   const [copiedMemberId, setCopiedMemberId] = useState<boolean>(false);
 
@@ -1860,12 +1861,10 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
               {isMe && onLogout && (
                 <button
                   type="button"
+                  id="btn-instagram-logout-trigger"
                   onClick={() => {
                     setShowProfileOptions(false);
-                    if (window.confirm('Are you sure you want to log out of your Gateway Connect account?')) {
-                      onLogout();
-                      onClose();
-                    }
+                    setShowLogoutConfirmModal(true);
                   }}
                   className="w-full py-3.5 text-rose-400 font-bold hover:bg-white/5 transition-colors cursor-pointer flex items-center justify-center gap-2"
                 >
@@ -1880,6 +1879,51 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
               >
                 Cancel
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* IN-APP LOGOUT CONFIRMATION DIALOG (Reliable, no window.confirm dependency) */}
+        {showLogoutConfirmModal && (
+          <div 
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+            onClick={() => setShowLogoutConfirmModal(false)}
+          >
+            <div 
+              className="w-full max-w-xs sm:max-w-sm bg-card border border-border rounded-2xl p-5 sm:p-6 shadow-2xl space-y-4 text-center animate-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-12 h-12 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-500 mx-auto flex items-center justify-center">
+                <LogOut className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-foreground">Log Out of Account?</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Are you sure you want to log out of your Gateway Connect account? You will return to the sign in screen.
+                </p>
+              </div>
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutConfirmModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground text-xs font-semibold transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  id="btn-confirm-account-logout"
+                  onClick={() => {
+                    setShowLogoutConfirmModal(false);
+                    if (onLogout) onLogout();
+                    onClose();
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Log Out</span>
+                </button>
+              </div>
             </div>
           </div>
         )}

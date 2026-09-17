@@ -55,7 +55,13 @@ import confetti from 'canvas-confetti';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('home');
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(() => {
+    try {
+      return !sessionStorage.getItem('gcz_seen_splash');
+    } catch {
+      return true;
+    }
+  });
   const [currentUser, setCurrentUser] = useState<User | null>(StorageService.getCurrentUser());
   const [lowDataMode, setLowDataMode] = useState<boolean>(StorageService.getLowDataMode());
   
@@ -366,7 +372,18 @@ export default function App() {
 
   // Website splash screen
   if (showSplash) {
-    return <SplashScreen onComplete={() => setShowSplash(false)} />;
+    return (
+      <SplashScreen
+        onComplete={() => {
+          setShowSplash(false);
+          try {
+            sessionStorage.setItem('gcz_seen_splash', 'true');
+          } catch {
+            // Ignore storage errors
+          }
+        }}
+      />
+    );
   }
 
   // Enforce Login Screen when user opens app for the 1st time or after logging out
@@ -510,8 +527,8 @@ export default function App() {
         )}
       </main>
 
-      {/* 3. Sleek Ministry System Status Bar */}
-      <footer className="gcz-statusbar h-10 bg-card border-t border-border px-4 sm:px-8 flex items-center justify-between text-[10px] font-bold tracking-widest text-muted-foreground shrink-0 mb-14 sm:mb-16">
+      {/* 3. Sleek Ministry System Status Bar (Hidden on mobile to save vertical screen space) */}
+      <footer className="hidden md:flex gcz-statusbar h-9 bg-card border-t border-border px-8 items-center justify-between text-[10px] font-bold tracking-widest text-muted-foreground shrink-0 mb-14 sm:mb-16">
         <div className="flex items-center gap-4 sm:gap-8">
           <span className="text-primary flex items-center gap-1.5 font-semibold">
             <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>

@@ -14,7 +14,8 @@ import {
   ChevronRight,
   ShieldCheck,
   Upload,
-  AlertCircle
+  AlertCircle,
+  Crown
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { User, ChurchPage, PageCategory } from '../../types';
@@ -251,33 +252,32 @@ export const PageCreationModal: React.FC<PageCreationModalProps> = ({
         {/* Verification Check Notice if not verified */}
         {!isVerifiedBadgeHolder ? (
           <div className="p-6 text-center space-y-4">
-            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center mx-auto shadow-inner">
-              <ShieldCheck className="w-7 h-7" />
+            <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center mx-auto">
+              <Crown className="w-6 h-6" />
             </div>
             <div className="space-y-1.5 max-w-sm mx-auto">
-              <h4 className="font-bold text-base text-foreground">Verified Badge Required</h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Church page creation is exclusively reserved for verified believers with a 
-                <span className="font-semibold text-foreground"> Silver</span>, 
-                <span className="font-semibold text-blue-500"> Blue</span>, or 
-                <span className="font-semibold text-amber-500"> Gold</span> badge.
+              <h4 className="font-bold text-base text-foreground">Pro Feature</h4>
+              <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span>Page creation requires a Pro membership.</span>
               </p>
             </div>
-            <div className="bg-secondary/60 rounded-xl p-3.5 border border-border text-xs text-muted-foreground text-left space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-foreground">
-                <AlertCircle className="w-3.5 h-3.5 text-primary" />
-                <span>How to obtain badge verification:</span>
-              </div>
-              <p className="text-[11px] leading-relaxed">
-                Ministry leaders, department heads, and fellowship coordinators can apply for an official verification badge in the <strong>Verification</strong> section on your profile.
-              </p>
-            </div>
-            <div className="pt-2">
+            <div className="pt-2 flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  onClose();
+                  window.dispatchEvent(new CustomEvent('gcz_open_upgrade_modal'));
+                }}
+                className="w-full py-2.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-bold text-xs shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Crown className="w-4 h-4 fill-current" />
+                <span>Buy Pro</span>
+              </button>
               <button
                 onClick={onClose}
-                className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 transition-all"
+                className="w-full py-2 rounded-full text-muted-foreground hover:text-foreground text-xs transition-colors cursor-pointer"
               >
-                Understood
+                Cancel
               </button>
             </div>
           </div>
