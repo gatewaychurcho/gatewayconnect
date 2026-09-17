@@ -64,28 +64,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     const cleanLocal = trimmed.replace(/^0+/, '');
     return `${code}${cleanLocal}`;
   };
-import { supabase } from '../../supabaseClient';
-
-const handleSignup = async (email: string, password: string, username: string) => {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-  });
-
-  if (error) {
-    console.error(error);
-    return;
-  }
-
-  const userId = data.user?.id;
-
-  // Persist into users table
-  await supabase.from('users').insert({
-    id: userId,
-    email,
-    username,
-  });
-};
 
   // Unban Appeal & Password Reset Modal States
   const [showAppealModal, setShowAppealModal] = useState<boolean>(false);
