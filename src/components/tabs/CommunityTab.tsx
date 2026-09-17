@@ -1457,42 +1457,53 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      {/* Super Admin / Developer Delete / Moderate Post */}
-                      {canModeratePosts && (
-                        <button
-                          onClick={() => {
-                            if (window.confirm('Are you sure you want to delete this post from the community feed?')) {
-                              StorageService.deleteTestimony(post.id);
-                              setTestimonyList(StorageService.getTestimonies());
-                            }
-                          }}
-                          className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                          title="Delete Post (Admin/Dev Moderation)"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
+                    {(() => {
+                      const isPostAuthor = (Boolean(post.user_id) && post.user_id === currentUser.id) ||
+                                           (Boolean(post.user_handle) && post.user_handle === currentUser.handle) ||
+                                           (Boolean(post.page_id) && StorageService.getPages().some(p => p.id === post.page_id && (p.creator_id === currentUser.id || p.admin_ids?.includes(currentUser.id))));
+                      const isModOrAdmin = isAdminOrDev || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'developer' || (currentUser.role as string) === 'moderator' || (currentUser.role as string) === 'mod' || canModeratePosts;
+                      const canManagePost = isPostAuthor || isModOrAdmin;
 
-                      {/* Photo Update button - STRICTLY for Mr. Daniels account only */}
-                      {isMrDaniels && (
-                        <button
-                          onClick={() => setPostToEditImage(post)}
-                          className="px-2.5 py-1 rounded-lg bg-secondary hover:bg-primary hover:text-primary-foreground text-foreground text-[11px] font-semibold flex items-center gap-1.5 transition-all"
-                          title="Apostle Joe Daniels: Update post photo"
-                        >
-                          <Camera className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">{post.image_url ? 'Change Photo' : '+ Photo'}</span>
-                        </button>
-                      )}
+                      return (
+                        <div className="flex items-center gap-1.5">
+                          {/* Photo Update button - STRICTLY for Author, Admin, or Mod only */}
+                          {canManagePost && (
+                            <button
+                              onClick={() => setPostToEditImage(post)}
+                              className="px-2 py-1 rounded-lg bg-secondary hover:bg-primary hover:text-primary-foreground text-foreground text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                              title="Update post photo (Author, Admin, or Mod only)"
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">{post.image_url ? 'Change Photo' : '+ Photo'}</span>
+                            </button>
+                          )}
 
-                      <button
-                        onClick={() => setSelectedPostOptions(post)}
-                        className="p-1 rounded-lg text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <MoreHorizontal className="w-4 h-4" />
-                      </button>
-                    </div>
+                          {/* Delete Post - STRICTLY for Author, Admin, or Mod only */}
+                          {canManagePost && (
+                            <button
+                              onClick={() => {
+                                if (window.confirm('Are you sure you want to delete this post from the community feed?')) {
+                                  StorageService.deleteTestimony(post.id);
+                                  setTestimonyList(StorageService.getTestimonies());
+                                  if (onRefreshData) onRefreshData();
+                                }
+                              }}
+                              className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                              title="Delete Post (Author, Admin, or Mod only)"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => setSelectedPostOptions(post)}
+                            className="p-1 rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                          >
+                            <MoreHorizontal className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Post Media (Reel/Video or Photo with Double Tap to Like) */}
@@ -2520,8 +2531,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
       {/* MODAL: INSTAGRAM-STYLE CREATE POST (LOCAL STORAGE / URL / PRESETS) */}
       {showCreatePostModal && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-card border border-border rounded-xl p-4 sm:p-5 w-full max-w-lg space-y-4 shadow-xl my-auto">
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-card border border-border rounded-xl p-4 sm:p-5 w-full max-w-lg space-y-4 shadow-xl my-auto max-h-[60vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold">
@@ -3063,7 +3074,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       {/* ADD STORY MODAL */}
       {showAddStoryModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-4 space-y-3.5 shadow-2xl animate-in zoom-in-95">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-4 space-y-3.5 shadow-2xl animate-in zoom-in-95 max-h-[60vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-border pb-2.5">
               <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-primary" />
@@ -3173,8 +3184,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       {/* INSTAGRAM LIKES MODAL (Real Accounts List) */}
       {activeLikesModalPost && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-card border border-border rounded-xl overflow-hidden shadow-xl">
-            <div className="p-3.5 border-b border-border flex items-center justify-between">
+          <div className="w-full max-w-sm bg-card border border-border rounded-xl overflow-hidden shadow-xl max-h-[60vh] flex flex-col">
+            <div className="p-3.5 border-b border-border flex items-center justify-between shrink-0">
               <span className="font-bold text-sm text-foreground">Likes</span>
               <button
                 onClick={() => setActiveLikesModalPost(null)}
@@ -3184,7 +3195,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
               </button>
             </div>
 
-            <div className="p-3 max-h-80 overflow-y-auto space-y-2.5">
+            <div className="p-3 flex-1 overflow-y-auto space-y-2.5">
               {(() => {
                 const likerIds = activeLikesModalPost.liked_user_ids || [];
                 const likers = allRegisteredUsers.filter(u => likerIds.includes(u.id));
@@ -3233,13 +3244,13 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       {/* POST OPTIONS ACTION SHEET */}
       {selectedPostOptions && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-card border border-border rounded-xl overflow-hidden shadow-xl divide-y divide-border text-center text-xs">
+          <div className="w-full max-w-sm bg-card border border-border rounded-xl overflow-hidden shadow-xl divide-y divide-border text-center text-xs max-h-[60vh] overflow-y-auto">
             <button
               onClick={() => {
                 handleSharePostWhatsApp(selectedPostOptions);
                 setSelectedPostOptions(null);
               }}
-              className="w-full py-3.5 font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-secondary/60 flex items-center justify-center gap-2"
+              className="w-full py-3.5 font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-secondary/60 flex items-center justify-center gap-2 cursor-pointer"
             >
               <Send className="w-4 h-4" />
               <span>Share to WhatsApp</span>
@@ -3249,41 +3260,52 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 handleToggleSavePost(selectedPostOptions.id);
                 setSelectedPostOptions(null);
               }}
-              className="w-full py-3.5 font-semibold text-foreground hover:bg-secondary/60 flex items-center justify-center gap-2"
+              className="w-full py-3.5 font-semibold text-foreground hover:bg-secondary/60 flex items-center justify-center gap-2 cursor-pointer"
             >
               <Bookmark className="w-4 h-4" />
               <span>{savedPosts[selectedPostOptions.id] ? 'Remove from Saved' : 'Save Post'}</span>
             </button>
-            {isMrDaniels && (
-              <button
-                onClick={() => {
-                  setPostToEditImage(selectedPostOptions);
-                  setSelectedPostOptions(null);
-                }}
-                className="w-full py-3.5 font-semibold text-primary hover:bg-secondary/60 flex items-center justify-center gap-2"
-              >
-                <Camera className="w-4 h-4" />
-                <span>Change Post Photo</span>
-              </button>
-            )}
-            {canModeratePosts && (
-              <button
-                onClick={() => {
-                  if (window.confirm('Delete this post from the community feed?')) {
-                    StorageService.deleteTestimony(selectedPostOptions.id);
-                    setTestimonyList(StorageService.getTestimonies());
-                    setSelectedPostOptions(null);
-                  }
-                }}
-                className="w-full py-3.5 font-bold text-destructive hover:bg-destructive/10 flex items-center justify-center gap-2"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Delete Post (Admin Moderation)</span>
-              </button>
-            )}
+            {(() => {
+              const isPostAuthor = (Boolean(selectedPostOptions.user_id) && selectedPostOptions.user_id === currentUser.id) ||
+                                   (Boolean(selectedPostOptions.user_handle) && selectedPostOptions.user_handle === currentUser.handle) ||
+                                   (Boolean(selectedPostOptions.page_id) && StorageService.getPages().some(p => p.id === selectedPostOptions.page_id && (p.creator_id === currentUser.id || p.admin_ids?.includes(currentUser.id))));
+              const isModOrAdmin = isAdminOrDev || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'developer' || (currentUser.role as string) === 'moderator' || (currentUser.role as string) === 'mod' || canModeratePosts;
+              const canManagePost = isPostAuthor || isModOrAdmin;
+
+              if (!canManagePost) return null;
+
+              return (
+                <>
+                  <button
+                    onClick={() => {
+                      setPostToEditImage(selectedPostOptions);
+                      setSelectedPostOptions(null);
+                    }}
+                    className="w-full py-3.5 font-semibold text-primary hover:bg-secondary/60 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>Change Post Photo</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Delete this post from the community feed?')) {
+                        StorageService.deleteTestimony(selectedPostOptions.id);
+                        setTestimonyList(StorageService.getTestimonies());
+                        setSelectedPostOptions(null);
+                        if (onRefreshData) onRefreshData();
+                      }
+                    }}
+                    className="w-full py-3.5 font-bold text-destructive hover:bg-destructive/10 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete Post</span>
+                  </button>
+                </>
+              );
+            })()}
             <button
               onClick={() => setSelectedPostOptions(null)}
-              className="w-full py-3.5 font-bold text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+              className="w-full py-3.5 font-bold text-muted-foreground hover:text-foreground hover:bg-secondary/60 cursor-pointer"
             >
               Cancel
             </button>
@@ -3327,8 +3349,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
       {/* EVENT CREATION & EDITING MODAL (Admin & Dev Governance) */}
       {showEventModal && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-card border border-border rounded-2xl p-5 sm:p-6 w-full max-w-lg space-y-4 shadow-2xl my-auto">
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-card border border-border rounded-2xl p-5 sm:p-6 w-full max-w-lg space-y-4 shadow-2xl my-auto max-h-[60vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold">

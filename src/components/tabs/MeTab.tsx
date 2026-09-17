@@ -82,13 +82,7 @@ interface StoryHighlight {
   img: string;
 }
 
-const DEFAULT_HIGHLIGHTS: StoryHighlight[] = [
-  { id: 'h1', title: 'Altar Fire', img: '/assets/apostle_joe_daniels_preach.jpg' },
-  { id: 'h2', title: 'Miracles', img: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80' },
-  { id: 'h3', title: "Harare '26", img: '/assets/apostle_joe_daniels_main.jpg' },
-  { id: 'h4', title: 'Praise Choir', img: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=300&auto=format&fit=crop&q=80' },
-  { id: 'h5', title: 'Sunday Live', img: '/assets/apostle_joe_daniels_podcast.jpg' },
-];
+const DEFAULT_HIGHLIGHTS: StoryHighlight[] = [];
 
 export const MeTab: React.FC<MeTabProps> = ({
   currentUser,
@@ -141,13 +135,13 @@ export const MeTab: React.FC<MeTabProps> = ({
   const [showFollowersDrawer, setShowFollowersDrawer] = useState<'followers' | 'following' | null>(null);
   const [followSearchQuery, setFollowSearchQuery] = useState('');
 
-  // Story Highlights State & Story Viewer
+  // Story Highlights State & Story Viewer (Only real highlights; none if empty)
   const [storyHighlights, setStoryHighlights] = useState<StoryHighlight[]>(() => {
     try {
       const saved = localStorage.getItem('gcz_story_highlights_custom');
-      return saved ? JSON.parse(saved) : DEFAULT_HIGHLIGHTS;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return DEFAULT_HIGHLIGHTS;
+      return [];
     }
   });
   const [activeStoryHighlight, setActiveStoryHighlight] = useState<StoryHighlight | null>(null);
@@ -156,6 +150,27 @@ export const MeTab: React.FC<MeTabProps> = ({
   const [newHighlightTitle, setNewHighlightTitle] = useState<string>('');
   const [newHighlightImg, setNewHighlightImg] = useState<string>('');
   const highlightFileInputRef = useRef<HTMLInputElement | null>(null);
+  const postImageFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handlePostImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeDetailPost) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('Please select a valid image file');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        const newImg = event.target.result as string;
+        StorageService.updateTestimonyImage(activeDetailPost.id, newImg);
+        setActiveDetailPost({ ...activeDetailPost, image_url: newImg });
+        setMyPosts(prev => prev.map(p => p.id === activeDetailPost.id ? { ...p, image_url: newImg } : p));
+        showToast('Post photo updated');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleHighlightCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -507,21 +522,11 @@ export const MeTab: React.FC<MeTabProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Member ID chip with copy button */}
-            <button
-              onClick={handleCopyId}
-              className="flex items-center gap-1 font-mono text-[11px] bg-secondary hover:bg-secondary/80 border border-border px-2 py-1 rounded-lg text-muted-foreground transition-colors"
-              title="Copy Member ID"
-            >
-              <span>{localUser.member_id}</span>
-              {copiedId ? <Check className="w-3 h-3 text-primary" /> : <Copy className="w-3 h-3 text-muted-foreground" />}
-            </button>
-
             {/* Admin Badge */}
             {isSuperAdmin && (
               <button
                 onClick={onOpenAdminPanel}
-                className="px-2.5 py-1 rounded-lg bg-primary text-primary-foreground font-semibold text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-xs hover:bg-primary/90 active:scale-95 transition-all"
+                className="px-2.5 py-1 rounded-lg bg-primary text-primary-foreground font-semibold text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-xs hover:bg-primary/90 active:scale-95 transition-all cursor-pointer"
                 title="Admin Control Center"
               >
                 <ShieldCheck className="w-3 h-3" />
@@ -533,7 +538,7 @@ export const MeTab: React.FC<MeTabProps> = ({
             {isDeveloper && (
               <button
                 onClick={onOpenDevConsole}
-                className="px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20 font-semibold text-[10px] flex items-center gap-1 hover:bg-purple-500/20 active:scale-95 transition-all"
+                className="px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20 font-semibold text-[10px] flex items-center gap-1 hover:bg-purple-500/20 active:scale-95 transition-all cursor-pointer"
                 title="Developer Console"
               >
                 <Code2 className="w-3 h-3" />
@@ -544,7 +549,7 @@ export const MeTab: React.FC<MeTabProps> = ({
             {/* 3-Dots Options Menu */}
             <button
               onClick={() => setShowOptionsSheet(true)}
-              className="p-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground transition-colors active:scale-95 border border-border"
+              className="p-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground transition-colors active:scale-95 border border-border cursor-pointer"
               title="Profile Options"
             >
               <MoreHorizontal className="w-4 h-4" />
@@ -637,16 +642,26 @@ export const MeTab: React.FC<MeTabProps> = ({
             </span>
           </div>
 
-          {/* Phone & Location */}
-          <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+          {/* Phone, Location & Member ID */}
+          <div className="flex items-center gap-2.5 sm:gap-4 text-xs text-muted-foreground flex-wrap">
             <div className="flex items-center gap-1">
-              <Phone className="w-3.5 h-3.5 text-primary" />
+              <Phone className="w-3.5 h-3.5 text-primary shrink-0" />
               <span className="font-mono">{localUser.phone}</span>
             </div>
             <div className="flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5 text-primary" />
+              <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
               <span>{localUser.location || localUser.city_location || 'Harare, Zimbabwe'}</span>
             </div>
+            {/* Relocated Member ID badge - safely contained within the profile card without overlapping */}
+            <button
+              onClick={handleCopyId}
+              className="inline-flex items-center gap-1.5 font-mono text-[11px] bg-secondary hover:bg-secondary/80 border border-border px-2 py-0.5 rounded-md text-foreground transition-colors cursor-pointer"
+              title="Copy Member ID"
+            >
+              <span className="text-[10px] text-muted-foreground font-sans font-semibold">ID:</span>
+              <span className="font-bold text-primary">{localUser.member_id}</span>
+              {copiedId ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3 text-muted-foreground" />}
+            </button>
           </div>
 
           {/* Bio text */}
@@ -732,14 +747,14 @@ export const MeTab: React.FC<MeTabProps> = ({
 
         </div>
 
-        {/* 4. INSTAGRAM ACTION BUTTONS (Compact Instagram Mobile Style) */}
+        {/* 4. ACTION BUTTONS (Uncrowded Mobile Layout: Edit, Share, Crown Icon Only) */}
         <div className="flex items-center gap-2 pt-1">
           
           {/* 1. Edit Profile Button */}
           <button
             id="btn-me-edit-profile"
             onClick={() => setShowEditDrawer(true)}
-            className="flex-1 h-8 px-2.5 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-semibold text-xs border border-border flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+            className="flex-1 h-8 px-3 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-semibold text-xs border border-border flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
           >
             <Edit3 className="w-3.5 h-3.5 text-primary" />
             <span>Edit</span>
@@ -749,128 +764,91 @@ export const MeTab: React.FC<MeTabProps> = ({
           <button
             id="btn-me-share-profile"
             onClick={handleShareProfileWhatsApp}
-            className="flex-1 h-8 px-2.5 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-semibold text-xs border border-border flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+            className="flex-1 h-8 px-3 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-semibold text-xs border border-border flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
           >
             <Share2 className="w-3.5 h-3.5 text-emerald-500" />
             <span>Share</span>
           </button>
 
-          {/* 3. Member ID Card Icon Button */}
-          <button
-            id="btn-me-member-card"
-            onClick={() => setShowMemberIdCard(true)}
-            className="h-8 w-8 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground border border-border flex items-center justify-center transition-all active:scale-95 cursor-pointer shrink-0"
-            title="Digital Member ID"
-            aria-label="Digital Member ID"
-          >
-            <QrCode className="w-4 h-4 text-primary" />
-          </button>
-
-          {/* 4. Church Pages Shortcut */}
-          <button
-            id="btn-me-pages-shortcut"
-            onClick={() => setActiveSubTab('pages')}
-            className={`h-8 px-2.5 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0 ${
-              activeSubTab === 'pages'
-                ? 'bg-primary text-primary-foreground border-primary shadow-xs'
-                : 'bg-secondary hover:bg-secondary/80 text-foreground border-border'
-            }`}
-            title="Church Pages & Ministries"
-          >
-            <Flag className="w-3.5 h-3.5 text-primary" />
-            <span className="hidden sm:inline">Pages</span>
-          </button>
-
-          {/* 5. Create Page Action Button */}
-          <button
-            id="btn-me-create-page"
-            onClick={() => setShowPageCreationModal(true)}
-            className="h-8 px-2.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0"
-            title="Create Official Church Page"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Create Page</span>
-          </button>
-
-          {/* 5. Role Status / Admin / Mod Button */}
+          {/* 3. Partner / Role Status Icon Button (Crown only with no text label) */}
           {isSuperAdmin ? (
             <button
               onClick={onOpenAdminPanel}
-              className="h-8 px-2.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs flex items-center justify-center gap-1 shadow-xs active:scale-95 transition-all cursor-pointer shrink-0"
+              className="h-8 w-8 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center shadow-xs active:scale-95 transition-all cursor-pointer shrink-0"
               title="Admin Panel"
+              aria-label="Admin Panel"
             >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Admin</span>
+              <ShieldCheck className="w-4 h-4" />
             </button>
           ) : localUser.role === 'developer' ? (
             <button
               onClick={onOpenAdminPanel}
-              className="h-8 px-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-1 shadow-xs active:scale-95 transition-all cursor-pointer shrink-0"
+              className="h-8 w-8 rounded-lg bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center shadow-xs active:scale-95 transition-all cursor-pointer shrink-0"
               title="Moderator Tools"
+              aria-label="Moderator Tools"
             >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Mod</span>
+              <ShieldCheck className="w-4 h-4" />
             </button>
           ) : (
             <button
               id="btn-me-upgrade-partner"
               onClick={() => setShowUpgradeModal(true)}
-              className="h-8 px-2.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs flex items-center justify-center gap-1 shadow-xs active:scale-95 transition-all cursor-pointer shrink-0"
-              title="Partner"
+              className="h-8 w-8 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center shadow-xs active:scale-95 transition-all cursor-pointer shrink-0"
+              title="Kingdom Partner"
+              aria-label="Kingdom Partner"
             >
-              <Crown className="w-3.5 h-3.5" />
-              <span>Partner</span>
+              <Crown className="w-4 h-4" />
             </button>
           )}
 
         </div>
 
-        {/* 5. INSTAGRAM STORY HIGHLIGHTS TRAY */}
-        <div className="pt-2 border-t border-border">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Story Highlights</span>
-            <button 
-              onClick={() => setShowAddHighlightModal(true)}
-              className="text-[10px] text-primary hover:underline font-semibold flex items-center gap-0.5 cursor-pointer"
-            >
-              <Plus className="w-3 h-3" />
-              <span>New Highlight</span>
-            </button>
-          </div>
+        {/* 5. INSTAGRAM STORY HIGHLIGHTS TRAY (Only rendered if there are real highlights) */}
+        {storyHighlights.length > 0 && (
+          <div className="pt-2 border-t border-border">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Story Highlights</span>
+              <button 
+                onClick={() => setShowAddHighlightModal(true)}
+                className="text-[10px] text-primary hover:underline font-semibold flex items-center gap-0.5 cursor-pointer"
+              >
+                <Plus className="w-3 h-3" />
+                <span>New Highlight</span>
+              </button>
+            </div>
 
-          <div className="flex items-center gap-3.5 overflow-x-auto no-scrollbar py-1">
-            
-            {/* Story Highlight Bubbles */}
-            {storyHighlights.map((hl) => (
+            <div className="flex items-center gap-3.5 overflow-x-auto no-scrollbar py-1">
+              {/* Story Highlight Bubbles */}
+              {storyHighlights.map((hl) => (
+                <button
+                  key={hl.id}
+                  onClick={() => setActiveStoryHighlight(hl)}
+                  className="flex flex-col items-center gap-1 group shrink-0 cursor-pointer"
+                >
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-amber-400 to-yellow-300 group-hover:scale-105 transition-transform">
+                    <div className="w-full h-full rounded-full overflow-hidden bg-card border border-border">
+                      <img src={hl.img} alt={hl.title} className="w-full h-full object-cover" />
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-foreground/80 font-medium truncate max-w-[56px] text-center">
+                    {hl.title}
+                  </span>
+                </button>
+              ))}
+
+              {/* "+ New" Highlight Add Bubble */}
               <button
-                key={hl.id}
-                onClick={() => setActiveStoryHighlight(hl)}
+                onClick={() => setShowAddHighlightModal(true)}
                 className="flex flex-col items-center gap-1 group shrink-0 cursor-pointer"
               >
-                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-amber-400 to-yellow-300 group-hover:scale-105 transition-transform">
-                  <div className="w-full h-full rounded-full overflow-hidden bg-card border border-border">
-                    <img src={hl.img} alt={hl.title} className="w-full h-full object-cover" />
-                  </div>
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border border-dashed border-border hover:border-primary flex items-center justify-center text-muted-foreground hover:text-primary transition-all group-hover:scale-105">
+                  <Plus className="w-4 h-4" />
                 </div>
-                <span className="text-[10px] text-foreground/80 font-medium truncate max-w-[56px] text-center">
-                  {hl.title}
-                </span>
+                <span className="text-[10px] text-muted-foreground font-medium">New</span>
               </button>
-            ))}
-
-            {/* "+ New" Highlight Add Bubble */}
-            <button
-              onClick={() => setShowAddHighlightModal(true)}
-              className="flex flex-col items-center gap-1 group shrink-0 cursor-pointer"
-            >
-              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border border-dashed border-border hover:border-primary flex items-center justify-center text-muted-foreground hover:text-primary transition-all group-hover:scale-105">
-                <Plus className="w-4 h-4" />
-              </div>
-              <span className="text-[10px] text-muted-foreground font-medium">New</span>
-            </button>
-
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
 
@@ -1503,7 +1481,7 @@ export const MeTab: React.FC<MeTabProps> = ({
       {/* 8. EDIT PROFILE DRAWER */}
       {showEditDrawer && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
-          <div className="w-full max-w-lg bg-card border border-border rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 shadow-xl space-y-4 max-h-[92vh] overflow-y-auto">
+          <div className="w-full max-w-lg bg-card border border-border rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 shadow-xl space-y-4 max-h-[60vh] overflow-y-auto">
             
             <div className="flex items-center justify-between pb-3 border-b border-border">
               <div className="flex items-center gap-2">
@@ -1656,7 +1634,7 @@ export const MeTab: React.FC<MeTabProps> = ({
       {/* 9. FOLLOWERS & FOLLOWING DRAWER */}
       {showFollowersDrawer && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
-          <div className="w-full max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl p-5 shadow-xl space-y-4 max-h-[85vh] flex flex-col">
+          <div className="w-full max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl p-5 shadow-xl space-y-4 max-h-[60vh] flex flex-col">
             
             <div className="flex items-center justify-between pb-3 border-b border-border shrink-0">
               <div className="flex items-center gap-2">
@@ -1755,7 +1733,7 @@ export const MeTab: React.FC<MeTabProps> = ({
       {/* 10. POST DETAIL MODAL */}
       {activeDetailPost && (
         <div className="fixed inset-0 z-50 bg-background/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
-          <div className="w-full max-w-md bg-card border border-border rounded-xl overflow-hidden shadow-xl flex flex-col max-h-[90vh]">
+          <div className="w-full max-w-md bg-card border border-border rounded-xl overflow-hidden shadow-xl flex flex-col max-h-[60vh]">
             
             {/* Post Header */}
             <div className="p-3 border-b border-border flex items-center justify-between shrink-0">
@@ -1770,93 +1748,144 @@ export const MeTab: React.FC<MeTabProps> = ({
                   <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{localUser.handle || '@believer'}</p>
                 </div>
               </div>
-              <button
-                onClick={() => setActiveDetailPost(null)}
-                className="p-1.5 rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground"
+
+              <div className="flex items-center gap-1.5">
+                {/* Only author of post or admin or mod can edit post image or delete post */}
+                {(() => {
+                  const isPostAuthor = (Boolean(activeDetailPost.user_id) && activeDetailPost.user_id === localUser.id) ||
+                                       (Boolean(activeDetailPost.user_handle) && activeDetailPost.user_handle === localUser.handle);
+                  const isPostAdminOrMod = isSuperAdmin || isDeveloper || (localUser.role as string) === 'moderator' || (localUser.role as string) === 'mod';
+                  const canManage = isPostAuthor || isPostAdminOrMod;
+
+                  if (!canManage) return null;
+
+                  return (
+                    <>
+                      <button
+                        onClick={() => postImageFileInputRef.current?.click()}
+                        className="px-2 py-1 rounded-md bg-secondary hover:bg-secondary/80 text-foreground text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                        title="Change post photo (Author/Admin/Mod only)"
+                      >
+                        <Camera className="w-3.5 h-3.5 text-primary" />
+                        <span className="hidden sm:inline">Change Photo</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Delete this post permanently from your profile and community feed?')) {
+                            StorageService.deleteTestimony(activeDetailPost.id);
+                            setMyPosts(prev => prev.filter(p => p.id !== activeDetailPost.id));
+                            setActiveDetailPost(null);
+                            showToast('Post deleted');
+                          }
+                        }}
+                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                        title="Delete post (Author/Admin/Mod only)"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  );
+                })()}
+                <button
+                  onClick={() => setActiveDetailPost(null)}
+                  className="p-1.5 rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Hidden file input for updating post photo */}
+            <input
+              type="file"
+              ref={postImageFileInputRef}
+              onChange={handlePostImageChange}
+              accept="image/*"
+              className="hidden"
+            />
+
+            {/* Seamlessly scrollable body: image, details, caption, and comments */}
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {/* Post Image with Double-Tap Heart Animation */}
+              <div 
+                className="relative w-full bg-muted overflow-hidden cursor-pointer max-h-52 flex items-center justify-center shrink-0"
+                onDoubleClick={() => handleTogglePostLike(activeDetailPost)}
               >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+                <img
+                  src={activeDetailPost.image_url || '/assets/apostle_joe_daniels_preach.jpg'}
+                  alt=""
+                  className="w-full max-h-52 object-cover"
+                />
 
-            {/* Post Image with Double-Tap Heart Animation */}
-            <div 
-              className="relative aspect-square w-full bg-muted shrink-0 overflow-hidden cursor-pointer"
-              onDoubleClick={() => handleTogglePostLike(activeDetailPost)}
-            >
-              <img
-                src={activeDetailPost.image_url || '/assets/apostle_joe_daniels_preach.jpg'}
-                alt=""
-                className="w-full h-full object-cover"
-              />
-
-              {postHeartAnim && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <Heart className="w-20 h-20 text-rose-500 fill-rose-500 animate-ping" />
-                </div>
-              )}
-            </div>
-
-            {/* Actions Bar */}
-            <div className="p-3 space-y-2 flex-1 overflow-y-auto">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => handleTogglePostLike(activeDetailPost)}
-                    className="text-foreground hover:scale-110 active:scale-90 transition-transform cursor-pointer"
-                  >
-                    <Heart
-                      className={`w-6 h-6 ${
-                        activeDetailPost.user_liked || activeDetailPost.liked_user_ids?.includes(localUser.id)
-                          ? 'fill-rose-500 text-rose-500'
-                          : 'text-foreground'
-                      }`}
-                    />
-                  </button>
-                  <button className="text-foreground hover:scale-110 transition-transform cursor-pointer">
-                    <MessageCircle className="w-6 h-6" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      const shareText = `Check out this testimony on Gateway Church: "${activeDetailPost.title}"\n${window.location.origin}`;
-                      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`, '_blank');
-                    }}
-                    className="text-foreground hover:scale-110 transition-transform cursor-pointer"
-                  >
-                    <Share2 className="w-5 h-5 text-emerald-500" />
-                  </button>
-                </div>
-
-                <span className="text-[10px] font-semibold text-primary px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20">
-                  {activeDetailPost.category}
-                </span>
+                {postHeartAnim && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <Heart className="w-20 h-20 text-rose-500 fill-rose-500 animate-ping" />
+                  </div>
+                )}
               </div>
 
-              {/* Likes counter */}
-              <p className="font-bold text-xs text-foreground">
-                {(activeDetailPost.likes_count || 0).toLocaleString()} likes
-              </p>
-
-              {/* Caption */}
-              <p className="text-xs text-foreground/90 leading-relaxed">
-                <strong className="text-foreground mr-1.5">{localUser.full_name}</strong>
-                {activeDetailPost.content || activeDetailPost.title}
-              </p>
-
-              {activeDetailPost.scripture_tag && (
-                <p className="text-[11px] text-primary font-semibold italic">
-                  📖 {activeDetailPost.scripture_tag}
-                </p>
-              )}
-
-              {/* Comments Thread */}
-              <div className="pt-2 border-t border-border space-y-2">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Comments</p>
-                {activeDetailPost.comments?.map((c, idx) => (
-                  <div key={idx} className="text-xs flex items-start gap-2">
-                    <strong className="text-foreground font-semibold shrink-0">{c.user_name}:</strong>
-                    <span className="text-muted-foreground">{c.text}</span>
+              {/* Actions Bar & Content */}
+              <div className="p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => handleTogglePostLike(activeDetailPost)}
+                      className="text-foreground hover:scale-110 active:scale-90 transition-transform cursor-pointer"
+                    >
+                      <Heart
+                        className={`w-5 h-5 ${
+                          activeDetailPost.user_liked || activeDetailPost.liked_user_ids?.includes(localUser.id)
+                            ? 'fill-rose-500 text-rose-500'
+                            : 'text-foreground'
+                        }`}
+                      />
+                    </button>
+                    <button className="text-foreground hover:scale-110 transition-transform cursor-pointer">
+                      <MessageCircle className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        const shareText = `Check out this testimony on Gateway Church: "${activeDetailPost.title}"\n${window.location.origin}`;
+                        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`, '_blank');
+                      }}
+                      className="text-foreground hover:scale-110 transition-transform cursor-pointer"
+                    >
+                      <Share2 className="w-4 h-4 text-emerald-500" />
+                    </button>
                   </div>
-                ))}
+
+                  <span className="text-[10px] font-semibold text-primary px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20">
+                    {activeDetailPost.category}
+                  </span>
+                </div>
+
+                {/* Likes counter */}
+                <p className="font-bold text-xs text-foreground">
+                  {(activeDetailPost.likes_count || 0).toLocaleString()} likes
+                </p>
+
+                {/* Caption */}
+                <p className="text-xs text-foreground/90 leading-relaxed">
+                  <strong className="text-foreground mr-1.5">{localUser.full_name}</strong>
+                  {activeDetailPost.content || activeDetailPost.title}
+                </p>
+
+                {activeDetailPost.scripture_tag && (
+                  <p className="text-[11px] text-primary font-semibold italic">
+                    📖 {activeDetailPost.scripture_tag}
+                  </p>
+                )}
+
+                {/* Comments Thread */}
+                <div className="pt-2 border-t border-border space-y-2">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Comments</p>
+                  {activeDetailPost.comments?.map((c, idx) => (
+                    <div key={idx} className="text-xs flex items-start gap-2">
+                      <strong className="text-foreground font-semibold shrink-0">{c.user_name}:</strong>
+                      <span className="text-muted-foreground">{c.text}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -1881,12 +1910,12 @@ export const MeTab: React.FC<MeTabProps> = ({
         </div>
       )}
 
-      {/* 11. STORY HIGHLIGHTS VIEWER */}
+      {/* 11. STORY HIGHLIGHTS VIEWER (Contained on mobile to never overlap screen) */}
       {activeStoryHighlight && (
-        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col justify-between p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col justify-between p-2.5 sm:p-4 max-h-[100dvh] h-[100dvh] overflow-hidden pb-[max(0.75rem,env(safe-area-inset-bottom))] animate-in fade-in">
           
           {/* Progress Bars */}
-          <div className="flex gap-1.5 pt-2 max-w-md mx-auto w-full">
+          <div className="flex gap-1.5 pt-1 max-w-sm mx-auto w-full shrink-0">
             {storyHighlights.map((hl) => (
               <div key={hl.id} className="h-1 flex-1 bg-white/20 rounded-full overflow-hidden">
                 <div
@@ -1904,7 +1933,7 @@ export const MeTab: React.FC<MeTabProps> = ({
           </div>
 
           {/* Story Top Bar */}
-          <div className="max-w-md mx-auto w-full flex items-center justify-between py-3">
+          <div className="max-w-sm mx-auto w-full flex items-center justify-between py-2 shrink-0">
             <div className="flex items-center gap-2.5">
               <img
                 src={localUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
@@ -1918,18 +1947,18 @@ export const MeTab: React.FC<MeTabProps> = ({
             </div>
             <button
               onClick={() => setActiveStoryHighlight(null)}
-              className="p-1 rounded-full bg-white/20 text-white hover:bg-white/30"
+              className="p-1.5 rounded-full bg-white/20 text-white hover:bg-white/30 cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Story Image Stage */}
-          <div className="max-w-md mx-auto w-full aspect-[9/16] rounded-2xl overflow-hidden relative shadow-2xl flex items-center justify-center bg-black">
+          {/* Story Image Stage - Contained to mobile viewport */}
+          <div className="max-w-sm mx-auto w-full flex-1 min-h-0 my-auto rounded-2xl overflow-hidden relative shadow-2xl flex items-center justify-center bg-black">
             <img
               src={activeStoryHighlight.img}
               alt=""
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
             />
             
             {/* Tap navigation hotspots */}
@@ -1949,16 +1978,16 @@ export const MeTab: React.FC<MeTabProps> = ({
               }}
             />
 
-            <div className="absolute bottom-6 left-4 right-4 text-center">
-              <span className="px-4 py-1.5 rounded-full bg-black/60 text-primary font-semibold text-xs border border-primary/40 shadow-lg">
-                ✨ {activeStoryHighlight.title} • Gateway Church
+            <div className="absolute bottom-4 left-4 right-4 text-center">
+              <span className="px-3.5 py-1 rounded-full bg-black/60 text-primary font-semibold text-xs border border-primary/40 shadow-lg">
+                ✨ {activeStoryHighlight.title}
               </span>
             </div>
           </div>
 
           {/* Story Footer */}
-          <div className="max-w-md mx-auto w-full py-3 flex items-center justify-center">
-            <span className="text-[11px] text-white/50">Tap left to rewind • Tap right to advance</span>
+          <div className="max-w-sm mx-auto w-full py-2 flex items-center justify-center shrink-0">
+            <span className="text-[10px] text-white/50">Tap left to rewind • Tap right to advance</span>
           </div>
 
         </div>
@@ -1967,7 +1996,7 @@ export const MeTab: React.FC<MeTabProps> = ({
       {/* 12. ADD STORY HIGHLIGHT DRAWER */}
       {showAddHighlightModal && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
-          <div className="w-full max-w-sm bg-card border border-border rounded-t-2xl sm:rounded-2xl p-5 shadow-xl space-y-4">
+          <div className="w-full max-w-sm bg-card border border-border rounded-t-2xl sm:rounded-2xl p-5 shadow-xl space-y-4 max-h-[60vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-border">
               <h3 className="font-bold text-sm text-foreground">Create Story Highlight</h3>
               <button onClick={() => setShowAddHighlightModal(false)} className="p-1.5 rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground">
@@ -2042,7 +2071,7 @@ export const MeTab: React.FC<MeTabProps> = ({
       {/* 13. DIGITAL MEMBER ID CARD MODAL */}
       {showMemberIdCard && (
         <div className="fixed inset-0 z-50 bg-background/85 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
-          <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-6 shadow-xl text-center space-y-4 text-foreground relative">
+          <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-6 shadow-xl text-center space-y-4 text-foreground relative max-h-[60vh] overflow-y-auto">
             <button
               onClick={() => setShowMemberIdCard(false)}
               className="absolute top-4 right-4 p-1.5 rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-colors"
@@ -2102,13 +2131,27 @@ export const MeTab: React.FC<MeTabProps> = ({
       {/* 14. 3-DOTS PROFILE OPTIONS SHEET */}
       {showOptionsSheet && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
-          <div className="w-full max-w-sm bg-card border border-border rounded-t-2xl sm:rounded-2xl p-5 shadow-xl space-y-2 text-xs">
+          <div className="w-full max-w-sm bg-card border border-border rounded-t-2xl sm:rounded-2xl p-5 shadow-xl space-y-2 text-xs max-h-[60vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-border">
               <h4 className="font-bold text-foreground text-sm">Account Options</h4>
               <button onClick={() => setShowOptionsSheet(false)} className="p-1.5 rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground">
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            <button
+              onClick={() => {
+                handleCopyId();
+                showToast(`Copied ID: ${localUser.member_id}`);
+              }}
+              className="w-full p-3 rounded-lg bg-secondary/50 hover:bg-secondary text-left text-foreground font-medium flex items-center justify-between transition-colors cursor-pointer border border-border"
+            >
+              <div className="flex items-center gap-2.5">
+                <Copy className="w-4 h-4 text-amber-500" />
+                <span>Copy Member ID ({localUser.member_id})</span>
+              </div>
+              <span className="text-[10px] text-primary font-bold uppercase">{copiedId ? 'Copied!' : 'Copy'}</span>
+            </button>
 
             <button
               onClick={handleShareProfileWhatsApp}

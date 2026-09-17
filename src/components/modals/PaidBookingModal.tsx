@@ -115,8 +115,8 @@ export const PaidBookingModal: React.FC<PaidBookingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-      <div className="bg-card border border-border rounded-2xl max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150 my-auto text-foreground">
+    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-card border border-border rounded-2xl max-w-md w-full max-h-[60vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150 my-auto text-foreground">
         
         {/* Header */}
         <div className="bg-secondary/40 p-3.5 sm:p-4 border-b border-border flex items-center justify-between shrink-0">
@@ -232,7 +232,7 @@ export const PaidBookingModal: React.FC<PaidBookingModalProps> = ({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmitBooking} className="p-4 sm:p-5 space-y-3.5 max-h-[80vh] overflow-y-auto">
+          <form onSubmit={handleSubmitBooking} className="p-4 sm:p-5 space-y-3.5 flex-1 min-h-0 overflow-y-auto">
             {paymentError && (
               <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
                 {paymentError}

@@ -79,6 +79,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
   const [viewStyle, setViewStyle] = useState<'verse' | 'paragraph'>('verse');
   const [fontFamily, setFontFamily] = useState<'serif' | 'sans'>('serif');
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [showSearchInput, setShowSearchInput] = useState<boolean>(false);
 
   // Tabs: Reader vs Reading Plans vs Bookmarks
   const [activeTab, setActiveTab] = useState<'reader' | 'plans' | 'highlights'>('reader');
@@ -551,190 +552,344 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
     <div className="space-y-4 pb-20 max-w-4xl mx-auto px-0 sm:px-2 pt-1 w-full max-w-full">
       
       {/* 1. Main Top Navigation Bar */}
-      <div className="bg-card/95 backdrop-blur-md border border-border rounded-xl p-2.5 sm:p-3 shadow-sm sticky top-14 z-30 space-y-2">
+      <div className="bg-card/95 backdrop-blur-md border border-border rounded-xl p-2 sm:p-2.5 shadow-sm sticky top-14 z-30 space-y-2">
         
-        <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
-          {/* Main Scripture Selector Trigger (Book + Chapter) */}
-          <button
-            id="btn-open-jw-bible-nav"
-            onClick={() => {
-              setNavStep('book');
-              setShowNavModal(true);
-            }}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border hover:border-primary/40 text-foreground font-semibold text-sm sm:text-base transition-all shadow-xs active:scale-95"
-          >
-            <BookOpen className="w-4 h-4 text-primary" />
-            <span className="text-primary">{displayBookName(selectedBook)}</span>
-            <span className="text-foreground">{selectedChapter}</span>
-            <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-          </button>
-
-          {/* Quick Chapter Step Prev / Next Buttons */}
-          <div className="flex items-center gap-1 bg-secondary/70 p-1 rounded-lg border border-border">
+        <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+          {/* Left: Scripture Selector (Book + Chapter) & Chapter Stepper */}
+          <div className="flex items-center gap-1 min-w-0">
             <button
-              disabled={selectedChapter <= 1}
+              id="btn-open-jw-bible-nav"
               onClick={() => {
-                setSelectedChapter(prev => Math.max(1, prev - 1));
-                setTargetVerse(1);
+                setNavStep('book');
+                setShowNavModal(true);
               }}
-              title="Previous Chapter"
-              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-background/80 disabled:opacity-30 transition-all"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border hover:border-primary/40 text-foreground font-semibold text-xs sm:text-sm transition-all shadow-xs active:scale-95 shrink-0"
+              title="Select Scripture Book & Chapter"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary shrink-0" />
+              <span className="text-primary truncate max-w-[90px] sm:max-w-none">{displayBookName(selectedBook)}</span>
+              <span className="text-foreground font-bold">{selectedChapter}</span>
+              <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
             </button>
-            <span className="text-xs font-mono text-muted-foreground px-1 font-semibold">
-              {selectedChapter} / {currentBookObj.chaptersCount}
-            </span>
-            <button
-              disabled={selectedChapter >= currentBookObj.chaptersCount}
-              onClick={() => {
-                setSelectedChapter(prev => Math.min(currentBookObj.chaptersCount, prev + 1));
-                setTargetVerse(1);
-              }}
-              title="Next Chapter"
-              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-background/80 disabled:opacity-30 transition-all"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
 
-          {/* Translation Switcher */}
-          <div className="flex items-center gap-1 bg-secondary/70 p-1 rounded-lg border border-border">
-            {(['KJV', 'NIV'] as BibleVersion[]).map(v => (
+            {/* Quick Chapter Step Prev / Next Buttons */}
+            <div className="flex items-center bg-secondary/70 p-0.5 rounded-lg border border-border shrink-0">
               <button
-                key={v}
-                onClick={() => setVersion(v)}
-                className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
-                  version === v 
-                    ? 'bg-primary text-primary-foreground shadow-xs' 
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
+                disabled={selectedChapter <= 1}
+                onClick={() => {
+                  setSelectedChapter(prev => Math.max(1, prev - 1));
+                  setTargetVerse(1);
+                }}
+                title="Previous Chapter"
+                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background/80 disabled:opacity-30 transition-all"
               >
-                {v}
+                <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
-            ))}
+              <button
+                disabled={selectedChapter >= currentBookObj.chaptersCount}
+                onClick={() => {
+                  setSelectedChapter(prev => Math.min(currentBookObj.chaptersCount, prev + 1));
+                  setTargetVerse(1);
+                }}
+                title="Next Chapter"
+                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background/80 disabled:opacity-30 transition-all"
+              >
+                <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
+            </div>
           </div>
 
-          {/* Settings & Audio & Offline Controls */}
-          <div className="flex items-center gap-1.5">
-            {/* Offline Mode Toggle Button */}
+          {/* Right: Translation Switcher, Audio, Search, Settings & Tools Menu */}
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+            {/* Version Pill Switcher (Toggle between KJV and NIV) */}
             <button
-              id="btn-toggle-offline-mode"
-              onClick={handleToggleOfflineMode}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5 ${
-                isOfflineMode
-                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-400 font-bold shadow-xs'
-                  : 'bg-secondary hover:bg-secondary/80 text-muted-foreground border-border'
-              }`}
-              title={isOfflineMode ? 'Offline Mode Active: Reading strictly from IndexedDB' : 'Click to activate Offline Mode'}
+              onClick={() => setVersion(prev => prev === 'KJV' ? 'NIV' : 'KJV')}
+              className="px-2 sm:px-2.5 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-xs font-bold text-primary transition-all shadow-xs"
+              title={`Switch Translation (Currently ${version} • Click to toggle)`}
             >
-              {isOfflineMode ? <WifiOff className="w-3.5 h-3.5 text-amber-500" /> : <Wifi className="w-3.5 h-3.5" />}
-              <span className="hidden xs:inline">{isOfflineMode ? 'Offline' : 'Online'}</span>
-              <span className={`w-2 h-2 rounded-full ${isOfflineMode ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
+              {version}
             </button>
 
-            {/* IndexedDB Cache & Download Actions */}
+            {/* Audio Reader */}
+            <button
+              onClick={handleToggleAudio}
+              className={`p-1.5 sm:p-2 rounded-lg text-xs font-semibold transition-all border ${
+                isPlayingAudio 
+                  ? 'bg-destructive text-destructive-foreground border-destructive animate-pulse' 
+                  : 'bg-secondary hover:bg-secondary/80 text-foreground border border-border'
+              }`}
+              title={isPlayingAudio ? 'Stop Audio' : 'Read Chapter Aloud'}
+            >
+              {isPlayingAudio ? <VolumeX className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary" />}
+            </button>
+
+            {/* Search Toggle */}
+            <button
+              onClick={() => setShowSearchInput(prev => !prev)}
+              className={`p-1.5 sm:p-2 rounded-lg text-xs font-semibold transition-all border ${
+                showSearchInput
+                  ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                  : 'bg-secondary hover:bg-secondary/80 text-foreground border border-border'
+              }`}
+              title="Search Verse or Word"
+            >
+              <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </button>
+
+            {/* Display & Offline Tools Menu */}
             <div className="relative">
               <button
-                id="btn-cache-menu"
-                onClick={() => setShowCacheDropdown(!showCacheDropdown)}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5 ${
-                  isChapterCached
-                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 font-bold'
-                    : 'bg-secondary hover:bg-secondary/80 text-foreground border-border'
+                id="btn-bible-tools-menu"
+                onClick={() => setShowSettings(prev => !prev)}
+                className={`p-1.5 sm:p-2 rounded-lg text-xs font-semibold transition-all border relative ${
+                  showSettings 
+                    ? 'bg-primary text-primary-foreground border-primary shadow-xs' 
+                    : 'bg-secondary hover:bg-secondary/80 text-foreground border border-border'
                 }`}
-                title="Offline Storage & IndexedDB Caching"
+                title="Display, Typography & Offline Tools"
               >
-                {isCachingChapter || isCachingBook ? (
-                  <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                ) : isChapterCached ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-500" />
-                ) : (
-                  <HardDriveDownload className="w-3.5 h-3.5 text-primary" />
+                <Sliders className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                {isOfflineMode && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-background animate-pulse" />
                 )}
-                <span className="hidden sm:inline">
-                  {isCachingBook ? 'Saving...' : isChapterCached ? 'Cached' : 'Cache'}
-                </span>
-                <ChevronDown className="w-3 h-3 text-muted-foreground" />
               </button>
 
-              {showCacheDropdown && (
-                <div className="absolute right-0 mt-1.5 w-64 bg-card border border-border rounded-xl p-2 shadow-xl z-50 text-xs space-y-1 animate-in fade-in zoom-in-95 duration-100">
-                  <div className="px-2 py-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between border-b border-border pb-1 mb-1">
-                    <span className="flex items-center gap-1"><Database className="w-3 h-3 text-primary" /> IndexedDB Cache</span>
-                    <span className={isChapterCached ? 'text-emerald-500 font-semibold' : 'text-muted-foreground'}>
-                      {isChapterCached ? 'Ch. Cached' : 'Not Cached'}
+              {/* Unified Display & Tools Dropdown Menu */}
+              {showSettings && (
+                <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-card border border-border rounded-xl p-3 shadow-xl z-50 text-xs space-y-3 animate-in fade-in zoom-in-95 duration-100 max-h-[60vh] overflow-y-auto overscroll-contain">
+                  {/* Header */}
+                  <div className="flex items-center justify-between pb-2 border-b border-border">
+                    <span className="font-bold text-foreground flex items-center gap-1.5 text-xs">
+                      <Sliders className="w-3.5 h-3.5 text-primary" />
+                      Display & Reading Tools
                     </span>
+                    <button onClick={() => setShowSettings(false)} className="p-1 rounded text-muted-foreground hover:text-foreground">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
 
-                  {/* Action 1: Cache current chapter */}
-                  <button
-                    disabled={isCachingChapter || isCachingBook || versesForChapter.length === 0}
-                    onClick={handleCacheCurrentChapter}
-                    className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-secondary flex items-center gap-2 text-foreground disabled:opacity-50 transition-colors"
-                  >
-                    <HardDriveDownload className="w-4 h-4 text-primary shrink-0" />
-                    <div>
-                      <div className="font-semibold">Cache Current Chapter</div>
-                      <div className="text-[10px] text-muted-foreground">Save {selectedBook} {selectedChapter} ({version}) to IndexedDB</div>
+                  {/* Section 1: Typography & Layout */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      <span>Typography & Layout</span>
                     </div>
-                  </button>
-
-                  {/* Action 2: Cache entire book */}
-                  <button
-                    disabled={isCachingChapter || isCachingBook}
-                    onClick={handleCacheEntireBook}
-                    className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-secondary flex items-center gap-2 text-foreground disabled:opacity-50 transition-colors"
-                  >
-                    <DownloadCloud className="w-4 h-4 text-emerald-500 shrink-0" />
-                    <div>
-                      <div className="font-semibold">Cache Entire Book</div>
-                      <div className="text-[10px] text-muted-foreground">Download all {currentBookObj.chaptersCount} chapters of {selectedBook}</div>
+                    
+                    {/* Font Size */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground text-xs">Text Size:</span>
+                      <div className="flex rounded-lg bg-secondary p-0.5 border border-border">
+                        <button
+                          onClick={() => setFontSize('sm')}
+                          className={`px-2 py-0.5 rounded text-xs transition-colors ${fontSize === 'sm' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                          A-
+                        </button>
+                        <button
+                          onClick={() => setFontSize('base')}
+                          className={`px-2 py-0.5 rounded text-xs transition-colors ${fontSize === 'base' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                          A
+                        </button>
+                        <button
+                          onClick={() => setFontSize('lg')}
+                          className={`px-2 py-0.5 rounded text-xs transition-colors ${fontSize === 'lg' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                          A+
+                        </button>
+                      </div>
                     </div>
-                  </button>
 
-                  <div className="border-t border-border my-1" />
-
-                  {/* Action 3: View Offline Library */}
-                  <button
-                    onClick={handleOpenOfflineLibrary}
-                    className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-secondary flex items-center gap-2 text-foreground transition-colors"
-                  >
-                    <BookOpen className="w-4 h-4 text-sky-500 shrink-0" />
-                    <div>
-                      <div className="font-semibold">View Offline Library</div>
-                      <div className="text-[10px] text-muted-foreground">Browse all cached scriptures in IndexedDB</div>
+                    {/* Font Family */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground text-xs">Font:</span>
+                      <div className="flex rounded-lg bg-secondary p-0.5 border border-border">
+                        <button
+                          onClick={() => setFontFamily('serif')}
+                          className={`px-2.5 py-0.5 rounded text-xs transition-colors ${fontFamily === 'serif' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                          Serif
+                        </button>
+                        <button
+                          onClick={() => setFontFamily('sans')}
+                          className={`px-2.5 py-0.5 rounded text-xs transition-colors ${fontFamily === 'sans' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                          Sans
+                        </button>
+                      </div>
                     </div>
-                  </button>
+
+                    {/* Layout View */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground text-xs">View Mode:</span>
+                      <div className="flex rounded-lg bg-secondary p-0.5 border border-border">
+                        <button
+                          onClick={() => setViewStyle('verse')}
+                          className={`px-2 py-0.5 rounded text-xs transition-colors ${viewStyle === 'verse' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                          Verses
+                        </button>
+                        <button
+                          onClick={() => setViewStyle('paragraph')}
+                          className={`px-2 py-0.5 rounded text-xs transition-colors ${viewStyle === 'paragraph' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                          Continuous
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border" />
+
+                  {/* Section 2: Offline Mode & IndexedDB Caching */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      <span className="flex items-center gap-1"><Database className="w-3 h-3 text-primary" /> Offline & Cache</span>
+                      <span className={isChapterCached ? 'text-emerald-500 font-semibold' : 'text-muted-foreground'}>
+                        {isChapterCached ? 'Chapter Cached' : 'Not Cached'}
+                      </span>
+                    </div>
+
+                    {/* Offline Toggle Switch */}
+                    <button
+                      onClick={handleToggleOfflineMode}
+                      className={`w-full p-2 rounded-lg text-xs font-semibold transition-all border flex items-center justify-between ${
+                        isOfflineMode
+                          ? 'bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-400'
+                          : 'bg-secondary hover:bg-secondary/80 text-foreground border border-border'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isOfflineMode ? <WifiOff className="w-3.5 h-3.5 text-amber-500" /> : <Wifi className="w-3.5 h-3.5 text-emerald-500" />}
+                        <span>Offline Mode</span>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isOfflineMode ? 'bg-amber-500 text-white' : 'bg-secondary text-muted-foreground'}`}>
+                        {isOfflineMode ? 'ACTIVE' : 'OFF'}
+                      </span>
+                    </button>
+
+                    {/* Cache Current Chapter */}
+                    <button
+                      disabled={isCachingChapter || isCachingBook || versesForChapter.length === 0}
+                      onClick={handleCacheCurrentChapter}
+                      className="w-full text-left p-2 rounded-lg hover:bg-secondary flex items-center justify-between text-foreground disabled:opacity-50 transition-colors border border-border/60"
+                    >
+                      <div className="flex items-center gap-2">
+                        {isCachingChapter ? (
+                          <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        ) : isChapterCached ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        ) : (
+                          <HardDriveDownload className="w-3.5 h-3.5 text-primary" />
+                        )}
+                        <div>
+                          <div className="font-semibold text-xs">Cache Current Chapter</div>
+                          <div className="text-[10px] text-muted-foreground">{selectedBook} {selectedChapter} ({version})</div>
+                        </div>
+                      </div>
+                      {isChapterCached && (
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Saved</span>
+                      )}
+                    </button>
+
+                    {/* Cache Entire Book */}
+                    <button
+                      disabled={isCachingChapter || isCachingBook}
+                      onClick={handleCacheEntireBook}
+                      className="w-full text-left p-2 rounded-lg hover:bg-secondary flex items-center gap-2 text-foreground disabled:opacity-50 transition-colors border border-border/60"
+                    >
+                      <DownloadCloud className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-xs">Cache Entire Book</div>
+                        <div className="text-[10px] text-muted-foreground">Download all {currentBookObj.chaptersCount} chapters of {selectedBook}</div>
+                      </div>
+                    </button>
+
+                    {/* View Offline Library */}
+                    <button
+                      onClick={() => {
+                        setShowSettings(false);
+                        handleOpenOfflineLibrary();
+                      }}
+                      className="w-full text-left p-2 rounded-lg bg-secondary/50 hover:bg-secondary flex items-center justify-between text-foreground transition-colors border border-border/60"
+                    >
+                      <div className="flex items-center gap-2">
+                        <BookOpen className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <span className="font-semibold text-xs">Open Offline Library</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {cachedChaptersList.length} saved
+                      </span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
-
-            <button
-              onClick={handleToggleAudio}
-              className={`p-2 rounded-lg text-xs font-semibold transition-all ${
-                isPlayingAudio 
-                  ? 'bg-destructive text-destructive-foreground animate-pulse' 
-                  : 'bg-secondary hover:bg-secondary/80 text-foreground border border-border'
-              }`}
-              title="Read Chapter Aloud"
-            >
-              {isPlayingAudio ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-primary" />}
-            </button>
-
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className={`p-2 rounded-lg text-xs font-semibold transition-all border ${
-                showSettings 
-                  ? 'bg-primary text-primary-foreground border-primary' 
-                  : 'bg-secondary hover:bg-secondary/80 text-foreground border border-border'
-              }`}
-              title="Typography & Reading Settings"
-            >
-              <Sliders className="w-4 h-4" />
-            </button>
           </div>
         </div>
+
+        {/* Quick Reference / Verse Search Bar (Toggled on demand) */}
+        {showSearchInput && (
+          <form onSubmit={handleQuickSearch} className="flex items-center gap-1.5 pt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                value={quickSearchQuery}
+                onChange={(e) => setQuickSearchQuery(e.target.value)}
+                placeholder='Search verse e.g. "John 3:16", "Romans 8:28", or "shepherd"'
+                className="w-full bg-secondary/70 border border-border rounded-lg pl-9 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
+                autoFocus
+              />
+            </div>
+            <button
+              type="submit"
+              className="px-3 py-1.5 bg-primary text-primary-foreground font-semibold text-xs rounded-lg hover:opacity-90 shadow-xs transition-all shrink-0"
+            >
+              Jump
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowSearchInput(false);
+                setIsSearching(false);
+              }}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </form>
+        )}
+
+        {/* Search Results Dropdown */}
+        {isSearching && quickSearchResults.length > 0 && (
+          <div className="p-2.5 bg-card border border-border rounded-xl space-y-1.5 max-h-48 overflow-y-auto text-xs shadow-lg">
+            <div className="flex items-center justify-between text-[11px] text-primary font-semibold px-1">
+              <span>{quickSearchResults.length} Search Matches</span>
+              <button onClick={() => setIsSearching(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {quickSearchResults.map((res, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  setSelectedBook(res.book);
+                  setSelectedChapter(res.chapter);
+                  setTargetVerse(res.verse);
+                  setHasSelectedBook(true);
+                  setIsSearching(false);
+                  setShowSearchInput(false);
+                }}
+                className="w-full text-left p-2 rounded-lg bg-secondary/60 hover:bg-secondary border border-border transition-all block"
+              >
+                <div className="font-semibold text-primary">
+                  {res.book} {res.chapter}:{res.verse}
+                </div>
+                <div className="text-muted-foreground line-clamp-1">{res.text}</div>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Toast Feedback for Offline operations */}
         {offlineToast && (
@@ -777,7 +932,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
           <div className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2 text-xs text-amber-700 dark:text-amber-300">
             <div className="flex items-center gap-2">
               <WifiOff className="w-4 h-4 text-amber-500 shrink-0" />
-              <span><strong>Offline Mode Active:</strong> Holy Scripture is served from IndexedDB. Zero network bandwidth consumed.</span>
+              <span><strong>Offline Mode Active:</strong> Reading from IndexedDB.</span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button
@@ -786,126 +941,6 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
               >
                 Offline Library
               </button>
-            </div>
-          </div>
-        )}
-
-        {/* Quick Reference / Verse Search Bar */}
-        <form onSubmit={handleQuickSearch} className="flex items-center gap-1.5">
-          <div className="relative flex-1">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              value={quickSearchQuery}
-              onChange={(e) => setQuickSearchQuery(e.target.value)}
-              placeholder='Search verse e.g. "John 3:16", "Romans 8:28", or word "shepherd"'
-              className="w-full bg-secondary/70 border border-border rounded-lg pl-9 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
-            />
-          </div>
-          <button
-            type="submit"
-            className="px-3 py-1.5 bg-primary text-primary-foreground font-semibold text-xs rounded-lg hover:opacity-90 shadow-xs transition-all"
-          >
-            Jump
-          </button>
-        </form>
-
-        {/* Search Results Dropdown */}
-        {isSearching && quickSearchResults.length > 0 && (
-          <div className="p-2.5 bg-card border border-border rounded-xl space-y-1.5 max-h-48 overflow-y-auto text-xs shadow-lg">
-            <div className="flex items-center justify-between text-[11px] text-primary font-semibold px-1">
-              <span>{quickSearchResults.length} Search Matches</span>
-              <button onClick={() => setIsSearching(false)} className="text-muted-foreground hover:text-foreground">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            {quickSearchResults.map((res, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  setSelectedBook(res.book);
-                  setSelectedChapter(res.chapter);
-                  setTargetVerse(res.verse);
-                  setHasSelectedBook(true);
-                  setIsSearching(false);
-                }}
-                className="w-full text-left p-2 rounded-lg bg-secondary/60 hover:bg-secondary border border-border transition-all block"
-              >
-                <div className="font-semibold text-primary">
-                  {res.book} {res.chapter}:{res.verse}
-                </div>
-                <div className="text-muted-foreground line-clamp-1">{res.text}</div>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* JW Typography Settings Panel (Expandable) */}
-        {showSettings && (
-          <div className="pt-2 border-t border-border flex flex-wrap items-center justify-between gap-3 text-xs text-foreground animate-in fade-in duration-150">
-            {/* Font Size Adjuster (A- / A / A+) */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-muted-foreground">Font Size:</span>
-              <div className="flex rounded-lg bg-secondary/70 p-0.5 border border-border">
-                <button
-                  onClick={() => setFontSize('sm')}
-                  className={`px-2.5 py-0.5 rounded text-xs transition-colors ${fontSize === 'sm' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  A-
-                </button>
-                <button
-                  onClick={() => setFontSize('base')}
-                  className={`px-2.5 py-0.5 rounded text-xs transition-colors ${fontSize === 'base' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  A
-                </button>
-                <button
-                  onClick={() => setFontSize('lg')}
-                  className={`px-2.5 py-0.5 rounded text-xs transition-colors ${fontSize === 'lg' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  A+
-                </button>
-              </div>
-            </div>
-
-            {/* Layout Style: Verse-by-Verse vs Continuous Paragraph */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-muted-foreground">Layout:</span>
-              <div className="flex rounded-lg bg-secondary/70 p-0.5 border border-border">
-                <button
-                  onClick={() => setViewStyle('verse')}
-                  className={`px-2.5 py-0.5 rounded text-xs flex items-center gap-1 transition-colors ${viewStyle === 'verse' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  <List className="w-3 h-3" />
-                  <span>Verse by Verse</span>
-                </button>
-                <button
-                  onClick={() => setViewStyle('paragraph')}
-                  className={`px-2.5 py-0.5 rounded text-xs flex items-center gap-1 transition-colors ${viewStyle === 'paragraph' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  <AlignLeft className="w-3 h-3" />
-                  <span>Continuous</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Font Family: Classical Serif vs Clean Sans */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-muted-foreground">Font:</span>
-              <div className="flex rounded-lg bg-secondary/70 p-0.5 border border-border">
-                <button
-                  onClick={() => setFontFamily('serif')}
-                  className={`px-2.5 py-0.5 rounded text-xs font-serif transition-colors ${fontFamily === 'serif' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  Serif
-                </button>
-                <button
-                  onClick={() => setFontFamily('sans')}
-                  className={`px-2.5 py-0.5 rounded text-xs font-sans transition-colors ${fontFamily === 'sans' ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  Sans
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -1468,7 +1503,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
           onClick={() => setShowNavModal(false)}
         >
           <div 
-            className="bg-card border border-border rounded-2xl max-w-xl w-full max-h-[88vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150"
+            className="bg-card border border-border rounded-2xl max-w-xl w-full max-h-[60vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             
@@ -1706,7 +1741,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
             }}
           >
             <div 
-              className="bg-card border border-border rounded-2xl max-w-xl w-full max-h-[88vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150 text-foreground"
+              className="bg-card border border-border rounded-2xl max-w-xl w-full max-h-[60vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150 text-foreground"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -2012,7 +2047,7 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
       {/* 5. IndexedDB Offline Library Modal */}
       {showOfflineLibraryModal && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 animate-in fade-in">
-          <div className="bg-card border border-border rounded-xl shadow-2xl max-w-xl w-full overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95">
+          <div className="bg-card border border-border rounded-xl shadow-2xl max-w-xl w-full overflow-hidden flex flex-col max-h-[60vh] animate-in zoom-in-95">
             {/* Modal Header */}
             <div className="p-4 border-b border-border flex items-center justify-between bg-secondary/40">
               <div className="flex items-center gap-2.5">

@@ -94,15 +94,15 @@ export const PaidGroupBillingModal: React.FC<PaidGroupBillingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-card border-2 border-amber-400/90 rounded-2xl max-w-md w-full overflow-hidden shadow-[0_0_40px_rgba(245,158,11,0.35)] animate-in zoom-in-95 duration-150 my-4 text-foreground relative">
+    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-card border-2 border-amber-400/90 rounded-2xl max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden shadow-[0_0_40px_rgba(245,158,11,0.35)] animate-in zoom-in-95 duration-150 text-foreground relative">
         
         {/* Shimmering Gold Ambient Glow Accent */}
         <div className="absolute -top-12 -left-12 w-36 h-36 bg-amber-500/25 rounded-full blur-2xl pointer-events-none" />
         <div className="absolute -bottom-12 -right-12 w-36 h-36 bg-amber-400/20 rounded-full blur-2xl pointer-events-none" />
 
         {/* Header with Shining Gold Banner */}
-        <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 p-4 text-slate-950 flex items-center justify-between shadow-sm relative z-10">
+        <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 p-3.5 sm:p-4 text-slate-950 flex items-center justify-between shadow-sm relative z-10 shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-slate-950/20 flex items-center justify-center font-bold">
               <Crown className="w-5 h-5 text-slate-950 fill-current" />
@@ -122,7 +122,7 @@ export const PaidGroupBillingModal: React.FC<PaidGroupBillingModalProps> = ({
         </div>
 
         {/* Body Content */}
-        <div className="p-4 sm:p-5 space-y-4 relative z-10">
+        <div className="p-3.5 sm:p-4 space-y-3.5 relative z-10 overflow-y-auto flex-1 overscroll-contain">
           
           {/* Target Group Info Card */}
           <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">

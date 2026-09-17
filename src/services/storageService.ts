@@ -839,15 +839,20 @@ export class StorageService {
     const effectiveTargetId = (targetUserId === 'usr_daniels' || targetUserId === 'usr_pastor_joe') ? 'usr_apostle_joe' : targetUserId;
     const effectiveFollowerId = (followerId === 'usr_daniels' || followerId === 'usr_pastor_joe') ? 'usr_apostle_joe' : followerId;
 
-    const records = this.getUserFollowsRecords();
-    const existingIndex = records.findIndex(
+    let records = this.getUserFollowsRecords();
+    const isCurrentlyFollowing = records.some(
       r => r.follower_id === effectiveFollowerId && (r.following_id === effectiveTargetId || r.following_id === targetUserId)
     );
-    const isCurrentlyFollowing = existingIndex >= 0;
 
     if (isCurrentlyFollowing) {
-      records.splice(existingIndex, 1);
+      records = records.filter(
+        r => !(r.follower_id === effectiveFollowerId && (r.following_id === effectiveTargetId || r.following_id === targetUserId))
+      );
     } else {
+      // Remove any stale duplicates first, then push new record
+      records = records.filter(
+        r => !(r.follower_id === effectiveFollowerId && (r.following_id === effectiveTargetId || r.following_id === targetUserId))
+      );
       records.push({
         follower_id: effectiveFollowerId,
         following_id: effectiveTargetId,
@@ -862,10 +867,12 @@ export class StorageService {
     const followerUser = allUsers.find(u => u.id === effectiveFollowerId);
     
     if (targetUser) {
-      targetUser.followers_count = records.filter(r => r.following_id === effectiveTargetId || r.following_id === targetUserId).length;
+      const followers = Array.from(new Set(records.filter(r => r.following_id === effectiveTargetId || r.following_id === targetUserId).map(r => r.follower_id)));
+      targetUser.followers_count = followers.length;
     }
     if (followerUser) {
-      followerUser.following_count = records.filter(r => r.follower_id === effectiveFollowerId).length;
+      const following = Array.from(new Set(records.filter(r => r.follower_id === effectiveFollowerId).map(r => r.following_id)));
+      followerUser.following_count = following.length;
     }
 
     setLocal(KEYS.ALL_USERS, allUsers);
@@ -902,7 +909,7 @@ export class StorageService {
 
     return {
       isFollowing: !isCurrentlyFollowing,
-      targetUserFollowers: targetUser?.followers_count || 1
+      targetUserFollowers: targetUser?.followers_count ?? 0
     };
   }
 
@@ -910,15 +917,15 @@ export class StorageService {
     const uid = userId || this.getCurrentUser()?.id || 'guest';
     const effectiveUid = (uid === 'usr_daniels' || uid === 'usr_pastor_joe') ? 'usr_apostle_joe' : uid;
     const records = this.getUserFollowsRecords();
-    return records.filter(r => r.follower_id === effectiveUid).map(r => r.following_id);
+    return Array.from(new Set(records.filter(r => r.follower_id === effectiveUid).map(r => r.following_id)));
   }
 
   static getFollowersList(targetUserId: string): string[] {
     const effectiveTargetId = (targetUserId === 'usr_daniels' || targetUserId === 'usr_pastor_joe') ? 'usr_apostle_joe' : targetUserId;
     const records = this.getUserFollowsRecords();
-    return records
+    return Array.from(new Set(records
       .filter(r => r.following_id === effectiveTargetId || r.following_id === targetUserId)
-      .map(r => r.follower_id);
+      .map(r => r.follower_id)));
   }
 
   static getFollowingUsers(userId: string): User[] {

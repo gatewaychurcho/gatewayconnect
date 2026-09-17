@@ -122,11 +122,11 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-card border border-border rounded-2xl max-w-md w-full overflow-hidden shadow-xl animate-in zoom-in-95 duration-150 my-4 text-foreground">
+    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-card border border-border rounded-2xl max-w-md w-full max-h-[60vh] flex flex-col overflow-hidden shadow-xl animate-in zoom-in-95 duration-150 text-foreground">
         
         {/* Header */}
-        <div className="bg-secondary/40 p-4 border-b border-border flex items-center justify-between">
+        <div className="bg-secondary/40 p-3.5 sm:p-4 border-b border-border flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold shadow-xs">
               <Crown className="w-4 h-4" />
@@ -143,7 +143,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-colors"
+            className="p-1.5 rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -151,7 +151,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
 
         {/* Content */}
         {upgradedSuccess ? (
-          <div className="p-6 text-center space-y-4">
+          <div className="p-6 text-center space-y-4 overflow-y-auto flex-1 overscroll-contain">
             <div className="w-14 h-14 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8" />
             </div>
@@ -169,7 +169,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             </button>
           </div>
         ) : (
-          <div className="p-4 sm:p-5 space-y-4">
+          <div className="p-3.5 sm:p-4 space-y-3.5 overflow-y-auto flex-1 overscroll-contain">
             
             {/* Tiers Selection */}
             <div className="space-y-2.5">

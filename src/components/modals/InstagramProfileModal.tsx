@@ -203,13 +203,13 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
   const [showImagePickerModal, setShowImagePickerModal] = useState<boolean>(false);
   const [imagePickerPurpose, setImagePickerPurpose] = useState<'avatar' | 'highlight'>('avatar');
 
-  // Story Highlights State & Story Viewer
+  // Story Highlights State & Story Viewer - strictly real user highlights only
   const [storyHighlights, setStoryHighlights] = useState<StoryHighlight[]>(() => {
     try {
       const saved = localStorage.getItem('gcz_story_highlights_custom');
-      return saved ? JSON.parse(saved) : DEFAULT_HIGHLIGHTS;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return DEFAULT_HIGHLIGHTS;
+      return [];
     }
   });
   const [activeStoryHighlight, setActiveStoryHighlight] = useState<StoryHighlight | null>(null);
@@ -1029,60 +1029,62 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
             </div>
 
             {/* STORY HIGHLIGHTS ROW: Curated past church events & sermon snippets */}
-            <div className="pt-2">
-              <div className="flex items-center justify-between pb-1.5 px-0.5">
-                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-primary" />
-                  <span>Story Highlights</span>
-                </span>
-                {isMe && (
-                  <button
-                    onClick={() => setShowAddHighlightModal(true)}
-                    className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5 cursor-pointer"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>Add Story</span>
-                  </button>
-                )}
-              </div>
+            {(storyHighlights.length > 0 || isMe) && (
+              <div className="pt-2">
+                <div className="flex items-center justify-between pb-1.5 px-0.5">
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-primary" />
+                    <span>Story Highlights</span>
+                  </span>
+                  {isMe && (
+                    <button
+                      onClick={() => setShowAddHighlightModal(true)}
+                      className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Add Story</span>
+                    </button>
+                  )}
+                </div>
 
-              <div className="flex items-center gap-2.5 sm:gap-3 overflow-x-auto pb-1.5 scrollbar-none max-w-full">
-                {isMe && (
-                  <button 
-                    type="button"
-                    onClick={() => setShowAddHighlightModal(true)}
-                    className="flex flex-col items-center gap-1 shrink-0 cursor-pointer group"
-                  >
-                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border border-dashed border-border flex items-center justify-center text-muted-foreground group-hover:border-primary group-hover:text-primary transition-colors bg-secondary/50">
-                      <Plus className="w-4 h-4" />
-                    </div>
-                    <span className="text-[10px] text-muted-foreground font-medium">New</span>
-                  </button>
-                )}
-
-                {storyHighlights.map((h) => (
-                  <button 
-                    type="button"
-                    key={h.id} 
-                    onClick={() => setActiveStoryHighlight(h)}
-                    className="flex flex-col items-center gap-1 shrink-0 cursor-pointer group"
-                  >
-                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform shadow-xs">
-                      <div className="w-full h-full rounded-full overflow-hidden p-[1px] bg-background">
-                        <img
-                          src={h.img}
-                          alt={h.title}
-                          className="w-full h-full rounded-full object-cover"
-                        />
+                <div className="flex items-center gap-2.5 sm:gap-3 overflow-x-auto pb-1.5 scrollbar-none max-w-full">
+                  {isMe && (
+                    <button 
+                      type="button"
+                      onClick={() => setShowAddHighlightModal(true)}
+                      className="flex flex-col items-center gap-1 shrink-0 cursor-pointer group"
+                    >
+                      <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border border-dashed border-border flex items-center justify-center text-muted-foreground group-hover:border-primary group-hover:text-primary transition-colors bg-secondary/50">
+                        <Plus className="w-4 h-4" />
                       </div>
-                    </div>
-                    <span className="text-[10px] text-foreground/80 font-medium truncate max-w-[54px] sm:max-w-[60px] text-center">
-                      {h.title}
-                    </span>
-                  </button>
-                ))}
+                      <span className="text-[10px] text-muted-foreground font-medium">New</span>
+                    </button>
+                  )}
+
+                  {storyHighlights.map((h) => (
+                    <button 
+                      type="button"
+                      key={h.id} 
+                      onClick={() => setActiveStoryHighlight(h)}
+                      className="flex flex-col items-center gap-1 shrink-0 cursor-pointer group"
+                    >
+                      <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform shadow-xs">
+                        <div className="w-full h-full rounded-full overflow-hidden p-[1px] bg-background">
+                          <img
+                            src={h.img}
+                            alt={h.title}
+                            className="w-full h-full rounded-full object-cover"
+                          />
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-foreground/80 font-medium truncate max-w-[54px] sm:max-w-[60px] text-center">
+                        {h.title}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* 3. INSTAGRAM TAB SWITCHER (Toggle between 'Testimonies' and 'Saved Verses') */}

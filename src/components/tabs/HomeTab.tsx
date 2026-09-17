@@ -36,7 +36,7 @@ import {
   Film
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { Sermon, Devotional, Testimony, User } from '../../types';
+import { Sermon, Devotional, Testimony, User, CommunityStory } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { MOCK_PARTNER_TICKERS } from '../../data/mockData';
 import { VerifiedBadge } from '../common/VerifiedBadge';
@@ -61,66 +61,6 @@ interface HomeTabProps {
   onOpenDevConsole?: () => void;
   onOpenAdminPanel?: () => void;
 }
-
-interface HomeStory {
-  id: string;
-  user_name: string;
-  avatar: string;
-  title: string;
-  image: string;
-  isLive?: boolean;
-  scripture?: string;
-  time: string;
-}
-
-const HOME_STORIES: HomeStory[] = [
-  {
-    id: 's_apostle',
-    user_name: 'Apostle Joe',
-    avatar: '/assets/apostle_joe_daniels_main.jpg',
-    title: 'Sunday Dominion Service',
-    image: '/assets/apostle_joe_daniels_preach.jpg',
-    isLive: true,
-    scripture: 'Romans 8:37',
-    time: '2h ago'
-  },
-  {
-    id: 's_word',
-    user_name: 'Daily Word',
-    avatar: '/assets/apostle_joe_daniels_podcast.jpg',
-    title: 'Divine Acceleration 2026',
-    image: 'https://images.unsplash.com/photo-1504052434569-70ad5836ab65?w=800&auto=format&fit=crop&q=80',
-    scripture: 'Habakkuk 2:3',
-    time: '4h ago'
-  },
-  {
-    id: 's_cathedral',
-    user_name: 'Harare 2026',
-    avatar: '/assets/apostle_joe_daniels_grad.jpg',
-    title: 'Cathedral Foundation Vision',
-    image: 'https://images.unsplash.com/photo-1548625361-0498b584a71b?w=800&auto=format&fit=crop&q=80',
-    scripture: 'Haggai 2:9',
-    time: '6h ago'
-  },
-  {
-    id: 's_worship',
-    user_name: 'Praise Choir',
-    avatar: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80',
-    title: 'Altar Worship & Fire',
-    image: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&auto=format&fit=crop&q=80',
-    scripture: 'Psalm 100:2',
-    time: '8h ago'
-  },
-  {
-    id: 's_youth',
-    user_name: 'Youth Fire',
-    avatar: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=300&auto=format&fit=crop&q=80',
-    title: 'Ignite Campus Revival',
-    image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&auto=format&fit=crop&q=80',
-    scripture: '1 Timothy 4:12',
-    time: '12h ago'
-  }
-];
 
 export const HomeTab: React.FC<HomeTabProps> = ({
   sermons,
@@ -179,9 +119,23 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const isPremiumActive = StorageService.isUserPremiumActive(activeUser);
   const badgeStatus = StorageService.getBadgeStatus(activeUser);
 
-  // Instagram-style Home state
-  const [activeStory, setActiveStory] = useState<HomeStory | null>(null);
+  // Real-time Community Stories
+  const [realStories, setRealStories] = useState<CommunityStory[]>(() => StorageService.getSortedStories(currentUser?.id));
+  const [activeStory, setActiveStory] = useState<CommunityStory | null>(null);
   const [storyProgress, setStoryProgress] = useState<number>(0);
+
+  useEffect(() => {
+    const refreshStories = () => {
+      setRealStories(StorageService.getSortedStories(currentUser?.id));
+    };
+    refreshStories();
+    window.addEventListener('gcz_story_updated', refreshStories);
+    window.addEventListener('gcz_follow_updated', refreshStories);
+    return () => {
+      window.removeEventListener('gcz_story_updated', refreshStories);
+      window.removeEventListener('gcz_follow_updated', refreshStories);
+    };
+  }, [currentUser?.id]);
   const [broadcastLikes, setBroadcastLikes] = useState<string[]>(() => StorageService.getBroadcastLikes());
   const [broadcastLikers, setBroadcastLikers] = useState<User[]>(() => StorageService.getBroadcastLikerUsers());
   const [isPostLiked, setIsPostLiked] = useState<boolean>(() => StorageService.hasUserLikedBroadcast(currentUser?.id));
@@ -469,9 +423,9 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       setStoryProgress(prev => {
         if (prev >= 100) {
           clearInterval(interval);
-          const currentIndex = HOME_STORIES.findIndex(s => s.id === activeStory.id);
-          if (currentIndex !== -1 && currentIndex < HOME_STORIES.length - 1) {
-            setActiveStory(HOME_STORIES[currentIndex + 1]);
+          const currentIndex = realStories.findIndex(s => s.id === activeStory.id);
+          if (currentIndex !== -1 && currentIndex < realStories.length - 1) {
+            setActiveStory(realStories[currentIndex + 1]);
           } else {
             setActiveStory(null);
           }
@@ -482,7 +436,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     }, 100);
 
     return () => clearInterval(interval);
-  }, [activeStory?.id]);
+  }, [activeStory?.id, realStories]);
 
   // Filter sermons
   const filteredSermons = sermons.filter(s => {
@@ -533,19 +487,19 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         </div>
       )}
 
-      {/* Instagram Story Viewer Modal */}
+      {/* Instagram Story Viewer Modal - Fixed to never overlap or push off mobile screen */}
       {activeStory && (
-        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-between p-3 sm:p-6 animate-in fade-in">
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-between p-2.5 sm:p-4 max-h-[100dvh] h-[100dvh] overflow-hidden pb-[max(0.75rem,env(safe-area-inset-bottom))] animate-in fade-in">
           {/* Progress bar */}
-          <div className="w-full max-w-md flex items-center gap-1.5 pt-2">
-            {HOME_STORIES.map(st => (
+          <div className="w-full max-w-sm flex items-center gap-1.5 pt-1 shrink-0">
+            {realStories.map(st => (
               <div key={st.id} className="flex-1 h-1 bg-white/20 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-white transition-all duration-100"
                   style={{
                     width: st.id === activeStory.id 
                       ? `${storyProgress}%` 
-                      : HOME_STORIES.findIndex(s => s.id === st.id) < HOME_STORIES.findIndex(s => s.id === activeStory.id) 
+                      : realStories.findIndex(s => s.id === st.id) < realStories.findIndex(s => s.id === activeStory.id) 
                         ? '100%' 
                         : '0%'
                   }}
@@ -555,55 +509,65 @@ export const HomeTab: React.FC<HomeTabProps> = ({
           </div>
 
           {/* Story Header */}
-          <div className="w-full max-w-md flex items-center justify-between mt-3 px-1 text-white">
+          <div className="w-full max-w-sm flex items-center justify-between mt-2 px-1 text-white shrink-0">
             <div className="flex items-center gap-2.5">
-              <img src={activeStory.avatar} alt="" className="w-9 h-9 rounded-full object-cover border-2 border-primary" />
+              <img 
+                src={activeStory.user_avatar || activeStory.avatar_url || '/assets/apostle_joe_daniels_main.jpg'} 
+                alt="" 
+                className="w-8 h-8 rounded-full object-cover border-2 border-primary" 
+              />
               <div>
                 <div className="flex items-center gap-1 font-bold text-xs">
                   <span>{activeStory.user_name}</span>
-                  <VerifiedBadge type="gold" size="xs" />
+                  <VerifiedBadge type={activeStory.badge_type || 'none'} size="xs" />
                 </div>
-                <span className="text-[10px] text-white/60">{activeStory.time}</span>
+                <span className="text-[10px] text-white/60">{activeStory.user_handle || 'Believer'}</span>
               </div>
             </div>
             <button 
               onClick={() => setActiveStory(null)} 
               className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Story Content Area */}
-          <div className="relative w-full max-w-md flex-1 my-3 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center bg-zinc-950">
-            <img src={activeStory.image} alt="" className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30" />
+          {/* Story Content Area - Contained and fully viewable on mobile */}
+          <div className="relative w-full max-w-sm flex-1 min-h-0 my-2 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center bg-zinc-950">
+            <img 
+              src={activeStory.image_url} 
+              alt="" 
+              className="w-full h-full object-contain" 
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
             
             {/* Story Text Overlay */}
-            <div className="absolute bottom-6 inset-x-4 text-white space-y-1.5">
+            <div className="absolute bottom-4 inset-x-3 text-white space-y-1">
               {activeStory.scripture && (
-                <span className="inline-block px-2.5 py-1 rounded-md bg-primary text-primary-foreground font-bold text-[11px] shadow">
+                <span className="inline-block px-2 py-0.5 rounded-md bg-primary text-primary-foreground font-bold text-[10px] shadow">
                   📖 {activeStory.scripture}
                 </span>
               )}
-              <h3 className="text-lg font-bold drop-shadow-md">{activeStory.title}</h3>
-              <p className="text-xs text-white/80">Tap left or right to skip stories</p>
+              <h3 className="text-sm sm:text-base font-bold drop-shadow-md line-clamp-2">
+                {activeStory.caption || activeStory.text || 'Gateway Dominion Story'}
+              </h3>
+              <p className="text-[10px] text-white/70">Tap left or right to switch</p>
             </div>
 
             {/* Click areas for prev/next story */}
             <div 
               className="absolute left-0 top-0 bottom-0 w-1/2 cursor-pointer"
               onClick={() => {
-                const idx = HOME_STORIES.findIndex(s => s.id === activeStory.id);
-                if (idx > 0) setActiveStory(HOME_STORIES[idx - 1]);
+                const idx = realStories.findIndex(s => s.id === activeStory.id);
+                if (idx > 0) setActiveStory(realStories[idx - 1]);
               }}
             />
             <div 
               className="absolute right-0 top-0 bottom-0 w-1/2 cursor-pointer"
               onClick={() => {
-                const idx = HOME_STORIES.findIndex(s => s.id === activeStory.id);
-                if (idx < HOME_STORIES.length - 1) {
-                  setActiveStory(HOME_STORIES[idx + 1]);
+                const idx = realStories.findIndex(s => s.id === activeStory.id);
+                if (idx < realStories.length - 1) {
+                  setActiveStory(realStories[idx + 1]);
                 } else {
                   setActiveStory(null);
                 }
@@ -612,90 +576,81 @@ export const HomeTab: React.FC<HomeTabProps> = ({
           </div>
 
           {/* Story Footer Input */}
-          <div className="w-full max-w-md flex items-center gap-2 px-1">
+          <div className="w-full max-w-sm flex items-center gap-2 px-1 shrink-0">
             <input 
               type="text"
               placeholder={`Reply to ${activeStory.user_name}...`}
-              className="flex-1 bg-white/10 border border-white/20 rounded-full px-4 py-2.5 text-xs text-white placeholder-white/50 focus:outline-none focus:border-primary"
+              className="flex-1 bg-white/10 border border-white/20 rounded-full px-3.5 py-2 text-xs text-white placeholder-white/50 focus:outline-none focus:border-primary"
             />
             <button 
               onClick={() => {
                 confetti({ particleCount: 15, spread: 40 });
-                showToast('Reaction sent to Apostle Joe Daniels');
+                showToast(`Reaction sent to ${activeStory.user_name}`);
               }}
-              className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-primary border border-white/20 transition-all cursor-pointer"
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-primary border border-white/20 transition-all cursor-pointer"
             >
-              <Heart className="w-5 h-5 fill-current" />
+              <Heart className="w-4 h-4 fill-current" />
             </button>
           </div>
         </div>
       )}
 
-      {/* 0. Instagram-Style Stories Tray */}
-      <div className="bg-card/90 backdrop-blur-md border border-border rounded-2xl p-3 shadow-xs overflow-x-auto scrollbar-none">
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-max">
-          {/* User's Own Story Item with Add (+) badge */}
-          <button
-            onClick={() => {
-              if (onNavigateTab) {
-                onNavigateTab('me');
-              } else {
-                showToast('Head to ME tab to publish your testimony');
-              }
-            }}
-            className="flex flex-col items-center gap-1 group cursor-pointer focus:outline-none shrink-0"
-          >
-            <div className="relative">
-              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full p-0.5 bg-gradient-to-tr from-muted to-muted-foreground/30 flex items-center justify-center group-hover:scale-105 transition-all">
-                <img
-                  src={currentUser?.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
-                  alt="Your Story"
-                  className="w-full h-full rounded-full object-cover border-2 border-background"
-                />
-              </div>
-              <div className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-blue-500 text-white flex items-center justify-center border border-background shadow-xs">
-                <Plus className="w-2.5 h-2.5 stroke-[3]" />
-              </div>
-            </div>
-            <span className="text-[10px] font-medium text-foreground truncate max-w-[56px] text-center">Your Story</span>
-          </button>
-
-          {/* Stories List */}
-          {HOME_STORIES.map(story => (
+      {/* 0. Real Community Stories Tray - Rendered only if there are real stories */}
+      {realStories.length > 0 && (
+        <div className="bg-card/90 backdrop-blur-md border border-border rounded-2xl p-3 shadow-xs overflow-x-auto scrollbar-none">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-max">
+            {/* User's Own Story Item with Add (+) badge */}
             <button
-              key={story.id}
-              onClick={() => setActiveStory(story)}
+              onClick={() => {
+                if (onNavigateTab) {
+                  onNavigateTab('me');
+                } else {
+                  showToast('Head to ME tab to publish your testimony');
+                }
+              }}
               className="flex flex-col items-center gap-1 group cursor-pointer focus:outline-none shrink-0"
             >
               <div className="relative">
-                {/* Instagram Gradient Ring */}
-                <div className={cn(
-                  "w-11 h-11 sm:w-12 sm:h-12 rounded-full p-[2px] transition-all group-hover:scale-105",
-                  story.isLive && liveStreamStatus.isLive
-                    ? "bg-gradient-to-tr from-red-600 via-rose-500 to-amber-400 animate-pulse"
-                    : "bg-gradient-to-tr from-primary via-amber-400 to-rose-500"
-                )}>
-                  <div className="w-full h-full rounded-full p-[1px] bg-background">
-                    <img
-                      src={story.avatar}
-                      alt={story.user_name}
-                      className="w-full h-full rounded-full object-cover"
-                    />
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full p-0.5 bg-gradient-to-tr from-muted to-muted-foreground/30 flex items-center justify-center group-hover:scale-105 transition-all">
+                  <img
+                    src={currentUser?.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
+                    alt="Your Story"
+                    className="w-full h-full rounded-full object-cover border-2 border-background"
+                  />
+                </div>
+                <div className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-blue-500 text-white flex items-center justify-center border border-background shadow-xs">
+                  <Plus className="w-2.5 h-2.5 stroke-[3]" />
+                </div>
+              </div>
+              <span className="text-[10px] font-medium text-foreground truncate max-w-[56px] text-center">Your Story</span>
+            </button>
+
+            {/* Real Stories List */}
+            {realStories.map(story => (
+              <button
+                key={story.id}
+                onClick={() => setActiveStory(story)}
+                className="flex flex-col items-center gap-1 group cursor-pointer focus:outline-none shrink-0"
+              >
+                <div className="relative">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full p-[2px] bg-gradient-to-tr from-primary via-amber-400 to-rose-500 transition-all group-hover:scale-105">
+                    <div className="w-full h-full rounded-full p-[1px] bg-background">
+                      <img
+                        src={story.user_avatar || story.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
+                        alt={story.user_name}
+                        className="w-full h-full rounded-full object-cover"
+                      />
+                    </div>
                   </div>
                 </div>
-                {story.isLive && liveStreamStatus.isLive && (
-                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1 py-0.2 rounded-full bg-red-600 text-white font-black text-[8px] tracking-wider uppercase border border-background shadow-xs">
-                    LIVE
-                  </span>
-                )}
-              </div>
-              <span className="text-[10px] font-medium text-foreground truncate max-w-[56px] text-center">
-                {story.user_name}
-              </span>
-            </button>
-          ))}
+                <span className="text-[10px] font-medium text-foreground truncate max-w-[56px] text-center">
+                  {story.user_name}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 1. Researched Church Sanctuary Location */}
       <div className="bg-card/85 backdrop-blur-md border border-border rounded-xl px-3.5 py-2.5 overflow-hidden shadow-xs flex items-center gap-3">
