@@ -59,9 +59,9 @@ export const CONFIG = {
   // ---------------------------------------------------------------------------
   // Server Port & Runtime Environment
   // ---------------------------------------------------------------------------
-  PORT: Number(getEnv('PORT') || getEnv('LIVE_PORT') || 8787),
-  IS_DEV: Boolean((import.meta as any)?.env?.DEV),
-  IS_PROD: Boolean((import.meta as any)?.env?.PROD),
+  PORT: Number(getEnv('PORT') || getEnv('LIVE_PORT') || 3000),
+  IS_DEV: Boolean(getEnv('DEV') === 'true' || process.env.NODE_ENV !== 'production'),
+  IS_PROD: Boolean(getEnv('PROD') === 'true' || process.env.NODE_ENV === 'production'),
   MODE: getEnv('MODE', 'production'),
 } as const;
 

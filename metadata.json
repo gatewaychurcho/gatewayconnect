@@ -1,6 +1,6 @@
 {
-  "name": "Gateway Church Connect",
-  "description": "Follow Apostle Joe Daniels And Melinda Daniels And Connect with the Gateway Church",
+  "name": "Gateway Connect",
+  "description": "Gateway Connect Connect With Apostle Dr Joe Daniels and Melinda Daniels and the Gateway Church",
   "requestFramePermissions": [
     "camera",
     "microphone"

@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { CONFIG } from './config';
 
@@ -60,6 +62,50 @@ const sendJson = (response: import('node:http').ServerResponse, status: number, 
 };
 
 const paynowHash = (values: string[], key: string) => crypto.createHash('sha512').update(values.join('') + key, 'utf8').digest('hex').toUpperCase();
+
+const MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.xml': 'application/xml',
+  '.txt': 'text/plain; charset=utf-8',
+};
+
+const serveStaticFile = (filePath: string, response: import('node:http').ServerResponse): boolean => {
+  try {
+    if (!fs.existsSync(filePath)) return false;
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) return false;
+
+    const ext = path.extname(filePath).toLowerCase();
+    const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+    const content = fs.readFileSync(filePath);
+
+    response.writeHead(200, {
+      'Content-Type': contentType,
+      'Content-Length': stat.size,
+      'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable'
+    });
+    response.end(content);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const server = createServer(async (request, response) => {
   const requestUrl = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
@@ -160,12 +206,35 @@ const server = createServer(async (request, response) => {
 
   // ... your Paynow routes unchanged ...
 
-  if (requestUrl.pathname === '/' || requestUrl.pathname === '/health') {
-    sendJson(response, 200, { service: 'gateway-connect-live', connected: clients.size });
+  if (requestUrl.pathname === '/health') {
+    sendJson(response, 200, { status: 'ok', service: 'gateway-connect-live', connected: clients.size });
     return;
   }
 
-  sendJson(response, 404, { error: 'Not found' });
+  // Serve static assets from dist/ directory with SPA fallback
+  const distDir = [
+    path.join(process.cwd(), 'dist'),
+    path.resolve(__dirname, '..', 'dist'),
+    path.resolve(__dirname)
+  ].find(dir => fs.existsSync(path.join(dir, 'index.html'))) || path.join(process.cwd(), 'dist');
+
+  const cleanPath = decodeURIComponent(requestUrl.pathname.replace(/^\/+/, ''));
+  const targetFilePath = path.join(distDir, cleanPath);
+
+  // Security: prevent path traversal outside distDir
+  if (targetFilePath.startsWith(distDir) && fs.existsSync(targetFilePath) && fs.statSync(targetFilePath).isFile()) {
+    if (serveStaticFile(targetFilePath, response)) return;
+  }
+
+  // SPA fallback to index.html for all page routes
+  const indexPath = path.join(distDir, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    if (serveStaticFile(indexPath, response)) return;
+  }
+
+  // Fallback if dist has not been generated
+  response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  response.end(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Gateway Connect</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#09090b;color:#f4f4f5;text-align:center;padding:1rem;"><div><h1 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;">Gateway Connect</h1><p style="font-size:0.875rem;color:#a1a1aa;">Serving live apostolic fellowship. Refreshing view...</p></div><script>setTimeout(() => location.reload(), 2000);</script></body></html>`);
 });
 
 const socketServer = new WebSocketServer({ server, path: '/live' });
@@ -232,8 +301,8 @@ socketServer.on('connection', (socket) => {
   });
 });
 
-const port = CONFIG.PORT;
+const port = Number(process.env.PORT || CONFIG.PORT || 3000);
 
 server.listen(port, '0.0.0.0', () => {
-  console.log('Gateway Connect live hub listening on port ' + port);
+  console.log('Gateway Connect server listening on 0.0.0.0:' + port);
 });
