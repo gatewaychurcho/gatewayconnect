@@ -1150,7 +1150,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                 <span className="text-[10px] sm:text-xs text-slate-400 block truncate">Supabase Project Ref</span>
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                  <span className="text-[11px] sm:text-xs font-mono font-bold text-emerald-400 truncate">csinlqdcqdgcssdanvsr</span>
+                  <span className="text-[11px] sm:text-xs font-mono font-bold text-emerald-400 truncate">{CONFIG.SUPABASE_URL.replace('https://', '').split('.')[0]}</span>
                 </div>
                 <p className="text-[9px] sm:text-[10px] text-slate-500 truncate">PostgreSQL 15.x Live</p>
               </div>
@@ -1671,7 +1671,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                 </button>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                To create all tables, Row Level Security (RLS) policies, and foreign keys in your Supabase project (<code className="text-emerald-400 font-mono">csinlqdcqdgcssdanvsr</code>):
+                To create all tables, Row Level Security (RLS) policies, and foreign keys in your Supabase project (<code className="text-emerald-400 font-mono">{CONFIG.SUPABASE_URL.replace('https://', '').split('.')[0]}</code>):
               </p>
               <ol className="text-xs text-slate-300 list-decimal list-inside space-y-1 font-mono">
                 <li>Go to your Supabase Dashboard and click <strong className="text-purple-300">SQL Editor</strong> on the left menu (icon <code className="text-amber-400">&gt;_</code>).</li>
