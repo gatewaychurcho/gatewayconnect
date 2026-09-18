@@ -137,12 +137,12 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 }) => {
   // Screen size detection for WhatsApp mobile vs desktop layout
   const [isMobile, setIsMobile] = useState<boolean>(() => 
-    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+    typeof window !== 'undefined' ? window.innerWidth < 640 : false
   );
 
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
+      setIsMobile(window.innerWidth < 640);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -1671,7 +1671,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       }}
     >
       <div 
-        className="bg-card border-0 sm:border border-border/80 rounded-none sm:rounded-2xl w-full max-w-4xl h-[100dvh] sm:h-[88vh] sm:max-h-[820px] flex flex-col shadow-2xl overflow-hidden text-card-foreground animate-in slide-in-from-bottom-3 sm:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom,0px)]"
+        className="bg-card border-0 sm:border border-border/80 rounded-none sm:rounded-2xl w-full max-w-5xl h-[100dvh] sm:h-[88vh] sm:max-h-[820px] flex flex-col shadow-2xl overflow-hidden text-card-foreground animate-in slide-in-from-bottom-3 sm:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom,0px)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Mobile Pull/Drag handle indicator */}
@@ -1788,8 +1788,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
           {/* ========================================================================= */}
           {/* LEFT COLUMN (Sidebar for Direct Messages OR Church Groups) */}
           {/* ========================================================================= */}
-          <div className={`w-full md:w-84 lg:w-92 bg-card border-r border-border/80 flex flex-col relative min-w-0 ${
-            isMobileChatActive ? 'hidden md:flex' : 'flex'
+          <div className={`w-full sm:w-84 md:w-92 bg-card border-r border-border/80 flex flex-col relative ${
+            isMobileChatActive ? 'hidden sm:flex' : 'flex'
           }`}>
             
             {/* Search & Actions Bar */}
@@ -2102,7 +2102,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                 {filteredGroups.map(grp => {
                   const isSelected = grp.id === activeGroupId;
                   const isMember = grp.member_ids.includes(currentUser.id);
-                  const isFs = grp.id === 'group_foundation_school' || grp.id === 'group_international_school_of_mentorship' || grp.id === 'group_isn_mentorship';
+                  const isFs = grp.id === 'group_foundation_school' || grp.id === 'group_isn_mentorship';
                   const grpUnread = StorageService.getUnreadGroupMessagesCount(grp.id, currentUser.id);
                   const grpMsgs = StorageService.getChatGroupMessagesForUser(grp.id, currentUser.id);
                   const lastMsg = grpMsgs[grpMsgs.length - 1];
@@ -2247,8 +2247,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
           {/* ========================================================================= */}
           {/* RIGHT COLUMN (Active Conversation Canvas for Direct OR Group) */}
           {/* ========================================================================= */}
-          <div className={`flex-1 flex flex-col bg-background min-w-0 overflow-hidden ${
-            (activeTab === 'direct' ? !activeUserId : !activeGroupId) ? 'hidden md:flex' : 'flex'
+          <div className={`flex-1 flex flex-col bg-background ${
+            (activeTab === 'direct' ? !activeUserId : !activeGroupId) ? 'hidden sm:flex' : 'flex'
           }`}>
             
             {/* DIRECT CHAT ACTIVE CANVAS */}
@@ -2292,7 +2292,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
                         <button
                           onClick={handleBackOrClose}
-                          className="md:hidden p-2 -ml-1 rounded-full hover:bg-secondary text-muted-foreground active:scale-95 transition-transform cursor-pointer"
+                          className="sm:hidden p-2 -ml-1 rounded-full hover:bg-secondary text-muted-foreground active:scale-95 transition-transform cursor-pointer"
                           title="Back to conversations"
                         >
                           <ArrowLeft className="w-5 h-5" />
@@ -2795,7 +2795,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       e.preventDefault();
                       handleSendMessage();
                     }}
-                    className="p-2 sm:p-2.5 bg-card border-t border-border flex items-center gap-1.5 sm:gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] w-full min-w-0 box-border"
+                    className="p-2 sm:p-2.5 bg-card border-t border-border flex items-center gap-1.5 sm:gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
                   >
                     <button
                       type="button"
@@ -2835,7 +2835,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         }
                       }}
                       placeholder={`Message ${activeUser.full_name}...`}
-                      className="flex-1 min-w-0 bg-secondary/80 border border-border rounded-full px-4 py-2 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1.5 focus:ring-primary shadow-2xs"
+                      className="flex-1 bg-secondary/80 border border-border rounded-full px-4 py-2 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1.5 focus:ring-primary shadow-2xs"
                     />
                     <button
                       type="submit"
@@ -2921,7 +2921,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
                         <button
                           onClick={handleBackOrClose}
-                          className="md:hidden p-2 -ml-1 rounded-full hover:bg-secondary text-muted-foreground active:scale-95 transition-transform cursor-pointer"
+                          className="sm:hidden p-2 -ml-1 rounded-full hover:bg-secondary text-muted-foreground active:scale-95 transition-transform cursor-pointer"
                           title="Back to conversations"
                         >
                           <ArrowLeft className="w-5 h-5" />
@@ -3682,7 +3682,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               e.preventDefault();
                               handleSendGroupMessage();
                             }}
-                            className="p-2 sm:p-2.5 bg-card border-t border-border flex items-center gap-1.5 sm:gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] w-full min-w-0 box-border"
+                            className="p-2 sm:p-2.5 bg-card border-t border-border flex items-center gap-1.5 sm:gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
                           >
                             <button
                               type="button"
@@ -3730,7 +3730,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               value={groupInputText}
                               onChange={handleGroupInputChange}
                               placeholder={`Message ${activeGroup.name} (type @ to tag)...`}
-                              className="flex-1 min-w-0 bg-secondary/80 border border-border rounded-full px-4 py-2 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1.5 focus:ring-primary shadow-2xs"
+                              className="flex-1 bg-secondary/80 border border-border rounded-full px-4 py-2 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1.5 focus:ring-primary shadow-2xs"
                             />
                             <button
                               type="submit"
@@ -3929,7 +3929,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   <h3 className="font-serif-church font-bold text-base text-foreground">
                     Create Church Group
                   </h3>
-                  <p className="text-[11px] text-muted-foreground">Fellowship Group</p>
+                  <p className="text-[11px] text-muted-foreground">WhatsApp-style Fellowship Cell</p>
                 </div>
               </div>
               <button
@@ -4106,9 +4106,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               </button>
             </div>
 
-            <div className="px-3 py-1.5 rounded-full bg-secondary text-[11px] text-muted-foreground flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" />
-              <span className="truncate">Admins receive an invitation to join.</span>
+            <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-700 dark:text-blue-300 leading-snug">
+              <span className="font-bold">WhatsApp Protocol Notice:</span> Super Admins (Apostle Joe, Prophetess Melinda, Pastor Easter) and Developers cannot be forced into groups directly; an official invitation will be sent to their inbox for them to accept or decline.
             </div>
 
             <div className="flex-1 overflow-y-auto divide-y divide-border space-y-1">
