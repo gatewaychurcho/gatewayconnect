@@ -935,6 +935,23 @@ export class StorageService {
     return { isLiked, count: likes.length, likerUsers };
   }
 
+  static incrementBroadcastLike(userId?: string): { isLiked: boolean; count: number; likerUsers: User[] } {
+    const uid = userId || this.getCurrentUser()?.id || 'guest';
+    const likes = this.getBroadcastLikes();
+    if (!likes.includes(uid)) {
+      likes.push(uid);
+      setLocal(KEYS.BROADCAST_LIKES_TABLE, likes);
+    }
+    const allUsers = this.getAllUsers();
+    const likerUsers = allUsers.filter(u => likes.includes(u.id));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_broadcast_likes_updated', {
+        detail: { isLiked: true, count: likes.length, likerUsers }
+      }));
+    }
+    return { isLiked: true, count: likes.length, likerUsers };
+  }
+
   static async hydrateFollowsFromSupabase(userId: string): Promise<void> {
     if (!userId || userId === 'guest') return;
     try {
@@ -1241,6 +1258,24 @@ export class StorageService {
     const events = this.getEvents();
     events.push(event);
     setLocal(KEYS.EVENTS, events);
+  }
+
+  static saveEvent(event: ChurchEvent): void {
+    const events = this.getEvents();
+    const index = events.findIndex(e => e.id === event.id);
+    if (index >= 0) {
+      events[index] = event;
+    } else {
+      events.push(event);
+    }
+    setLocal(KEYS.EVENTS, events);
+  }
+
+  static deleteEvent(eventId: string): boolean {
+    const events = this.getEvents();
+    const filtered = events.filter(e => e.id !== eventId);
+    setLocal(KEYS.EVENTS, filtered);
+    return filtered.length !== events.length;
   }
 
   // Pastor Location & Church Directions Requests
@@ -1973,6 +2008,10 @@ export class StorageService {
     return { user_liked: target.user_liked, likes_count: target.likes_count };
   }
 
+  static incrementTestimonyLikes(id: string, userId?: string): { user_liked: boolean; likes_count: number } {
+    return this.likeTestimony(id, userId);
+  }
+
   static addCommentToTestimony(postId: string, text: string, user?: User | null): PostComment | null {
     const list = this.getTestimonies();
     const target = list.find(t => t.id === postId);
@@ -2115,6 +2154,43 @@ export class StorageService {
     const updated = this.updateUserProfile({
       is_premium: true,
       badge_type: 'blue',
+      premium_expires_at: expiry.toISOString().split('T')[0]
+    });
+    return updated;
+  }
+
+  static isUserPremiumActive(user?: User | null): boolean {
+    const u = user || this.getCurrentUser();
+    if (!u) return false;
+    if (u.role === 'super_admin' || u.role === 'developer') return true;
+    if (!u.is_premium) return false;
+    if (u.premium_expires_at) {
+      return new Date(u.premium_expires_at).getTime() > Date.now();
+    }
+    return Boolean(u.is_premium);
+  }
+
+  static getBadgeStatus(user?: User | null): { hasBadge: boolean; badgeType: BadgeType | null; expiresAt?: string; is_active: boolean } {
+    const u = user || this.getCurrentUser();
+    if (!u) return { hasBadge: false, badgeType: null, is_active: false };
+    const hasBadge = Boolean(u.is_verified || (u.badge_type && u.badge_type !== 'none'));
+    const badgeType = u.badge_type && u.badge_type !== 'none' ? u.badge_type : (u.is_verified ? 'blue' : null);
+    const is_active = this.isUserPremiumActive(u) || hasBadge;
+    return {
+      hasBadge,
+      badgeType,
+      expiresAt: u.premium_expires_at,
+      is_active
+    };
+  }
+
+  static purchaseBadge(badge: BadgeType, months: number = 1): User | null {
+    const expiry = new Date();
+    expiry.setMonth(expiry.getMonth() + months);
+    const updated = this.updateUserProfile({
+      is_premium: true,
+      is_verified: badge !== 'none',
+      badge_type: badge,
       premium_expires_at: expiry.toISOString().split('T')[0]
     });
     return updated;
@@ -5558,6 +5634,31 @@ export class StorageService {
     }
     setLocal(KEYS.PAGE_POSTS, all);
     return !isLiked;
+  }
+
+  static resetAppToDefaults(): void {
+    setLocal(KEYS.SERMONS, MOCK_SERMONS);
+    setLocal(KEYS.DEVOTIONALS, MOCK_DEVOTIONALS);
+    setLocal(KEYS.TESTIMONIES, MOCK_TESTIMONIES);
+    setLocal(KEYS.GROUPS, MOCK_COMMUNITY_GROUPS);
+    setLocal(KEYS.PRAYERS, MOCK_PRAYER_REQUESTS);
+    setLocal(KEYS.EVENTS, MOCK_EVENTS);
+    setLocal(KEYS.PRODUCTS, MOCK_PRODUCTS);
+    setLocal(KEYS.DONATIONS, MOCK_DONATIONS);
+    setLocal(KEYS.BOOKINGS, MOCK_BOOKINGS);
+    setLocal(KEYS.ORDERS, MOCK_ORDERS);
+    setLocal(KEYS.JOE_VIBES, MOCK_JOE_VIBES);
+    setLocal(KEYS.PUSH_NOTIFICATIONS, MOCK_PUSH_NOTIFICATIONS);
+    setLocal(KEYS.CHAT_GROUPS, INITIAL_CHAT_GROUPS);
+    setLocal(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
+    setLocal(KEYS.CHURCH_PAGES, INITIAL_PAGES);
+    setLocal(KEYS.PAGE_POSTS, INITIAL_PAGE_POSTS);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_app_data_reset'));
+      window.dispatchEvent(new CustomEvent('gcz_testimony_updated'));
+      window.dispatchEvent(new CustomEvent('gcz_prayer_updated'));
+      window.dispatchEvent(new CustomEvent('gcz_groups_updated'));
+    }
   }
 }
 
