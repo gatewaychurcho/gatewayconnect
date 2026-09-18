@@ -9,7 +9,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- 2. USERS / PROFILES TABLE
 CREATE TABLE IF NOT EXISTS public.users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- TEXT (not UUID): the client uses ids like 'usr_apostle_joe' / 'usr_17…'.
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     phone VARCHAR(50) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL DEFAULT '',
     full_name VARCHAR(150) NOT NULL DEFAULT 'Church Member',
@@ -141,7 +142,7 @@ CREATE TABLE IF NOT EXISTS public.live_streams (
 
 CREATE TABLE IF NOT EXISTS public.live_streamers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id VARCHAR(100) NOT NULL,
+    user_id VARCHAR(100) NOT NULL UNIQUE,
     full_name VARCHAR(150) NOT NULL,
     city VARCHAR(100) NOT NULL DEFAULT 'Harare',
     device VARCHAR(50) DEFAULT 'Mobile',
