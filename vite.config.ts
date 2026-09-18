@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import crypto from 'crypto';
 import {defineConfig} from 'vite';
+import { CONFIG } from './config';
 
 // Paynow SHA-512 Generator for server-side signing
 function generateServerPaynowHash(values: string[], integrationKey: string): string {
@@ -21,8 +22,8 @@ export default defineConfig(() => {
           server.middlewares.use('/api/paynow/health', (req, res) => {
             res.setHeader('Content-Type', 'application/json');
             res.statusCode = 200;
-            const integrationId = (process.env.PAYNOW_INTEGRATION_ID || '').trim();
-            const integrationKey = (process.env.PAYNOW_INTEGRATION_KEY || '').trim();
+            const integrationId = CONFIG.PAYNOW_INTEGRATION_ID;
+            const integrationKey = CONFIG.PAYNOW_INTEGRATION_KEY;
             res.end(JSON.stringify({
               success: true,
               configured: Boolean(integrationId && integrationKey),
@@ -298,13 +299,11 @@ export default defineConfig(() => {
       },
     },
     server: {
-      host: '0.0.0.0',
-      port: 3000,
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
+      hmr: CONFIG.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      watch: CONFIG.DISABLE_HMR === 'true' ? null : {},
     },
   };
 });
