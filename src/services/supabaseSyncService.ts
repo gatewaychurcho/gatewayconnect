@@ -1,6 +1,19 @@
 import { getSupabase } from './supabaseClient';
 import { Donation, PrayerRequest, ServiceBooking, Sermon, Devotional, Testimony, PostComment, CommunityStory, CartItem, MessageReaction, GroupMediaItem, NotificationSettings, Receipt, User, ChatGroupMessage, DirectMessage, ChatGroup, LiveStreamViewer, AppNotification } from '../types';
 
+// Reads a JSON array from localStorage, tolerating blocked storage / bad data.
+function readLocalArray(key: string): any[] {
+  try {
+    if (typeof localStorage === 'undefined') return [];
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export class SupabaseSyncService {
   /**
    * Normalizes arbitrary payment method string into standard Supabase payment_gateway enum value
@@ -293,92 +306,204 @@ export class SupabaseSyncService {
   }
 
   /**
-   * Pulls latest remote rows from Supabase into local cache if tables exist
+   * Pulls the full direct-message history for a user from the shared `messages`
+   * table so a new device / new login sees conversations that were started on
+   * another phone.
    */
-  static async pullRemoteData(): Promise<{ prayersCount: number; sermonsCount: number; postsCount: number }> {
+  static async pullDirectMessagesFromSupabase(userId: string): Promise<DirectMessage[]> {
     const supabase = getSupabase();
-    if (!supabase) return { prayersCount: 0, sermonsCount: 0, postsCount: 0 };
+    if (!supabase || !userId) return [];
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+        .not('receiver_id', 'is', null)
+        .order('created_at', { ascending: true })
+        .limit(2000);
+
+      if (error || !data) return [];
+
+      return data.map((row: any) => ({
+        id: row.id,
+        sender_id: row.sender_id,
+        receiver_id: row.receiver_id,
+        text: row.text || '',
+        created_at: row.created_at || new Date().toISOString(),
+        is_read: Boolean(row.is_read),
+        reply_to: row.reply_to || undefined,
+        media_url: row.media_url || undefined,
+        media_type: row.media_type || undefined
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Pulls group-chat history for every fellowship group the user belongs to.
+   */
+  static async pullGroupMessagesFromSupabase(groupIds: string[]): Promise<ChatGroupMessage[]> {
+    const supabase = getSupabase();
+    if (!supabase || !groupIds || groupIds.length === 0) return [];
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .in('group_id', groupIds)
+        .order('created_at', { ascending: true })
+        .limit(3000);
+
+      if (error || !data) return [];
+
+      return data.map((row: any) => ({
+        id: row.id,
+        group_id: row.group_id,
+        sender_id: row.sender_id,
+        sender_name: row.sender_name || 'Church Member',
+        sender_avatar: row.sender_avatar || undefined,
+        sender_role: row.sender_role || 'member',
+        text: row.text || '',
+        created_at: row.created_at || new Date().toISOString(),
+        is_system: Boolean(row.is_system),
+        reply_to: row.reply_to || undefined,
+        read_by_user_ids: row.read_by_user_ids || [],
+        media_url: row.media_url || undefined,
+        media_type: row.media_type || undefined
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Pulls the latest remote rows (posts, their comments, and prayer requests)
+   * from Supabase into the local cache.
+   *
+   * This is what lets a brand-new user / fresh device see content created by
+   * everyone else. Writing to Supabase alone was never enough — nothing ever
+   * read it back, so new accounts only saw the bundled mock data.
+   */
+  static async pullRemoteData(): Promise<{ prayersCount: number; sermonsCount: number; postsCount: number; commentsCount: number }> {
+    const supabase = getSupabase();
+    if (!supabase) return { prayersCount: 0, sermonsCount: 0, postsCount: 0, commentsCount: 0 };
 
     let prayersCount = 0;
     let sermonsCount = 0;
     let postsCount = 0;
+    let commentsCount = 0;
 
+    // --- Prayer requests -----------------------------------------------------
     try {
-      // Pull prayers
       const { data: prayers, error: pErr } = await supabase
         .from('prayer_requests')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(50);
 
       if (!pErr && prayers && prayers.length > 0) {
-        let localPrayers: any[] = [];
-        try {
-          const raw = localStorage.getItem('gcz_prayers');
-          if (raw) localPrayers = JSON.parse(raw);
-        } catch (_) {}
-        const combined = [...prayers.map((p: any) => ({
-          id: p.id,
-          user_id: p.user_id || 'usr_remote',
-          user_name: p.author_name || p.user_name || (p.is_anonymous ? 'Anonymous Believer' : 'Church Believer'),
-          request_text: p.request_text || '',
-          category: p.category || 'General',
-          is_anonymous: Boolean(p.is_anonymous),
-          is_public: true,
-          prayer_count: p.prayer_count || 1,
-          created_at: p.created_at || new Date().toISOString(),
-          status: p.apostle_prayed ? ('apostle_prayed' as const) : ('approved' as const),
-          is_answered: Boolean(p.is_answered)
-        })), ...localPrayers.filter(lp => !prayers.some((rp: any) => rp.id === lp.id))];
+        const localPrayers = readLocalArray('gcz_prayers');
+        const remoteIds = new Set(prayers.map((p: any) => p.id));
+        const combined = [
+          ...prayers.map((p: any) => ({
+            id: p.id,
+            user_id: p.user_id || 'usr_remote',
+            user_name: p.author_name || p.user_name || 'Church Believer',
+            request_text: p.request_text,
+            category: p.category || 'Spiritual Growth',
+            is_anonymous: Boolean(p.is_anonymous),
+            is_public: true,
+            prayer_count: p.prayer_count || 1,
+            created_at: p.created_at,
+            status: p.apostle_prayed ? ('apostle_prayed' as const) : ('approved' as const),
+            is_answered: Boolean(p.is_answered)
+          })),
+          ...localPrayers.filter((lp: any) => lp && !remoteIds.has(lp.id))
+        ];
 
         localStorage.setItem('gcz_prayers', JSON.stringify(combined));
         prayersCount = prayers.length;
       }
-    } catch (e) {
+    } catch {
       // Ignored for offline tolerance
     }
 
+    // --- Posts / testimonies + their comments --------------------------------
     try {
-      // Pull community posts
       const { data: posts, error: postErr } = await supabase
         .from('posts')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(30);
+        .limit(100);
 
       if (!postErr && posts && posts.length > 0) {
-        let localPosts: any[] = [];
-        try {
-          const raw = localStorage.getItem('gcz_testimonies');
-          if (raw) localPosts = JSON.parse(raw);
-        } catch (_) {}
+        const localPosts = readLocalArray('gcz_testimonies');
+        const byId = new Map<string, any>(
+          localPosts.filter((p: any) => p && p.id).map((p: any) => [p.id, p])
+        );
+        let changed = false;
 
-        const remoteMapped = posts.map((p: any) => ({
-          id: p.id,
-          user_id: p.user_id || 'usr_apostle_joe',
-          user_name: p.author_name || 'Apostle Joe Daniels',
-          user_handle: p.author_handle || '@apostle_joe_daniels',
-          user_avatar: p.avatar_url || '/assets/apostle_joe_daniels_main.jpg',
-          title: p.title || 'Prophetic Word',
-          content: p.content || '',
-          category: p.category || 'Apostolic Teaching',
-          image_url: p.image_url || undefined,
-          video_url: p.video_url || undefined,
-          youtube_id: p.youtube_id || undefined,
-          date: 'Recently',
-          created_at: p.created_at,
-          liked_user_ids: [],
-          likes_count: p.likes_count || 0,
-          verified_by_church: true,
-          comments_count: p.comments_count || 0,
-          comments: []
-        }));
+        for (const p of posts) {
+          if (byId.has(p.id)) continue;
+          byId.set(p.id, {
+            id: p.id,
+            user_id: p.user_id || undefined,
+            user_name: p.author_name || 'Church Believer',
+            user_handle: p.author_handle || undefined,
+            user_avatar: p.avatar_url || undefined,
+            title: p.title || 'Prophetic Word',
+            content: p.content || '',
+            category: p.category || 'Apostolic Teaching',
+            image_url: p.image_url || undefined,
+            video_url: p.video_url || undefined,
+            youtube_id: p.youtube_id || undefined,
+            date: 'Recently',
+            created_at: p.created_at,
+            liked_user_ids: [],
+            likes_count: p.likes_count || 0,
+            verified_by_church: p.verified_by_church !== false,
+            comments_count: p.comments_count || 0,
+            comments: []
+          });
+          changed = true;
+        }
 
-        // Merge without duplicating IDs
-        const existingIds = new Set(localPosts.map((lp: any) => lp.id));
-        const newOnes = remoteMapped.filter((rp: any) => !existingIds.has(rp.id));
-        if (newOnes.length > 0) {
-          const merged = [...newOnes, ...localPosts];
+        // Comments are stored in their own table, so merge them into the post
+        // they belong to (deduplicated by id).
+        const { data: comments } = await supabase
+          .from('post_comments')
+          .select('*')
+          .order('created_at', { ascending: true })
+          .limit(1000);
+
+        if (comments && comments.length > 0) {
+          for (const c of comments) {
+            const post = byId.get(c.post_id);
+            if (!post) continue;
+            if (!Array.isArray(post.comments)) post.comments = [];
+            if (post.comments.some((existing: any) => existing && existing.id === c.id)) continue;
+            post.comments.push({
+              id: c.id,
+              user_id: c.user_id,
+              user_name: c.user_name || 'Church Member',
+              user_handle: c.user_handle || undefined,
+              user_avatar: c.user_avatar || undefined,
+              text: c.text,
+              created_at: c.created_at,
+              likes_count: c.likes_count || 0,
+              badge_type: c.badge_type || 'none'
+            });
+            post.comments_count = post.comments.length;
+            changed = true;
+          }
+          commentsCount = comments.length;
+        }
+
+        if (changed) {
+          const merged = Array.from(byId.values()).sort(
+            (a: any, b: any) =>
+              new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+          );
           localStorage.setItem('gcz_testimonies', JSON.stringify(merged));
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('gcz_testimony_updated'));
@@ -390,7 +515,7 @@ export class SupabaseSyncService {
       // Ignored
     }
 
-    return { prayersCount, sermonsCount, postsCount };
+    return { prayersCount, sermonsCount, postsCount, commentsCount };
   }
 
   /**
@@ -578,7 +703,7 @@ export class SupabaseSyncService {
         user_id: userId,
         avatar_url: avatarUrl,
         updated_at: new Date().toISOString()
-      });
+      }, { onConflict: 'user_id' });
       // Also update users table avatar_url
       await supabase.from('users').update({
         avatar_url: avatarUrl
