@@ -975,9 +975,9 @@ flutter:
 # ==============================================================================
 
 # 1. SUPABASE (Database, Auth, Storage, Realtime)
-# Project Ref: csinlqdcqdgcssdanvsr
-SUPABASE_URL=https://csinlqdcqdgcssdanvsr.supabase.co
-SUPABASE_ANON_KEY=sb_publishable_TJvwQ_lcZtUL0hHOm1yJmA_rfhpBKEX
+# Project Ref: kgdyynefwnmwlwnnqgxx
+SUPABASE_URL=https://kgdyynefwnmwlwnnqgxx.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtnZHl5bmVmd25td2x3bm5xZ3h4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0MjU3ODksImV4cCI6MjEwNDAwMTc4OX0.Y6QIzBbtHq1VEZcVJQGD3FvfdaEENXY8B-xAI_YqJh4
 
 # 2. PAYNOW ZIMBABWE (EcoCash, OneMoney, Zimswitch, Visa/Mastercard)
 # Get from: https://www.paynow.co.zw
