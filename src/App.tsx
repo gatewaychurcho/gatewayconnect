@@ -55,13 +55,7 @@ import confetti from 'canvas-confetti';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('home');
-  const [showSplash, setShowSplash] = useState(() => {
-    try {
-      return !sessionStorage.getItem('gcz_seen_splash');
-    } catch {
-      return true;
-    }
-  });
+  const [showSplash, setShowSplash] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(StorageService.getCurrentUser());
   const [lowDataMode, setLowDataMode] = useState<boolean>(StorageService.getLowDataMode());
   
@@ -192,12 +186,20 @@ export default function App() {
   useEffect(() => {
     StorageService.syncUsersWithRemote().catch(() => {});
     StorageService.syncStoriesWithRemote().catch(() => {});
+    // Hydrate community posts, comments and prayers from Supabase so a fresh
+    // install / new member sees everything the church has already shared.
+    StorageService.syncPostsAndPrayersWithRemote()
+      .catch(() => {})
+      .finally(() => refreshAppData());
     if (!currentUser) {
       liveSyncService.disconnect();
       return;
     }
     if (currentUser?.id && currentUser?.role !== 'guest') {
       StorageService.hydrateFollowsFromSupabase(currentUser.id).catch(() => {});
+      // Hydrate chat history so a new login sees conversations from other devices.
+      StorageService.syncDirectMessagesWithRemote(currentUser.id).catch(() => {});
+      StorageService.syncGroupMessagesWithRemote(currentUser.id).catch(() => {});
     }
     liveSyncService.connect(currentUser);
     const unbind = liveSyncService.bindLocalEvents();
@@ -247,23 +249,33 @@ export default function App() {
       {
         directMessages: (payload) => {
           console.log('Realtime direct message:', payload);
-          refreshAppData();
+          StorageService.syncDirectMessagesWithRemote(currentUser.id)
+            .catch(() => {})
+            .finally(() => refreshAppData());
         },
         messages: (payload) => {
           console.log('Realtime group message:', payload);
-          refreshAppData();
+          StorageService.syncGroupMessagesWithRemote(currentUser.id)
+            .catch(() => {})
+            .finally(() => refreshAppData());
         },
         posts: (payload) => {
           console.log('Realtime post:', payload);
-          refreshAppData();
+          StorageService.syncPostsAndPrayersWithRemote()
+            .catch(() => {})
+            .finally(() => refreshAppData());
         },
         comments: (payload) => {
           console.log('Realtime comment:', payload);
-          refreshAppData();
+          StorageService.syncPostsAndPrayersWithRemote()
+            .catch(() => {})
+            .finally(() => refreshAppData());
         },
         prayers: (payload) => {
           console.log('Realtime prayer request:', payload);
-          refreshAppData();
+          StorageService.syncPostsAndPrayersWithRemote()
+            .catch(() => {})
+            .finally(() => refreshAppData());
         },
         liveStreams: (payload) => {
           console.log('Realtime live stream:', payload);
@@ -372,18 +384,7 @@ export default function App() {
 
   // Website splash screen
   if (showSplash) {
-    return (
-      <SplashScreen
-        onComplete={() => {
-          setShowSplash(false);
-          try {
-            sessionStorage.setItem('gcz_seen_splash', 'true');
-          } catch {
-            // Ignore storage errors
-          }
-        }}
-      />
-    );
+    return <SplashScreen onComplete={() => setShowSplash(false)} />;
   }
 
   // Enforce Login Screen when user opens app for the 1st time or after logging out
@@ -527,8 +528,8 @@ export default function App() {
         )}
       </main>
 
-      {/* 3. Sleek Ministry System Status Bar (Hidden on mobile to save vertical screen space) */}
-      <footer className="hidden md:flex gcz-statusbar h-9 bg-card border-t border-border px-8 items-center justify-between text-[10px] font-bold tracking-widest text-muted-foreground shrink-0 mb-14 sm:mb-16">
+      {/* 3. Sleek Ministry System Status Bar */}
+      <footer className="gcz-statusbar h-10 bg-card border-t border-border px-4 sm:px-8 flex items-center justify-between text-[10px] font-bold tracking-widest text-muted-foreground shrink-0 mb-14 sm:mb-16">
         <div className="flex items-center gap-4 sm:gap-8">
           <span className="text-primary flex items-center gap-1.5 font-semibold">
             <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
