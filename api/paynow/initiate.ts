@@ -56,8 +56,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const body = req.body && typeof req.body === 'object' ? req.body : await readBody(req);
-    const integrationId = (CONFIG.PAYNOW_INTEGRATION_ID || body.integrationId || '').trim();
-    const integrationKey = (CONFIG.PAYNOW_INTEGRATION_KEY || body.integrationKey || '').trim();
+    // Credentials must only come from server environment variables. Never accept
+    // integration keys from the mobile/web request body.
+    const integrationId = CONFIG.PAYNOW_INTEGRATION_ID.trim();
+    const integrationKey = CONFIG.PAYNOW_INTEGRATION_KEY.trim();
 
     if (!integrationId || !integrationKey) {
       res.statusCode = 503;
