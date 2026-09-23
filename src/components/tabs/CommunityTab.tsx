@@ -44,6 +44,7 @@ import {
 import confetti from 'canvas-confetti';
 import { CommunityGroup, PrayerRequest, ChurchEvent, Testimony, User, CommunityStory, ChurchPage } from '../../types';
 import { StorageService, arePhoneNumbersEqual } from '../../services/storageService';
+import { StorageBucketService } from '../../services/StorageBucketService';
 import { SupabaseSyncService } from '../../services/supabaseSyncService';
 import { liveSyncService, OnlineMember } from '../../services/liveSyncService';
 import { ImagePickerModal } from '../modals/ImagePickerModal';
@@ -465,7 +466,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     StorageService.submitTestimony({
       user_id: currUser.id,
       user_name: postingPage ? postingPage.name : (currUser.full_name || 'Covenant Member'),
-      user_handle: postingPage ? postingPage.handle : (currUser.handle || @),
+      user_handle: postingPage ? postingPage.handle : (currUser.handle || '@member'),
       user_avatar: postingPage ? postingPage.avatar_url : (currUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg'),
       page_id: postingPage ? postingPage.id : undefined,
       page_name: postingPage ? postingPage.name : undefined,
@@ -476,12 +477,10 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       content: postContent.trim(),
       scripture_tag: postScriptureTag.trim(),
       image_url: finalImageUrl,
-      video_url: finalVideoUrl,
-      likes: 0,
-      comments: []
+      video_url: finalVideoUrl
     });
 
-    setTestimonies(StorageService.getTestimonies());
+    setTestimonyList(StorageService.getTestimonies());
     
     setShowCreatePostModal(false);
     setPostTitle('');
@@ -496,77 +495,6 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     confetti({ particleCount: 35, spread: 60 });
   };
 
-  const handleCreatePost = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isGuest) {
-      onRequireAuth();
-      return;
-    }
-    if (!postContent.trim()) return;
-
-    const currUser = StorageService.getCurrentUser() || currentUser;
-    const isFacebookOrVideoUrl = StorageService.isFacebookUrl(postImageUrl) || Boolean(StorageService.extractYoutubeId(postImageUrl)) || Boolean(postImageUrl.match(/\.(mp4|webm|mov)(\?.*)?$/i));
-    const isVideo = (mediaType === 'video' && (postVideoUrl || localImagePreview || postImageUrl)) || isFacebookOrVideoUrl;
-    const finalVideo = isVideo ? (postVideoUrl || (isFacebookOrVideoUrl ? postImageUrl : undefined) || localImagePreview || undefined) : undefined;
-    const finalImage = isVideo ? undefined : (postImageUrl || localImagePreview || '/assets/apostle_joe_daniels_main.jpg');
-
-    const managedPages = StorageService.getPages().filter(
-      p => p.creator_id === currUser.id || p.admin_ids?.includes(currUser.id)
-    );
-    const postingPage = selectedPostingPageId !== 'personal'
-      ? managedPages.find(p => p.id === selectedPostingPageId)
-      : null;
-
-    // New posts start with 0 likes and 0 comments until liked/commented by real users
-    StorageService.submitTestimony({
-      user_id: currUser.id,
-      user_name: postingPage ? postingPage.name : (currUser.full_name || 'Covenant Member'),
-      user_handle: postingPage ? postingPage.handle : (currUser.handle || `@${currUser.full_name.toLowerCase().replace(/\s+/g, '_')}`),
-      user_avatar: postingPage ? postingPage.avatar_url : (currUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg'),
-      page_id: postingPage ? postingPage.id : undefined,
-      page_name: postingPage ? postingPage.name : undefined,
-      page_handle: postingPage ? postingPage.handle : undefined,
-      page_avatar: postingPage ? postingPage.avatar_url : undefined,
-      page_verified: postingPage ? true : undefined,
-      title: postTitle.trim() || (isVideo ? 'Video / Reel Testimony' : 'Supernatural Miracle Testimony'),
-      category: postCategory,
-      content: postContent.trim(),
-      image_url: finalImage,
-      video_url: finalVideo,
-      scripture_tag: postScriptureTag.trim() || undefined,
-    });
-
-    if (postingPage) {
-      StorageService.createPagePost(
-        postingPage.id,
-        currUser.id,
-        postingPage.name,
-        postContent.trim(),
-        finalImage || finalVideo,
-        postingPage.avatar_url
-      );
-    }
-
-    setTestimonyList(StorageService.getTestimonies());
-    setShowCreatePostModal(false);
-
-    // Reset Form
-    setPostTitle('');
-    setPostContent('');
-    setPostImageUrl('');
-    setPostVideoUrl('');
-    setMediaType('image');
-    setLocalImagePreview(null);
-    setPostScriptureTag('');
-
-    confetti({
-      particleCount: 40,
-      spread: 70,
-      origin: { y: 0.7 }
-    });
-
-    if (onRefreshData) onRefreshData();
-  };
 
   const handleSavePostImage = (newImageUrl: string) => {
     if (!postToEditImage) return;
@@ -951,6 +879,37 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     if (selectedGroupCategory === '⭐ Paid & Pro') return g.is_paid;
     return g.category === selectedGroupCategory;
   });
+
+  const handleStoryFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 20 * 1024 * 1024) {
+      alert("File size must be under 20MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (loadEvt) => {
+      const result = loadEvt.target?.result as string;
+      setNewStoryImageUrl(result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCreateStory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStoryImageUrl) return;
+
+    // TODO: Connect this to actual story upload if needed
+    setShowAddStoryModal(false);
+    setNewStoryImageUrl('');
+    setNewStoryScripture('');
+    setNewStoryText('');
+    
+    confetti({ particleCount: 30, spread: 60, origin: { y: 0.6 } });
+    if (onRefreshData) onRefreshData();
+  };
 
   return (
     <div className="space-y-4 pb-20 max-w-3xl mx-auto px-0 sm:px-2 pt-1 w-full max-w-full">

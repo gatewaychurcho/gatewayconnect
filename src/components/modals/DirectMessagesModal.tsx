@@ -58,6 +58,7 @@ import {
 import confetti from 'canvas-confetti';
 import { User, DirectMessage, DmThread, ChatGroup, ChatGroupMessage, GroupMembership, GroupInvite } from '../../types';
 import { StorageService, arePhoneNumbersEqual } from '../../services/storageService';
+import { StorageBucketService } from '../../services/StorageBucketService';
 import { SupabaseSyncService } from '../../services/supabaseSyncService';
 import { PaynowService } from '../../services/paynowService';
 import { LocalImagePicker } from '../common/LocalImagePicker';
@@ -359,8 +360,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     else if (file.type.startsWith('audio/')) mType = 'audio';
 
     const sizeStr = file.size > 1024 * 1024
-      ? ${(file.size / (1024 * 1024)).toFixed(1)} MB
-      : ${Math.round(file.size / 1024)} KB;
+      ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+      : `${Math.round(file.size / 1024)} KB`;
 
     const reader = new FileReader();
     reader.onload = (loadEvt) => {
@@ -404,7 +405,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
         sender_name: currentUser.full_name,
         sender_avatar: currentUser.avatar_url,
         sender_role: currentUser.role,
-        text: shareMediaCaption.trim() || (stagedLocalMedia.type === 'video' ? Shared a video:  : stagedLocalMedia.type === 'audio' ? Shared an audio:  : stagedLocalMedia.type === 'document' ? Shared a document:  : 'Shared a photo'),
+        text: shareMediaCaption.trim() || (stagedLocalMedia.type === 'video' ? 'Shared a video' : stagedLocalMedia.type === 'audio' ? 'Shared an audio' : stagedLocalMedia.type === 'document' ? 'Shared a document' : 'Shared a photo'),
         media_url: finalUrl,
         media_type: stagedLocalMedia.type
       });
@@ -416,7 +417,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       setCopyFeedback('Media shared to fellowship group!');
       setTimeout(() => setCopyFeedback(null), 3000);
     } else if (activeUserId && activeUser) {
-      const msgText = shareMediaCaption.trim() || (stagedLocalMedia.type === 'video' ? Shared a video:  : stagedLocalMedia.type === 'audio' ? Shared an audio:  : stagedLocalMedia.type === 'document' ? Shared a document:  : 'Shared a photo');
+      const msgText = shareMediaCaption.trim() || (stagedLocalMedia.type === 'video' ? 'Shared a video' : stagedLocalMedia.type === 'audio' ? 'Shared an audio' : stagedLocalMedia.type === 'document' ? 'Shared a document' : 'Shared a photo');
       StorageService.sendDirectMessage(
         currentUser.id,
         activeUserId,
