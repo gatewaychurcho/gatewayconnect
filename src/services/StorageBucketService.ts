@@ -72,7 +72,7 @@ export class StorageBucketService {
    * @param bucketName Optional bucket name, defaults to 'media'
    * @returns The public URL of the uploaded file, or null if it failed.
    */
-  static async uploadFileToMediaBucket(file: File, bucketName: 'media' | 'avatars' = 'media'): Promise<string | null> {
+    static async uploadFileToMediaBucket(file: File, bucketName: 'media' | 'avatars' = 'media'): Promise<string | null> {
     const supabase = getSupabase();
     if (!supabase) {
       console.error('Supabase is not configured. Cannot upload file.');
@@ -82,12 +82,10 @@ export class StorageBucketService {
     try {
       let finalFile = file;
       
-      // Intercept and compress videos if it's a video file
       if (file.type.startsWith('video/')) {
         finalFile = await this.compressVideo(file);
       }
 
-      // Generate a unique filename using timestamp and random string, preserving the original extension
       const ext = finalFile.name.split('.').pop();
       const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
       const filePath = `uploads/${filename}`;
@@ -102,11 +100,14 @@ export class StorageBucketService {
         });
 
       if (error) {
-        console.error('Supabase Upload Error:', error);
+        console.error(`Supabase Upload Error to bucket '${bucketName}':`, error);
+        
+        // Fallback: If 'media' bucket fails, try 'public' bucket if it exists, or just log clearly.
+        // We will just alert the user or log it so they can see the exact reason (e.g. RLS policy or missing bucket).
+        alert(`Upload Failed: ${error.message}. Please check if the '${bucketName}' bucket exists and is public in Supabase.`);
         return null;
       }
 
-      // Retrieve Public URL
       const { data: publicUrlData } = supabase.storage
         .from(bucketName)
         .getPublicUrl(data.path);
@@ -118,3 +119,4 @@ export class StorageBucketService {
     }
   }
 }
+

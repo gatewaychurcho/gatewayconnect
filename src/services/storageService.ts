@@ -1,3 +1,4 @@
+﻿import { getSupabase } from './supabaseClient';
 import { 
   User, 
   Sermon, 
@@ -595,6 +596,22 @@ export class StorageService {
     const updated: User = { ...curr, ...updates };
     this.setCurrentUser(updated);
     this.saveUser(updated);
+
+    // Sync to Supabase Postgres real-time
+    const supabase = getSupabase();
+    if (supabase) {
+      const dbPayload = {
+        full_name: updated.full_name,
+        phone: updated.phone,
+        bio: updated.bio,
+        location: updated.location,
+        handle: updated.handle,
+        avatar_url: updated.avatar_url,
+      };
+      supabase.from('users').update(dbPayload).eq('id', curr.id).then(({ error }) => {
+        if (error) console.warn('Failed to sync profile update to Supabase:', error);
+      });
+    }
 
     // Update authored testimonies and comments across app in real time
     try {
@@ -2830,6 +2847,32 @@ export class StorageService {
     });
   }
 
+  static async fetchStoriesFromSupabase(): Promise<void> {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    try {
+      const { data, error } = await supabase.from('stories').select('*').order('created_at', { ascending: false });
+      if (!error && data) {
+        const stories: CommunityStory[] = data.map(s => ({
+          id: s.id,
+          user_id: s.author_id,
+          user_name: 'Believer',
+          user_handle: '@believer',
+          user_avatar: '',
+          image_url: s.media_url,
+          caption: s.caption || '',
+          scripture: s.scripture || undefined,
+          created_at: s.created_at,
+          likes_count: 0,
+        }));
+        setLocal(KEYS.COMMUNITY_STORIES, stories);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('gcz_story_updated', { detail: stories[0] }));
+        }
+      }
+    } catch (e) { console.warn(e); }
+  }
+
   static addStory(story: Omit<CommunityStory, 'id' | 'created_at'>): CommunityStory {
     const list = this.getActiveStories();
     const newStory: CommunityStory = {
@@ -2839,6 +2882,22 @@ export class StorageService {
     };
     list.unshift(newStory);
     setLocal(KEYS.COMMUNITY_STORIES, list);
+    
+    // Sync to Supabase Postgres real-time
+    const supabase = getSupabase();
+    if (supabase) {
+      supabase.from('stories').insert([{
+        id: newStory.id,
+        author_id: newStory.user_id,
+        media_url: newStory.image_url,
+        caption: newStory.caption,
+        scripture: newStory.scripture,
+        created_at: newStory.created_at
+      }]).then(({ error }) => {
+        if (error) console.warn('Failed to insert story into Supabase:', error);
+      });
+    }
+
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_story_updated', { detail: newStory }));
     }
@@ -2865,7 +2924,7 @@ export class StorageService {
   /**
    * Pulls all stories from every user (last 24h) from Supabase and merges
    * them into local storage. Without this, stories posted on other devices
-   * never appear here at all — syncStory() only ever wrote to Supabase and
+   * never appear here at all â€” syncStory() only ever wrote to Supabase and
    * nothing ever read it back.
    */
   static async syncStoriesWithRemote(): Promise<void> {
@@ -3080,7 +3139,7 @@ export class StorageService {
         id: 'dm_init_1',
         sender_id: userBId,
         receiver_id: userAId,
-        text: 'Grace and peace! Welcome to Gateway Connect. How can I stand in agreement with you today in prayer? 🙏',
+        text: 'Grace and peace! Welcome to Gateway Connect. How can I stand in agreement with you today in prayer? ðŸ™',
         created_at: new Date(Date.now() - 3600000).toISOString(),
         is_read: true
       }
@@ -3306,7 +3365,7 @@ export class StorageService {
     const realViewersCount = this.getStreamViewers().length;
     const status = getLocal(KEYS.LIVE_SERMON, {
       isLive: true,
-      title: 'Church & Politics (Controversial Issues) • Apostle Joe Daniels Live',
+      title: 'Church & Politics (Controversial Issues) â€¢ Apostle Joe Daniels Live',
       sermonId: 'sermon_church_politics',
       viewerCount: realViewersCount,
       streamUrl: savedUrl
@@ -3361,7 +3420,7 @@ export class StorageService {
       city: user.location || user.city_location || 'Harare',
       avatar_url: user.avatar_url,
       device: typeof navigator !== 'undefined' && /Mobi|Android|iPhone/i.test(navigator.userAgent) ? 'Mobile' : 'Desktop',
-      login_details: `${user.phone || 'Phone'} • Role: ${user.role} • ID: ${user.member_id || user.id.substring(0, 8)}`,
+      login_details: `${user.phone || 'Phone'} â€¢ Role: ${user.role} â€¢ ID: ${user.member_id || user.id.substring(0, 8)}`,
       joined_at: new Date().toISOString(),
       is_active: true
     };
@@ -4430,7 +4489,7 @@ export class StorageService {
     this.sendChatGroupMessage(groupId, {
       sender_id: 'system',
       sender_name: 'Gateway System',
-      text: `${joinedUser?.full_name || 'A believer'} joined ${grp.name}. Welcome in Jesus' name! 🕊️`,
+      text: `${joinedUser?.full_name || 'A believer'} joined ${grp.name}. Welcome in Jesus' name! ðŸ•Šï¸`,
       is_system: true
     });
 
@@ -4702,6 +4761,35 @@ export class StorageService {
     } else {
       return { success: true, message: `Declined invitation to ${inv.group_name}.` };
     }
+  }
+
+  static hydrateGroupMessages(groupId: string, messages: any[], reactionsData: any[] = []) {
+    const allMsgs = getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
+    
+    // Process messages and attach reactions
+    const formattedMsgs = messages.map(row => {
+      // Find reactions for this message
+      const msgReactions = reactionsData.filter(r => r.message_id === row.id).map(r => r.emoji);
+      return {
+        id: row.id,
+        group_id: row.group_id,
+        sender_id: row.sender_id,
+        sender_name: row.sender_name || 'Church Member',
+        sender_avatar: row.sender_avatar,
+        sender_role: row.sender_role || 'member',
+        text: row.text,
+        reply_to: row.reply_to,
+        media_url: row.media_url,
+        media_type: row.media_type,
+        is_system: row.is_system || false,
+        read_by_user_ids: row.read_by_user_ids || [row.sender_id],
+        created_at: row.created_at,
+        reactions: msgReactions
+      } as ChatGroupMessage;
+    });
+
+    allMsgs[groupId] = formattedMsgs;
+    setLocal(KEYS.CHAT_GROUP_MESSAGES, allMsgs);
   }
 
   static getChatGroupMessages(groupId: string): ChatGroupMessage[] {
@@ -5663,4 +5751,7 @@ export class StorageService {
 }
 
 type DonationsList = Donation[];
+
+
+
 

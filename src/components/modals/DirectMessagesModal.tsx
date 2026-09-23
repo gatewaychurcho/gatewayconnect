@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   Send, 
@@ -58,6 +58,7 @@ import {
 import confetti from 'canvas-confetti';
 import { User, DirectMessage, DmThread, ChatGroup, ChatGroupMessage, GroupMembership, GroupInvite } from '../../types';
 import { StorageService, arePhoneNumbersEqual } from '../../services/storageService';
+import { getSupabase } from '../../services/supabaseClient';
 import { StorageBucketService } from '../../services/StorageBucketService';
 import { SupabaseSyncService } from '../../services/supabaseSyncService';
 import { PaynowService } from '../../services/paynowService';
@@ -72,7 +73,7 @@ interface DirectMessagesModalProps {
   onClose: () => void;
 }
 
-const EMOJI_REACTIONS = ['🙏', '❤️', '🔥', '✝️', '🕊️', '🙌', '👑', '🌟'];
+const EMOJI_REACTIONS = ['ðŸ™', 'â¤ï¸', 'ðŸ”¥', 'âœï¸', 'ðŸ•Šï¸', 'ðŸ™Œ', 'ðŸ‘‘', 'ðŸŒŸ'];
 
 const formatMessageDateDivider = (dateStr?: string): string => {
   if (!dateStr) return '';
@@ -720,7 +721,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       },
       onUserProfileUpdated: () => {
         // Pull the new/updated account from Supabase and merge it into local
-        // storage first — otherwise a sender who just registered (or just
+        // storage first â€” otherwise a sender who just registered (or just
         // changed their photo) on another device won't resolve to a real
         // user here, and their messages/threads won't render.
         StorageService.syncUsersWithRemote().finally(() => {
@@ -750,8 +751,35 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       refreshThreads();
     } else if (activeTab === 'groups' && activeGroupId) {
       StorageService.markGroupMessagesAsRead(activeGroupId, currentUser.id);
-      const msgs = StorageService.getChatGroupMessagesForUser(activeGroupId, currentUser.id);
-      setGroupMessages(msgs);
+      
+      const fetchRealtimeMessages = async () => {
+        const supabase = getSupabase();
+        if (!supabase) {
+           const msgs = StorageService.getChatGroupMessagesForUser(activeGroupId, currentUser.id);
+           setGroupMessages(msgs);
+           return;
+        }
+        
+        try {
+          const { data: msgs, error: msgError } = await supabase.from('messages').select('*').eq('group_id', activeGroupId).order('created_at', { ascending: true });
+          if (!msgError && msgs) {
+             const msgIds = msgs.map(m => m.id);
+             let reactionsData: any[] = [];
+             if (msgIds.length > 0) {
+               const { data: rData } = await supabase.from('message_reactions').select('message_id, emoji').in('message_id', msgIds);
+               if (rData) reactionsData = rData;
+             }
+             StorageService.hydrateGroupMessages(activeGroupId, msgs, reactionsData);
+          }
+        } catch (e) {
+          console.error('Failed to fetch realtime msgs', e);
+        }
+        
+        const msgs = StorageService.getChatGroupMessagesForUser(activeGroupId, currentUser.id);
+        setGroupMessages(msgs);
+      };
+      
+      fetchRealtimeMessages();
     }
   }, [activeUserId, activeGroupId, activeTab]);
 
@@ -1263,7 +1291,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   <span className="text-[10px] uppercase font-bold tracking-wider text-primary">Official Group Invitation</span>
                 </div>
                 <h4 className="font-bold text-foreground text-xs truncate">{matchedGroup.name}</h4>
-                <p className="text-[10px] text-muted-foreground">{matchedGroup.member_ids.length} members • Official Admin & Mod Link</p>
+                <p className="text-[10px] text-muted-foreground">{matchedGroup.member_ids.length} members â€¢ Official Admin & Mod Link</p>
               </div>
             </div>
 
@@ -1993,7 +2021,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             )}
                           </div>
                           <p className="text-[11px] text-muted-foreground truncate font-mono">
-                            {contact.handle || `@${contact.full_name.toLowerCase().replace(/\s+/g, '_')}`} • {contact.location || 'Harare'}
+                            {contact.handle || `@${contact.full_name.toLowerCase().replace(/\s+/g, '_')}`} â€¢ {contact.location || 'Harare'}
                           </p>
                         </div>
                       </button>
@@ -2042,7 +2070,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                   )}
                                   <span>{thread.other_user.full_name}</span>
                                   {thread.other_user.role === 'super_admin' && (
-                                    <span className="text-[10px] text-primary">✦</span>
+                                    <span className="text-[10px] text-primary">âœ¦</span>
                                   )}
                                 </span>
                                 <span className="text-[10px] text-muted-foreground">
@@ -2181,7 +2209,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             grpUnread > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'
                           }`}>
                             {lastMsg 
-                              ? `${lastMsg.sender_name ? `${lastMsg.sender_name.split(' ')[0]}: ` : ''}${lastMsg.text || (lastMsg.media_type ? `📷 ${lastMsg.media_type}` : 'New message')}`
+                              ? `${lastMsg.sender_name ? `${lastMsg.sender_name.split(' ')[0]}: ` : ''}${lastMsg.text || (lastMsg.media_type ? `ðŸ“· ${lastMsg.media_type}` : 'New message')}`
                               : grp.description
                             }
                           </p>
@@ -2364,7 +2392,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                       </>
                                     ) : (
                                       <span className="truncate font-medium">
-                                        {StorageService.getUserLastSeen(activeUser) || `Active • ${activeUser.location || 'Harare'}`}
+                                        {StorageService.getUserLastSeen(activeUser) || `Active â€¢ ${activeUser.location || 'Harare'}`}
                                       </span>
                                     )}
                                   </>
@@ -2576,7 +2604,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                 <div className={`opacity-0 group-hover/msg:opacity-100 transition-opacity absolute -top-8.5 z-20 flex items-center gap-0.5 bg-card/95 backdrop-blur-md border border-border/80 shadow-md rounded-full px-2 py-0.5 ${
                                   isMine ? 'right-0' : 'left-0'
                                 }`}>
-                                  {['🙏', '❤️', '🔥', '👍', '😂', '🕊️'].map((emoji) => (
+                                  {['ðŸ™', 'â¤ï¸', 'ðŸ”¥', 'ðŸ‘', 'ðŸ˜‚', 'ðŸ•Šï¸'].map((emoji) => (
                                     <button
                                       key={emoji}
                                       type="button"
@@ -2977,7 +3005,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             ) : (
                               <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 truncate">
                                 <span>{activeGroup.member_ids.length} members</span>
-                                <span>•</span>
+                                <span>â€¢</span>
                                 <span className="text-emerald-600 dark:text-emerald-400 font-semibold inline-flex items-center gap-1">
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                                   <span>{groupOnlineCount} online</span>
@@ -3176,7 +3204,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           className="text-[10px] px-2 py-1 rounded-md bg-secondary border border-border text-foreground hover:bg-secondary/80 font-semibold"
                           title="Simulate membership expiry notice"
                         >
-                          ⚡ Test Expiry Notice
+                          âš¡ Test Expiry Notice
                         </button>
 
                         {isFsExpiringSoon && (
@@ -3361,7 +3389,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                     <div className={`opacity-0 group-hover/msg:opacity-100 transition-opacity absolute -top-8.5 z-20 flex items-center gap-0.5 bg-card/95 backdrop-blur-md border border-border/80 shadow-md rounded-full px-2 py-0.5 ${
                                       isMine ? 'right-0' : 'left-0'
                                     }`}>
-                                      {['🙏', '❤️', '🔥', '👍', '😂', '🕊️'].map((emoji) => (
+                                      {['ðŸ™', 'â¤ï¸', 'ðŸ”¥', 'ðŸ‘', 'ðŸ˜‚', 'ðŸ•Šï¸'].map((emoji) => (
                                         <button
                                           key={emoji}
                                           type="button"
@@ -3427,12 +3455,12 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                       </button>
                                       {msg.sender_role === 'super_admin' && (
                                         <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/30">
-                                          Apostle ✦
+                                          Apostle âœ¦
                                         </span>
                                       )}
                                       {msg.sender_role === 'developer' && (
                                         <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-400 font-bold border border-purple-500/30">
-                                          Dev 🛡️
+                                          Dev ðŸ›¡ï¸
                                         </span>
                                       )}
                                     </div>
@@ -4151,7 +4179,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             )}
                           </p>
                           <p className="text-[10px] text-muted-foreground truncate font-mono">
-                            {contact.phone} • {contact.location || 'Harare'}
+                            {contact.phone} â€¢ {contact.location || 'Harare'}
                           </p>
                         </div>
                       </div>
@@ -4458,7 +4486,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
             <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Paperclip className="w-4 h-4 text-primary" />
-                <div><h3 className="font-bold text-sm text-foreground">Send attachment</h3><p className="text-[10px] text-muted-foreground truncate max-w-[250px]">{stagedLocalMedia.name} • {stagedLocalMedia.size}</p></div>
+                <div><h3 className="font-bold text-sm text-foreground">Send attachment</h3><p className="text-[10px] text-muted-foreground truncate max-w-[250px]">{stagedLocalMedia.name} â€¢ {stagedLocalMedia.size}</p></div>
               </div>
               <button type="button" onClick={() => { setShowShareMediaPrompt(false); setStagedLocalMedia(null); }} className="p-1.5 rounded-lg hover:bg-secondary"><X className="w-4 h-4" /></button>
             </div>
@@ -4565,6 +4593,10 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     </div>
   );
 };
+
+
+
+
 
 
 
