@@ -1119,7 +1119,8 @@ export const MeTab: React.FC<MeTabProps> = ({
                   title={playingOfflineSermon.title}
                   src={StorageService.getYoutubeEmbedUrl(StorageService.extractYoutubeId(playingOfflineSermon.youtube_id || playingOfflineSermon.video_url))}
                   className="w-full h-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
                   allowFullScreen
                 />
               </div>

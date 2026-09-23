@@ -1495,7 +1495,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                           className="w-full aspect-video border-0"
                           src={StorageService.getYoutubeEmbedUrl(StorageService.extractYoutubeId(post.video_url)!)}
                           title={post.title}
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          referrerPolicy="strict-origin-when-cross-origin"
                           allowFullScreen
                         />
                       ) : (
@@ -2705,6 +2706,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                           src={StorageService.getYoutubeEmbedUrl(StorageService.extractYoutubeId(postImageUrl)!)}
                           title="YouTube Video Preview"
                           className="w-full aspect-video border-0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          referrerPolicy="strict-origin-when-cross-origin"
                           allowFullScreen
                         />
                       ) : (

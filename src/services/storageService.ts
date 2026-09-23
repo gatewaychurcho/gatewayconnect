@@ -1,4 +1,4 @@
-﻿import { getSupabase } from './supabaseClient';
+import { getSupabase } from './supabaseClient';
 import { 
   User, 
   Sermon, 
@@ -3996,12 +3996,14 @@ export class StorageService {
       controls: '1',
       rel: '0',
       playsinline: '1',
-      enablejsapi: '1'
+      enablejsapi: '1',
+      fs: '1',
+      modestbranding: '1'
     });
     if (typeof window !== 'undefined' && /^https?:$/.test(window.location.protocol)) {
       params.set('origin', window.location.origin);
     }
-    return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?${params.toString()}`;
+    return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?${params.toString()}`;
   }
 
   static getStreamEmbedInfo(urlOrId?: string): StreamEmbedInfo {

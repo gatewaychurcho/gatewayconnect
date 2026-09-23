@@ -848,7 +848,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                   className="w-full h-full pointer-events-auto border-0"
                   src={streamEmbedInfo.embedUrl || StorageService.getYoutubeEmbedUrl(activeVideoId)}
                   title={activeSermon.title || 'Church & Politics (Controversial Issues) - Apostle Joe Daniels'}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   referrerPolicy="strict-origin-when-cross-origin"
                   allowFullScreen
                 />

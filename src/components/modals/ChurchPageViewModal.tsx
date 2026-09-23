@@ -539,6 +539,8 @@ export const ChurchPageViewModal: React.FC<ChurchPageViewModalProps> = ({
                               src={StorageService.getYoutubeEmbedUrl(StorageService.extractYoutubeId(testimony.image_url)!)}
                               title={currentPage.name}
                               className="w-full aspect-video border-0"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                              referrerPolicy="strict-origin-when-cross-origin"
                               allowFullScreen
                             />
                           ) : (
@@ -604,6 +606,8 @@ export const ChurchPageViewModal: React.FC<ChurchPageViewModalProps> = ({
                               src={StorageService.getYoutubeEmbedUrl(StorageService.extractYoutubeId(post.image_url)!)}
                               title={currentPage.name}
                               className="w-full aspect-video border-0"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                              referrerPolicy="strict-origin-when-cross-origin"
                               allowFullScreen
                             />
                           ) : (
