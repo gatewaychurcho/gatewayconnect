@@ -2320,6 +2320,17 @@ export class StorageService {
     }
   }
 
+  static formatPhoneWithCountryCode(rawPhone: string, code = '+263'): string {
+    const trimmed = rawPhone.trim();
+    if (!trimmed) return '';
+    if (trimmed.startsWith('@') || /[a-zA-Z]/.test(trimmed)) {
+      return trimmed;
+    }
+    if (trimmed.startsWith('+')) return trimmed;
+    const cleanLocal = trimmed.replace(/^0+/, '');
+    return `${code}${cleanLocal}`;
+  }
+
   // Auth: Login & Signup with strict 1 Number Per Account & Unique Username enforcement
   static login(phoneOrIdentifier: string, password?: string): { success: boolean; user?: User; error?: string } {
     const users = this.getAllUsers();

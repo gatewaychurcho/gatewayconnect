@@ -305,11 +305,60 @@ export default function App() {
   }, [currentUser?.id]);
 
   // Login / Signup Handlers
-  const handleAuthSubmit = (e: React.FormEvent) => {
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
 
+    const supabase = getSupabase();
+
     if (authMode === 'login') {
+      // 1. Try Supabase Auth first
+      if (supabase) {
+        const fullPhone = StorageService.formatPhoneWithCountryCode(authPhone.trim(), '+263');
+        const syntheticEmail = fullPhone.replace('+', '') + '@gatewayconnect.joedaniels.org';
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: authPhone.includes('@') ? authPhone.trim() : syntheticEmail,
+            password: authPassword.trim(),
+          });
+          if (!error && data.user) {
+            const meta = data.user.user_metadata || {};
+            let mappedUser: User = {
+              id: data.user.id,
+              phone: meta.phone || fullPhone,
+              full_name: meta.full_name || 'Member',
+              handle: meta.handle || `@${(meta.full_name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+              role: meta.role || 'member',
+              location: meta.location || 'Harare',
+              member_id: meta.member_id || data.user.id.substring(0, 8),
+              avatar_url: meta.avatar_url || '',
+              created_at: data.user.created_at,
+              is_premium: meta.is_premium || false,
+              badge_type: meta.badge_type || 'none',
+              is_verified: meta.is_verified || false
+            };
+            try {
+              const { data: dbUser } = await supabase.from('users').select('*').eq('id', data.user.id).single();
+              if (dbUser) {
+                mappedUser = { ...mappedUser, ...dbUser };
+              }
+            } catch {}
+
+            StorageService.saveUser(mappedUser);
+            StorageService.setCurrentUser(mappedUser);
+            setCurrentUser(mappedUser);
+            setShowAuthModal(false);
+            setAuthPhone('');
+            setAuthPassword('');
+            confetti({ particleCount: 30, spread: 60 });
+            return;
+          }
+        } catch (err: any) {
+          console.warn('Supabase auth catch:', err);
+        }
+      }
+
+      // 2. Fallback to local storage
       const res = StorageService.login(authPhone.trim(), authPassword.trim());
       if (res.success && res.user) {
         setCurrentUser(res.user);
@@ -329,6 +378,88 @@ export default function App() {
         setAuthError('Please select your Date of Birth.');
         return;
       }
+
+      // 1. Try Supabase Auth first
+      if (supabase) {
+        const fullPhone = StorageService.formatPhoneWithCountryCode(authPhone.trim(), '+263');
+        const syntheticEmail = fullPhone.replace('+', '') + '@gatewayconnect.joedaniels.org';
+        try {
+          const { data, error } = await supabase.auth.signUp({
+            email: syntheticEmail,
+            password: authPassword.trim(),
+            options: {
+              data: {
+                full_name: authFullName.trim(),
+                phone: fullPhone,
+                role: 'member',
+                location: authLocation,
+                member_id: 'G' + Math.floor(100000 + Math.random() * 900000).toString(),
+                date_of_birth: authDateOfBirth,
+                gender: authGender
+              }
+            }
+          });
+
+          if (error) {
+            setAuthError(error.message);
+            return;
+          }
+
+          if (data.user) {
+            const memberId = 'G' + Math.floor(100000 + Math.random() * 900000).toString();
+            const handle = `@${authFullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+            const newUser: User = {
+              id: data.user.id,
+              phone: fullPhone,
+              full_name: authFullName.trim(),
+              handle,
+              role: 'member',
+              location: authLocation,
+              member_id: memberId,
+              created_at: data.user.created_at,
+              is_premium: false,
+              badge_type: 'none',
+              is_verified: false,
+              date_of_birth: authDateOfBirth,
+              gender: authGender
+            };
+
+            try {
+              await supabase.from('users').upsert({
+                id: data.user.id,
+                phone: fullPhone,
+                full_name: authFullName.trim(),
+                handle,
+                role: 'member',
+                location: authLocation,
+                member_id: memberId,
+                date_of_birth: authDateOfBirth,
+                gender: authGender,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'id' });
+            } catch {}
+
+            StorageService.saveUser(newUser);
+            StorageService.setCurrentUser(newUser);
+            setCurrentUser(newUser);
+            setShowAuthModal(false);
+            setAuthFullName('');
+            setAuthPhone('');
+            setAuthPassword('');
+            setAuthReferralCode('');
+            setAuthDateOfBirth('');
+            setAuthGender('male');
+            confetti({ particleCount: 40, spread: 70 });
+            return;
+          }
+        } catch (err: any) {
+          setAuthError(err.message || 'Failed to create account.');
+          return;
+        }
+      }
+
+      // 2. Fallback to local storage
       const res = StorageService.signup(
         authFullName.trim(),
         authPhone.trim(),
@@ -699,8 +830,8 @@ export default function App() {
 
       {/* Auth Modal (Login / Signup) */}
       {showAuthModal && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-5 space-y-4 shadow-xl">
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-card border border-border rounded-2xl max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4 shadow-xl my-auto">
             <div className="flex justify-between items-center border-b border-border pb-2.5">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg shadow-xs">

@@ -152,11 +152,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         
         // Construct basic user profile from metadata to match local User type expected by App
         const meta = data.user.user_metadata || {};
-        const mappedUser = {
+        let mappedUser: any = {
           id: data.user.id,
           phone: meta.phone || fullPhone,
           full_name: meta.full_name || 'Member',
-          handle: meta.handle || '',
+          handle: meta.handle || `@${(meta.full_name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
           role: meta.role || 'member',
           location: meta.location || 'Harare',
           member_id: meta.member_id || data.user.id.substring(0, 8),
@@ -165,8 +165,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           is_premium: meta.is_premium || false,
           badge_type: meta.badge_type || 'none'
         };
+
+        try {
+          const { data: dbUser } = await supabase.from('users').select('*').eq('id', data.user.id).single();
+          if (dbUser) {
+            mappedUser = { ...mappedUser, ...dbUser };
+          }
+        } catch {}
         
-        StorageService.setCurrentUser(mappedUser as any);
+        StorageService.saveUser(mappedUser);
+        StorageService.setCurrentUser(mappedUser);
         onLoginSuccess(mappedUser as any);
       }
     } catch (err: any) {
@@ -221,21 +229,42 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         confetti({ particleCount: 45, spread: 70 });
         
         const meta = data.user.user_metadata || {};
-        const mappedUser = {
+        const memberId = meta.member_id || 'G' + Math.floor(100000 + Math.random() * 900000).toString();
+        const handle = `@${fullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+        const mappedUser: any = {
           id: data.user.id,
           phone: meta.phone || fullPhone,
           full_name: meta.full_name || fullName.trim(),
-          handle: meta.handle || '',
-          role: meta.role || 'member',
+          handle,
+          role: 'member',
           location: meta.location || cityLocation,
-          member_id: meta.member_id || data.user.id.substring(0, 8),
-          avatar_url: meta.avatar_url || '',
+          member_id: memberId,
+          avatar_url: '',
           created_at: data.user.created_at,
           is_premium: false,
-          badge_type: 'none'
+          badge_type: 'none',
+          date_of_birth: dateOfBirth,
+          gender: gender
         };
+
+        try {
+          await supabase.from('users').upsert({
+            id: data.user.id,
+            phone: fullPhone,
+            full_name: fullName.trim(),
+            handle,
+            role: 'member',
+            location: cityLocation,
+            member_id: memberId,
+            date_of_birth: dateOfBirth,
+            gender: gender,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' });
+        } catch {}
         
-        StorageService.setCurrentUser(mappedUser as any);
+        StorageService.saveUser(mappedUser);
+        StorageService.setCurrentUser(mappedUser);
         onLoginSuccess(mappedUser as any);
       }
     } catch (err: any) {
@@ -244,7 +273,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-3 sm:p-6">
+    <div className="min-h-screen min-h-[100dvh] bg-background text-foreground flex flex-col items-center justify-start sm:justify-center p-3 sm:p-6 overflow-y-auto py-8">
       
       {/* Background Subtle Accent */}
       <div className="w-full max-w-lg space-y-5">
