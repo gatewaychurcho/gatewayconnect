@@ -35,7 +35,7 @@ export const FloatingNotificationToast: React.FC<FloatingNotificationToastProps>
 }) => {
   const [currentNotif, setCurrentNotif] = useState<AppNotification | null>(null);
   const [isVisible, setIsVisible] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showNotification = (notif: AppNotification) => {
     const activeUser = currentUser || StorageService.getCurrentUser();

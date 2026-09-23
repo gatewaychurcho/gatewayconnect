@@ -75,7 +75,7 @@ export const MoorsDepositModal: React.FC<MoorsDepositModalProps> = ({
   }, [isOpen, defaultFund, initialAmount]);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     if (isOpen && depositState === 'ussd_prompt' && ussdTimer > 0) {
       interval = setInterval(() => {
         setUssdTimer(prev => prev - 1);

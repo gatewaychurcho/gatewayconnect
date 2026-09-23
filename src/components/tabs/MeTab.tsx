@@ -280,7 +280,7 @@ export const MeTab: React.FC<MeTabProps> = ({
 
   // Story Viewer Timer effect
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setInterval>;
     if (activeStoryHighlight) {
       setStoryProgress(0);
       const interval = 50; // ms
