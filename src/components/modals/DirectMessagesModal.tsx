@@ -343,8 +343,11 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     type: 'image' | 'video' | 'audio' | 'document';
     name: string;
     size: string;
+    file?: File;
   } | null>(null);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const mediaFileInputRef = useRef<HTMLInputElement | null>(null);
+
 
   const handleLocalMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -356,8 +359,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     else if (file.type.startsWith('audio/')) mType = 'audio';
 
     const sizeStr = file.size > 1024 * 1024
-      ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-      : `${Math.round(file.size / 1024)} KB`;
+      ? ${(file.size / (1024 * 1024)).toFixed(1)} MB
+      : ${Math.round(file.size / 1024)} KB;
 
     const reader = new FileReader();
     reader.onload = (loadEvt) => {
@@ -367,7 +370,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
           url: result,
           type: mType,
           name: file.name,
-          size: sizeStr
+          size: sizeStr,
+          file: file
         });
         setShowShareMediaPrompt(true);
       }
@@ -376,12 +380,22 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     e.target.value = '';
   };
 
-  const handleConfirmSendMedia = () => {
+
+  const handleConfirmSendMedia = async () => {
     if (!stagedLocalMedia) return;
+
+    setIsUploadingMedia(true);
+    let finalUrl = stagedLocalMedia.url;
+    
+    if (stagedLocalMedia.file) {
+      const uploadedUrl = await StorageBucketService.uploadFileToMediaBucket(stagedLocalMedia.file);
+      if (uploadedUrl) finalUrl = uploadedUrl;
+    }
 
     if (activeGroup) {
       if (StorageService.hasUserExitedGroup(activeGroup.id, currentUser.id)) {
         alert('You cannot send media because you exited this group fellowship. Please rejoin to participate.');
+        setIsUploadingMedia(false);
         return;
       }
 
@@ -390,8 +404,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
         sender_name: currentUser.full_name,
         sender_avatar: currentUser.avatar_url,
         sender_role: currentUser.role,
-        text: shareMediaCaption.trim() || (stagedLocalMedia.type === 'video' ? `Shared a video: ${stagedLocalMedia.name}` : stagedLocalMedia.type === 'audio' ? `Shared an audio: ${stagedLocalMedia.name}` : stagedLocalMedia.type === 'document' ? `Shared a document: ${stagedLocalMedia.name}` : 'Shared a photo'),
-        media_url: stagedLocalMedia.url,
+        text: shareMediaCaption.trim() || (stagedLocalMedia.type === 'video' ? Shared a video:  : stagedLocalMedia.type === 'audio' ? Shared an audio:  : stagedLocalMedia.type === 'document' ? Shared a document:  : 'Shared a photo'),
+        media_url: finalUrl,
         media_type: stagedLocalMedia.type
       });
 
@@ -402,13 +416,13 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       setCopyFeedback('Media shared to fellowship group!');
       setTimeout(() => setCopyFeedback(null), 3000);
     } else if (activeUserId && activeUser) {
-      const msgText = shareMediaCaption.trim() || (stagedLocalMedia.type === 'video' ? `Shared a video: ${stagedLocalMedia.name}` : stagedLocalMedia.type === 'audio' ? `Shared an audio: ${stagedLocalMedia.name}` : stagedLocalMedia.type === 'document' ? `Shared a document: ${stagedLocalMedia.name}` : 'Shared a photo');
+      const msgText = shareMediaCaption.trim() || (stagedLocalMedia.type === 'video' ? Shared a video:  : stagedLocalMedia.type === 'audio' ? Shared an audio:  : stagedLocalMedia.type === 'document' ? Shared a document:  : 'Shared a photo');
       StorageService.sendDirectMessage(
         currentUser.id,
         activeUserId,
         msgText,
         undefined,
-        stagedLocalMedia.url,
+        finalUrl,
         stagedLocalMedia.type
       );
 
@@ -420,6 +434,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       setCopyFeedback('Media sent!');
       setTimeout(() => setCopyFeedback(null), 3000);
     }
+    setIsUploadingMedia(false);
   };
 
   const isPrivilegedAdminOrDev = 
@@ -4453,7 +4468,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               <input value={shareMediaCaption} onChange={(e) => setShareMediaCaption(e.target.value)} placeholder="Add a caption (optional)" className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
               <div className="flex gap-2">
                 <button type="button" onClick={() => mediaFileInputRef.current?.click()} className="flex-1 py-2 rounded-lg bg-secondary border border-border text-xs font-semibold">Choose another</button>
-                <button type="button" onClick={handleConfirmSendMedia} className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center gap-1.5"><Send className="w-3.5 h-3.5" />Send</button>
+                <button type="button" onClick={handleConfirmSendMedia} disabled={isUploadingMedia} className="flex-1 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors">{isUploadingMedia ? <span className="animate-pulse">Sending...</span> : <><Send className="w-3.5 h-3.5" />Send</>}</button>
               </div>
             </div>
           </div>
@@ -4549,3 +4564,6 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     </div>
   );
 };
+
+
+

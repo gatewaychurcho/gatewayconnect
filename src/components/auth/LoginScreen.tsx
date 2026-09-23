@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { User as UserType, SUPPORTED_CITIES, SupportedCity, COUNTRY_CODES } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { getSupabase } from '../../services/supabaseClient';
 import confetti from 'canvas-confetti';
 
 interface LoginScreenProps {
@@ -115,7 +116,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     confetti({ particleCount: 25, spread: 60 });
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -129,16 +131,51 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     }
 
     const fullPhone = formatPhoneWithCountryCode(phone, countryCode);
-    const res = StorageService.login(fullPhone, password.trim());
-    if (res.success && res.user) {
-      confetti({ particleCount: 35, spread: 60 });
-      onLoginSuccess(res.user);
-    } else {
-      setErrorMessage(res.error || 'Authentication failed. Please verify phone and password.');
+    const syntheticEmail = fullPhone.replace('+', '') + '@gatewayconnect.joedaniels.org';
+    const supabase = getSupabase();
+
+    if (!supabase) {
+      setErrorMessage('Supabase is not configured.');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: phone.includes('@') ? phone : syntheticEmail,
+        password: password.trim(),
+      });
+
+      if (error) {
+        setErrorMessage(error.message);
+      } else if (data.user) {
+        confetti({ particleCount: 35, spread: 60 });
+        
+        // Construct basic user profile from metadata to match local User type expected by App
+        const meta = data.user.user_metadata || {};
+        const mappedUser = {
+          id: data.user.id,
+          phone: meta.phone || fullPhone,
+          full_name: meta.full_name || 'Member',
+          handle: meta.handle || '',
+          role: meta.role || 'member',
+          location: meta.location || 'Harare',
+          member_id: meta.member_id || data.user.id.substring(0, 8),
+          avatar_url: meta.avatar_url || '',
+          created_at: data.user.created_at,
+          is_premium: meta.is_premium || false,
+          badge_type: meta.badge_type || 'none'
+        };
+        
+        StorageService.setCurrentUser(mappedUser as any);
+        onLoginSuccess(mappedUser as any);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Authentication failed.');
     }
   };
 
-  const handleSignupSubmit = (e: React.FormEvent) => {
+
+  const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -153,22 +190,56 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     }
 
     const fullPhone = formatPhoneWithCountryCode(phone, countryCode);
-    const res = StorageService.signup(
-      fullName.trim(),
-      fullPhone,
-      password.trim(),
-      cityLocation,
-      referralCode.trim(),
-      undefined,
-      dateOfBirth,
-      gender
-    );
+    const syntheticEmail = fullPhone.replace('+', '') + '@gatewayconnect.joedaniels.org';
+    const supabase = getSupabase();
 
-    if (res.success && res.user) {
-      confetti({ particleCount: 45, spread: 70 });
-      onLoginSuccess(res.user);
-    } else {
-      setErrorMessage(res.error || 'Account could not be created. Please check your phone number.');
+    if (!supabase) {
+      setErrorMessage('Supabase is not configured.');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: syntheticEmail,
+        password: password.trim(),
+        options: {
+          data: {
+            full_name: fullName.trim(),
+            phone: fullPhone,
+            role: 'member',
+            location: cityLocation,
+            member_id: 'G' + Math.floor(100000 + Math.random() * 900000).toString(),
+            date_of_birth: dateOfBirth,
+            gender: gender
+          }
+        }
+      });
+
+      if (error) {
+        setErrorMessage(error.message);
+      } else if (data.user) {
+        confetti({ particleCount: 45, spread: 70 });
+        
+        const meta = data.user.user_metadata || {};
+        const mappedUser = {
+          id: data.user.id,
+          phone: meta.phone || fullPhone,
+          full_name: meta.full_name || fullName.trim(),
+          handle: meta.handle || '',
+          role: meta.role || 'member',
+          location: meta.location || cityLocation,
+          member_id: meta.member_id || data.user.id.substring(0, 8),
+          avatar_url: meta.avatar_url || '',
+          created_at: data.user.created_at,
+          is_premium: false,
+          badge_type: 'none'
+        };
+        
+        StorageService.setCurrentUser(mappedUser as any);
+        onLoginSuccess(mappedUser as any);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Account creation failed.');
     }
   };
 
@@ -708,3 +779,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     </div>
   );
 };
+
+
+

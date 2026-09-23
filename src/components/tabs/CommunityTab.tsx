@@ -333,6 +333,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   const [postVideoUrl, setPostVideoUrl] = useState<string>('');
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
   const [localImagePreview, setLocalImagePreview] = useState<string | null>(null);
+  const [postFile, setPostFile] = useState<File | null>(null);
+  const [storyFile, setStoryFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -410,74 +412,87 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   }, [currentUser?.id]);
 
   // Handle local file selection (Instagram style from device - supports photos & reels/videos)
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const isVideo = file.type.startsWith('video/');
-    setMediaType(isVideo ? 'video' : 'image');
+    const isImage = file.type.startsWith('image/');
 
-    setIsUploading(true);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      setLocalImagePreview(result);
-      if (isVideo) {
-        setPostVideoUrl(result);
-        setPostImageUrl('');
-      } else {
-        setPostImageUrl(result);
-        setPostVideoUrl('');
-      }
-      setIsUploading(false);
-    };
-    reader.onerror = () => {
-      setIsUploading(false);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleStoryFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      alert('Please choose an image for your story.');
-      e.target.value = '';
+    if (!isVideo && !isImage) {
+      alert('Please select an image or video file.');
       return;
     }
+
+    setPostFile(file);
+    setMediaType(isVideo ? 'video' : 'image');
+    
     const reader = new FileReader();
     reader.onload = (event) => {
       const result = event.target?.result as string;
-      if (result) setNewStoryImageUrl(result);
+      if (result) {
+        setLocalImagePreview(result);
+        if (isVideo) setPostVideoUrl(result);
+        else setPostImageUrl(result);
+      }
     };
-    reader.onerror = () => alert('Could not read that image. Please try another file.');
     reader.readAsDataURL(file);
   };
 
-  const handleCreateStory = (e: React.FormEvent) => {
+  const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!postContent.trim()) return;
+
+    setIsUploading(true);
+    let finalImageUrl = postImageUrl;
+    let finalVideoUrl = postVideoUrl;
+
+    if (postFile) {
+      const uploadedUrl = await StorageBucketService.uploadFileToMediaBucket(postFile);
+      if (uploadedUrl) {
+        if (mediaType === 'video') finalVideoUrl = uploadedUrl;
+        else finalImageUrl = uploadedUrl;
+      }
+    }
+
     const currUser = StorageService.getCurrentUser() || currentUser;
-    const finalStoryImg = newStoryImageUrl || '/assets/apostle_joe_daniels_preach.jpg';
-    
-    StorageService.addStory({
+    const postingPage = selectedPostingPageId !== 'personal' 
+      ? StorageService.getPages().find(p => p.id === selectedPostingPageId)
+      : null;
+
+    // New posts start with 0 likes and 0 comments until liked/commented by real users
+    StorageService.submitTestimony({
       user_id: currUser.id,
-      user_name: currUser.full_name || 'Member',
-      user_handle: currUser.handle || `@${currUser.full_name.toLowerCase().replace(/\s+/g, '_')}`,
-      user_avatar: currUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg',
-      avatar_url: currUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg',
-      badge_type: currUser.verified_badge || currUser.badge_type || 'none',
-      image_url: finalStoryImg,
-      scripture: newStoryScripture.trim() || undefined,
-      text: newStoryText.trim() || undefined,
-      caption: newStoryText.trim() || undefined
+      user_name: postingPage ? postingPage.name : (currUser.full_name || 'Covenant Member'),
+      user_handle: postingPage ? postingPage.handle : (currUser.handle || @),
+      user_avatar: postingPage ? postingPage.avatar_url : (currUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg'),
+      page_id: postingPage ? postingPage.id : undefined,
+      page_name: postingPage ? postingPage.name : undefined,
+      page_handle: postingPage ? postingPage.handle : undefined,
+      page_avatar: postingPage ? postingPage.avatar_url : undefined,
+      category: postCategory,
+      title: postTitle.trim(),
+      content: postContent.trim(),
+      scripture_tag: postScriptureTag.trim(),
+      image_url: finalImageUrl,
+      video_url: finalVideoUrl,
+      likes: 0,
+      comments: []
     });
 
-    setCommunityStories(StorageService.getSortedStories(currUser.id));
-    setShowAddStoryModal(false);
-    setNewStoryImageUrl('');
-    setNewStoryScripture('');
-    setNewStoryText('');
+    setTestimonies(StorageService.getTestimonies());
+    
+    setShowCreatePostModal(false);
+    setPostTitle('');
+    setPostContent('');
+    setPostCategory('Praise & Testimony');
+    setPostScriptureTag('');
+    setPostImageUrl('');
+    setPostVideoUrl('');
     setLocalImagePreview(null);
+    setPostFile(null);
+    setIsUploading(false);
     confetti({ particleCount: 35, spread: 60 });
   };
 
@@ -3540,3 +3555,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     </div>
   );
 };
+
+
+
+
