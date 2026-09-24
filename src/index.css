@@ -23,67 +23,67 @@
 }
 
 :root, [data-theme="dark"] {
-  --background: #09090b;
-  --foreground: #fafafa;
-  --card: #121216;
-  --card-foreground: #fafafa;
-  --popover: #121216;
-  --popover-foreground: #fafafa;
-  --primary: #f59e0b;
-  --primary-foreground: #09090b;
-  --secondary: #1e1e24;
-  --secondary-foreground: #fafafa;
-  --muted: #18181b;
-  --muted-foreground: #a1a1aa;
-  --accent: #27272a;
-  --accent-foreground: #fafafa;
-  --destructive: #ef4444;
-  --destructive-foreground: #fafafa;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.16);
+  --background: #0b0f19;
+  --foreground: #f8fafc;
+  --card: #131d31;
+  --card-foreground: #f8fafc;
+  --popover: #131d31;
+  --popover-foreground: #f8fafc;
+  --primary: #0095f6;
+  --primary-foreground: #ffffff;
+  --secondary: #1a253c;
+  --secondary-foreground: #f8fafc;
+  --muted: #141e32;
+  --muted-foreground: #94a3b8;
+  --accent: #1e2c47;
+  --accent-foreground: #38bdf8;
+  --destructive: #f43f5e;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.18);
   --input: rgba(255, 255, 255, 0.1);
-  --ring: #f59e0b;
+  --ring: #0095f6;
   --church-gold: #f59e0b;
-  --church-gold-muted: rgba(245, 158, 11, 0.15);
-  --church-navy: #09090b;
-  --church-navy-surface: #121216;
-  --church-navy-card: rgba(18, 18, 22, 0.85);
-  --bg-page: #09090b;
-  --text-primary: #fafafa;
-  --text-muted: #a1a1aa;
+  --church-gold-muted: rgba(245, 158, 11, 0.18);
+  --church-navy: #0b0f19;
+  --church-navy-surface: #131d31;
+  --church-navy-card: rgba(19, 29, 49, 0.94);
+  --bg-page: #0b0f19;
+  --text-primary: #f8fafc;
+  --text-muted: #94a3b8;
   --border-subtle: rgba(255, 255, 255, 0.08);
 }
 
 [data-theme="light"] {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #f0f2f5;
+  --foreground: #0f1419;
   --card: #ffffff;
-  --card-foreground: #0f172a;
+  --card-foreground: #0f1419;
   --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: #d97706;
+  --popover-foreground: #0f1419;
+  --primary: #0095f6;
   --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #475569;
-  --accent: #e2e8f0;
-  --accent-foreground: #0f172a;
-  --destructive: #dc2626;
+  --secondary: #e4e6eb;
+  --secondary-foreground: #050505;
+  --muted: #f0f2f5;
+  --muted-foreground: #65676b;
+  --accent: #e7f3ff;
+  --accent-foreground: #0095f6;
+  --destructive: #e11d48;
   --destructive-foreground: #ffffff;
-  --border: rgba(15, 23, 42, 0.09);
-  --border-strong: rgba(15, 23, 42, 0.16);
-  --input: rgba(15, 23, 42, 0.08);
-  --ring: #d97706;
-  --church-gold: #b48318;
-  --church-gold-muted: rgba(180, 131, 24, 0.12);
-  --church-navy: #0a192f;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.16);
+  --input: rgba(0, 0, 0, 0.06);
+  --ring: #0095f6;
+  --church-gold: #f59e0b;
+  --church-gold-muted: rgba(245, 158, 11, 0.12);
+  --church-navy: #ffffff;
   --church-navy-surface: #ffffff;
   --church-navy-card: #ffffff;
-  --bg-page: #f8fafc;
-  --text-primary: #0f172a;
-  --text-muted: #475569;
-  --border-subtle: rgba(15, 23, 42, 0.08);
+  --bg-page: #f0f2f5;
+  --text-primary: #0f1419;
+  --text-muted: #65676b;
+  --border-subtle: rgba(0, 0, 0, 0.06);
 }
 
 html, body, #root {
@@ -357,41 +357,41 @@ body {
 
 /* ===== Gateway Connect V2 — completely new application shell ===== */
 :root, [data-theme="dark"] {
-  --gcz-v2-bg: #070b12;
-  --gcz-v2-surface: #0d1420;
-  --gcz-v2-surface-2: #111b2a;
-  --gcz-v2-line: rgba(148, 163, 184, .14);
-  --gcz-v2-text: #f5f7fb;
-  --gcz-v2-muted: #8b98aa;
-  --gcz-v2-accent: #67e8c4;
-  --gcz-v2-accent-2: #7dd3fc;
+  --gcz-v2-bg: #0b0f19;
+  --gcz-v2-surface: #131d31;
+  --gcz-v2-surface-2: #1a253c;
+  --gcz-v2-line: rgba(255, 255, 255, 0.09);
+  --gcz-v2-text: #f8fafc;
+  --gcz-v2-muted: #94a3b8;
+  --gcz-v2-accent: #0095f6;
+  --gcz-v2-accent-2: #8b5cf6;
 }
 [data-theme="light"] {
-  --gcz-v2-bg: #f8fafc;
+  --gcz-v2-bg: #f0f2f5;
   --gcz-v2-surface: #ffffff;
-  --gcz-v2-surface-2: #f1f5f9;
-  --gcz-v2-line: rgba(15, 23, 42, .09);
-  --gcz-v2-text: #0f172a;
-  --gcz-v2-muted: #475569;
-  --gcz-v2-accent: #d97706;
-  --gcz-v2-accent-2: #1e40af;
+  --gcz-v2-surface-2: #f8f9fa;
+  --gcz-v2-line: rgba(0, 0, 0, 0.08);
+  --gcz-v2-text: #0f1419;
+  --gcz-v2-muted: #65676b;
+  --gcz-v2-accent: #0095f6;
+  --gcz-v2-accent-2: #6366f1;
 }
 
 html { background: var(--gcz-v2-bg); }
 body { background: var(--gcz-v2-bg) !important; color: var(--gcz-v2-text); }
-.gcz-app-shell { background: radial-gradient(circle at 10% 0%, color-mix(in srgb, var(--gcz-v2-accent-2) 9%, transparent), transparent 32rem), var(--gcz-v2-bg); color: var(--gcz-v2-text); }
+.gcz-app-shell { background: radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--gcz-v2-accent) 9%, transparent), transparent 36rem), var(--gcz-v2-bg); color: var(--gcz-v2-text); }
 .gcz-main { min-height: 0; }
-.gcz-header { background: color-mix(in srgb, var(--gcz-v2-bg) 82%, transparent); border-bottom: 1px solid var(--gcz-v2-line); backdrop-filter: blur(18px); }
+.gcz-header { background: color-mix(in srgb, var(--gcz-v2-bg) 85%, transparent); border-bottom: 1px solid var(--gcz-v2-line); backdrop-filter: blur(18px); }
 .gcz-header > div:first-child > div:first-child { border-radius: 14px !important; background: linear-gradient(145deg, var(--gcz-v2-surface-2), var(--gcz-v2-surface)) !important; border-color: var(--gcz-v2-line) !important; }
 .gcz-header button { border-radius: 13px !important; border-color: var(--gcz-v2-line) !important; }
 .gcz-header button:hover { transform: translateY(-1px); }
 .gcz-header .bg-secondary\/50 { background: var(--gcz-v2-surface) !important; }
-.gcz-header .bg-primary { background: linear-gradient(135deg, var(--gcz-v2-accent), var(--gcz-v2-accent-2)) !important; color: #061015 !important; }
+.gcz-header .bg-primary { background: linear-gradient(135deg, var(--gcz-v2-accent), var(--gcz-v2-accent-2)) !important; color: #ffffff !important; }
 .gcz-nav { background: color-mix(in srgb, var(--gcz-v2-surface) 94%, transparent); border: 1px solid var(--gcz-v2-line); border-radius: 22px; box-shadow: 0 18px 45px rgba(0,0,0,.25); backdrop-filter: blur(22px); }
 .gcz-nav-inner { padding: 2px; }
 .gcz-nav button { min-height: 52px; border-radius: 16px !important; }
 .gcz-nav button:hover { background: color-mix(in srgb, var(--gcz-v2-accent) 9%, transparent) !important; }
-.gcz-nav button[class*="bg-secondary"] { background: linear-gradient(145deg, color-mix(in srgb, var(--gcz-v2-accent) 15%, transparent), color-mix(in srgb, var(--gcz-v2-accent-2) 8%, transparent)) !important; }
+.gcz-nav button[class*="bg-secondary"] { background: linear-gradient(145deg, color-mix(in srgb, var(--gcz-v2-accent) 15%, transparent), color-mix(in srgb, var(--gcz-v2-accent-2) 10%, transparent)) !important; }
 .gcz-nav button[class*="bg-secondary"] svg, .gcz-nav button[class*="bg-secondary"] span { color: var(--gcz-v2-accent) !important; }
 .gcz-statusbar { background: var(--gcz-v2-surface); border-top: 1px solid var(--gcz-v2-line); color: var(--gcz-v2-muted); }
 
@@ -400,7 +400,17 @@ body { background: var(--gcz-v2-bg) !important; color: var(--gcz-v2-text); }
 .gcz-main .rounded-xl { border-radius: 17px !important; }
 .gcz-main .shadow-xl, .gcz-main .shadow-2xl { box-shadow: 0 16px 40px rgba(0,0,0,.12) !important; }
 .gcz-main .border-border { border-color: var(--gcz-v2-line) !important; }
-.gcz-main .bg-card { background: linear-gradient(145deg, var(--gcz-v2-surface), color-mix(in srgb, var(--gcz-v2-surface-2) 65%, var(--gcz-v2-surface))) !important; }
+.gcz-main .bg-card { background: var(--card) !important; }
+
+/* Social media gradient utility classes */
+.bg-instagram-gradient {
+  background: linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%) !important;
+}
+.text-instagram-gradient {
+  background: linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
 
 /* Mobile view optimization: fit mobile screen precisely without overflow */
 @media (max-width: 640px) {

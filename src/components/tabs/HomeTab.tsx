@@ -633,7 +633,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 className="flex flex-col items-center gap-1 group cursor-pointer focus:outline-none shrink-0"
               >
                 <div className="relative">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full p-[2px] bg-gradient-to-tr from-primary via-amber-400 to-rose-500 transition-all group-hover:scale-105">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full p-[2px] bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888] transition-all group-hover:scale-105">
                     <div className="w-full h-full rounded-full p-[1px] bg-background">
                       <img
                         src={story.user_avatar || story.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
@@ -685,7 +685,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         {/* Instagram Post Header */}
         <div className="px-3.5 py-2.5 flex items-center justify-between border-b border-border bg-card">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-10 h-10 rounded-full p-[1.5px] bg-gradient-to-tr from-primary to-amber-500 shrink-0">
+            <div className="w-10 h-10 rounded-full p-[1.5px] bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888] shrink-0">
               <img
                 src="/assets/apostle_joe_daniels_main.jpg"
                 alt="Apostle Joe Daniels"
@@ -993,7 +993,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             <button
               id="btn-hero-floating-seed"
               onClick={() => setShowInStreamDonation(true)}
-              className="p-2.5 rounded-full bg-gradient-to-r from-primary via-amber-300 to-primary text-primary-foreground flex items-center justify-center shadow-xl shadow-primary/40 hover:scale-105 active:scale-95 transition-all border border-white/40 cursor-pointer"
+              className="p-2.5 rounded-full bg-gradient-to-r from-blue-600 via-sky-400 to-indigo-600 text-white flex items-center justify-center shadow-xl shadow-blue-500/30 hover:scale-105 active:scale-95 transition-all border border-white/40 cursor-pointer"
               title="Sow Seed"
               aria-label="Sow Seed"
             >
@@ -1119,7 +1119,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                   <button
                     type="submit"
                     disabled={isDonating}
-                    className="w-full py-2 rounded-lg bg-gradient-to-r from-primary to-amber-400 text-primary-foreground font-black text-xs flex items-center justify-center gap-1.5 shadow"
+                    className="w-full py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow"
                   >
                     {isDonating ? 'Processing...' : `Give ${currency} ${seedAmount} Direct`}
                   </button>
@@ -1139,7 +1139,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               <div className="relative flex items-center justify-center mb-4">
                 <div className="absolute w-28 h-28 rounded-full bg-primary/10 animate-ping" />
                 <div className="absolute w-24 h-24 rounded-full bg-primary/15 animate-pulse" />
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-amber-300 text-primary-foreground flex items-center justify-center shadow-xl shadow-primary/30 z-10">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-xl shadow-blue-500/30 z-10">
                   <Headphones className="w-8 h-8" />
                 </div>
               </div>
@@ -1307,7 +1307,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                       "flex items-center gap-1.5 p-2 rounded-xl font-bold text-xs transition-all cursor-pointer active:scale-95 border",
                       showInStreamDonation
                         ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                        : "bg-gradient-to-r from-primary/20 to-amber-400/20 text-foreground border-primary/40 hover:bg-primary/30"
+                        : "bg-gradient-to-r from-primary/20 to-sky-500/20 text-foreground border-primary/40 hover:bg-primary/30"
                     )}
                     title="Sow Seed while watching"
                     aria-label="Sow Seed while watching"
@@ -1596,7 +1596,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                   <button
                     id="btn-instagram-sow-seed"
                     onClick={() => setShowInStreamDonation(true)}
-                    className="p-2 rounded-full bg-gradient-to-r from-primary to-amber-400 text-primary-foreground shadow-xs hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                    className="p-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
                     title="Sow Kingdom Seed"
                     aria-label="Sow Kingdom Seed"
                   >

@@ -88,7 +88,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                     className={cn(
                       'rounded-full transition-all duration-200 flex items-center justify-center',
                       isActive 
-                        ? 'w-7 h-7 p-[1.5px] bg-gradient-to-tr from-amber-500 via-amber-400 to-yellow-300 shadow-xs' 
+                        ? 'w-7 h-7 p-[1.5px] bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888] shadow-xs' 
                         : 'w-6 h-6 p-[1px] bg-border group-hover:bg-muted-foreground/40'
                     )}
                   >
@@ -111,7 +111,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                     className={cn(
                       'w-5 h-5 sm:w-6 sm:h-6 transition-all duration-200',
                       isActive 
-                        ? 'scale-110 text-primary stroke-[2.4] fill-primary/20 drop-shadow-[0_0_8px_rgba(245,158,11,0.3)]' 
+                        ? 'scale-110 text-primary stroke-[2.4] fill-primary/20 drop-shadow-[0_0_8px_rgba(0,149,246,0.4)]' 
                         : 'stroke-[1.8] group-hover:scale-105'
                     )} 
                   />
