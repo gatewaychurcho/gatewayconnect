@@ -2,19 +2,40 @@
 -- GATEWAY CONNECT: STORAGE BUCKETS & RLS POLICIES FOR UNSTRUCTURED MEDIA
 -- Media (videos, voice audio, documents, posts, sermon recordings, church links)
 -- Avatars (profile pictures, church page logos, group icons)
+--
+-- RUN IN SUPABASE SQL EDITOR (Dashboard -> SQL Editor -> Run).
+-- Note: In Supabase, 'storage.objects' already has Row Level Security (RLS) enabled
+-- by default and is owned by 'supabase_storage_admin'. Running
+-- 'ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY' causes SQLSTATE 42501
+-- because only the table owner can alter it. It has been omitted here.
 -- ==============================================================================
 
 -- 1. Create or update storage buckets in Supabase
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+INSERT INTO storage.buckets (id, name, public)
 VALUES 
-  ('media', 'media', true, 104857600, NULL), -- 100MB max for videos, audio, images, PDFs
-  ('avatars', 'avatars', true, 15728640, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']) -- 15MB max for avatars
+  ('media', 'media', true),
+  ('avatars', 'avatars', true)
 ON CONFLICT (id) DO UPDATE SET 
-  public = true,
-  file_size_limit = EXCLUDED.file_size_limit;
+  public = true;
+
+-- Update size limits & mime types if columns exist in this Supabase version
+DO $$
+BEGIN
+  UPDATE storage.buckets 
+  SET file_size_limit = 104857600 -- 100MB max for videos, audio, images, documents
+  WHERE id = 'media';
+
+  UPDATE storage.buckets 
+  SET file_size_limit = 15728640, -- 15MB max for avatars
+      allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  WHERE id = 'avatars';
+EXCEPTION WHEN OTHERS THEN
+  -- Gracefully ignore if optional limit columns are not present
+  NULL;
+END $$;
 
 -- 2. Storage Policies on storage.objects
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- Note: RLS is ALREADY enabled on storage.objects by Supabase. Do NOT run ALTER TABLE.
 
 -- Clean up any existing policies
 DROP POLICY IF EXISTS "Public access to media bucket" ON storage.objects;
