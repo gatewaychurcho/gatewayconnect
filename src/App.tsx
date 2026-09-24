@@ -547,7 +547,7 @@ export default function App() {
   }
 
   return (
-    <div className="gcz-app-shell min-h-screen bg-[var(--gcz-bg-page)] text-[var(--gcz-text-main)] flex flex-col selection:bg-amber-400 selection:text-slate-950 transition-colors duration-200 overflow-x-hidden w-full max-w-full">
+    <div className="gcz-app-shell min-h-screen bg-[var(--gcz-bg-page)] text-[var(--gcz-text-main)] flex flex-col selection:bg-primary selection:text-white transition-colors duration-200 overflow-x-hidden w-full max-w-full">
       
       {/* 1. Main Header */}
       <Header
