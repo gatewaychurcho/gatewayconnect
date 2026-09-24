@@ -484,6 +484,11 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
     setFollowersCount(StorageService.getUserFollowersCount(profileUser.id));
     setFollowingCount(StorageService.getUserFollowingCount(profileUser.id));
 
+    if (result.blocked) {
+      triggerToast(result.reason || 'Foundational Super Admins and Platform Developers cannot be unfollowed.');
+      return;
+    }
+
     if (result.isFollowing) {
       confetti({
         particleCount: 35,

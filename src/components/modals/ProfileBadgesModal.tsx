@@ -16,7 +16,8 @@ import {
   MessageSquare,
   Crown,
   ChevronRight,
-  Share2
+  Share2,
+  Lock
 } from 'lucide-react';
 import { User, UserRole } from '../../types';
 import { StorageService } from '../../services/storageService';
@@ -57,6 +58,7 @@ export const ProfileBadgesModal: React.FC<ProfileBadgesModalProps> = ({
   }, [isOpen]);
 
   const [claimedReward, setClaimedReward] = useState(false);
+  const [followToast, setFollowToast] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -66,6 +68,11 @@ export const ProfileBadgesModal: React.FC<ProfileBadgesModalProps> = ({
     const res = StorageService.toggleFollowUser(targetUserId);
     setFollowingList(StorageService.getFollowingList(currentUser.id));
     setUsersList(StorageService.getAllUsers());
+    if (res.blocked) {
+      setFollowToast(res.reason || 'Super Admins and Ministry Developers are foundational accounts and cannot be unfollowed.');
+      setTimeout(() => setFollowToast(null), 3500);
+      return;
+    }
     if (res.isFollowing) {
       confetti({ particleCount: 25, spread: 50, origin: { y: 0.6 } });
     }
@@ -175,6 +182,14 @@ export const ProfileBadgesModal: React.FC<ProfileBadgesModalProps> = ({
             </span>
           </p>
         </div>
+
+        {/* Unfollow Protected Notification */}
+        {followToast && (
+          <div className="mx-4 mt-2 p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+            <Lock className="w-4 h-4 shrink-0 text-amber-500" />
+            <span className="flex-1">{followToast}</span>
+          </div>
+        )}
 
         {/* Sub-Navigation Tabs */}
         <div className="flex items-center border-y border-border bg-secondary/50 px-2 py-1 shrink-0 overflow-x-auto text-xs font-semibold gap-1">

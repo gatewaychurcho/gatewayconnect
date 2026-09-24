@@ -683,6 +683,13 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       ...prev,
       [userId]: res.isFollowing
     }));
+    if (res.blocked) {
+      setEventFeedbackToast({
+        title: 'Foundational Ministry Account',
+        message: res.reason || 'Super Admins and Platform Developers are foundational accounts and cannot be unfollowed.'
+      });
+      return;
+    }
     window.dispatchEvent(new CustomEvent('gcz_follow_updated', {
       detail: { followerId: currentUser?.id, targetUserId: userId, isFollowing: res.isFollowing }
     }));

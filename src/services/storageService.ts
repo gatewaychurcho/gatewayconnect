@@ -254,6 +254,15 @@ export class StorageService {
     }
   }
 
+  static removePermanentCustomAvatar(userId: string): void {
+    if (!userId) return;
+    const avatars = this.getPermanentCustomAvatars();
+    if (avatars[userId]) {
+      delete avatars[userId];
+      setLocal('gcz_permanent_custom_avatars', avatars);
+    }
+  }
+
   static async hydrateProfilePictureFromSupabase(userId: string): Promise<string | null> {
     if (!userId) return null;
     try {
@@ -806,7 +815,22 @@ export class StorageService {
     return records;
   }
 
-  static toggleFollowUser(targetUserId: string, explicitFollowerId?: string): { isFollowing: boolean; targetUserFollowers: number } {
+  static isProtectedLeader(userId: string): boolean {
+    if (!userId) return false;
+    const allUsers = this.getAllUsers();
+    const user = allUsers.find(u => u.id === userId);
+    return Boolean(
+      userId === 'usr_apostle_joe' ||
+      userId === 'usr_prophetess_melinda' ||
+      userId === 'usr_pastor_easter' ||
+      userId === 'usr_developer' ||
+      user?.role === 'super_admin' ||
+      user?.role === 'developer' ||
+      user?.phone === '0780699988'
+    );
+  }
+
+  static toggleFollowUser(targetUserId: string, explicitFollowerId?: string): { isFollowing: boolean; targetUserFollowers: number; blocked?: boolean; reason?: string } {
     const currentUser = this.getCurrentUser();
     const followerId = explicitFollowerId || currentUser?.id || 'guest';
     const allUsers = this.getAllUsers();
@@ -820,6 +844,17 @@ export class StorageService {
       r => r.follower_id === effectiveFollowerId && (r.following_id === effectiveTargetId || r.following_id === targetUserId)
     );
     const isCurrentlyFollowing = existingIndex >= 0;
+
+    // Protection: Super Admins and Platform Developers cannot be unfollowed!
+    if (isCurrentlyFollowing && this.isProtectedLeader(effectiveTargetId)) {
+      const targetUser = allUsers.find(u => u.id === effectiveTargetId || u.id === targetUserId);
+      return {
+        isFollowing: true,
+        targetUserFollowers: targetUser?.followers_count || 1,
+        blocked: true,
+        reason: 'Super Admins and Platform Developers are foundational leaders and cannot be unfollowed.'
+      };
+    }
 
     if (isCurrentlyFollowing) {
       records.splice(existingIndex, 1);
@@ -2432,9 +2467,11 @@ export class StorageService {
       member_id: `GCZ-${role === 'developer' ? 'DEV' : 'MEM'}-${Math.floor(1000 + Math.random() * 9000)}`,
       is_verified: isVerified,
       created_at: new Date().toISOString(),
-      saved_verses: ['John 1:1', 'Isaiah 40:31'],
+      saved_verses: [],
+      offline_sermon_ids: [],
+      unlocked_sermon_ids: [],
       followers_count: 0,
-      following_count: 2
+      following_count: 0
     };
 
     this.saveUser(newUser);
@@ -2473,6 +2510,74 @@ export class StorageService {
     }
 
     return { success: true, user: newUser };
+  }
+
+  /**
+   * Permanently deletes a user account from local storage and remote database
+   */
+  static deleteAccount(userId: string): { success: boolean; error?: string } {
+    if (!userId || userId === 'guest' || userId.startsWith('usr_guest')) {
+      return { success: false, error: 'Cannot delete guest session' };
+    }
+
+    // Protection: Prevent deleting foundational leaders & developers
+    if (this.isProtectedLeader(userId)) {
+      return {
+        success: false,
+        error: 'Foundational Ministry Overseers and Platform Developers cannot be deleted.'
+      };
+    }
+
+    try {
+      // 1. Remove from all users
+      const allUsers = this.getAllUsers().filter(u => u.id !== userId);
+      setLocal(KEYS.ALL_USERS, allUsers);
+
+      // 2. Remove all follow relationships
+      const records = this.getUserFollowsRecords().filter(
+        r => r.follower_id !== userId && r.following_id !== userId
+      );
+      setLocal(KEYS.USER_FOLLOWS_TABLE, records);
+
+      // 3. Clear following key in localStorage
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(`following_list_${userId}`);
+      }
+
+      // 4. Remove custom avatar
+      this.removePermanentCustomAvatar(userId);
+
+      // 5. Remove community stories and user posts created by this user
+      const stories = this.getStories().filter(s => s.user_id !== userId);
+      setLocal(KEYS.COMMUNITY_STORIES, stories);
+
+      const testimonies = this.getTestimonies().filter(t => t.user_id !== userId);
+      setLocal(KEYS.TESTIMONIES, testimonies);
+
+      // 6. Delete from Supabase in background
+      const supabase = getSupabase();
+      if (supabase) {
+        Promise.resolve(supabase.from('users').delete().eq('id', userId)).catch(() => {});
+      }
+
+      // 7. Clear current user if it's the deleted user
+      const current = this.getCurrentUser();
+      if (current && current.id === userId) {
+        this.logout();
+      }
+
+      // 8. Dispatch events across applet
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_user_deleted', { detail: { userId } }));
+        window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+        window.dispatchEvent(new CustomEvent('gcz_follow_updated'));
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Failed to delete account:', err);
+      return { success: false, error: err.message || 'Failed to delete account' };
+    }
   }
 
   // User Password Change Feature
@@ -2791,6 +2896,10 @@ export class StorageService {
       return true;
     }
     return false;
+  }
+
+  static getStories(): CommunityStory[] {
+    return getLocal<CommunityStory[]>(KEYS.COMMUNITY_STORIES, []);
   }
 
   // 24-HOUR COMMUNITY STORIES (WhatsApp / Instagram Status style) - REAL-TIME ONLY

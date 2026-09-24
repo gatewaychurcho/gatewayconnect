@@ -174,6 +174,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         } catch {}
         
         StorageService.saveUser(mappedUser);
+        StorageService.autoFollowSuperAdminAndDeveloper(mappedUser.id);
         StorageService.setCurrentUser(mappedUser);
         onLoginSuccess(mappedUser as any);
       }
@@ -244,7 +245,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           is_premium: false,
           badge_type: 'none',
           date_of_birth: dateOfBirth,
-          gender: gender
+          gender: gender,
+          saved_verses: [],
+          offline_sermon_ids: [],
+          followers_count: 0,
+          following_count: 0
         };
 
         try {
@@ -264,6 +269,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         } catch {}
         
         StorageService.saveUser(mappedUser);
+        StorageService.autoFollowSuperAdminAndDeveloper(mappedUser.id);
         StorageService.setCurrentUser(mappedUser);
         onLoginSuccess(mappedUser as any);
       }

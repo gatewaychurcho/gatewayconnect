@@ -221,12 +221,14 @@ export default function App() {
       created_at: new Date().toISOString(),
       location: 'Harare',
       city_location: 'Harare',
-      saved_verses: []
+      saved_verses: [],
+      offline_sermon_ids: [],
+      followers_count: 0,
+      following_count: 0
     };
     StorageService.saveUser(instantUser);
+    StorageService.autoFollowSuperAdminAndDeveloper(instantUser.id);
     StorageService.setCurrentUser(instantUser);
-    ['usr_apostle_joe', 'usr_developer', 'usr_pastor_tendai', 'usr_pastor_grace', 'usr_prophetess_melinda', 'usr_pastor_easter']
-      .forEach(leaderId => StorageService.toggleFollowUser(leaderId, instantUser.id));
     setCurrentUser(instantUser);
     confetti({ particleCount: 30, spread: 60 });
   };
@@ -265,8 +267,18 @@ export default function App() {
     };
     window.addEventListener('gcz_banned_users_updated', refreshLiveState);
     window.addEventListener('gcz_current_user_banned', refreshLiveState);
+    const handleUserDeleted = (e: any) => {
+      const deletedId = e?.detail?.userId;
+      if (!deletedId || currentUser?.id === deletedId) {
+        handleLogout();
+      } else {
+        refreshAppData();
+      }
+    };
+
     window.addEventListener('gcz_open_user_profile', handleOpenProfile);
     window.addEventListener('gcz_user_profile_updated', handleProfileUpdated);
+    window.addEventListener('gcz_user_deleted', handleUserDeleted);
     return () => {
       unbind();
       liveSyncService.disconnect();
@@ -274,6 +286,7 @@ export default function App() {
       window.removeEventListener('gcz_current_user_banned', refreshLiveState);
       window.removeEventListener('gcz_open_user_profile', handleOpenProfile);
       window.removeEventListener('gcz_user_profile_updated', handleProfileUpdated);
+      window.removeEventListener('gcz_user_deleted', handleUserDeleted);
     };
   }, [currentUser?.id]);
   useEffect(() => {
@@ -469,7 +482,11 @@ export default function App() {
               badge_type: 'none',
               is_verified: false,
               date_of_birth: authDateOfBirth,
-              gender: authGender
+              gender: authGender,
+              saved_verses: [],
+              offline_sermon_ids: [],
+              followers_count: 0,
+              following_count: 0
             };
 
             try {
@@ -489,6 +506,7 @@ export default function App() {
             } catch {}
 
             StorageService.saveUser(newUser);
+            StorageService.autoFollowSuperAdminAndDeveloper(newUser.id);
             StorageService.setCurrentUser(newUser);
             setCurrentUser(newUser);
             setShowAuthModal(false);
@@ -634,6 +652,7 @@ export default function App() {
             }}
             onOpenDevConsole={() => setShowDevConsole(true)}
             onOpenAdminPanel={() => setShowAdminPanel(true)}
+            onOpenLiveModal={() => setShowLiveSermonModal(true)}
           />
         )}
 

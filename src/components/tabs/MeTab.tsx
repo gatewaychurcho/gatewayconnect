@@ -42,7 +42,8 @@ import {
   CheckCircle2,
   UserCheck,
   Flag,
-  RotateCcw
+  RotateCcw,
+  AlertTriangle
 } from 'lucide-react';
 import { User, Sermon, NotificationSettings, Testimony, PostComment, ChurchPage } from '../../types';
 import { StorageService } from '../../services/storageService';
@@ -131,6 +132,9 @@ export const MeTab: React.FC<MeTabProps> = ({
   const [copiedId, setCopiedId] = useState(false);
   const [notificationSavedToast, setNotificationSavedToast] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
 
   // Followers / Following Modal Drawer
   const [showFollowersDrawer, setShowFollowersDrawer] = useState<'followers' | 'following' | null>(null);
@@ -251,12 +255,11 @@ export const MeTab: React.FC<MeTabProps> = ({
     const freshUser = StorageService.getCurrentUser() || currentUser;
     setLocalUser(freshUser);
 
-    // Filter posts for this user
+    // Filter posts strictly for this user
     const allTestimonies = StorageService.getTestimonies();
     const userTestimonies = allTestimonies.filter(
       t => t.user_id === freshUser.id || 
-           (t.user_handle && t.user_handle === freshUser.handle) || 
-           t.user_name === freshUser.full_name
+           (freshUser.handle && t.user_handle === freshUser.handle)
     );
     setMyPosts(userTestimonies);
 
@@ -1487,13 +1490,42 @@ export const MeTab: React.FC<MeTabProps> = ({
             </div>
           )}
 
+          {/* Danger Zone: Account Deletion */}
+          <div className="p-4 bg-destructive/5 border border-destructive/20 rounded-xl space-y-3">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <p className="font-bold text-xs uppercase tracking-wider">Account Deletion & Data Privacy</p>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Permanently delete your Gateway Connect profile, credentials, and membership record. This action is irreversible.
+            </p>
+            {StorageService.isProtectedLeader(localUser.id) ? (
+              <div className="p-2.5 rounded-lg bg-secondary/80 border border-border text-[11px] text-muted-foreground flex items-center gap-2">
+                <Lock className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span>Foundational Overseer / Platform Developer account cannot be deleted.</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteAccountError(null);
+                  setShowDeleteAccountModal(true);
+                }}
+                className="px-3.5 py-2 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete My Account</span>
+              </button>
+            )}
+          </div>
+
           {/* Log Out Button */}
           {onLogout && (
             <button
               onClick={onLogout}
-              className="w-full py-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive hover:bg-destructive/20 font-semibold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              className="w-full py-3 rounded-lg bg-secondary border border-border text-foreground hover:bg-secondary/80 font-semibold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-4 h-4 text-muted-foreground" />
               <span>Log Out of Gateway Connect</span>
             </button>
           )}
@@ -1733,9 +1765,13 @@ export const MeTab: React.FC<MeTabProps> = ({
 
                         <button
                           onClick={() => {
-                            StorageService.toggleFollowUser(localUser.id, id);
+                            const res = StorageService.toggleFollowUser(id, localUser.id);
                             refreshUserData();
-                            showToast(isFollowingThis ? 'Unfollowed' : 'Followed believer');
+                            if (res.blocked) {
+                              showToast(res.reason || 'Foundational Super Admins and Developers cannot be unfollowed.');
+                            } else {
+                              showToast(res.isFollowing ? 'Followed believer' : 'Unfollowed');
+                            }
                           }}
                           className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition-all ${
                             isFollowingThis
@@ -1743,7 +1779,7 @@ export const MeTab: React.FC<MeTabProps> = ({
                               : 'bg-primary text-primary-foreground hover:bg-primary/90'
                           }`}
                         >
-                          {isFollowingThis ? 'Following' : 'Follow'}
+                          {isFollowingThis ? (StorageService.isProtectedLeader(id) ? 'Following (Leader)' : 'Following') : 'Follow'}
                         </button>
                       </div>
                     );
@@ -2359,6 +2395,78 @@ export const MeTab: React.FC<MeTabProps> = ({
           onClose={() => setSelectedChurchPage(null)}
           onUpdatePage={(updated) => setSelectedChurchPage(updated)}
         />
+      )}
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteAccountModal && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="w-full max-w-md bg-card border border-destructive/30 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-destructive">
+              <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0 border border-destructive/20">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-foreground">Delete Account Permanently?</h3>
+                <p className="text-[11px] text-muted-foreground">This action is irreversible</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Are you sure you want to permanently delete your Gateway Connect profile? All your stored preferences, personal bookmarks, and membership records will be purged from the ministry platform.
+            </p>
+
+            {deleteAccountError && (
+              <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs">
+                {deleteAccountError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingAccount}
+                onClick={() => setShowDeleteAccountModal(false)}
+                className="px-4 py-2 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-semibold text-xs border border-border transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingAccount}
+                onClick={() => {
+                  setIsDeletingAccount(true);
+                  setDeleteAccountError(null);
+                  try {
+                    const res = StorageService.deleteAccount(localUser.id);
+                    if (res.success) {
+                      showToast('Your account has been deleted.');
+                      setShowDeleteAccountModal(false);
+                      if (onLogout) {
+                        onLogout();
+                      }
+                    } else {
+                      setDeleteAccountError(res.error || 'Failed to delete account');
+                      setIsDeletingAccount(false);
+                    }
+                  } catch (err: any) {
+                    setDeleteAccountError(err.message || 'Error occurred while deleting account');
+                    setIsDeletingAccount(false);
+                  }
+                }}
+                className="px-4 py-2 rounded-lg bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isDeletingAccount ? (
+                  <span>Deleting...</span>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Yes, Permanently Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

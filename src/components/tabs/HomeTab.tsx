@@ -33,7 +33,16 @@ import {
   Lock,
   Crown,
   Music,
-  Film
+  Film,
+  TrendingUp,
+  Quote,
+  HandHeart,
+  Search,
+  Hash,
+  Compass,
+  ArrowRight,
+  ShieldCheck,
+  BellRing
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Sermon, Devotional, Testimony, User, CommunityStory } from '../../types';
@@ -45,7 +54,6 @@ import { UpgradeModal } from '../modals/UpgradeModal';
 import { FacebookStreamPlayer } from '../common/FacebookStreamPlayer';
 import { cn } from '../../lib/utils';
 import { liveSyncService } from '../../services/liveSyncService';
-import { LivePouringComments } from '../broadcast/LivePouringComments';
 
 interface HomeTabProps {
   sermons: Sermon[];
@@ -81,6 +89,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const [offlineIds, setOfflineIds] = useState<string[]>(StorageService.getOfflineSermonsList());
   const [showArchivedVideoDropdown, setShowArchivedVideoDropdown] = useState<boolean>(false);
   const [liveTestimonies, setLiveTestimonies] = useState<Testimony[]>(testimonies);
+  const [activeTestimonyIndex, setActiveTestimonyIndex] = useState<number>(0);
   const [chatMessages, setChatMessages] = useState<Array<{ user: string; text: string; time: string }>>([
     { user: 'Sister Tariro (Harare)', text: 'Amen! Receiving this word of divine speed!', time: '10:04' },
     { user: 'Brother Farai (UK)', text: 'Watching live from London! The presence of God is heavy!', time: '10:05' },
@@ -136,6 +145,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       window.removeEventListener('gcz_follow_updated', refreshStories);
     };
   }, [currentUser?.id]);
+
   const [broadcastLikes, setBroadcastLikes] = useState<string[]>(() => StorageService.getBroadcastLikes());
   const [broadcastLikers, setBroadcastLikers] = useState<User[]>(() => StorageService.getBroadcastLikerUsers());
   const [isPostLiked, setIsPostLiked] = useState<boolean>(() => StorageService.hasUserLikedBroadcast(currentUser?.id));
@@ -148,7 +158,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const currentDevotional = React.useMemo(() => {
     if (!devotionals || devotionals.length === 0) return {} as Devotional;
     const now = new Date();
-    // Unique day index
     const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
     const selected = devotionals[Math.abs(dayOfYear) % devotionals.length] || devotionals[0];
     const formattedDate = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -194,7 +203,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       const updated = e?.detail || StorageService.getLiveSermonStatus();
       setLiveSermonStatus(updated);
       if (updated?.isLive) {
-        setOverridePlayingVideo(null); // Instantly swap to live broadcast
+        setOverridePlayingVideo(null);
       }
       if (updated?.streamUrl) {
         setLiveStreamUrl(updated.streamUrl);
@@ -222,7 +231,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       window.removeEventListener('gcz_live_broadcast_started', handleLiveStatusChange);
       window.removeEventListener('gcz_broadcast_likes_updated', handleBroadcastLikesUpdated);
     };
-  }, []);
+  }, [currentUser?.id]);
 
   // Real-time viewer attendance tracking when watching live broadcast on HomeTab
   useEffect(() => {
@@ -310,21 +319,21 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       onRequireAuth();
       return;
     }
-    // Allow continuous repeated taps like Facebook Live
     setActiveReactionCount(prev => ({
       ...prev,
       [emoji]: (prev[emoji] || 0) + 1
     }));
-    setUserReacted(prev => ({
-      ...prev,
-      [emoji]: true
-    }));
-    
-    // Broadcast reaction across live stream so floating bubbles rise up
-    const reactionType = emoji === '❤️' ? 'love' : emoji === '🙏' ? 'amen' : emoji === '🔥' ? 'fire' : 'like';
+    setUserReacted(prev => ({ ...prev, [emoji]: true }));
+    confetti({
+      particleCount: 15,
+      spread: 40,
+      origin: { y: 0.8, x: 0.85 }
+    });
+
+    const reactionType = emoji === '❤️' ? 'love' : emoji === '🔥' ? 'fire' : emoji === '🙏' ? 'amen' : 'like';
     liveSyncService.broadcastEvent({
       type: 'stream_reaction',
-      payload: { emoji, reactionType, user: currentUser.full_name }
+      payload: { emoji, reactionType, user: currentUser?.full_name || 'Believer' }
     });
   };
 
@@ -344,26 +353,24 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     }
     if (!inputChat.trim()) return;
     const newMsg = {
-      user: `${currentUser.full_name} (${currentUser.cell_group || 'Member'})`,
+      user: `${currentUser?.full_name || 'Believer'} (${currentUser?.cell_group || 'Member'})`,
       text: inputChat.trim(),
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     setChatMessages(prev => [...prev, newMsg]);
     setInputChat('');
 
-    // Pop on screen for 1 second like Instagram/TikTok Live
     window.dispatchEvent(new CustomEvent('gcz_live_comment_pop', {
       detail: {
-        sender_name: currentUser.full_name,
+        sender_name: currentUser?.full_name || 'Believer',
         message: newMsg.text,
-        city: currentUser.location || 'Harare',
+        city: currentUser?.location || 'Harare',
         is_decree: Boolean(newMsg.text.toLowerCase().includes('amen') || newMsg.text.toLowerCase().includes('receive')),
         is_current_user: true,
-        avatar_url: currentUser.avatar_url
+        avatar_url: currentUser?.avatar_url
       }
     }));
 
-    // Broadcast chat to all other connected viewers
     liveSyncService.broadcastEvent({
       type: 'stream_chat',
       payload: newMsg
@@ -379,7 +386,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   };
 
   const handleShareWhatsApp = (title: string, text: string) => {
-    const shareText = `*Gateway Connect Zimbabwe* - Apostle Joe Daniels\n\n📌 *${title}*\n${text}\n\n📲 Watch and listen in Gateway Connect App!`;
+    const shareText = `*Gateway Connect Zimbabwe* - Apostle Joe Daniels\n\n📌 *${title}*\n${text}\n\n📲 Connect with us on Gateway Connect App!`;
     const url = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
     window.open(url, '_blank');
   };
@@ -390,7 +397,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   };
 
   const handleTogglePostHeart = () => {
-    // Like and broadcast reaction in real-time
     const res = StorageService.incrementBroadcastLike(currentUser?.id);
     setIsPostLiked(true);
     setBroadcastLikes(StorageService.getBroadcastLikes());
@@ -398,7 +404,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     setHeartAnim(true);
     setTimeout(() => setHeartAnim(false), 500);
 
-    // Broadcast reaction across stream
     liveSyncService.broadcastEvent({
       type: 'stream_reaction',
       payload: { emoji: '❤️', reactionType: 'love', user: currentUser?.full_name || 'Believer' }
@@ -448,9 +453,65 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   });
 
   const [showPaidBookingModal, setShowPaidBookingModal] = useState(false);
+  const [activeTrendingTag, setActiveTrendingTag] = useState<string | null>(null);
+  const [isSpeakingDeclaration, setIsSpeakingDeclaration] = useState<boolean>(false);
+  const videoPlayerRef = useRef<HTMLDivElement | null>(null);
+
+  const handleToggleTestimonyAmen = (testimonyId: string) => {
+    if (isGuest) {
+      onRequireAuth();
+      return;
+    }
+    StorageService.likeTestimony(testimonyId, currentUser?.id);
+    setLiveTestimonies(StorageService.getTestimonies());
+    confetti({
+      particleCount: 30,
+      spread: 60,
+      origin: { y: 0.7 }
+    });
+    showToast('Amen! Your praise agreement was recorded.');
+  };
+
+  const handleSelectTrendingTag = (tag: string, targetSeries?: string) => {
+    setActiveTrendingTag(tag);
+    const clean = tag.replace('#', '');
+    setSearchQuery(clean);
+    if (targetSeries) {
+      setSelectedSeries(targetSeries);
+    }
+    showToast(`Filtering for ${tag}`);
+    const archiveEl = document.getElementById('sermon-archive-section');
+    if (archiveEl) {
+      archiveEl.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const handleSpeakDeclaration = (text: string) => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+      utterance.onstart = () => setIsSpeakingDeclaration(true);
+      utterance.onend = () => setIsSpeakingDeclaration(false);
+      utterance.onerror = () => setIsSpeakingDeclaration(false);
+      window.speechSynthesis.speak(utterance);
+    }
+  };
 
   const uniqueSeries = ['All', ...Array.from(new Set(sermons.map(s => s.series).filter(Boolean)))];
-  const latestApostlePost = (liveTestimonies || []).find(t => (t?.user_name || '').toLowerCase().includes('daniels')) || liveTestimonies?.[0];
+  
+  // Trending hashtags wired to church themes & sermons
+  const trendingTags = [
+    { tag: '#DivineSpeed', count: '1.4k decrees', series: 'Prophetic Speed' },
+    { tag: '#Cathedral2026', count: '890 partners', series: 'Cathedral Foundation' },
+    { tag: '#DominionHour', count: '2.1k watching', series: 'Dominion' },
+    { tag: '#AltarDecree', count: '650 prayers', series: 'All' },
+    { tag: '#ChurchAndPolitics', count: '3.2k discussions', series: 'Controversial Issues' }
+  ];
+
+  // Active highlighted testimony
+  const featuredTestimony = liveTestimonies[activeTestimonyIndex % (liveTestimonies.length || 1)] || liveTestimonies[0];
 
   const liveStreamStatus = liveSermonStatus;
 
@@ -472,12 +533,11 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const activeVideoId = streamEmbedInfo.videoId || StorageService.extractYoutubeId(currentStreamTarget) || '-CibsaxijIk';
   const isFacebook = streamEmbedInfo.isFacebook;
 
-  // Local media detection (uploaded locally via Admin Panel)
   const currentLocalVideo = overridePlayingVideo?.video_url || (!overridePlayingVideo && activeSermon?.video_url);
   const currentLocalAudio = overridePlayingVideo?.audio_url || (!overridePlayingVideo && activeSermon?.audio_url);
 
   return (
-    <div className="space-y-4 sm:space-y-6 pb-20 max-w-4xl mx-auto px-0 sm:px-2 pt-1 w-full max-w-full">
+    <div className="space-y-4 sm:space-y-6 pb-24 max-w-4xl mx-auto px-1 sm:px-2 pt-1 w-full">
       
       {/* Toast Notification */}
       {toastMsg && (
@@ -487,10 +547,9 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         </div>
       )}
 
-      {/* Instagram Story Viewer Modal - Fixed to never overlap or push off mobile screen */}
+      {/* Instagram Story Viewer Modal */}
       {activeStory && (
         <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-between p-2.5 sm:p-4 max-h-[100dvh] h-[100dvh] overflow-hidden pb-[max(0.75rem,env(safe-area-inset-bottom))] animate-in fade-in">
-          {/* Progress bar */}
           <div className="w-full max-w-sm flex items-center gap-1.5 pt-1 shrink-0">
             {realStories.map(st => (
               <div key={st.id} className="flex-1 h-1 bg-white/20 rounded-full overflow-hidden">
@@ -508,7 +567,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             ))}
           </div>
 
-          {/* Story Header */}
           <div className="w-full max-w-sm flex items-center justify-between mt-2 px-1 text-white shrink-0">
             <div className="flex items-center gap-2.5">
               <img 
@@ -532,7 +590,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             </button>
           </div>
 
-          {/* Story Content Area - Contained and fully viewable on mobile */}
           <div className="relative w-full max-w-sm flex-1 min-h-0 my-2 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center bg-zinc-950">
             <img 
               src={activeStory.image_url} 
@@ -540,66 +597,27 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               className="w-full h-full object-contain" 
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
-            
-            {/* Story Text Overlay */}
-            <div className="absolute bottom-4 inset-x-3 text-white space-y-1">
-              {activeStory.scripture && (
-                <span className="inline-block px-2 py-0.5 rounded-md bg-primary text-primary-foreground font-bold text-[10px] shadow">
-                  📖 {activeStory.scripture}
-                </span>
-              )}
-              <h3 className="text-sm sm:text-base font-bold drop-shadow-md line-clamp-2">
-                {activeStory.caption || activeStory.text || 'Gateway Dominion Story'}
-              </h3>
-              <p className="text-[10px] text-white/70">Tap left or right to switch</p>
-            </div>
-
-            {/* Click areas for prev/next story */}
-            <div 
-              className="absolute left-0 top-0 bottom-0 w-1/2 cursor-pointer"
-              onClick={() => {
-                const idx = realStories.findIndex(s => s.id === activeStory.id);
-                if (idx > 0) setActiveStory(realStories[idx - 1]);
-              }}
-            />
-            <div 
-              className="absolute right-0 top-0 bottom-0 w-1/2 cursor-pointer"
-              onClick={() => {
-                const idx = realStories.findIndex(s => s.id === activeStory.id);
-                if (idx < realStories.length - 1) {
-                  setActiveStory(realStories[idx + 1]);
-                } else {
-                  setActiveStory(null);
-                }
-              }}
-            />
           </div>
 
-          {/* Story Footer Input */}
-          <div className="w-full max-w-sm flex items-center gap-2 px-1 shrink-0">
-            <input 
-              type="text"
-              placeholder={`Reply to ${activeStory.user_name}...`}
-              className="flex-1 bg-white/10 border border-white/20 rounded-full px-3.5 py-2 text-xs text-white placeholder-white/50 focus:outline-none focus:border-primary"
-            />
-            <button 
+          <div className="w-full max-w-sm pb-2 shrink-0">
+            <button
               onClick={() => {
-                confetti({ particleCount: 15, spread: 40 });
-                showToast(`Reaction sent to ${activeStory.user_name}`);
+                confetti({ particleCount: 25, spread: 60 });
+                showToast(`Praise agreement sent to ${activeStory.user_name}!`);
               }}
-              className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-primary border border-white/20 transition-all cursor-pointer"
+              className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Heart className="w-4 h-4 fill-current" />
+              <span>Agree in Prayer & Praise</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* 0. Real Community Stories Tray - Rendered only if there are real stories */}
+      {/* 0. Real Community Stories Tray */}
       {realStories.length > 0 && (
         <div className="bg-card/90 backdrop-blur-md border border-border rounded-2xl p-3 shadow-xs overflow-x-auto scrollbar-none">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-max">
-            {/* User's Own Story Item with Add (+) badge */}
             <button
               onClick={() => {
                 if (onNavigateTab) {
@@ -625,7 +643,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               <span className="text-[10px] font-medium text-foreground truncate max-w-[56px] text-center">Your Story</span>
             </button>
 
-            {/* Real Stories List */}
             {realStories.map(story => (
               <button
                 key={story.id}
@@ -652,7 +669,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         </div>
       )}
 
-      {/* 1. Researched Church Sanctuary Location */}
+      {/* 1. Sanctuary Live Marquee & Cathedral Location */}
       <div className="bg-card/85 backdrop-blur-md border border-border rounded-xl px-3.5 py-2.5 overflow-hidden shadow-xs flex items-center gap-3">
         <div className="w-7 h-7 rounded-lg bg-primary/15 border border-primary/30 text-primary flex items-center justify-center shrink-0 shadow-xs" title="Church Sanctuary Location">
           <MapPin className="w-4 h-4 fill-current text-primary" />
@@ -678,8 +695,10 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         </div>
       </div>
 
-      {/* 2. Hero Featured Sermon & Sermon Player Card */}
+      {/* 2. Hero Featured Sermon & Sermon Player Card (Video on top and its features intact) */}
       <div 
+        ref={videoPlayerRef}
+        id="hero-video-player-card"
         className="rounded-2xl overflow-hidden relative transition-all duration-200 bg-card border border-border shadow-xs"
       >
         {/* Instagram Post Header */}
@@ -790,352 +809,140 @@ export const HomeTab: React.FC<HomeTabProps> = ({
           {/* Local Video Player */}
           {currentLocalVideo ? (
             <video
-              controls
-              playsInline
               src={currentLocalVideo}
-              className="w-full h-full object-contain bg-black"
+              controls
+              autoPlay
+              playsInline
+              className="w-full h-full object-contain"
             />
-          ) : currentLocalAudio ? (
-            /* Local Audio Archive Player */
-            <div className="relative w-full h-full flex items-center justify-center bg-zinc-950 overflow-hidden p-4">
-              <img
-                src={overridePlayingVideo?.thumbnail_url || activeSermon?.thumbnail_url || '/assets/apostle_joe_daniels_preach.jpg'}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-30 scale-110"
-              />
-              <div className="relative z-10 flex flex-col items-center text-center max-w-md w-full p-4 rounded-2xl bg-black/60 border border-white/10 backdrop-blur-md shadow-2xl">
-                <div className="relative mb-3">
-                  <img
-                    src={overridePlayingVideo?.thumbnail_url || activeSermon?.thumbnail_url || '/assets/apostle_joe_daniels_preach.jpg'}
-                    alt="Audio sermon"
-                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover shadow-xl border border-white/20"
-                  />
-                  <div className="absolute -bottom-2 -right-2 p-2 rounded-xl bg-primary text-primary-foreground shadow-md">
-                    <Music className="w-4 h-4" />
-                  </div>
-                </div>
-                <span className="text-[10px] font-bold text-primary uppercase tracking-wider mb-1">
-                  {overridePlayingVideo?.series || activeSermon?.series || 'Apostolic Message Archive'}
-                </span>
-                <h4 className="font-bold text-white text-sm sm:text-base line-clamp-1">
-                  {overridePlayingVideo?.title || activeSermon?.title || 'Apostolic Audio Sermon'}
-                </h4>
-                <p className="text-xs text-white/70 mt-0.5">
-                  {overridePlayingVideo?.speaker || activeSermon?.speaker || 'Apostle Joe Daniels'}
-                </p>
-                <audio
-                  controls
-                  playsInline
-                  src={currentLocalAudio}
-                  className="w-full mt-3.5 h-10 accent-primary"
-                />
-              </div>
-            </div>
-          ) : (
-            /* Underlying YouTube / Facebook Stream iframe - Always mounted so audio continues uninterrupted */
-            <div className={isAudioOnly ? "absolute opacity-0 pointer-events-none w-1 h-1 overflow-hidden" : "w-full h-full relative"}>
-              {streamEmbedInfo.isFacebook ? (
-                <FacebookStreamPlayer
-                  embedUrl={streamEmbedInfo.embedUrl}
-                  directUrl={streamEmbedInfo.facebookDirectUrl || currentStreamTarget}
-                  title={liveFeedTitle}
-                  isLivePageHub={Boolean(streamEmbedInfo.isLivePageHub)}
-                  isLive={liveSermonStatus.isLive}
-                />
-              ) : (
-                <iframe
-                  id="youtube-hero-stream-player"
-                  className="w-full h-full pointer-events-auto border-0"
-                  src={streamEmbedInfo.embedUrl || StorageService.getYoutubeEmbedUrl(activeVideoId)}
-                  title={activeSermon.title || 'Church & Politics (Controversial Issues) - Apostle Joe Daniels'}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  referrerPolicy="strict-origin-when-cross-origin"
-                  allowFullScreen
-                />
-              )}
-            </div>
-          )}
+          ) : isFacebook ? (
+            <FacebookStreamPlayer
+              embedUrl={streamEmbedInfo.embedUrl || streamEmbedInfo.originalUrl}
+              directUrl={streamEmbedInfo.facebookDirectUrl || streamEmbedInfo.originalUrl}
+              title={liveFeedTitle}
+              isLive={liveStreamStatus.isLive}
+            />
+          ) : !isAudioOnly ? (
+            <iframe
+              src={`https://www.youtube-nocookie.com/embed/${activeVideoId}?autoplay=1&mute=0&controls=1&modestbranding=1&rel=0&playsinline=1`}
+              title={liveFeedTitle}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              className="w-full h-full border-0"
+            />
+          ) : null}
 
-          {/* No Featured Sermon Offline Overlay - only show if there is completely no video/stream URL configured */}
-          {!liveStreamStatus.isLive && !overridePlayingVideo && !streamEmbedInfo.embedUrl && !currentLocalVideo && !currentLocalAudio && (
-            <div className="absolute inset-0 z-25 bg-background/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
-              <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-3 shadow-inner">
-                <Radio className="w-6 h-6 text-primary" />
-              </div>
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary border border-border text-foreground text-xs font-semibold mb-2">
-                <span className="w-2 h-2 rounded-full bg-muted-foreground" />
-                <span>Currently no featured sermon session in progress</span>
-              </div>
-              <h4 className="text-foreground font-bold text-base sm:text-lg mb-1">
-                Sanctuary Stream is Offline
-              </h4>
-              <p className="text-muted-foreground text-xs max-w-sm mb-4 leading-relaxed">
-                Join us for our next scheduled service this Sunday at 09:30 AM CAT. In the meantime, you can watch past recorded sermons or study the Word.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  if (sermons && sermons.length > 0) {
-                    setOverridePlayingVideo({
-                      id: sermons[0].id,
-                      title: sermons[0].title,
-                      youtube_id: sermons[0].youtube_id
-                    });
-                  }
-                }}
-                className="p-2.5 rounded-lg bg-primary hover:brightness-105 text-primary-foreground flex items-center justify-center shadow-sm transition-all cursor-pointer"
-                title="Watch Featured Sermon Replay"
-                aria-label="Watch Featured Sermon Replay"
-              >
-                <Tv className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-
-          {/* Locked Premium Sermon Overlay on Stream Player */}
-          {overridePlayingVideo && !isPremiumActive && (
-            <div className="absolute inset-0 z-30 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center text-white animate-in fade-in">
-              <div className="w-12 h-12 rounded-full bg-amber-500/20 border border-amber-400/60 flex items-center justify-center text-amber-400 mb-2.5 shadow-lg">
-                <Crown className="w-6 h-6 fill-current" />
-              </div>
-              <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[11px] font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <Crown className="w-3.5 h-3.5 fill-current text-amber-400" />
-                Buy Pro to Unlock
-              </span>
-              <h4 className="text-sm sm:text-base font-bold max-w-md line-clamp-1 mb-1">
-                {overridePlayingVideo.title}
-              </h4>
-              <p className="text-xs text-white/75 max-w-sm mb-4 leading-relaxed">
-                Archived sermon messages and downloads require Pro membership.
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowBadgeUpgradeModal(true)}
-                  className="px-4 py-2 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 font-black text-xs shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Crown className="w-3.5 h-3.5 fill-current" />
-                  <span>Buy Pro</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOverridePlayingVideo(null);
-                    StorageService.setOverridePlayingVideo(null);
-                  }}
-                  className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold border border-white/20 transition-all cursor-pointer"
-                >
-                  Return to Live
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Facebook Live External Link Pill (non-blocking) */}
-          {streamEmbedInfo.isFacebook && (
-            <div className="absolute top-2 right-2 z-20 flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-blue-500/40">
-              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              <span className="text-[10px] font-bold text-blue-300">Facebook Video</span>
-              <a
-                href={streamEmbedInfo.facebookDirectUrl || streamEmbedInfo.originalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-white/80 hover:text-white ml-1 p-0.5"
-                title="Open in Facebook"
-              >
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-          )}
-
-          {/* Active Featured Sermon Prompt Card Overlay - Watch video & join chat/reactions */}
-
-          {/* Live-only controls intentionally removed from the public app. */}
-          {liveStreamStatus.isLive && (
-            <>
-          {/* Floating Facebook Action Pill (if Facebook Live) */}
-          {streamEmbedInfo.isFacebook && (
-            <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2">
-              <a
-                href={streamEmbedInfo.facebookDirectUrl || streamEmbedInfo.originalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 rounded-full bg-blue-600 hover:bg-blue-600/90 text-white flex items-center justify-center shadow-xl border border-white/20 transition-all hover:scale-105 cursor-pointer"
-                title="Watch directly on Facebook"
-                aria-label="Watch on Facebook"
-              >
-                <ExternalLink className="w-4 h-4" />
-              </a>
-              <button
-                type="button"
-                onClick={() => {
-                  const ytUrl = 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP';
-                  StorageService.setLiveStreamUrl(ytUrl);
-                  setLiveStreamUrl(ytUrl);
-                }}
-                className="p-2 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center border border-white/20 transition-all cursor-pointer"
-                title="Switch to YouTube stream"
-                aria-label="YouTube Mirror"
-              >
-                <Tv className="w-4 h-4 text-red-400" />
-              </button>
-            </div>
-          )}
-
-          {/* Live Pouring Comments (Pop up on screen only during live, real comments only) */}
-          <LivePouringComments 
-            isLive={liveStreamStatus.isLive && !overridePlayingVideo} 
-            className="absolute bottom-12 left-3 sm:left-4 z-20 max-w-[260px] sm:max-w-xs" 
-          />
-
-          {/* Floating In-Stream Seed Button */}
-          <div className="absolute bottom-3 right-3 z-20">
-            <button
-              id="btn-hero-floating-seed"
-              onClick={() => setShowInStreamDonation(true)}
-              className="p-2.5 rounded-full bg-gradient-to-r from-blue-600 via-sky-400 to-indigo-600 text-white flex items-center justify-center shadow-xl shadow-blue-500/30 hover:scale-105 active:scale-95 transition-all border border-white/40 cursor-pointer"
-              title="Sow Seed"
-              aria-label="Sow Seed"
-            >
-              <Gift className="w-4 h-4 fill-current" />
-            </button>
-          </div>
-
-          {/* IN-STREAM DONATION FLOAT: Non-blocking, does not overlap whole screen, leaves space to navigate to other pages, with X close button */}
+          {/* Floating In-Stream Donation Overlay */}
           {showInStreamDonation && (
-            <>
-              {/* Click blank space backdrop to exit float */}
-              <div 
-                className="fixed inset-0 z-39 bg-black/20"
-                onClick={() => setShowInStreamDonation(false)}
-                aria-hidden="true"
-              />
-              <div 
-                onClick={(e) => e.stopPropagation()}
-                className="fixed bottom-24 right-3 sm:absolute sm:bottom-4 sm:right-4 z-40 w-[calc(100vw-24px)] max-w-[340px] max-h-[60vh] overflow-y-auto bg-card/95 backdrop-blur-md border border-primary/80 rounded-2xl p-4 shadow-2xl animate-in slide-in-from-bottom-4 duration-200 text-white"
-              >
-              <button
-                onClick={() => setShowInStreamDonation(false)}
-                className="absolute top-3 right-3 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white hover:text-amber-300 transition-all shadow"
-                title="Close Donation Float"
-                aria-label="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              <div className="flex items-center gap-2 mb-3 pr-8">
-                <div className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0">
-                  <Gift className="w-4 h-4 fill-current" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-sm text-white">In-Stream Giving</h4>
-                  <p className="text-[10px] text-primary">Give while stream plays</p>
-                </div>
-              </div>
-
-              {donationSuccess ? (
-                <div className="text-center py-4 space-y-1.5">
-                  <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto animate-bounce" />
-                  <div className="font-bold text-sm text-white">Altar Seed Received!</div>
-                  <div className="text-[11px] text-primary">
-                    May the God of Apostle Joe Daniels open the windows of heaven upon you!
+            <div className="absolute inset-0 z-40 bg-black/85 backdrop-blur-sm p-4 flex flex-col justify-center items-center text-white animate-in fade-in">
+              <div className="w-full max-w-sm bg-card border border-border rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-border pb-2">
+                  <div className="flex items-center gap-1.5 text-primary font-bold text-xs uppercase">
+                    <Gift className="w-4 h-4" />
+                    <span>Sow Seed Into Anointing</span>
                   </div>
-                </div>
-              ) : (
-                <form onSubmit={handleProcessInStreamSeed} className="space-y-2.5 text-xs">
-                  <div className="flex items-center justify-between bg-background p-1 rounded-lg border border-white/10">
-                    <button
-                      type="button"
-                      onClick={() => setCurrency('USD')}
-                      className={`flex-1 py-1 rounded text-xs font-bold ${currency === 'USD' ? 'bg-primary text-primary-foreground' : 'text-white/60'}`}
-                    >
-                      USD ($)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCurrency('ZiG')}
-                      className={`flex-1 py-1 rounded text-xs font-bold ${currency === 'ZiG' ? 'bg-primary text-primary-foreground' : 'text-white/60'}`}
-                    >
-                      ZiG
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-4 gap-1">
-                    {['5', '10', '20', '50'].map(amt => (
-                      <button
-                        key={amt}
-                        type="button"
-                        onClick={() => setSeedAmount(amt)}
-                        className={`py-1 rounded text-xs font-bold border ${seedAmount === amt ? 'bg-primary text-primary-foreground border-primary' : 'bg-white/5 border-white/10 text-white'}`}
-                      >
-                        {currency === 'USD' ? `$${amt}` : `${amt} ZiG`}
-                      </button>
-                    ))}
-                  </div>
-
-                  <select
-                    value={seedCategory}
-                    onChange={(e) => setSeedCategory(e.target.value as any)}
-                    className="w-full bg-background border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white"
-                  >
-                    <option value="Altar Seed">Altar Seed (Prophetic Covenant)</option>
-                    <option value="Tithe">Tithe (10% Kingdom Honor)</option>
-                    <option value="Apostle Blessing">Apostle Blessing</option>
-                    <option value="Building Offering">Building Offering</option>
-                  </select>
-
-                  <div className="grid grid-cols-3 gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('ecocash')}
-                      className={`py-1 px-1.5 rounded text-[10px] font-bold border ${paymentMethod === 'ecocash' ? 'bg-blue-600/30 border-blue-400 text-white' : 'bg-white/5 border-white/10 text-white/70'}`}
-                    >
-                      EcoCash
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('innbucks')}
-                      className={`py-1 px-1.5 rounded text-[10px] font-bold border ${paymentMethod === 'innbucks' ? 'bg-amber-600/30 border-amber-400 text-white' : 'bg-white/5 border-white/10 text-white/70'}`}
-                    >
-                      Innbucks
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('card')}
-                      className={`py-1 px-1.5 rounded text-[10px] font-bold border ${paymentMethod === 'card' ? 'bg-emerald-600/30 border-emerald-400 text-white' : 'bg-white/5 border-white/10 text-white/70'}`}
-                    >
-                      Card / Visa
-                    </button>
-                  </div>
-
-                  <input
-                    type="tel"
-                    value={donorPhone}
-                    onChange={(e) => setDonorPhone(e.target.value)}
-                    placeholder="e.g. 0772123456"
-                    className="w-full bg-background border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white"
-                  />
-
-                  <button
-                    type="submit"
-                    disabled={isDonating}
-                    className="w-full py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow"
-                  >
-                    {isDonating ? 'Processing...' : `Give ${currency} ${seedAmount} Direct`}
+                  <button onClick={() => setShowInStreamDonation(false)} className="text-muted-foreground hover:text-foreground">
+                    <X className="w-4 h-4" />
                   </button>
-                </form>
-              )}
+                </div>
+
+                {donationSuccess ? (
+                  <div className="text-center py-4 space-y-2">
+                    <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+                    <p className="font-bold text-sm text-foreground">Seed Received with Apostolic Grace!</p>
+                    <p className="text-xs text-muted-foreground">May the God of Apostle Joe Daniels open the windows of heaven upon you!</p>
+                  </div>
+                ) : (
+                  <form onSubmit={handleProcessInStreamSeed} className="space-y-2.5 text-xs">
+                    <div className="flex items-center justify-between bg-secondary p-1 rounded-lg border border-border">
+                      <button
+                        type="button"
+                        onClick={() => setCurrency('USD')}
+                        className={`flex-1 py-1 rounded text-xs font-bold ${currency === 'USD' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                      >
+                        USD ($)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCurrency('ZiG')}
+                        className={`flex-1 py-1 rounded text-xs font-bold ${currency === 'ZiG' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                      >
+                        ZiG
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-1">
+                      {['5', '10', '20', '50'].map(amt => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => setSeedAmount(amt)}
+                          className={`py-1 rounded text-xs font-bold border ${seedAmount === amt ? 'bg-primary text-primary-foreground border-primary' : 'bg-secondary border-border text-foreground'}`}
+                        >
+                          {currency === 'USD' ? `$${amt}` : `${amt} ZiG`}
+                        </button>
+                      ))}
+                    </div>
+
+                    <select
+                      value={seedCategory}
+                      onChange={(e) => setSeedCategory(e.target.value as any)}
+                      className="w-full bg-secondary border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground"
+                    >
+                      <option value="Altar Seed">Altar Seed (Prophetic Covenant)</option>
+                      <option value="Tithe">Tithe (10% Kingdom Honor)</option>
+                      <option value="Apostle Blessing">Apostle Blessing</option>
+                      <option value="Building Offering">Building Offering</option>
+                    </select>
+
+                    <div className="grid grid-cols-3 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('ecocash')}
+                        className={`py-1 px-1.5 rounded text-[10px] font-bold border ${paymentMethod === 'ecocash' ? 'bg-blue-600/30 border-blue-400 text-foreground' : 'bg-secondary border-border text-muted-foreground'}`}
+                      >
+                        EcoCash
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('innbucks')}
+                        className={`py-1 px-1.5 rounded text-[10px] font-bold border ${paymentMethod === 'innbucks' ? 'bg-amber-600/30 border-amber-400 text-foreground' : 'bg-secondary border-border text-muted-foreground'}`}
+                      >
+                        Innbucks
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('card')}
+                        className={`py-1 px-1.5 rounded text-[10px] font-bold border ${paymentMethod === 'card' ? 'bg-emerald-600/30 border-emerald-400 text-foreground' : 'bg-secondary border-border text-muted-foreground'}`}
+                      >
+                        Card / Visa
+                      </button>
+                    </div>
+
+                    <input
+                      type="tel"
+                      value={donorPhone}
+                      onChange={(e) => setDonorPhone(e.target.value)}
+                      placeholder="e.g. 0772123456"
+                      className="w-full bg-secondary border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground"
+                    />
+
+                    <button
+                      type="submit"
+                      disabled={isDonating}
+                      className="w-full py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow"
+                    >
+                      {isDonating ? 'Processing...' : `Give ${currency} ${seedAmount} Direct`}
+                    </button>
+                  </form>
+                )}
               </div>
-            </>
-          )}
-            </>
+            </div>
           )}
 
-          {/* Audio-Only Low Data Mode Visualization (active when isAudioOnly is true) */}
+          {/* Audio-Only Low Data Mode Visualization */}
           {isAudioOnly && (
             <div className="w-full h-full bg-gradient-to-br from-background via-card to-background flex flex-col items-center justify-center p-6 text-center relative select-none">
-              
-              {/* Radio Wave Pulse Graphic */}
               <div className="relative flex items-center justify-center mb-4">
                 <div className="absolute w-28 h-28 rounded-full bg-primary/10 animate-ping" />
                 <div className="absolute w-24 h-24 rounded-full bg-primary/15 animate-pulse" />
@@ -1144,7 +951,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 </div>
               </div>
 
-              {/* Streaming Indicator */}
               <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-black/40 border border-primary/30 mb-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <span className="text-[11px] font-bold tracking-widest text-primary uppercase">
@@ -1152,7 +958,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 </span>
               </div>
 
-              {/* Sermon & Speaker Info */}
               <h3 className="text-sm sm:text-base font-bold text-white max-w-md line-clamp-2 px-4 leading-snug">
                 {activeSermon.title || 'Church & Politics (Controversial Issues)'}
               </h3>
@@ -1162,7 +967,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 <span>• Recorded Sermon</span>
               </p>
 
-              {/* Equalizer Waveform Animation */}
               <div className="flex items-end justify-center gap-1 h-7 mt-3 mb-2">
                 {[40, 70, 30, 90, 60, 100, 45, 80, 55, 95, 35, 75, 50, 85].map((height, idx) => (
                   <div
@@ -1177,7 +981,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 ))}
               </div>
 
-              {/* Audio Controls */}
               <div className="flex items-center gap-3 mt-2">
                 <button
                   id="btn-audio-only-switch-video"
@@ -1227,222 +1030,61 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         </div>
 
         {/* Stream Details & Interactivity Bar */}
-        <div className="p-4 sm:p-6 bg-card border-t border-border space-y-4">
+        <div className="p-4 sm:p-5 bg-card border-t border-border space-y-4">
           
-          {/* Facebook Live Status & Troubleshooter Banner */}
-          {streamEmbedInfo.isFacebook && (
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-              <div className="flex items-start sm:items-center gap-2 text-foreground/90">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0 mt-0.5 sm:mt-0 animate-ping" />
-                <div>
-                  <span className="font-bold text-blue-400">Facebook Live Mode Active: </span>
-                  <span className="text-muted-foreground">
-                    If Facebook displays <em>"Video Unavailable"</em>, Facebook requires opening the broadcast in the Facebook app or web browser due to browser cookie restrictions, or setting the video privacy on Facebook to <strong>Public 🌐</strong>.
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <a
-                  href={streamEmbedInfo.facebookDirectUrl || streamEmbedInfo.originalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shadow-xs transition-all cursor-pointer"
-                  title="Open on Facebook"
-                  aria-label="Open on Facebook"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const ytUrl = 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP';
-                    StorageService.setLiveStreamUrl(ytUrl);
-                    setLiveStreamUrl(ytUrl);
-                  }}
-                  className="p-2 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground border border-border transition-all flex items-center justify-center cursor-pointer"
-                  title="Switch to YouTube featured sermon"
-                  aria-label="Switch to YouTube featured sermon"
-                >
-                  <Tv className="w-4 h-4 text-rose-500" />
-                </button>
-              </div>
-            </div>
-          )}
-
+          {/* Live broadcast comment or default layout */}
           {liveStreamStatus.isLive ? (
-            /* LIVE BROADCAST INTERACTION BAR:
-               When streaming has been activated, all the hardcoded text ("Apostolic Word...", "Church & Politics...", 
-               description, etc.) is removed.
-               Instead, an interactive comment section, like button, and seed button appear so believers can 
-               comment while watching the video, like while watching the video, and seed while watching the video!
-            */
             <div className="space-y-4">
-              {/* Live Interactive Action Bar */}
               <div className="flex items-center justify-between pb-2 border-b border-border">
                 <div className="flex items-center gap-3">
-                  {/* Like Button */}
                   <button
                     id="btn-live-stream-like"
                     onClick={handleTogglePostHeart}
                     className="group flex items-center gap-1.5 p-2 rounded-xl bg-secondary/80 hover:bg-secondary border border-border transition-all cursor-pointer active:scale-95"
                     title="Like live broadcast"
-                    aria-label="Like live broadcast"
                   >
-                    <Heart
-                      className={cn(
-                        "w-5 h-5 transition-transform group-hover:scale-110",
-                        isPostLiked ? "text-rose-500 fill-current" : "text-foreground"
-                      )}
-                    />
-                    <span className="text-xs font-bold text-foreground">
-                      {broadcastLikes.length}
-                    </span>
+                    <Heart className={cn("w-5 h-5 transition-transform", isPostLiked ? "text-rose-500 fill-current scale-110" : "text-muted-foreground group-hover:text-rose-500")} />
+                    <span className="text-xs font-bold text-foreground">{broadcastLikes.length}</span>
                   </button>
 
-                  {/* Seed Button */}
                   <button
-                    id="btn-live-stream-seed"
-                    onClick={() => setShowInStreamDonation(prev => !prev)}
-                    className={cn(
-                      "flex items-center gap-1.5 p-2 rounded-xl font-bold text-xs transition-all cursor-pointer active:scale-95 border",
-                      showInStreamDonation
-                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                        : "bg-gradient-to-r from-primary/20 to-sky-500/20 text-foreground border-primary/40 hover:bg-primary/30"
-                    )}
-                    title="Sow Seed while watching"
-                    aria-label="Sow Seed while watching"
+                    onClick={() => setShowInStreamDonation(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-600 text-slate-950 font-bold text-xs shadow-xs hover:brightness-105 active:scale-95 transition-all cursor-pointer"
                   >
-                    <Gift className="w-5 h-5 text-primary fill-current" />
-                    <span className="text-xs font-bold">Seed</span>
-                  </button>
-
-                  {/* WhatsApp Share Button */}
-                  <button
-                    id="btn-live-stream-share"
-                    onClick={() => handleShareWhatsApp(liveFeedTitle, "Join the live apostolic broadcast now!")}
-                    className="p-2 rounded-xl bg-secondary/80 hover:bg-secondary border border-border text-foreground transition-all cursor-pointer active:scale-95 flex items-center justify-center"
-                    title="Share live broadcast to WhatsApp"
-                    aria-label="Share live broadcast to WhatsApp"
-                  >
-                    <Send className="w-5 h-5 -rotate-45 text-emerald-500" />
+                    <Gift className="w-3.5 h-3.5 fill-current" />
+                    <span>Sow Altar Seed</span>
                   </button>
                 </div>
 
-                {/* Quick Reaction Emojis */}
-                <div className="flex items-center gap-1 bg-secondary/60 px-2 py-1 rounded-xl border border-border">
-                  {['❤️', '🙏', '🔥'].map(emoji => (
+                <div className="flex items-center gap-1">
+                  {['👍', '❤️', '🙏', '🔥', '👏'].map((emoji) => (
                     <button
                       key={emoji}
                       onClick={() => handleTriggerReaction(emoji)}
-                      className="hover:scale-125 active:scale-90 transition-transform p-1 cursor-pointer text-base"
-                      title={`Send ${emoji} reaction`}
-                      aria-label={`Send ${emoji} reaction`}
+                      className="p-1.5 rounded-lg bg-secondary/60 hover:bg-secondary text-sm hover:scale-125 active:scale-90 transition-transform cursor-pointer relative"
                     >
                       <span>{emoji}</span>
+                      {activeReactionCount[emoji] > 0 && (
+                        <span className="absolute -top-1 -right-1 text-[9px] bg-primary text-primary-foreground rounded-full px-1 font-bold">
+                          {activeReactionCount[emoji]}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Heart popup animation */}
-              {heartAnim && (
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-30 animate-in zoom-in-50 fade-in duration-200">
-                  <Heart className="w-20 h-20 text-rose-500 fill-current drop-shadow-2xl animate-bounce" />
-                </div>
-              )}
-
-              {/* In-Stream Giving Tray (appears when Seed is clicked, allowing believers to seed while watching) */}
-              {showInStreamDonation && (
-                <div className="bg-secondary/40 border border-primary/40 rounded-xl p-3 sm:p-4 space-y-3 animate-in fade-in duration-150">
-                  <div className="flex items-center justify-between pb-1 border-b border-border">
-                    <div className="flex items-center gap-2">
-                      <Gift className="w-4 h-4 text-primary" />
-                      <span className="text-xs font-bold text-foreground">Sow Kingdom Seed In-Stream</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowInStreamDonation(false)}
-                      className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
-                      title="Close Giving Tray"
-                      aria-label="Close Giving Tray"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {donationSuccess ? (
-                    <div className="py-3 text-center space-y-1">
-                      <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center mx-auto mb-1">
-                        <Check className="w-5 h-5" />
-                      </div>
-                      <p className="text-xs font-bold text-foreground">Seed Sowed Successfully!</p>
-                      <p className="text-[11px] text-muted-foreground">May the Lord multiply your seed sown in abundance.</p>
-                    </div>
-                  ) : (
-                    <form onSubmit={handleProcessInStreamSeed} className="space-y-2.5">
-                      <div className="flex gap-2">
-                        <div className="flex rounded-lg border border-border bg-background p-0.5 shrink-0">
-                          {(['USD', 'ZiG'] as const).map(c => (
-                            <button
-                              key={c}
-                              type="button"
-                              onClick={() => setCurrency(c)}
-                              className={cn(
-                                "px-2 py-1 rounded text-[11px] font-bold transition-colors cursor-pointer",
-                                currency === c ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                              )}
-                            >
-                              {c}
-                            </button>
-                          ))}
-                        </div>
-                        <input
-                          type="number"
-                          min="1"
-                          step="any"
-                          value={seedAmount}
-                          onChange={e => setSeedAmount(e.target.value)}
-                          placeholder="Amount"
-                          className="flex-1 bg-background border border-border rounded-lg px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
-                          required
-                        />
-                        <button
-                          type="submit"
-                          disabled={isDonating}
-                          className="p-2 rounded-lg bg-primary hover:brightness-105 text-primary-foreground font-semibold text-xs shadow-xs transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
-                          title="Confirm Seed"
-                          aria-label="Confirm Seed"
-                        >
-                          <Gift className="w-4 h-4 fill-current" />
-                        </button>
-                      </div>
-                      <input
-                        type="tel"
-                        value={donorPhone}
-                        onChange={e => setDonorPhone(e.target.value)}
-                        placeholder="EcoCash / InnBucks Phone (optional)"
-                        className="w-full bg-background border border-border rounded-lg px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
-                      />
-                    </form>
-                  )}
-                </div>
-              )}
-
-              {/* Live Comments & Prayer Decrees Stream (visible while watching video) */}
-              <div className="bg-secondary/30 rounded-xl p-3 sm:p-4 border border-border space-y-3">
-                <div className="flex items-center justify-between text-xs text-muted-foreground pb-1 border-b border-border">
-                  <div className="flex items-center gap-1.5">
-                    <MessageSquare className="w-3.5 h-3.5 text-primary" />
-                    <span className="font-semibold text-foreground">Live Decrees & Comments</span>
-                    <span className="text-[10px] bg-secondary px-1.5 py-0.2 rounded-full border border-border">
-                      {chatMessages.length}
-                    </span>
-                  </div>
+              {/* Live comment stream */}
+              <div className="bg-secondary/40 rounded-xl p-3 border border-border space-y-2.5">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span className="font-semibold flex items-center gap-1.5">
+                    <Radio className="w-3.5 h-3.5 text-red-500 animate-pulse" />
+                    Live Sanctuary Decrees & Prayers
+                  </span>
                   {isGuest && <span className="text-primary font-semibold text-[11px]">Sign in to comment</span>}
                 </div>
 
-                {/* Chat decrees scroll list */}
-                <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                <div className="max-h-44 overflow-y-auto space-y-2 pr-1">
                   {chatMessages.map((msg, i) => (
                     <div key={i} className="text-xs bg-card/60 p-2 rounded-lg border border-border">
                       <div className="flex items-center justify-between">
@@ -1454,7 +1096,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                   ))}
                 </div>
 
-                {/* Quick decree suggestions */}
                 {!isGuest && (
                   <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
                     {['Amen! 🙏', 'Receiving speed! ⚡', 'Hallelujah! 🙌', 'Grace multiplied! 🔥'].map((decree) => (
@@ -1470,7 +1111,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                   </div>
                 )}
 
-                {/* Comment Input Form */}
                 <form onSubmit={handleSendChat} className="flex gap-2 pt-1 border-t border-border">
                   <input
                     type="text"
@@ -1484,8 +1124,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                     type="submit"
                     disabled={isGuest || !inputChat.trim()}
                     className="p-2 bg-primary hover:brightness-105 text-primary-foreground rounded-lg transition-all shadow-xs cursor-pointer flex items-center justify-center disabled:opacity-40"
-                    title="Send comment"
-                    aria-label="Send comment"
                   >
                     <Send className="w-4 h-4" />
                   </button>
@@ -1493,7 +1131,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               </div>
             </div>
           ) : (
-            /* DEFAULT WAY: When broadcast is done, app goes back to its default way */
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
@@ -1504,13 +1141,12 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                     {liveFeedTitle}
                   </h2>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
-                    <span>{activeSermon.speaker}</span>
+                    <span>{activeSermon.speaker || 'Apostle Joe Daniels'}</span>
                     <VerifiedBadge type="gold" size="xs" />
                     <span>• {activeSermon.date}</span>
                   </div>
                 </div>
 
-                {/* Quick Scriptures Pill */}
                 {activeSermon.scriptures && activeSermon.scriptures.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 self-start sm:self-center">
                     {activeSermon.scriptures.map((sc, i) => (
@@ -1519,7 +1155,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                         onClick={() => onNavigateToBible(sc)}
                         className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-secondary hover:bg-secondary/80 border border-border text-foreground text-xs font-semibold transition-all cursor-pointer"
                         title={`Open Scripture ${sc}`}
-                        aria-label={`Open Scripture ${sc}`}
                       >
                         <BookOpen className="w-3.5 h-3.5 text-primary" />
                         <span>{sc}</span>
@@ -1529,38 +1164,14 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 )}
               </div>
 
-              {/* Premium Locked Sermon Notification */}
-              {!isSermonUnlocked && (
-                <div className="p-3 bg-secondary/80 border border-border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-                  <div>
-                    <span className="text-xs font-bold text-primary flex items-center gap-1">
-                      🔒 Premium Apostolic Teaching • 45s Preview Active
-                    </span>
-                    <p className="text-[11px] text-muted-foreground">
-                      Full anointed teaching is available for Covenant Partners or per-sermon unlock ($5).
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => onOpenPremiumModal && onOpenPremiumModal(activeSermon)}
-                    className="p-2 bg-primary text-primary-foreground font-semibold text-xs rounded-md hover:brightness-105 shadow-xs active:scale-95 cursor-pointer flex items-center justify-center"
-                    title="Unlock Message ($5)"
-                    aria-label="Unlock Message ($5)"
-                  >
-                    <Lock className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-
-              {/* Post Action Bar (all iconified) */}
+              {/* Action Bar */}
               <div className="flex items-center justify-between pt-2.5 border-t border-border">
                 <div className="flex items-center gap-3.5">
-                  {/* Like Button */}
                   <button
                     id="btn-instagram-heart-like"
                     onClick={handleTogglePostHeart}
                     className="group flex items-center gap-1 transition-all focus:outline-none cursor-pointer active:scale-90 p-1"
                     title="Like sermon"
-                    aria-label="Like sermon"
                   >
                     <Heart
                       className={cn(
@@ -1570,63 +1181,52 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                     />
                   </button>
 
-                  {/* Comment Bubble */}
                   <button
                     id="btn-instagram-comment-toggle"
                     onClick={handleToggleComments}
                     className="group flex items-center gap-1 transition-all focus:outline-none cursor-pointer active:scale-90 p-1"
                     title="Toggle Comments"
-                    aria-label="Toggle Comments"
                   >
                     <MessageSquare className="w-6 h-6 text-foreground group-hover:text-primary transition-colors" />
                   </button>
 
-                  {/* Share Button */}
                   <button
                     id="btn-instagram-share-direct"
                     onClick={() => handleShareWhatsApp(activeSermon.title, activeSermon.description)}
                     className="group flex items-center gap-1 transition-all focus:outline-none cursor-pointer active:scale-90 p-1"
                     title="Share to WhatsApp"
-                    aria-label="Share to WhatsApp"
                   >
                     <Send className="w-5 h-5 -rotate-45 text-foreground group-hover:text-emerald-500 transition-colors" />
                   </button>
 
-                  {/* Sow Seed Button */}
                   <button
                     id="btn-instagram-sow-seed"
                     onClick={() => setShowInStreamDonation(true)}
                     className="p-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
                     title="Sow Kingdom Seed"
-                    aria-label="Sow Kingdom Seed"
                   >
                     <Gift className="w-4 h-4 fill-current" />
                   </button>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {/* Quick Emojis Pill */}
                   <div className="hidden sm:flex items-center gap-1 bg-secondary/60 px-2 py-0.5 rounded-full border border-border text-xs">
                     {['❤️', '🙏', '🔥'].map(emoji => (
                       <button
                         key={emoji}
                         onClick={() => handleTriggerReaction(emoji)}
                         className="hover:scale-125 active:scale-90 transition-transform p-0.5 cursor-pointer"
-                        title={`React ${emoji}`}
-                        aria-label={`React ${emoji}`}
                       >
                         <span>{emoji}</span>
                       </button>
                     ))}
                   </div>
 
-                  {/* Bookmark Save Button */}
                   <button
                     id="btn-instagram-bookmark"
                     onClick={handleToggleSaveSermon}
                     className="p-1 text-foreground hover:text-primary transition-colors focus:outline-none cursor-pointer active:scale-90"
                     title="Save sermon to offline library"
-                    aria-label="Save sermon to offline library"
                   >
                     <Bookmark
                       className={cn(
@@ -1640,18 +1240,10 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 </div>
               </div>
 
-              {/* Heart Animation Overlay */}
-              {heartAnim && (
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-30 animate-in zoom-in-50 fade-in duration-200">
-                  <Heart className="w-24 h-24 text-rose-500 fill-current drop-shadow-2xl animate-bounce" />
-                </div>
-              )}
-
-              {/* Likes Counter (Real registered believers) */}
+              {/* Likers Cluster */}
               <div 
                 onClick={handleTogglePostHeart}
                 className="text-xs font-semibold text-foreground pt-1 flex items-center gap-1.5 cursor-pointer select-none active:scale-95 transition-transform"
-                title="Tap to like"
               >
                 {broadcastLikers.length > 0 ? (
                   <>
@@ -1680,7 +1272,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 )}
               </div>
 
-              {/* Post Caption */}
+              {/* Caption */}
               <div className="text-xs space-y-1 text-foreground/90">
                 <p>
                   <strong className="font-bold text-foreground mr-1.5">apostle_joe_daniels</strong>
@@ -1688,7 +1280,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 </p>
               </div>
 
-              {/* Comments Count Toggle Link */}
+              {/* Comments Accordion */}
               <button
                 onClick={handleToggleComments}
                 className="text-[11px] text-muted-foreground hover:text-foreground font-medium transition-colors cursor-pointer text-left block"
@@ -1696,7 +1288,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 {showChat ? 'Hide comments' : `View all ${chatMessages.length} comments and prayer decrees`}
               </button>
 
-              {/* Comments Panel (Collapsible) */}
               {showChat && (
                 <div className="bg-secondary/40 rounded-xl p-3 sm:p-4 border border-border space-y-3 mt-1">
                   <div className="flex items-center justify-between text-xs text-muted-foreground pb-1 border-b border-border">
@@ -1727,8 +1318,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                     <button
                       type="submit"
                       className="p-2 bg-primary hover:brightness-105 text-primary-foreground rounded-lg transition-all shadow-xs cursor-pointer flex items-center justify-center"
-                      title="Send comment"
-                      aria-label="Send comment"
                     >
                       <Send className="w-4 h-4" />
                     </button>
@@ -1741,147 +1330,317 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         </div>
       </div>
 
-      {/* 3. Sleek Grid: Daily Devotional & Partner Wall */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      {/* 3. Church & Social App Quick Action Hub (Wiring with whole app) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+        {/* Holy Bible */}
+        <button
+          onClick={() => {
+            if (onNavigateTab) onNavigateTab('bible');
+            else onNavigateToBible();
+          }}
+          className="group p-3 sm:p-3.5 rounded-2xl bg-card border border-border hover:border-primary/50 shadow-xs flex items-center gap-3 transition-all hover:bg-secondary/40 text-left cursor-pointer active:scale-98"
+        >
+          <div className="w-10 h-10 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-500 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <BookOpen className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <h4 className="font-bold text-xs sm:text-sm text-foreground truncate group-hover:text-primary transition-colors">Holy Bible</h4>
+            <p className="text-[10px] text-muted-foreground truncate">Offline Shona & KJV</p>
+          </div>
+        </button>
+
+        {/* Community Fellowship */}
+        <button
+          onClick={() => {
+            if (onNavigateTab) onNavigateTab('community');
+          }}
+          className="group p-3 sm:p-3.5 rounded-2xl bg-card border border-border hover:border-primary/50 shadow-xs flex items-center gap-3 transition-all hover:bg-secondary/40 text-left cursor-pointer active:scale-98"
+        >
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <Users className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <h4 className="font-bold text-xs sm:text-sm text-foreground truncate group-hover:text-primary transition-colors">Fellowship</h4>
+            <p className="text-[10px] text-muted-foreground truncate">Praise & Testimonies</p>
+          </div>
+        </button>
+
+        {/* Pastoral Booking 1-on-1 */}
+        <button
+          onClick={() => setShowPaidBookingModal(true)}
+          className="group p-3 sm:p-3.5 rounded-2xl bg-card border border-border hover:border-primary/50 shadow-xs flex items-center gap-3 transition-all hover:bg-secondary/40 text-left cursor-pointer active:scale-98"
+        >
+          <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-500 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <Calendar className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <h4 className="font-bold text-xs sm:text-sm text-foreground truncate group-hover:text-primary transition-colors">Pastoral 1-on-1</h4>
+            <p className="text-[10px] text-muted-foreground truncate">Book with Apostle Joe</p>
+          </div>
+        </button>
+
+        {/* Kingdom Seed / Partner */}
+        <button
+          onClick={() => setShowInStreamDonation(true)}
+          className="group p-3 sm:p-3.5 rounded-2xl bg-card border border-border hover:border-primary/50 shadow-xs flex items-center gap-3 transition-all hover:bg-secondary/40 text-left cursor-pointer active:scale-98"
+        >
+          <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-500 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <Gift className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <h4 className="font-bold text-xs sm:text-sm text-foreground truncate group-hover:text-primary transition-colors">Kingdom Seed</h4>
+            <p className="text-[10px] text-muted-foreground truncate">EcoCash • Innbucks • Card</p>
+          </div>
+        </button>
+      </div>
+
+      {/* 4. Cooked Bento Grid: Daily Devotional & Trending + Testimonies */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
         
         {/* Daily Devotional Card */}
-        <div className="bg-card border border-border p-5 sm:p-6 rounded-xl relative overflow-hidden flex flex-col justify-between shadow-xs">
-          <div className="space-y-3">
+        <div className="bg-card border border-border p-5 rounded-2xl flex flex-col justify-between shadow-xs relative overflow-hidden group">
+          <div className="space-y-3.5">
             <div className="flex items-center justify-between">
-              <h3 className="text-primary text-xs font-bold tracking-widest uppercase">
-                DAILY DEVOTIONAL
-              </h3>
-              <span className="text-[11px] font-semibold text-primary bg-primary/10 px-2.5 py-0.5 rounded-md border border-primary/20">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                <h3 className="text-primary text-xs font-bold tracking-widest uppercase">
+                  DAILY DEVOTIONAL
+                </h3>
+              </div>
+              <span className="text-[10px] font-semibold text-muted-foreground bg-secondary px-2.5 py-1 rounded-full border border-border">
                 {currentDevotional.date || 'Today'}
               </span>
             </div>
 
-            <h4 className="text-base sm:text-lg font-bold text-foreground">
-              {currentDevotional.title}
-            </h4>
+            <div>
+              <h4 className="text-base sm:text-lg font-bold text-foreground leading-snug">
+                {currentDevotional.title}
+              </h4>
+              <p className="text-xs text-primary font-semibold mt-0.5">
+                {currentDevotional.scripture_reference}
+              </p>
+            </div>
 
-            <blockquote className="text-xs sm:text-sm text-muted-foreground italic border-l-2 border-primary pl-3 py-1 bg-secondary/40 rounded-r-md">
+            <blockquote className="text-xs text-foreground/90 italic border-l-2 border-primary pl-3 py-1.5 bg-secondary/50 rounded-r-xl leading-relaxed">
               "{currentDevotional.scripture_verse}"
             </blockquote>
 
-            <p className="text-xs sm:text-sm text-foreground/80 leading-relaxed line-clamp-3">
+            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
               {currentDevotional.content}
             </p>
+
+            {/* Prophetic Declaration Banner */}
+            {currentDevotional.declaration && (
+              <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 space-y-1.5">
+                <span className="text-[10px] font-black text-primary uppercase tracking-wider flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" />
+                  Apostolic Decree for Today
+                </span>
+                <p className="text-xs text-foreground font-medium italic">
+                  "{currentDevotional.declaration}"
+                </p>
+              </div>
+            )}
           </div>
 
-          <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
-            <button
-              onClick={() => onNavigateToBible(currentDevotional.scripture_reference)}
-              className="text-xs font-semibold border-b border-primary text-primary pb-0.5 hover:text-foreground transition-colors cursor-pointer"
-            >
-              READ FULL MESSAGE ({currentDevotional.scripture_reference})
-            </button>
+          <div className="mt-4 pt-3.5 border-t border-border flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onNavigateToBible(currentDevotional.scripture_reference)}
+                className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:brightness-105 transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Read in Bible</span>
+              </button>
+
+              {currentDevotional.declaration && (
+                <button
+                  type="button"
+                  onClick={() => handleSpeakDeclaration(currentDevotional.declaration || currentDevotional.title)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer",
+                    isSpeakingDeclaration
+                      ? "bg-rose-500/20 text-rose-500 border-rose-500/40 animate-pulse"
+                      : "bg-secondary hover:bg-secondary/80 text-foreground border-border"
+                  )}
+                  title="Speak prophetic declaration"
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  <span>{isSpeakingDeclaration ? 'Declaring...' : 'Speak'}</span>
+                </button>
+              )}
+            </div>
 
             <button
-              onClick={() => handleShareWhatsApp(currentDevotional.title, `${currentDevotional.scripture_reference}\n\n${currentDevotional.declaration}`)}
-              className="p-2 rounded-lg bg-secondary/80 hover:bg-secondary border border-border text-emerald-500 hover:text-emerald-400 transition-all cursor-pointer flex items-center justify-center"
+              onClick={() => handleShareWhatsApp(currentDevotional.title, `${currentDevotional.scripture_reference}\n\n"${currentDevotional.scripture_verse}"\n\nDecree: ${currentDevotional.declaration}`)}
+              className="p-2 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-emerald-500 hover:text-emerald-400 transition-all cursor-pointer flex items-center justify-center"
               title="Share devotional to WhatsApp"
-              aria-label="Share devotional to WhatsApp"
             >
               <Send className="w-4 h-4 -rotate-45" />
             </button>
           </div>
         </div>
 
-        {/* Partner Wall & Latest Community Updates Card */}
-        <div className="bg-card border border-border p-5 sm:p-6 rounded-xl flex flex-col justify-between shadow-xs">
+        {/* Small Trending & Faith Testimony Spotlight Card */}
+        <div className="bg-card border border-border p-5 rounded-2xl flex flex-col justify-between shadow-xs space-y-4">
+          
+          {/* Top: Small Trending Part */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-primary text-xs font-bold tracking-widest uppercase">
-                APOSTOLIC WORD & COMMUNITY FEED
-              </h3>
-              <span className="text-[10px] text-muted-foreground tracking-wider font-semibold">LIVE FEED</span>
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center gap-1.5 text-primary">
+                <TrendingUp className="w-4 h-4" />
+                <h3 className="text-xs font-bold tracking-widest uppercase">
+                  TRENDING IN CHURCH
+                </h3>
+              </div>
+              <span className="text-[10px] text-muted-foreground font-semibold">Live Decrees</span>
             </div>
 
-            {/* Featured Latest Apostle Post / Photo Update */}
-            {latestApostlePost && (
-              <div 
-                onClick={() => onNavigateTab && onNavigateTab('community')}
-                className="mb-3 bg-secondary/30 border border-border hover:border-primary/40 rounded-xl overflow-hidden cursor-pointer transition-all group"
-              >
-                {latestApostlePost.image_url && (
-                  <div className="relative aspect-video w-full overflow-hidden bg-black">
-                    <img 
-                      src={latestApostlePost.image_url} 
-                      alt={latestApostlePost.title} 
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-background/90 text-primary text-[10px] font-bold border border-border">
-                      {latestApostlePost.category}
-                    </span>
-                    {latestApostlePost.scripture_tag && (
-                      <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-black/70 text-white text-[10px] font-semibold">
-                        {latestApostlePost.scripture_tag}
-                      </span>
-                    )}
-                  </div>
-                )}
-                <div className="p-2.5 space-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <img 
-                      src={latestApostlePost.user_avatar || '/assets/apostle_joe_daniels_main.jpg'} 
-                      alt={latestApostlePost.user_name} 
-                      className="w-4 h-4 rounded-full object-cover border border-primary"
-                    />
-                    <span className="text-xs font-semibold text-foreground truncate">{latestApostlePost.user_name}</span>
-                    <VerifiedBadge type="gold" size="xs" />
-                    <span className="text-[10px] text-muted-foreground ml-auto">{latestApostlePost.date}</span>
-                  </div>
-                  <h5 className="text-xs font-bold text-primary line-clamp-1">{latestApostlePost.title}</h5>
-                  <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">{latestApostlePost.content}</p>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <div className="flex items-center gap-3 bg-secondary/40 p-2.5 rounded-lg border border-border">
-                <div className="w-1 h-6 bg-primary rounded-full shrink-0"></div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Recent Kingdom Seed</p>
-                  <p className="text-xs font-semibold text-foreground">M. Chidzero (Harare) sowed $50 Cathedral Seed</p>
-                </div>
-              </div>
-
-              {liveTestimonies.filter((t) => t.id !== latestApostlePost?.id).slice(0, 1).map((test) => (
-                <div 
-                  key={test.id} 
-                  onClick={() => onNavigateTab && onNavigateTab('community')}
-                  className="flex items-center gap-2.5 bg-secondary/40 hover:bg-secondary/60 p-2 rounded-lg border border-border cursor-pointer transition-colors"
-                >
-                  {test.image_url ? (
-                    <img src={test.image_url} alt="" className="w-8 h-8 rounded-lg object-cover shrink-0 border border-border" />
-                  ) : (
-                    <div className="w-1 h-6 bg-emerald-500 rounded-full shrink-0"></div>
+            {/* Trending tags horizontal pills */}
+            <div className="flex flex-wrap gap-1.5">
+              {trendingTags.map((item) => (
+                <button
+                  key={item.tag}
+                  onClick={() => handleSelectTrendingTag(item.tag, item.series)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer border",
+                    activeTrendingTag === item.tag
+                      ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                      : "bg-secondary/80 text-foreground hover:bg-secondary border-border"
                   )}
-                  <div className="overflow-hidden min-w-0 flex-1">
-                    <p className="text-[10px] text-primary uppercase tracking-widest font-bold truncate">Praise: {test.category}</p>
-                    <p className="text-xs text-foreground/90 truncate font-medium">{test.title} — {test.user_name}</p>
-                  </div>
-                </div>
+                >
+                  <Hash className="w-3 h-3 text-primary shrink-0" />
+                  <span>{item.tag.replace('#', '')}</span>
+                  <span className="text-[9px] text-muted-foreground ml-0.5 font-normal">({item.count.split(' ')[0]})</span>
+                </button>
               ))}
             </div>
           </div>
 
-          <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-            <span>Cathedral Foundation: 85% Funded</span>
-            <span className="text-primary font-semibold">Harare Cathedral 2026</span>
+          {/* Bottom: Faith Testimony & Praise Spotlight */}
+          {featuredTestimony && (
+            <div className="bg-secondary/40 border border-border rounded-xl p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-background border border-border shrink-0">
+                    <img 
+                      src={featuredTestimony.user_avatar || '/assets/apostle_joe_daniels_main.jpg'} 
+                      alt={featuredTestimony.user_name}
+                      className="w-full h-full object-cover" 
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1">
+                      <span className="font-bold text-xs text-foreground truncate">{featuredTestimony.user_name}</span>
+                      <VerifiedBadge type="gold" size="xs" />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground block truncate">{featuredTestimony.date || 'Recent praise report'}</span>
+                  </div>
+                </div>
+
+                <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 text-[10px] font-bold">
+                  {featuredTestimony.category || 'Breakthrough'}
+                </span>
+              </div>
+
+              <div>
+                <h5 className="font-bold text-xs text-foreground line-clamp-1">{featuredTestimony.title}</h5>
+                <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5 leading-relaxed">{featuredTestimony.content}</p>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 border-t border-border/60">
+                <button
+                  onClick={() => handleToggleTestimonyAmen(featuredTestimony.id)}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <HandHeart className="w-3.5 h-3.5" />
+                  <span>Amen! ({featuredTestimony.likes_count || 12})</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (onNavigateTab) onNavigateTab('community');
+                  }}
+                  className="text-[11px] text-primary hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Explore Fellowship</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Social praise report call-to-action */}
+          <div className="flex items-center justify-between text-xs pt-1">
+            <span className="text-muted-foreground text-[11px]">Have God done something great?</span>
+            <button
+              onClick={() => {
+                if (onNavigateTab) onNavigateTab('community');
+              }}
+              className="text-primary font-bold text-xs hover:underline cursor-pointer flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Share Testimony</span>
+            </button>
           </div>
+
         </div>
 
       </div>
 
-      {/* 4. Sermon Archive & Offline Downloader */}
-      <div className="space-y-4 pt-2">
+      {/* 5. Cathedral Vision & Next Sanctuary Service Countdown */}
+      <div className="bg-card border border-border p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+        <div className="flex items-center gap-3 text-left w-full sm:w-auto">
+          <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0 shadow-xs">
+            <Clock className="w-6 h-6 text-primary" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-primary/15 text-primary border border-primary/30">
+                Next Service
+              </span>
+              <span className="text-[11px] text-muted-foreground">Sunday 09:30 AM CAT</span>
+            </div>
+            <h4 className="font-bold text-sm sm:text-base text-foreground truncate mt-0.5">
+              Glorious Apostolic Dominion Service
+            </h4>
+            <p className="text-[11px] text-muted-foreground">
+              Samora Machel Avenue West, Belvedere, Harare & Live Stream
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <button
+            onClick={() => {
+              if (videoPlayerRef.current) {
+                videoPlayerRef.current.scrollIntoView({ behavior: 'smooth' });
+              }
+              showToast('Featured service stream is ready at the top!');
+            }}
+            className="px-3.5 py-2 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground font-semibold text-xs border border-border transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            <Radio className="w-3.5 h-3.5 text-red-500" />
+            <span>Join Stream</span>
+          </button>
+
+          <button
+            onClick={() => setShowInStreamDonation(true)}
+            className="px-3.5 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:brightness-105 shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            <Gift className="w-3.5 h-3.5" />
+            <span>Partner Cathedral</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 6. Sermon Archive & Apostolic Messages */}
+      <div id="sermon-archive-section" className="space-y-4 pt-2">
         
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-base sm:text-xl font-bold text-foreground flex items-center gap-2">
-              <span>Sermon Archive & Messages</span>
+              <span>Sermon Archive & Apostolic Word</span>
               {!isPremiumActive ? (
                 <button
                   onClick={() => setShowBadgeUpgradeModal(true)}
@@ -1898,34 +1657,51 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               )}
             </h3>
             <p className="text-xs text-muted-foreground">
-              Prophetic teachings, apostolic archives, and offline playback.
+              Prophetic teachings, apostolic series, and high-fidelity video archives.
             </p>
           </div>
 
-          {/* Series Filter Selector */}
-          <div className="flex items-center gap-1.5 p-1 bg-secondary/60 rounded-xl border border-border overflow-x-auto no-scrollbar">
-            {uniqueSeries.map((series) => (
-              <button
-                key={series}
-                onClick={() => setSelectedSeries(series)}
-                className={cn(
-                  'px-3 py-1 rounded-lg text-xs font-medium tracking-wide shrink-0 transition-all uppercase cursor-pointer select-none',
-                  selectedSeries === series
-                    ? 'bg-background text-foreground shadow-xs font-semibold'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/40'
-                )}
-              >
-                {series}
+          {/* Search Box */}
+          <div className="relative w-full sm:w-64">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search sermons, scriptures..."
+              className="w-full bg-card border border-border rounded-xl pl-8.5 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary shadow-xs"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="w-3.5 h-3.5" />
               </button>
-            ))}
+            )}
           </div>
         </div>
 
-        {/* Premium Verification Status Banner */}
+        {/* Series Filter Selector */}
+        <div className="flex items-center gap-1.5 p-1 bg-secondary/60 rounded-xl border border-border overflow-x-auto no-scrollbar">
+          {uniqueSeries.map((series) => (
+            <button
+              key={series}
+              onClick={() => setSelectedSeries(series)}
+              className={cn(
+                'px-3 py-1 rounded-lg text-xs font-medium tracking-wide shrink-0 transition-all uppercase cursor-pointer select-none',
+                selectedSeries === series
+                  ? 'bg-background text-foreground shadow-xs font-semibold'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary/40'
+              )}
+            >
+              {series}
+            </button>
+          ))}
+        </div>
+
+        {/* Premium Banner */}
         {!isPremiumActive ? (
-          <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/15 border border-amber-400/50 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/15 border border-amber-400/50 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0 border border-amber-400/50 shadow-sm">
+              <div className="w-9 h-9 rounded-full bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0 border border-amber-400/50 shadow-xs">
                 <Crown className="w-4 h-4 fill-current" />
               </div>
               <div>
@@ -1936,14 +1712,14 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                  Unlock all sermon archives and offline downloads with Pro.
+                  Unlock full apostolic message recordings, high-quality audio, and offline downloads.
                 </p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setShowBadgeUpgradeModal(true)}
-              className="px-4 py-2 rounded-full bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 font-bold text-xs shadow-sm hover:brightness-110 active:scale-95 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 rounded-full bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 font-bold text-xs shadow-xs hover:brightness-110 active:scale-95 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
             >
               <Crown className="w-3.5 h-3.5 fill-current" />
               <span>Buy Pro</span>
@@ -1975,7 +1751,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               <div
                 key={sermon.id}
                 className={cn(
-                  'group rounded-xl border bg-card text-card-foreground shadow-xs transition-all flex flex-col justify-between overflow-hidden hover:shadow-md hover:border-border/80',
+                  'group rounded-2xl border bg-card text-card-foreground shadow-xs transition-all flex flex-col justify-between overflow-hidden hover:shadow-md hover:border-border/80',
                   isCurrent ? 'border-primary' : 'border-border'
                 )}
               >
@@ -1990,11 +1766,18 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                       setOverridePlayingVideo({
                         id: sermon.id,
                         title: sermon.title,
-                        youtube_id: sermon.youtube_id
+                        youtube_id: sermon.youtube_id,
+                        video_url: sermon.video_url,
+                        audio_url: sermon.audio_url,
+                        thumbnail_url: sermon.thumbnail_url,
+                        speaker: sermon.speaker,
+                        series: sermon.series
                       });
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                      if (videoPlayerRef.current) {
+                        videoPlayerRef.current.scrollIntoView({ behavior: 'smooth' });
+                      }
                     }}
-                    className="relative aspect-video rounded-lg overflow-hidden bg-black cursor-pointer group"
+                    className="relative aspect-video rounded-xl overflow-hidden bg-black cursor-pointer group"
                   >
                     <img
                       src={sermon.thumbnail_url}
@@ -2003,7 +1786,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                       loading="lazy"
                     />
 
-                    {/* Subtle Golden Crown Badge representing Pro */}
                     <div 
                       className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-xs border border-amber-400/40 text-amber-400 text-[10px] font-bold tracking-wider uppercase shadow-xs z-15"
                       title="Pro Sermon Video"
@@ -2012,7 +1794,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                       <span>PRO</span>
                     </div>
 
-                    {/* Premium Lock Overlay for Non-Premium / Expired Users */}
                     {!isPremiumActive ? (
                       <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px] flex flex-col items-center justify-center p-3 text-center transition-all group-hover:bg-slate-950/80 z-10">
                         <div className="w-9 h-9 rounded-full bg-amber-500/20 border border-amber-400/50 flex items-center justify-center mb-1 text-amber-400 shadow-xs">
@@ -2033,15 +1814,13 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                       </div>
                     )}
                     
-                    {/* Duration badge */}
                     <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-background/85 backdrop-blur-md text-[10px] font-semibold text-foreground border border-border z-15">
                       {sermon.duration}
                     </span>
 
-                    {/* Offline or Active Playing badge */}
                     {overridePlayingVideo?.id === sermon.id ? (
                       <span className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary text-[10px] font-bold text-primary-foreground shadow-xs animate-pulse z-15">
-                        ▶ NOW PLAYING
+                        ▶ NOW PLAYING ON TOP
                       </span>
                     ) : isDownloaded ? (
                       <span className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/90 text-[10px] font-bold text-white shadow-xs z-15">
@@ -2064,7 +1843,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                   </div>
                 </div>
 
-                {/* Card Action Footer */}
                 <div className="px-4 py-2.5 bg-secondary/30 border-t border-border flex items-center justify-between">
                   <button
                     onClick={() => {
@@ -2083,18 +1861,18 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                         speaker: sermon.speaker,
                         series: sermon.series
                       });
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                      if (videoPlayerRef.current) {
+                        videoPlayerRef.current.scrollIntoView({ behavior: 'smooth' });
+                      }
                     }}
                     className={cn(
-                      "px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 text-xs font-semibold",
+                      "px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-xs font-semibold",
                       !isPremiumActive
                         ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-400/30"
                         : overridePlayingVideo?.id === sermon.id
                           ? "bg-primary text-primary-foreground shadow-xs"
                           : "bg-secondary hover:bg-secondary/80 text-foreground border border-border"
                     )}
-                    title={!isPremiumActive ? "Unlock with Kingdom Badge" : overridePlayingVideo?.id === sermon.id ? "Now Playing" : `Play ${sermon.title}`}
-                    aria-label={!isPremiumActive ? "Unlock with Kingdom Badge" : overridePlayingVideo?.id === sermon.id ? "Now Playing" : `Play ${sermon.title}`}
                   >
                     {!isPremiumActive ? (
                       <>
@@ -2104,12 +1882,12 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                     ) : overridePlayingVideo?.id === sermon.id ? (
                       <>
                         <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>Now Playing</span>
+                        <span>Playing On Top</span>
                       </>
                     ) : (
                       <>
                         <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>Watch Sermon</span>
+                        <span>Watch on Top</span>
                       </>
                     )}
                   </button>
@@ -2125,22 +1903,20 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                         handleToggleDownload(sermon.id);
                       }}
                       className={cn(
-                        'p-2 rounded-lg transition-all cursor-pointer flex items-center justify-center',
+                        'p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center',
                         isDownloaded 
                           ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30' 
                           : 'bg-secondary hover:bg-secondary/80 text-foreground border border-border'
                       )}
                       title={!isPremiumActive ? "Buy Pro to download" : isDownloaded ? "Remove from offline storage" : "Save for offline listening"}
-                      aria-label={!isPremiumActive ? "Buy Pro to download" : isDownloaded ? "Remove from offline storage" : "Save for offline listening"}
                     >
                       {isDownloaded ? <Check className="w-4 h-4" /> : <Download className="w-4 h-4" />}
                     </button>
                     
                     <button
                       onClick={() => handleShareWhatsApp(sermon.title, sermon.description)}
-                      className="p-2 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground border border-border transition-all cursor-pointer flex items-center justify-center"
+                      className="p-2 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground border border-border transition-all cursor-pointer flex items-center justify-center"
                       title="Share message to WhatsApp"
-                      aria-label="Share message to WhatsApp"
                     >
                       <Send className="w-4 h-4 -rotate-45 text-emerald-500" />
                     </button>
@@ -2154,18 +1930,18 @@ export const HomeTab: React.FC<HomeTabProps> = ({
 
       </div>
 
-      {/* 1-on-1 Paid Pastoral Booking Banner */}
-      <div className="bg-card border border-border p-4 sm:p-5 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+      {/* 7. 1-on-1 Pastoral Consultation Banner */}
+      <div className="bg-card border border-border p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
         <div className="flex items-center gap-3 text-left">
-          <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 text-primary flex items-center justify-center font-bold shrink-0 shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center font-bold shrink-0 shadow-xs">
             <Calendar className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h4 className="font-semibold text-sm sm:text-base text-foreground">
+            <h4 className="font-bold text-sm sm:text-base text-foreground">
               Need 1-on-1 Pastoral Consultation?
             </h4>
             <p className="text-xs text-muted-foreground">
-              Book a private session with Apostle Joe Daniels. Submissions forwarded directly to our ministry team.
+              Book a private apostolic session with Apostle Joe Daniels. Submissions forwarded directly to our ministry desk.
             </p>
           </div>
         </div>
@@ -2173,11 +1949,11 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         <button
           id="btn-open-paid-booking-home"
           onClick={() => setShowPaidBookingModal(true)}
-          className="p-3 rounded-lg bg-primary hover:brightness-105 text-primary-foreground font-semibold text-xs shadow-xs transition-all active:scale-95 shrink-0 cursor-pointer flex items-center justify-center"
+          className="px-4 py-2.5 rounded-xl bg-primary hover:brightness-105 text-primary-foreground font-bold text-xs shadow-xs transition-all active:scale-95 shrink-0 cursor-pointer flex items-center gap-1.5"
           title="Book 1-on-1 Pastoral Consultation"
-          aria-label="Book 1-on-1 Pastoral Consultation"
         >
-          <Calendar className="w-5 h-5" />
+          <Calendar className="w-4 h-4" />
+          <span>Book Consultation</span>
         </button>
       </div>
 
