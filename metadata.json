@@ -1,6 +1,6 @@
 {
   "name": "Gatewayconnect",
-  "description": "Joe Daniels Connect Connect with Apostle Dr Joe Daniels",
+  "description": "Imported from GitHub: gatewaychurcho/gatewayconnect",
   "requestFramePermissions": [
     "camera",
     "microphone"
