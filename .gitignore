@@ -7,3 +7,5 @@ mobile/
 *.log
 gatewayconnect-source-*.zip
 .DS_Store
+.agents/
+skills-lock.json

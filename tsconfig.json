@@ -21,6 +21,20 @@
       ]
     },
     "allowImportingTsExtensions": true,
+    "esModuleInterop": true,
     "noEmit": true
-  }
+  },
+  "include": [
+    "src/**/*",
+    "api/**/*",
+    "config.ts",
+    "server.ts",
+    "supabaseClient.ts",
+    "vite.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "mobile"
+  ]
 }
