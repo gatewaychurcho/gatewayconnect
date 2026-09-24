@@ -100,6 +100,29 @@ export class StorageBucketService {
       const filename = `${Date.now()}_${cleanBase}.${ext}`;
       const filePath = `${targetFolder}/${filename}`;
 
+      // If uploading an avatar, check if dedicated 'avatars' bucket is available first
+      if (targetFolder === 'avatars' || targetFolder === 'avatar') {
+        try {
+          const { data: avatarData, error: avatarErr } = await supabase.storage
+            .from('avatars')
+            .upload(filename, finalFile, {
+              cacheControl: '3600',
+              upsert: true
+            });
+          if (!avatarErr && avatarData) {
+            const { data: avatarUrlData } = supabase.storage
+              .from('avatars')
+              .getPublicUrl(avatarData.path);
+            if (avatarUrlData?.publicUrl) {
+              console.log(`Successfully uploaded avatar to bucket 'avatars':`, avatarUrlData.publicUrl);
+              return avatarUrlData.publicUrl;
+            }
+          }
+        } catch {
+          // Seamlessly fallback to 'media' bucket below
+        }
+      }
+
       console.log(`Uploading file ${finalFile.name} to Supabase bucket '${this.BUCKET_NAME}' [${filePath}]...`);
 
       const { data, error } = await supabase.storage
