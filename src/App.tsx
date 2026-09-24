@@ -106,6 +106,48 @@ export default function App() {
       setShowLiveSermonModal(true);
     };
     window.addEventListener('gcz_open_live_stream', handleOpenLive);
+
+    // Sync Supabase Auth session on load
+    const supabase = getSupabase();
+    if (supabase) {
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
+        if (session?.user) {
+          const localUser = StorageService.getCurrentUser();
+          if (!localUser || localUser.id === 'usr_guest') {
+            try {
+              const { data: dbUser } = await supabase.from('users').select('*').eq('id', session.user.id).single();
+              if (dbUser) {
+                StorageService.saveUser(dbUser);
+                StorageService.setCurrentUser(dbUser);
+                setCurrentUser(dbUser);
+              }
+            } catch {}
+          }
+        }
+      }).catch(() => {});
+
+      const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_OUT') {
+          StorageService.logout();
+          setCurrentUser(null);
+        } else if (event === 'SIGNED_IN' && session?.user) {
+          try {
+            const { data: dbUser } = await supabase.from('users').select('*').eq('id', session.user.id).single();
+            if (dbUser) {
+              StorageService.saveUser(dbUser);
+              StorageService.setCurrentUser(dbUser);
+              setCurrentUser(dbUser);
+            }
+          } catch {}
+        }
+      });
+
+      return () => {
+        window.removeEventListener('gcz_open_live_stream', handleOpenLive);
+        authListener?.subscription?.unsubscribe();
+      };
+    }
+
     return () => {
       window.removeEventListener('gcz_open_live_stream', handleOpenLive);
     };
@@ -145,7 +187,13 @@ export default function App() {
     confetti({ particleCount: 15, spread: 40 });
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch {}
+    }
     StorageService.logout();
     setCurrentUser(null);
     setShowProfileModal(false);

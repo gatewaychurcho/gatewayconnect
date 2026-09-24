@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   Send, 
@@ -229,10 +229,22 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   const [newGroupPinnedNotice, setNewGroupPinnedNotice] = useState('');
   const groupAvatarInputRef = useRef<HTMLInputElement>(null);
 
-  const handleGroupAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleGroupAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) return;
+    
+    try {
+      const bucketUrl = await StorageBucketService.uploadFileToMediaBucket(file, 'avatars');
+      if (bucketUrl) {
+        setNewGroupAvatar(bucketUrl);
+        e.target.value = '';
+        return;
+      }
+    } catch (err) {
+      console.warn('Group avatar bucket upload notice:', err);
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
@@ -396,7 +408,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
     if (activeGroup) {
       if (StorageService.hasUserExitedGroup(activeGroup.id, currentUser.id)) {
-        alert('You cannot send media because you exited this group fellowship. Please rejoin to participate.');
+        setCopyFeedback('You cannot send media because you exited this group fellowship. Please rejoin to participate.');
+        setTimeout(() => setCopyFeedback(null), 3500);
         setIsUploadingMedia(false);
         return;
       }
@@ -749,6 +762,14 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     if (activeTab === 'direct') {
       refreshMessages();
       refreshThreads();
+      if (activeUserId) {
+        StorageService.syncDirectMessagesWithRemote(currentUser.id)
+          .then(() => {
+            refreshMessages();
+            refreshThreads();
+          })
+          .catch(() => {});
+      }
     } else if (activeTab === 'groups' && activeGroupId) {
       StorageService.markGroupMessagesAsRead(activeGroupId, currentUser.id);
       
@@ -1036,7 +1057,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   const handleShareMediaToGroup = (url: string, caption?: string) => {
     if (!activeGroup || !url.trim()) return;
     if (StorageService.hasUserExitedGroup(activeGroup.id, currentUser.id)) {
-      alert('You cannot send media because you exited this group fellowship. Please rejoin to participate.');
+      setCopyFeedback('You cannot send media because you exited this group fellowship. Please rejoin to participate.');
+      setTimeout(() => setCopyFeedback(null), 3500);
       return;
     }
     StorageService.sendChatGroupMessage(activeGroup.id, {
@@ -1077,7 +1099,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
     // Strictly block only members who exited that exact group
     if (StorageService.hasUserExitedGroup(activeGroup.id, currentUser.id)) {
-      alert('You cannot send messages anymore because you exited this group fellowship. Please rejoin the group to participate in discussions.');
+      setCopyFeedback('You cannot send messages because you exited this group fellowship. Please rejoin to participate.');
+      setTimeout(() => setCopyFeedback(null), 3500);
       return;
     }
 
@@ -1194,7 +1217,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     if (match) {
       setViewUserProfile(match);
     } else {
-      alert(`@${userNameOrHandle} is a fellowship member.`);
+      setCopyFeedback(`@${userNameOrHandle} is a fellowship member.`);
+      setTimeout(() => setCopyFeedback(null), 3000);
     }
   };
 
@@ -1320,7 +1344,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     } else {
                       const validation = StorageService.validateGroupInviteCode(code || matchedGroup.invite_code);
                       if (validation.status === 'reset') {
-                        alert("Can't join because this invite link was reset.");
+                        setCopyFeedback("Can't join because this invite link was reset.");
+                        setTimeout(() => setCopyFeedback(null), 3000);
                         return;
                       }
                       triggerJoiningAnimation(matchedGroup);
@@ -1342,7 +1367,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     } else {
                       const validation = StorageService.validateGroupInviteCode(code || matchedGroup.invite_code);
                       if (validation.status === 'reset') {
-                        alert("Can't join because this invite link was reset.");
+                        setCopyFeedback("Can't join because this invite link was reset.");
+                        setTimeout(() => setCopyFeedback(null), 3000);
                         return;
                       }
                       triggerJoiningAnimation(matchedGroup);
@@ -1362,7 +1388,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     if (matchingPendingInvite) {
                       handleRespondToInvite(matchingPendingInvite.id, false);
                     } else {
-                      alert(`You declined the invitation to join ${matchedGroup.name}. You will not join this group.`);
+                      setCopyFeedback(`You declined the invitation to join ${matchedGroup.name}.`);
+                      setTimeout(() => setCopyFeedback(null), 3000);
                     }
                   }}
                   className="flex-1 py-2 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-500/40 text-red-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
@@ -1591,7 +1618,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     const res = StorageService.sendGroupInvite(activeGroup.id, targetUser.id, currentUser.id);
     setShowAddMemberModal(false);
     refreshGroupsData();
-    alert(res.message);
+    setCopyFeedback(res.message);
+    setTimeout(() => setCopyFeedback(null), 3500);
   };
 
   const handleRespondToInvite = (inviteId: string, accept: boolean) => {
@@ -2533,7 +2561,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           onClick={() => {
                             StorageService.acceptFoundationSchoolExpiry(currentUser.id);
                             refreshGroupsData();
-                            alert('You have accepted that your Foundation School term will conclude at the end of the term.');
+                            setCopyFeedback('You have accepted that your Foundation School term will conclude at the end of the term.');
+                            setTimeout(() => setCopyFeedback(null), 3500);
                           }}
                           className="px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-semibold text-xs transition-colors border border-border"
                         >
@@ -3199,7 +3228,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             StorageService.triggerFoundationSchoolExpiryNotice(currentUser.id);
                             refreshGroupsData();
                             refreshThreads();
-                            alert('Foundation School Expiry Notice has been triggered! Check your inbox and the top banner.');
+                            setCopyFeedback('Foundation School Expiry Notice has been triggered! Check your inbox and the top banner.');
+                            setTimeout(() => setCopyFeedback(null), 3500);
                           }}
                           className="text-[10px] px-2 py-1 rounded-md bg-secondary border border-border text-foreground hover:bg-secondary/80 font-semibold"
                           title="Simulate membership expiry notice"

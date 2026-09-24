@@ -287,6 +287,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   });
   const [showAddStoryModal, setShowAddStoryModal] = useState<boolean>(false);
   const [newStoryImageUrl, setNewStoryImageUrl] = useState<string>('');
+  const [newStoryFile, setNewStoryFile] = useState<File | null>(null);
+  const [isUploadingStory, setIsUploadingStory] = useState<boolean>(false);
   const [newStoryScripture, setNewStoryScripture] = useState<string>('');
   const [newStoryText, setNewStoryText] = useState<string>('');
   const storyFileInputRef = useRef<HTMLInputElement>(null);
@@ -884,11 +886,12 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 20 * 1024 * 1024) {
-      alert("File size must be under 20MB.");
+    if (file.size > 25 * 1024 * 1024) {
+      console.warn("File size must be under 25MB.");
       return;
     }
 
+    setNewStoryFile(file);
     const reader = new FileReader();
     reader.onload = (loadEvt) => {
       const result = loadEvt.target?.result as string;
@@ -899,11 +902,34 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
   const handleCreateStory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStoryImageUrl) return;
+    if (!newStoryImageUrl && !newStoryFile) return;
 
-    // TODO: Connect this to actual story upload if needed
+    setIsUploadingStory(true);
+    let finalUrl = newStoryImageUrl;
+
+    if (newStoryFile) {
+      const uploadedUrl = await StorageBucketService.uploadFileToMediaBucket(newStoryFile, 'media');
+      if (uploadedUrl) finalUrl = uploadedUrl;
+    }
+
+    const cur = StorageService.getCurrentUser() || currentUser;
+    StorageService.addStory({
+      user_id: cur.id,
+      user_name: cur.full_name,
+      user_handle: cur.handle || `@${cur.full_name.toLowerCase().replace(/\s+/g, '_')}`,
+      user_avatar: cur.avatar_url || '',
+      avatar_url: cur.avatar_url,
+      badge_type: cur.badge_type || 'none',
+      image_url: finalUrl,
+      caption: newStoryText.trim(),
+      scripture: newStoryScripture.trim() || undefined,
+      likes_count: 0
+    });
+
+    setIsUploadingStory(false);
     setShowAddStoryModal(false);
     setNewStoryImageUrl('');
+    setNewStoryFile(null);
     setNewStoryScripture('');
     setNewStoryText('');
     
@@ -3146,11 +3172,11 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={!newStoryImageUrl}
+                  disabled={!newStoryImageUrl || isUploadingStory}
                   className="px-4 py-1.5 rounded-lg bg-primary hover:bg-primary/90 disabled:opacity-40 text-primary-foreground text-xs font-bold flex items-center gap-1.5 shadow-sm"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Share Story</span>
+                  <Send className={`w-3.5 h-3.5 ${isUploadingStory ? 'animate-pulse' : ''}`} />
+                  <span>{isUploadingStory ? 'Uploading to Cloud...' : 'Share Story'}</span>
                 </button>
               </div>
             </form>

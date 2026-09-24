@@ -8,9 +8,12 @@ import {
   Link as LinkIcon, 
   Trash2, 
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  Loader2,
+  CloudUpload
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { StorageBucketService } from '../../services/StorageBucketService';
 
 interface ImagePickerModalProps {
   isOpen: boolean;
@@ -61,23 +64,46 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({
   const [activeTab, setActiveTab] = useState<'upload' | 'gallery'>('upload');
   const [selectedImage, setSelectedImage] = useState<string>(currentImage || '/assets/apostle_joe_daniels_main.jpg');
   const [fileName, setFileName] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
-        alert('Please select a valid image file (JPEG, PNG, WebP).');
+        setUploadError('Please select a valid image file (JPEG, PNG, WebP).');
+        setTimeout(() => setUploadError(null), 3000);
         return;
       }
       setFileName(file.name);
+      setIsUploading(true);
+      setUploadError(null);
+
+      // 1. Upload to Supabase 'avatars' storage bucket
+      try {
+        const bucketUrl = await StorageBucketService.uploadFileToMediaBucket(file, 'avatars');
+        if (bucketUrl) {
+          setSelectedImage(bucketUrl);
+          setIsUploading(false);
+          try {
+            const recent = JSON.parse(localStorage.getItem('gcz_recent_local_uploads') || '[]');
+            const updated = [bucketUrl, ...recent.filter((u: string) => u !== bucketUrl)].slice(0, 6);
+            localStorage.setItem('gcz_recent_local_uploads', JSON.stringify(updated));
+          } catch {}
+          return;
+        }
+      } catch (err) {
+        console.warn('Storage bucket avatar upload notice:', err);
+      }
+
+      // 2. Fallback to local canvas compression
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
           const rawUrl = event.target.result as string;
-          // Downscale via canvas to ensure safe LocalStorage persistence without quota limits
           const img = new Image();
           img.onload = () => {
             const canvas = document.createElement('canvas');
@@ -101,20 +127,22 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({
             ctx?.drawImage(img, 0, 0, width, height);
             const compressed = canvas.toDataURL('image/jpeg', 0.8);
             setSelectedImage(compressed);
+            setIsUploading(false);
 
-            // Persist to local storage recent uploads
             try {
               const recent = JSON.parse(localStorage.getItem('gcz_recent_local_uploads') || '[]');
               const updated = [compressed, ...recent.filter((u: string) => u !== compressed)].slice(0, 6);
               localStorage.setItem('gcz_recent_local_uploads', JSON.stringify(updated));
-            } catch {
-              // Ignore storage errors
-            }
+            } catch {}
           };
-          img.onerror = () => setSelectedImage(rawUrl);
+          img.onerror = () => {
+            setSelectedImage(rawUrl);
+            setIsUploading(false);
+          };
           img.src = rawUrl;
         }
       };
+      reader.onerror = () => setIsUploading(false);
       reader.readAsDataURL(file);
     }
   };
@@ -285,27 +313,33 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({
                 onChange={handleFileChange}
                 className="hidden"
               />
+              {uploadError && (
+                <div className="p-2.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-medium text-center">
+                  {uploadError}
+                </div>
+              )}
               <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-primary/40 hover:border-primary rounded-2xl p-6 text-center cursor-pointer bg-secondary/30 hover:bg-secondary/50 transition-all flex flex-col items-center justify-center gap-2 group"
+                onClick={() => !isUploading && fileInputRef.current?.click()}
+                className={`border-2 border-dashed ${isUploading ? 'border-primary/20 opacity-70' : 'border-primary/40 hover:border-primary cursor-pointer'} rounded-2xl p-6 text-center bg-secondary/30 hover:bg-secondary/50 transition-all flex flex-col items-center justify-center gap-2 group`}
               >
                 <div className="w-14 h-14 rounded-full bg-primary/10 group-hover:bg-primary text-primary group-hover:text-primary-foreground flex items-center justify-center transition-all shadow-xs">
-                  <Camera className="w-7 h-7" />
+                  {isUploading ? <Loader2 className="w-7 h-7 animate-spin" /> : <Camera className="w-7 h-7" />}
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-foreground">
-                    Choose Photo from Device / Camera
+                    {isUploading ? 'Uploading to Cloud Bucket...' : 'Choose Photo from Device / Camera'}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Supports JPG, PNG, WebP, GIF from mobile gallery or PC
+                    {isUploading ? 'Compressing & uploading to database bucket' : 'Supports JPG, PNG, WebP, GIF from mobile gallery or PC'}
                   </p>
                 </div>
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-xs mt-2 shadow-xs flex items-center gap-1.5"
+                  disabled={isUploading}
+                  className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-xs mt-2 shadow-xs flex items-center gap-1.5 disabled:opacity-50"
                 >
-                  <ImageIcon className="w-3.5 h-3.5" />
-                  <span>Browse Photos</span>
+                  {isUploading ? <CloudUpload className="w-3.5 h-3.5 animate-pulse" /> : <ImageIcon className="w-3.5 h-3.5" />}
+                  <span>{isUploading ? 'Uploading...' : 'Browse Photos'}</span>
                 </button>
               </div>
             </div>

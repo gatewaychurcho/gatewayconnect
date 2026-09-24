@@ -27,6 +27,7 @@ import {
 import confetti from 'canvas-confetti';
 import { ChurchPage, User, PagePost, Testimony } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { StorageBucketService } from '../../services/StorageBucketService';
 import { FacebookStreamPlayer } from '../common/FacebookStreamPlayer';
 
 interface ChurchPageViewModalProps {
@@ -101,13 +102,24 @@ export const ChurchPageViewModal: React.FC<ChurchPageViewModalProps> = ({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file.');
       return;
     }
+
+    try {
+      const bucketUrl = await StorageBucketService.uploadFileToMediaBucket(file, 'media');
+      if (bucketUrl) {
+        setPostImageBase64(bucketUrl);
+        e.target.value = '';
+        return;
+      }
+    } catch (err) {
+      console.warn('Storage bucket page post photo notice:', err);
+    }
+
     const reader = new FileReader();
     reader.onload = (event) => {
       const result = event.target?.result as string;

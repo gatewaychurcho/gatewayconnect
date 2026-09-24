@@ -20,6 +20,7 @@ import {
 import confetti from 'canvas-confetti';
 import { User, ChurchPage, PageCategory } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { StorageBucketService } from '../../services/StorageBucketService';
 
 export interface PageCreationModalProps {
   currentUser: User;
@@ -123,16 +124,34 @@ export const PageCreationModal: React.FC<PageCreationModalProps> = ({
     reader.readAsDataURL(file);
   };
 
-  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      try {
+        const bucketUrl = await StorageBucketService.uploadFileToMediaBucket(file, 'avatars');
+        if (bucketUrl) {
+          setAvatarBase64(bucketUrl);
+          return;
+        }
+      } catch (err) {
+        console.warn('Page avatar bucket upload notice:', err);
+      }
       processImageFile(file, 400, (base64) => setAvatarBase64(base64));
     }
   };
 
-  const handleCoverFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      try {
+        const bucketUrl = await StorageBucketService.uploadFileToMediaBucket(file, 'media');
+        if (bucketUrl) {
+          setCoverBase64(bucketUrl);
+          return;
+        }
+      } catch (err) {
+        console.warn('Page cover bucket upload notice:', err);
+      }
       processImageFile(file, 1000, (base64) => setCoverBase64(base64));
     }
   };

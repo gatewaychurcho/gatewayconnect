@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import { User, Sermon, NotificationSettings, Testimony, PostComment, ChurchPage } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { StorageBucketService } from '../../services/StorageBucketService';
 import { PaynowService } from '../../services/paynowService';
 import { MOCK_SERMONS, INITIAL_USERS } from '../../data/mockData';
 import { ImagePickerModal } from '../modals/ImagePickerModal';
@@ -152,13 +153,28 @@ export const MeTab: React.FC<MeTabProps> = ({
   const highlightFileInputRef = useRef<HTMLInputElement | null>(null);
   const postImageFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handlePostImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePostImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeDetailPost) return;
     if (!file.type.startsWith('image/')) {
       showToast('Please select a valid image file');
       return;
     }
+
+    try {
+      const bucketUrl = await StorageBucketService.uploadFileToMediaBucket(file, 'media');
+      if (bucketUrl) {
+        StorageService.updateTestimonyImage(activeDetailPost.id, bucketUrl);
+        setActiveDetailPost({ ...activeDetailPost, image_url: bucketUrl });
+        setMyPosts(prev => prev.map(p => p.id === activeDetailPost.id ? { ...p, image_url: bucketUrl } : p));
+        showToast('Post photo saved to cloud');
+        e.target.value = '';
+        return;
+      }
+    } catch (err) {
+      console.warn('Storage bucket post photo upload notice:', err);
+    }
+
     const reader = new FileReader();
     reader.onload = (event) => {
       if (event.target?.result) {
@@ -170,15 +186,29 @@ export const MeTab: React.FC<MeTabProps> = ({
       }
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
-  const handleHighlightCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleHighlightCoverSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       showToast('Please select a valid image file.');
       return;
     }
+
+    try {
+      const bucketUrl = await StorageBucketService.uploadFileToMediaBucket(file, 'media');
+      if (bucketUrl) {
+        setNewHighlightImg(bucketUrl);
+        showToast('Cover photo saved to cloud bucket');
+        e.target.value = '';
+        return;
+      }
+    } catch (err) {
+      console.warn('Highlight cover bucket upload notice:', err);
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {

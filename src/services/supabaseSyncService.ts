@@ -1166,6 +1166,7 @@ export class SupabaseSyncService {
         text: message.text,
         reply_to: message.reply_to || null,
         media_url: message.media_url || null,
+        media_type: message.media_type || null,
         is_read: message.is_read || false,
         created_at: message.created_at || new Date().toISOString()
       })).catch(() => {});
@@ -1175,6 +1176,7 @@ export class SupabaseSyncService {
         receiver_id: message.receiver_id,
         message: message.text,
         media_url: message.media_url || null,
+        media_type: message.media_type || null,
         is_read: message.is_read || false,
         created_at: message.created_at || new Date().toISOString()
       })).catch(() => {});

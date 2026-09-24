@@ -66,16 +66,16 @@ export class StorageBucketService {
   }
 
   /**
-   * Uploads a File object to the Supabase 'media' bucket.
+   * Uploads a File object to the Supabase 'media' or 'avatars' bucket.
    * Automatically compresses video files before uploading.
    * @param file The Javascript File object (from <input type="file" />)
    * @param bucketName Optional bucket name, defaults to 'media'
    * @returns The public URL of the uploaded file, or null if it failed.
    */
-    static async uploadFileToMediaBucket(file: File, bucketName: 'media' | 'avatars' = 'media'): Promise<string | null> {
+  static async uploadFileToMediaBucket(file: File, bucketName: 'media' | 'avatars' = 'media'): Promise<string | null> {
     const supabase = getSupabase();
     if (!supabase) {
-      console.error('Supabase is not configured. Cannot upload file.');
+      console.warn('Supabase is not configured. Falling back to local data URL.');
       return null;
     }
 
@@ -86,25 +86,33 @@ export class StorageBucketService {
         finalFile = await this.compressVideo(file);
       }
 
-      const ext = finalFile.name.split('.').pop();
-      const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+      const ext = finalFile.name.split('.').pop() || 'bin';
+      const cleanBase = finalFile.name.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+      const filename = `${Date.now()}_${cleanBase}.${ext}`;
       const filePath = `uploads/${filename}`;
 
-      console.log(`Uploading file ${finalFile.name} to Supabase bucket: ${bucketName}...`);
+      console.log(`Uploading file ${finalFile.name} to Supabase bucket '${bucketName}'...`);
 
       const { data, error } = await supabase.storage
         .from(bucketName)
         .upload(filePath, finalFile, {
           cacheControl: '3600',
-          upsert: false
+          upsert: true
         });
 
       if (error) {
-        console.error(`Supabase Upload Error to bucket '${bucketName}':`, error);
+        console.warn(`Supabase Storage upload warning (${bucketName}):`, error.message);
         
-        // Fallback: If 'media' bucket fails, try 'public' bucket if it exists, or just log clearly.
-        // We will just alert the user or log it so they can see the exact reason (e.g. RLS policy or missing bucket).
-        alert(`Upload Failed: ${error.message}. Please check if the '${bucketName}' bucket exists and is public in Supabase.`);
+        // Try fallback bucket if primary failed
+        if (bucketName !== 'media') {
+          const fallbackRes = await supabase.storage
+            .from('media')
+            .upload(filePath, finalFile, { cacheControl: '3600', upsert: true });
+          if (!fallbackRes.error && fallbackRes.data) {
+            const { data: fallbackUrl } = supabase.storage.from('media').getPublicUrl(fallbackRes.data.path);
+            return fallbackUrl.publicUrl;
+          }
+        }
         return null;
       }
 
@@ -112,9 +120,52 @@ export class StorageBucketService {
         .from(bucketName)
         .getPublicUrl(data.path);
 
+      console.log(`Successfully uploaded to bucket '${bucketName}':`, publicUrlData.publicUrl);
       return publicUrlData.publicUrl;
     } catch (err) {
       console.error('Unexpected error during file upload:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Uploads a base64 Data URL to the Supabase storage bucket and returns its public URL
+   */
+  static async uploadDataUrlToMediaBucket(
+    dataUrl: string, 
+    fallbackName: string = 'image', 
+    bucketName: 'media' | 'avatars' = 'media'
+  ): Promise<string | null> {
+    if (!dataUrl || !dataUrl.startsWith('data:')) {
+      return dataUrl || null;
+    }
+
+    try {
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const mime = blob.type || 'image/jpeg';
+      const ext = mime.split('/')[1]?.replace('+xml', '') || 'jpg';
+      const file = new File([blob], `${fallbackName}_${Date.now()}.${ext}`, { type: mime });
+      return await this.uploadFileToMediaBucket(file, bucketName);
+    } catch (err) {
+      console.warn('Failed to convert and upload dataUrl to bucket:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Uploads a Blob directly to the Supabase storage bucket and returns its public URL
+   */
+  static async uploadBlobToMediaBucket(
+    blob: Blob, 
+    filename: string, 
+    bucketName: 'media' | 'avatars' = 'media'
+  ): Promise<string | null> {
+    try {
+      const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+      return await this.uploadFileToMediaBucket(file, bucketName);
+    } catch (err) {
+      console.warn('Failed to upload blob to bucket:', err);
       return null;
     }
   }

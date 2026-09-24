@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { User, ChatGroup, ChatGroupMessage } from '../../types';
 import { StorageService, arePhoneNumbersEqual } from '../../services/storageService';
+import { StorageBucketService } from '../../services/StorageBucketService';
 
 // Client-side helper to compress uploaded group avatars smoothly for storage
 const compressImage = (dataUrl: string, maxWidth = 512, maxHeight = 512): Promise<string> => {
@@ -222,12 +223,31 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
   if (!isOpen) return null;
 
   // Handle uploading custom group icon from user's device
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file (PNG, JPG, WEBP, GIF).');
+      setIconUpdateSuccess('Please select a valid image file (PNG, JPG, WEBP).');
+      setTimeout(() => setIconUpdateSuccess(null), 3500);
       return;
+    }
+
+    try {
+      const bucketUrl = await StorageBucketService.uploadFileToMediaBucket(file, 'avatars');
+      if (bucketUrl) {
+        StorageService.updateGroupSettings(group.id, { avatar_url: bucketUrl });
+        onUpdateGroup();
+        setShowIconPicker(false);
+        setIconUpdateSuccess('Group icon updated in cloud bucket!');
+        try {
+          confetti({ particleCount: 35, spread: 60, origin: { y: 0.6 } });
+        } catch {}
+        setTimeout(() => setIconUpdateSuccess(null), 3500);
+        e.target.value = '';
+        return;
+      }
+    } catch (err) {
+      console.warn('Group icon bucket upload notice:', err);
     }
 
     const reader = new FileReader();

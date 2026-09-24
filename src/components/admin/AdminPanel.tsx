@@ -75,6 +75,7 @@ import {
   UnbanAppeal
 } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { StorageBucketService } from '../../services/StorageBucketService';
 import { LocalMediaStore } from '../../services/localMediaStore';
 import { FacebookStreamPlayer } from '../common/FacebookStreamPlayer';
 import { downloadCsvForExcel } from '../../utils/exportUtils';
@@ -333,7 +334,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     const isAudio = file.type.startsWith('audio/') || /\.(mp3|m4a|wav|aac|ogg)$/i.test(file.name);
     const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov|mkv)$/i.test(file.name);
     if (!isAudio && !isVideo) {
-      alert('Please select a valid audio (MP3, M4A, WAV) or video (MP4, WebM, MOV) file.');
+      setModerationMessage('Please select a valid audio (MP3, M4A, WAV) or video (MP4, WebM, MOV) file.');
       return;
     }
 
@@ -385,6 +386,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     const file = e.target.files?.[0];
     if (!file) return;
     try {
+      const bucketUrl = await StorageBucketService.uploadFileToMediaBucket(file, 'media');
+      if (bucketUrl) {
+        setSermonThumbnail(bucketUrl);
+        setModerationMessage('Custom sermon cover uploaded to cloud bucket!');
+        e.target.value = '';
+        return;
+      }
+    } catch (err) {
+      console.warn('Storage bucket sermon thumbnail upload notice:', err);
+    }
+
+    try {
       // Compress thumbnail so it safely stays under 150KB for fast local/cloud sync
       const compressedDataUrl = await LocalMediaStore.compressImage(file, 900, 0.85);
       setSermonThumbnail(compressedDataUrl);
@@ -403,11 +416,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   const handlePublishSermon = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sermonTitle.trim()) {
-      alert('Please enter a sermon title.');
+      setModerationMessage('Please enter a sermon title.');
       return;
     }
     if (sermonUploadMode === 'local' && !selectedMediaFile && !localMediaFileUrl) {
-      alert('Please select an audio or video file from your device to upload.');
+      setModerationMessage('Please select an audio or video file from your device to upload.');
       return;
     }
 
@@ -419,18 +432,32 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
 
       if (sermonUploadMode === 'local') {
         if (selectedMediaFile) {
-          // Persist in high-capacity local IndexedDB store
-          const blobUrl = await LocalMediaStore.saveSermonMedia(sermonId, selectedMediaFile, {
-            name: sermonTitle.trim(),
-            type: selectedMediaFile.type,
-            size: selectedMediaFile.size,
-            duration: localMediaDuration.trim()
-          });
+          // 1. Upload to Supabase 'media' bucket first for cloud persistence
+          try {
+            const bucketUrl = await StorageBucketService.uploadFileToMediaBucket(selectedMediaFile, 'media');
+            if (bucketUrl) {
+              if (localMediaType === 'video') finalVideoUrl = bucketUrl;
+              else finalAudioUrl = bucketUrl;
+              console.log('Sermon media successfully uploaded to Supabase storage bucket:', bucketUrl);
+            }
+          } catch (e) {
+            console.warn('Storage bucket sermon upload notice:', e);
+          }
 
-          if (localMediaType === 'video') {
-            finalVideoUrl = blobUrl;
-          } else {
-            finalAudioUrl = blobUrl;
+          // 2. Persist in high-capacity local IndexedDB store as fallback
+          if (!finalVideoUrl && !finalAudioUrl) {
+            const blobUrl = await LocalMediaStore.saveSermonMedia(sermonId, selectedMediaFile, {
+              name: sermonTitle.trim(),
+              type: selectedMediaFile.type,
+              size: selectedMediaFile.size,
+              duration: localMediaDuration.trim()
+            });
+
+            if (localMediaType === 'video') {
+              finalVideoUrl = blobUrl;
+            } else {
+              finalAudioUrl = blobUrl;
+            }
           }
         } else if (localMediaFileUrl) {
           if (localMediaType === 'video') finalVideoUrl = localMediaFileUrl;
@@ -466,10 +493,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       setLocalMediaFileUrl('');
       setLocalMediaFileName('');
       setLocalMediaFileSize('');
-      setModerationMessage(`Message "${newSermon.title}" archived successfully!`);
-      alert(`Message "${newSermon.title}" successfully archived to Gateway sanctuary library!`);
+      setModerationMessage(`Message "${newSermon.title}" archived successfully to sanctuary library!`);
     } catch (err: any) {
-      alert(`Failed to save local media: ${err?.message || err}`);
+      setModerationMessage(`Failed to save media: ${err?.message || err}`);
     } finally {
       setIsSavingMedia(false);
     }
@@ -487,7 +513,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     try {
       const mediaUrl = s.video_url || s.audio_url;
       if (!mediaUrl) {
-        alert('No media file attached to this sermon.');
+        setModerationMessage('No media file attached to this sermon.');
         return;
       }
       let downloadUrl = mediaUrl;
@@ -505,7 +531,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       a.click();
       document.body.removeChild(a);
     } catch (err: any) {
-      alert(`Could not download sermon media: ${err?.message || err}`);
+      setModerationMessage(`Could not download sermon media: ${err?.message || err}`);
     }
   };
 
@@ -616,10 +642,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     if (!newPwd || newPwd.trim().length < 4) return;
     const res = StorageService.changePassword(user.id, user.password || '', newPwd.trim());
     if (res.success) {
-      alert(`Password successfully updated to "${newPwd.trim()}" for ${user.full_name}.`);
+      setModerationMessage(`Password successfully updated to "${newPwd.trim()}" for ${user.full_name}.`);
       setUsers(StorageService.getAllUsers());
     } else {
-      alert(res.error || 'Failed to update password.');
+      setModerationMessage(res.error || 'Failed to update password.');
     }
   };
 
@@ -2662,7 +2688,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                                             window.location.reload();
                                           }, 500);
                                         } else {
-                                          alert(res.error || 'Failed to switch account');
+                                          setModerationMessage(res.error || 'Failed to switch account');
                                         }
                                       }}
                                       className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-bold text-amber-300 hover:bg-amber-400/20 flex items-center gap-1.5"

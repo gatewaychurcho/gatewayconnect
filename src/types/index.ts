@@ -383,6 +383,7 @@ export interface CommunityStory {
   text?: string;
   caption?: string;
   scripture?: string;
+  likes_count?: number;
   created_at: string; // ISO string for calculating 24h expiration
 }
 
