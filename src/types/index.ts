@@ -5,6 +5,7 @@ export type BadgeType = 'gold' | 'silver' | 'blue' | 'none';
 export interface User {
   id: string;
   phone: string;
+  email?: string;
   full_name: string;
   handle?: string;
   role: UserRole;
@@ -33,6 +34,8 @@ export interface User {
   gender?: 'male' | 'female' | 'other';
   is_banned?: boolean;
   ban_reason?: string;
+  onboarding_completed?: boolean;
+  spiritual_interests?: string[];
 }
 
 export interface PostComment {
@@ -157,7 +160,7 @@ export interface ReadingPlan {
 export interface CommunityGroup {
   id: string;
   name: string;
-  category: 'Location' | 'Youth' | 'Business' | 'Women' | 'Men' | 'Diaspora' | 'Worship' | 'School' | 'General';
+  category: 'Location' | 'Youth' | 'Business' | 'Women' | 'Men' | 'Diaspora' | 'Worship' | 'School' | 'General' | 'Discipleship';
   location: string;
   leader_name: string;
   leader_phone: string;

@@ -832,6 +832,7 @@ export class SupabaseSyncService {
     onNewDirectMessage?: (msg: DirectMessage) => void;
     onDeleteGroupMessage?: (payload: { groupId: string; messageId: string; forEveryone?: boolean }) => void;
     onDeleteDirectMessage?: (payload: { messageId: string; forEveryone?: boolean }) => void;
+    onDeletePost?: (payload: { id: string; deleted: boolean }) => void;
     onUserProfileUpdated?: (user: Partial<User>) => void;
     onGroupMemberChanged?: (detail: { groupId: string; userId: string; isJoining: boolean }) => void;
     onFollowUpdated?: (detail: { followerId: string; followingId: string; isFollowing: boolean }) => void;
@@ -871,18 +872,29 @@ export class SupabaseSyncService {
             this.socialSubscribers.forEach(cb => cb.onDeleteDirectMessage?.(payload));
           })
           .on('broadcast', { event: 'delete_post' }, ({ payload }: any) => {
-            if (!payload || !payload.id) return;
+            const postId = payload?.id || payload?.postId;
+            if (!postId) return;
             if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('gcz_testimony_deleted', { detail: payload }));
-              window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: payload }));
+              try {
+                (window as any).gcz_handle_remote_post_deleted?.(postId);
+              } catch {}
+              window.dispatchEvent(new CustomEvent('gcz_remote_post_deleted', { detail: { id: postId, deleted: true } }));
+              window.dispatchEvent(new CustomEvent('gcz_testimony_deleted', { detail: { id: postId, deleted: true } }));
+              window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: { id: postId, deleted: true } }));
             }
+            this.socialSubscribers.forEach(cb => cb.onDeletePost?.({ id: postId, deleted: true }));
           })
           .on('broadcast', { event: 'user_profile_updated' }, ({ payload }: any) => {
             if (!payload) return;
             this.socialSubscribers.forEach(cb => cb.onUserProfileUpdated?.(payload));
           })
           .on('broadcast', { event: 'group_member_changed' }, ({ payload }: any) => {
-            if (!payload) return;
+            if (!payload || !payload.groupId) return;
+            if (typeof window !== 'undefined') {
+              try {
+                (window as any).gcz_handle_remote_group_member_changed?.(payload.groupId, payload.userId, payload.isJoining);
+              } catch {}
+            }
             this.socialSubscribers.forEach(cb => cb.onGroupMemberChanged?.(payload));
           })
           .on('broadcast', { event: 'follow_updated' }, ({ payload }: any) => {
@@ -989,6 +1001,19 @@ export class SupabaseSyncService {
                 }));
               }
             }
+          })
+          .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'posts' }, (payload: any) => {
+            const postId = payload?.old?.id || payload?.old?.post_id;
+            if (!postId) return;
+            if (typeof window !== 'undefined') {
+              try {
+                (window as any).gcz_handle_remote_post_deleted?.(postId);
+              } catch {}
+              window.dispatchEvent(new CustomEvent('gcz_remote_post_deleted', { detail: { id: postId, deleted: true } }));
+              window.dispatchEvent(new CustomEvent('gcz_testimony_deleted', { detail: { id: postId, deleted: true } }));
+              window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: { id: postId, deleted: true } }));
+            }
+            this.socialSubscribers.forEach(cb => cb.onDeletePost?.({ id: postId, deleted: true }));
           });
 
         channel.subscribe();
@@ -1164,7 +1189,7 @@ export class SupabaseSyncService {
     // 2. Background database persistence
     const supabase = getSupabase();
     if (supabase) {
-      Promise.resolve(supabase.from('messages').insert({
+      Promise.resolve(supabase.from('messages').upsert({
         id: message.id,
         sender_id: message.sender_id,
         receiver_id: message.receiver_id,
@@ -1176,17 +1201,7 @@ export class SupabaseSyncService {
         media_type: message.media_type || null,
         is_read: message.is_read || false,
         created_at: message.created_at || new Date().toISOString()
-      })).catch(() => {});
-
-      Promise.resolve(supabase.from('direct_messages').insert({
-        sender_id: message.sender_id,
-        receiver_id: message.receiver_id,
-        message: message.text,
-        media_url: message.media_url || null,
-        media_type: message.media_type || null,
-        is_read: message.is_read || false,
-        created_at: message.created_at || new Date().toISOString()
-      })).catch(() => {});
+      }, { onConflict: 'id' })).catch(() => {});
     }
 
     return true;
@@ -1273,6 +1288,7 @@ export class SupabaseSyncService {
     onNewDirectMessage?: (msg: DirectMessage) => void;
     onDeleteGroupMessage?: (payload: { groupId: string; messageId: string; forEveryone?: boolean }) => void;
     onDeleteDirectMessage?: (payload: { messageId: string; forEveryone?: boolean }) => void;
+    onDeletePost?: (payload: { id: string; deleted: boolean }) => void;
     onUserProfileUpdated?: (user: Partial<User>) => void;
     onGroupMemberChanged?: (detail: { groupId: string; userId: string; isJoining: boolean }) => void;
     onFollowUpdated?: (detail: { followerId: string; followingId: string; isFollowing: boolean }) => void;

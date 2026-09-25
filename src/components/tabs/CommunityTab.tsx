@@ -102,6 +102,12 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   const [joiningStep, setJoiningStep] = useState<'joining' | 'joined'>('joining');
   const [exitingGroupId, setExitingGroupId] = useState<string | null>(null);
   const [selectedPaidGroupForBilling, setSelectedPaidGroupForBilling] = useState<CommunityGroup | null>(null);
+  const [postToDelete, setPostToDelete] = useState<Testimony | null>(null);
+  const [toastFeedback, setToastFeedback] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastFeedback(msg);
+    setTimeout(() => setToastFeedback(null), 3500);
+  };
 
   // Global Congregation Member Search Feature
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
@@ -138,10 +144,18 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
   // Real-time synchronization for community posts, prayers, groups, and members
   useEffect(() => {
+    const handlePostDeleted = (deletedId: string) => {
+      if (!deletedId) return;
+      setTestimonyList(prev => prev.filter(t => t.id !== deletedId));
+      setSelectedPostOptions(prev => (prev?.id === deletedId ? null : prev));
+    };
+
     const handleTestimoniesUpdated = (e?: any) => {
-      const deletedId = e?.detail?.deleted ? e?.detail?.id : null;
+      const detail = e?.detail;
+      const isDeleted = detail?.deleted || e?.type === 'gcz_testimony_deleted';
+      const deletedId = isDeleted ? (detail?.id || detail?.postId || (typeof detail === 'string' ? detail : null)) : null;
       if (deletedId) {
-        setTestimonyList(prev => prev.filter(t => t.id !== deletedId));
+        handlePostDeleted(deletedId);
       } else {
         setTestimonyList(StorageService.getTestimonies());
       }
@@ -177,6 +191,30 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       setEventList(StorageService.getEvents());
     };
 
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'gcz_testimonies') {
+        setTestimonyList(StorageService.getTestimonies());
+      }
+    };
+
+    // Cross-tab broadcast channel for immediate multi-tab sync
+    let crossTabChannel: BroadcastChannel | null = null;
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        crossTabChannel = new BroadcastChannel('gcz_cross_tab_sync');
+        crossTabChannel.onmessage = (event) => {
+          if (event.data?.type === 'testimony' && event.data?.payload?.deleted) {
+            const id = event.data.payload.id;
+            if (id) handlePostDeleted(id);
+          } else if (event.data?.type === 'delete_post') {
+            const id = event.data?.payload?.id;
+            if (id) handlePostDeleted(id);
+          }
+        };
+      } catch {}
+    }
+
+    window.addEventListener('storage', handleStorageChange);
     window.addEventListener('gcz_events_updated', handleEventsUpdated);
     window.addEventListener('gcz_testimony_updated', handleTestimoniesUpdated);
     window.addEventListener('gcz_testimony_deleted', handleTestimoniesUpdated);
@@ -189,8 +227,11 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     window.addEventListener('gcz_live_event_received', handleLiveSync);
     window.addEventListener('gcz_live_presence_updated', handlePresenceUpdated);
 
-    // Cross-device social sync
+    // Cross-device social sync via Supabase Realtime WebSocket
     const unsubscribe = SupabaseSyncService.subscribeToSocialMessaging({
+      onDeletePost: ({ id }) => {
+        if (id) handlePostDeleted(id);
+      },
       onUserProfileUpdated: () => {
         StorageService.syncUsersWithRemote().finally(() => {
           setGroupList(StorageService.getGroups(currentUser?.id));
@@ -209,6 +250,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     });
 
     return () => {
+      window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('gcz_events_updated', handleEventsUpdated);
       window.removeEventListener('gcz_testimony_updated', handleTestimoniesUpdated);
       window.removeEventListener('gcz_testimony_deleted', handleTestimoniesUpdated);
@@ -220,13 +262,19 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       window.removeEventListener('gcz_live_state_updated', handleLiveSync);
       window.removeEventListener('gcz_live_event_received', handleLiveSync);
       window.removeEventListener('gcz_live_presence_updated', handlePresenceUpdated);
+      try {
+        crossTabChannel?.close();
+      } catch {}
       unsubscribe();
     };
   }, [currentUser?.id]);
 
   useEffect(() => {
-    if (initialTestimonies && initialTestimonies.length > 0) {
-      setTestimonyList(initialTestimonies);
+    if (initialTestimonies) {
+      // Reconcile with latest storage to prevent deleted posts from re-appearing
+      const currentStoredIds = new Set(StorageService.getTestimonies().map(t => t.id));
+      const validTestimonies = initialTestimonies.filter(t => currentStoredIds.has(t.id));
+      setTestimonyList(validTestimonies);
     }
   }, [initialTestimonies]);
 
@@ -821,11 +869,30 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
       ? `Permanently delete and dissolve the Premium Paid Group "${group.name}" ($${group.price_usd || 150})? All member access and chat records will be purged.`
       : `Permanently delete and dissolve "${group.name}"? All member records and group data will be purged.`;
 
-    if (window.confirm(confirmMessage)) {
-      const res = StorageService.deleteChatGroup(group.id);
-      setGroupList(StorageService.getGroups(currentUser?.id));
-      alert(res.message || `Group "${group.name}" has been permanently deleted.`);
-    }
+    const res = StorageService.deleteChatGroup(group.id);
+    setGroupList(StorageService.getGroups(currentUser?.id));
+    showToast(res.message || `Group "${group.name}" has been permanently deleted.`);
+  };
+
+  const handleExecuteDeletePost = (post: Testimony) => {
+    if (!post || !post.id) return;
+    const postId = post.id;
+    // 1. Instant optimistic removal from UI for zero lag
+    setTestimonyList(prev => prev.filter(t => t.id !== postId));
+    setSavedPosts(prev => {
+      const copy = { ...prev };
+      delete copy[postId];
+      return copy;
+    });
+    setPostToDelete(null);
+    setSelectedPostOptions(null);
+
+    // 2. Delete from local storage and Supabase, and broadcast across realtime
+    StorageService.deleteTestimony(postId);
+
+    // 3. Show instant feedback
+    showToast('Post permanently deleted from feed.');
+    if (onRefreshData) onRefreshData();
   };
 
   const handleExitGroup = (group: CommunityGroup) => {
@@ -884,15 +951,15 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
   const isAdminOrDev = isAdmin || isDeveloper;
 
-  // USER MANDATE: "Every Paid Group" Should Be available when a user opens the "cell group part"
-  // plus any groups user has joined, or all groups for admin/developer
-  const visibleCommunityGroups = isAdminOrDev 
-    ? groupList 
-    : groupList.filter(g => g.joined || g.is_paid);
+  // All fellowship and discipleship groups are visible to all accounts so believers can discover and join
+  const visibleCommunityGroups = groupList;
 
   const filteredGroups = visibleCommunityGroups.filter(g => {
     if (selectedGroupCategory === 'All') return true;
     if (selectedGroupCategory === '⭐ Paid & Pro') return g.is_paid;
+    if (selectedGroupCategory === 'Discipleship') {
+      return g.category === 'Discipleship' || g.category === 'School' || g.name.toLowerCase().includes('mentorship') || g.name.toLowerCase().includes('foundation');
+    }
     return g.category === selectedGroupCategory;
   });
 
@@ -1472,10 +1539,20 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     </div>
 
                     {(() => {
-                      const isPostAuthor = (Boolean(post.user_id) && post.user_id === currentUser.id) ||
-                                           (Boolean(post.user_handle) && post.user_handle === currentUser.handle) ||
-                                           (Boolean(post.page_id) && StorageService.getPages().some(p => p.id === post.page_id && (p.creator_id === currentUser.id || p.admin_ids?.includes(currentUser.id))));
-                      const isModOrAdmin = isAdminOrDev || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'developer' || (currentUser.role as string) === 'moderator' || (currentUser.role as string) === 'mod' || canModeratePosts;
+                      const normalizeHandle = (h?: string) => (h || '').trim().toLowerCase().replace(/^@/, '');
+                      const isSameHandle = Boolean(post.user_handle && currentUser?.handle && normalizeHandle(post.user_handle) === normalizeHandle(currentUser.handle));
+                      const isSameName = Boolean(post.user_name && currentUser?.full_name && post.user_name.trim().toLowerCase() === currentUser.full_name.trim().toLowerCase());
+                      const isSamePhone = Boolean((post as any).phone && currentUser?.phone && arePhoneNumbersEqual((post as any).phone, currentUser.phone));
+                      const isPostAuthor = (Boolean(post.user_id) && Boolean(currentUser?.id) && post.user_id === currentUser.id) ||
+                                           isSameHandle ||
+                                           isSameName ||
+                                           isSamePhone ||
+                                           (Boolean(post.page_id) && StorageService.getPages().some(p => p.id === post.page_id && (p.creator_id === currentUser?.id || p.admin_ids?.includes(currentUser?.id || ''))));
+                      const isDeveloperUser = currentUser?.role === 'developer' || 
+                                              Boolean(currentUser?.phone && arePhoneNumbersEqual(currentUser.phone, '0780699988')) || 
+                                              (currentUser as any)?.is_developer || 
+                                              StorageService.isDeveloperMode();
+                      const isModOrAdmin = isDeveloperUser || isAdminOrDev || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || (currentUser?.role as string) === 'moderator' || (currentUser?.role as string) === 'mod' || canModeratePosts;
                       const canManagePost = isPostAuthor || isModOrAdmin;
 
                       return (
@@ -1495,13 +1572,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                           {/* Delete Post - STRICTLY for Author, Admin, or Mod only */}
                           {canManagePost && (
                             <button
-                              onClick={() => {
-                                if (window.confirm('Are you sure you want to delete this post from the community feed?')) {
-                                  StorageService.deleteTestimony(post.id);
-                                  setTestimonyList(StorageService.getTestimonies());
-                                  if (onRefreshData) onRefreshData();
-                                }
-                              }}
+                              onClick={() => setPostToDelete(post)}
                               className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
                               title="Delete Post (Author, Admin, or Mod only)"
                             >
@@ -2079,39 +2150,34 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
               <div
                 key={group.id}
                 className={cn(
-                  "rounded-xl p-4 flex flex-col justify-between w-full min-w-0 overflow-hidden box-border transition-all duration-200 relative h-full",
+                  "rounded-xl p-4 flex flex-col justify-between w-full min-w-0 overflow-hidden box-border transition-all duration-200 relative h-full min-h-[210px]",
                   group.is_paid
-                    ? "bg-card border border-amber-500/50 shadow-sm"
-                    : "bg-card border border-border shadow-sm"
+                    ? "bg-card border border-amber-500/30 hover:border-amber-500/50 shadow-sm"
+                    : "bg-card border border-border hover:border-primary/30 shadow-sm"
                 )}
               >
-                {/* Shining Premium Gold Banner for Paid Groups - cleanly aligned without negative margins */}
-                {group.is_paid && (
-                  <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 font-black mb-3 shadow-xs">
-                    <span className="flex items-center gap-1.5 text-[10px] tracking-wider uppercase">
-                      <Crown className="w-3.5 h-3.5 fill-current" />
-                      <span>PREMIUM CELL GROUP</span>
-                    </span>
-                    <span className="text-[11px] bg-slate-950/20 text-slate-950 px-2 py-0.5 rounded-md font-black">
-                      ${group.price_usd || 150} USD / {group.duration_months || 3} mo
-                    </span>
-                  </div>
-                )}
-
                 <div className="min-w-0 flex-1 flex flex-col">
-                  <div className="flex items-center justify-between mb-1.5 min-w-0">
-                    <span className={cn(
-                      "px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 flex items-center gap-1",
-                      group.is_paid
-                        ? "bg-amber-400/20 text-amber-600 dark:text-amber-400 border border-amber-400/30"
-                        : "bg-primary/15 text-primary"
-                    )}>
-                      {group.is_paid && <Sparkles className="w-3 h-3 fill-current text-amber-500" />}
-                      <span>{group.category}</span>
-                    </span>
+                  <div className="flex items-center justify-between mb-2 min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={cn(
+                        "px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 flex items-center gap-1",
+                        group.is_paid
+                          ? "bg-amber-400/20 text-amber-600 dark:text-amber-400 border border-amber-400/30"
+                          : "bg-primary/15 text-primary"
+                      )}>
+                        {group.is_paid && <Sparkles className="w-3 h-3 fill-current text-amber-500" />}
+                        <span>{group.category}</span>
+                      </span>
+                      {group.is_paid && (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 flex items-center gap-1 bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
+                          <Crown className="w-3 h-3 fill-current text-amber-500" />
+                          <span>${group.price_usd || 150} / {group.duration_months || 3}m</span>
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[11px] text-muted-foreground shrink-0">{group.member_count} Members</span>
                   </div>
-                  <h4 className="font-bold text-sm text-foreground mb-1 break-words line-clamp-2 min-w-0 flex items-center gap-1.5">
+                  <h4 className="font-bold text-sm text-foreground mb-1 break-words line-clamp-1 min-w-0 flex items-center gap-1.5">
                     {group.is_paid && <Crown className="w-3.5 h-3.5 text-amber-500 fill-current shrink-0" />}
                     <span>{group.name}</span>
                   </h4>
@@ -2488,10 +2554,9 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                             <button
                               id={`btn-delete-event-${event.id}`}
                               onClick={() => {
-                                if (window.confirm(`Are you sure you want to delete the event "${event.title}"?`)) {
-                                  StorageService.deleteEvent(event.id);
-                                  setEventList(StorageService.getEvents());
-                                }
+                                StorageService.deleteEvent(event.id);
+                                setEventList(StorageService.getEvents());
+                                showToast(`Event "${event.title}" deleted.`);
                               }}
                               className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 flex items-center gap-1 transition-all"
                               title="Delete Event"
@@ -3283,10 +3348,20 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
               <span>{savedPosts[selectedPostOptions.id] ? 'Remove from Saved' : 'Save Post'}</span>
             </button>
             {(() => {
-              const isPostAuthor = (Boolean(selectedPostOptions.user_id) && selectedPostOptions.user_id === currentUser.id) ||
-                                   (Boolean(selectedPostOptions.user_handle) && selectedPostOptions.user_handle === currentUser.handle) ||
-                                   (Boolean(selectedPostOptions.page_id) && StorageService.getPages().some(p => p.id === selectedPostOptions.page_id && (p.creator_id === currentUser.id || p.admin_ids?.includes(currentUser.id))));
-              const isModOrAdmin = isAdminOrDev || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'developer' || (currentUser.role as string) === 'moderator' || (currentUser.role as string) === 'mod' || canModeratePosts;
+              const normalizeHandle = (h?: string) => (h || '').trim().toLowerCase().replace(/^@/, '');
+              const isSameHandle = Boolean(selectedPostOptions.user_handle && currentUser?.handle && normalizeHandle(selectedPostOptions.user_handle) === normalizeHandle(currentUser.handle));
+              const isSameName = Boolean(selectedPostOptions.user_name && currentUser?.full_name && selectedPostOptions.user_name.trim().toLowerCase() === currentUser.full_name.trim().toLowerCase());
+              const isSamePhone = Boolean((selectedPostOptions as any).phone && currentUser?.phone && arePhoneNumbersEqual((selectedPostOptions as any).phone, currentUser.phone));
+              const isPostAuthor = (Boolean(selectedPostOptions.user_id) && Boolean(currentUser?.id) && selectedPostOptions.user_id === currentUser.id) ||
+                                   isSameHandle ||
+                                   isSameName ||
+                                   isSamePhone ||
+                                   (Boolean(selectedPostOptions.page_id) && StorageService.getPages().some(p => p.id === selectedPostOptions.page_id && (p.creator_id === currentUser?.id || p.admin_ids?.includes(currentUser?.id || ''))));
+              const isDeveloperUser = currentUser?.role === 'developer' || 
+                                      Boolean(currentUser?.phone && arePhoneNumbersEqual(currentUser.phone, '0780699988')) || 
+                                      (currentUser as any)?.is_developer || 
+                                      StorageService.isDeveloperMode();
+              const isModOrAdmin = isDeveloperUser || isAdminOrDev || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || (currentUser?.role as string) === 'moderator' || (currentUser?.role as string) === 'mod' || canModeratePosts;
               const canManagePost = isPostAuthor || isModOrAdmin;
 
               if (!canManagePost) return null;
@@ -3305,12 +3380,9 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   </button>
                   <button
                     onClick={() => {
-                      if (window.confirm('Delete this post from the community feed?')) {
-                        StorageService.deleteTestimony(selectedPostOptions.id);
-                        setTestimonyList(StorageService.getTestimonies());
-                        setSelectedPostOptions(null);
-                        if (onRefreshData) onRefreshData();
-                      }
+                      const post = selectedPostOptions;
+                      setSelectedPostOptions(null);
+                      setPostToDelete(post);
                     }}
                     className="w-full py-3.5 font-bold text-destructive hover:bg-destructive/10 flex items-center justify-center gap-2 cursor-pointer"
                   >
@@ -3327,6 +3399,70 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
               Cancel
             </button>
           </div>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE COMMUNITY POST MODAL (Privacy & Author/Developer Real-Time Control) */}
+      {postToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-card border border-destructive/40 rounded-2xl p-5 sm:p-6 w-full max-w-md space-y-4 shadow-2xl relative">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-destructive/15 text-destructive flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-base text-foreground">Delete Community Post</h3>
+                <p className="text-xs text-muted-foreground">Permanent Real-Time Removal</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPostToDelete(null)}
+                className="ml-auto p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 rounded-xl bg-secondary/50 border border-border/60 text-xs text-foreground/90 space-y-1">
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                <span className="font-semibold text-primary">{postToDelete.user_name}</span>
+                <span>{postToDelete.user_handle}</span>
+              </div>
+              <p className="line-clamp-3 italic text-muted-foreground">
+                "{postToDelete.content}"
+              </p>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Are you sure you want to delete this post? This action cannot be undone. The post, its reactions, and comments will be permanently erased for all believers in real time.
+            </p>
+
+            <div className="flex items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setPostToDelete(null)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-border font-semibold text-xs text-foreground hover:bg-secondary transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExecuteDeletePost(postToDelete)}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Permanently</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating In-App Toast Feedback */}
+      {toastFeedback && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-foreground text-background px-4 py-2.5 rounded-full text-xs font-semibold shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastFeedback}</span>
         </div>
       )}
 

@@ -13,6 +13,7 @@ import { AdminPanel } from './components/admin/AdminPanel';
 import { DevConsole } from './components/dev/DevConsole';
 import { FlutterExportModal } from './components/modals/FlutterExportModal';
 import { LoginScreen } from './components/auth/LoginScreen';
+import { OnboardingWizard } from './components/auth/OnboardingWizard';
 import { BannedScreen } from './components/auth/BannedScreen';
 import { DirectMessagesModal } from './components/modals/DirectMessagesModal';
 import { NotificationsModal } from './components/modals/NotificationsModal';
@@ -89,16 +90,7 @@ export default function App() {
     return threads.reduce((acc, t) => acc + (t.unread_count || 0), 0);
   });
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-
-  // Auth Form State
-  const [authPhone, setAuthPhone] = useState<string>('');
-  const [authPassword, setAuthPassword] = useState<string>('');
-  const [authFullName, setAuthFullName] = useState<string>('');
-  const [authLocation, setAuthLocation] = useState<string>('Harare');
-  const [authDateOfBirth, setAuthDateOfBirth] = useState<string>('');
-  const [authGender, setAuthGender] = useState<'male' | 'female'>('male');
-  const [authReferralCode, setAuthReferralCode] = useState<string>('');
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [showOnboardingModal, setShowOnboardingModal] = useState<boolean>(false);
 
 
   useEffect(() => {
@@ -373,193 +365,6 @@ export default function App() {
     };
   }, [currentUser?.id]);
 
-  // Login / Signup Handlers
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-
-    const supabase = getSupabase();
-
-    if (authMode === 'login') {
-      // 1. Try Supabase Auth first
-      if (supabase) {
-        const fullPhone = StorageService.formatPhoneWithCountryCode(authPhone.trim(), '+263');
-        const syntheticEmail = fullPhone.replace('+', '') + '@gatewayconnect.joedaniels.org';
-        try {
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email: authPhone.includes('@') ? authPhone.trim() : syntheticEmail,
-            password: authPassword.trim(),
-          });
-          if (!error && data.user) {
-            const meta = data.user.user_metadata || {};
-            let mappedUser: User = {
-              id: data.user.id,
-              phone: meta.phone || fullPhone,
-              full_name: meta.full_name || 'Member',
-              handle: meta.handle || `@${(meta.full_name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-              role: meta.role || 'member',
-              location: meta.location || 'Harare',
-              member_id: meta.member_id || data.user.id.substring(0, 8),
-              avatar_url: meta.avatar_url || '',
-              created_at: data.user.created_at,
-              is_premium: meta.is_premium || false,
-              badge_type: meta.badge_type || 'none',
-              is_verified: meta.is_verified || false
-            };
-            try {
-              const { data: dbUser } = await supabase.from('users').select('*').eq('id', data.user.id).single();
-              if (dbUser) {
-                mappedUser = { ...mappedUser, ...dbUser };
-              }
-            } catch {}
-
-            StorageService.saveUser(mappedUser);
-            StorageService.setCurrentUser(mappedUser);
-            setCurrentUser(mappedUser);
-            setShowAuthModal(false);
-            setAuthPhone('');
-            setAuthPassword('');
-            confetti({ particleCount: 30, spread: 60 });
-            return;
-          }
-        } catch (err: any) {
-          console.warn('Supabase auth catch:', err);
-        }
-      }
-
-      // 2. Fallback to local storage
-      const res = StorageService.login(authPhone.trim(), authPassword.trim());
-      if (res.success && res.user) {
-        setCurrentUser(res.user);
-        setShowAuthModal(false);
-        setAuthPhone('');
-        setAuthPassword('');
-        confetti({ particleCount: 30, spread: 60 });
-      } else {
-        setAuthError(res.error || 'Invalid phone number or password. Please verify credentials.');
-      }
-    } else {
-      if (!authFullName.trim() || !authPhone.trim() || !authPassword.trim()) {
-        setAuthError('Please fill in all required fields.');
-        return;
-      }
-      if (!authDateOfBirth) {
-        setAuthError('Please select your Date of Birth.');
-        return;
-      }
-
-      // 1. Try Supabase Auth first
-      if (supabase) {
-        const fullPhone = StorageService.formatPhoneWithCountryCode(authPhone.trim(), '+263');
-        const syntheticEmail = fullPhone.replace('+', '') + '@gatewayconnect.joedaniels.org';
-        try {
-          const { data, error } = await supabase.auth.signUp({
-            email: syntheticEmail,
-            password: authPassword.trim(),
-            options: {
-              data: {
-                full_name: authFullName.trim(),
-                phone: fullPhone,
-                role: 'member',
-                location: authLocation,
-                member_id: 'G' + Math.floor(100000 + Math.random() * 900000).toString(),
-                date_of_birth: authDateOfBirth,
-                gender: authGender
-              }
-            }
-          });
-
-          if (error) {
-            setAuthError(error.message);
-            return;
-          }
-
-          if (data.user) {
-            const memberId = 'G' + Math.floor(100000 + Math.random() * 900000).toString();
-            const handle = `@${authFullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-            const newUser: User = {
-              id: data.user.id,
-              phone: fullPhone,
-              full_name: authFullName.trim(),
-              handle,
-              role: 'member',
-              location: authLocation,
-              member_id: memberId,
-              created_at: data.user.created_at,
-              is_premium: false,
-              badge_type: 'none',
-              is_verified: false,
-              date_of_birth: authDateOfBirth,
-              gender: authGender,
-              saved_verses: [],
-              offline_sermon_ids: [],
-              followers_count: 0,
-              following_count: 0
-            };
-
-            try {
-              await supabase.from('users').upsert({
-                id: data.user.id,
-                phone: fullPhone,
-                full_name: authFullName.trim(),
-                handle,
-                role: 'member',
-                location: authLocation,
-                member_id: memberId,
-                date_of_birth: authDateOfBirth,
-                gender: authGender,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              }, { onConflict: 'id' });
-            } catch {}
-
-            StorageService.saveUser(newUser);
-            StorageService.autoFollowSuperAdminAndDeveloper(newUser.id);
-            StorageService.setCurrentUser(newUser);
-            setCurrentUser(newUser);
-            setShowAuthModal(false);
-            setAuthFullName('');
-            setAuthPhone('');
-            setAuthPassword('');
-            setAuthReferralCode('');
-            setAuthDateOfBirth('');
-            setAuthGender('male');
-            confetti({ particleCount: 40, spread: 70 });
-            return;
-          }
-        } catch (err: any) {
-          setAuthError(err.message || 'Failed to create account.');
-          return;
-        }
-      }
-
-      // 2. Fallback to local storage
-      const res = StorageService.signup(
-        authFullName.trim(),
-        authPhone.trim(),
-        authPassword.trim(),
-        authLocation,
-        authReferralCode.trim(),
-        undefined,
-        authDateOfBirth,
-        authGender
-      );
-      if (res.success && res.user) {
-        setCurrentUser(res.user);
-        setShowAuthModal(false);
-        setAuthFullName('');
-        setAuthPhone('');
-        setAuthPassword('');
-        setAuthReferralCode('');
-        setAuthDateOfBirth('');
-        setAuthGender('male');
-        confetti({ particleCount: 40, spread: 70 });
-      } else {
-        setAuthError(res.error || 'Failed to create account.');
-      }
-    }
-  };
-
   const handleOpenDirectChat = (recipientId?: string) => {
     if (!currentUser || currentUser.role === 'guest' || currentUser.id.startsWith('usr_guest')) {
       setShowAuthModal(true);
@@ -596,8 +401,9 @@ export default function App() {
   if (!currentUser) {
     return (
       <LoginScreen
-        onLoginSuccess={(user) => {
+        onLoginSuccess={(user, isNewUser) => {
           setCurrentUser(user);
+          refreshAppData();
         }}
         onInstantJoin={handleInstantJoin}
         onContinueAsGuest={handleGuestLogin}
@@ -616,6 +422,28 @@ export default function App() {
       <BannedScreen
         user={currentUser}
         onLogout={handleLogout}
+      />
+    );
+  }
+
+  // Multi-step Onboarding Wizard for new users immediately after sign-up (Facebook-style flow)
+  // Forces users to choose/upload an avatar before accessing the main dashboard
+  const needsOnboarding = Boolean(
+    currentUser && 
+    currentUser.role !== 'guest' && 
+    !currentUser.id.startsWith('usr_guest') && 
+    !currentUser.id.startsWith('usr_instant_') &&
+    (currentUser.onboarding_completed === false || (!currentUser.avatar_url && currentUser.onboarding_completed !== true))
+  );
+
+  if (needsOnboarding && currentUser) {
+    return (
+      <OnboardingWizard
+        user={currentUser}
+        onComplete={(updatedUser) => {
+          setCurrentUser(updatedUser);
+          refreshAppData();
+        }}
       />
     );
   }
@@ -722,6 +550,7 @@ export default function App() {
             onLogout={handleLogout}
             onUpdateUser={handleUpdateUser}
             onOpenDirectChat={handleOpenDirectChat}
+            onOpenOnboarding={() => setShowOnboardingModal(true)}
             onOpenLogin={() => {
               setAuthMode('login');
               setShowAuthModal(true);
@@ -903,169 +732,43 @@ export default function App() {
         />
       )}
 
-      {/* Auth Modal (Login / Signup) */}
+      {/* Unified Auth Modal (Login / Signup) */}
       {showAuthModal && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-card border border-border rounded-2xl max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4 shadow-xl my-auto">
-            <div className="flex justify-between items-center border-b border-border pb-2.5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg shadow-xs">
-                  G
-                </div>
-                <div>
-                  <h3 className="font-serif-church font-bold text-primary text-base leading-none">
-                    {authMode === 'login' ? 'GATEWAY CONNECT' : 'JOIN GATEWAY CHURCH'}
-                  </h3>
-                  <p className="text-[10px] text-muted-foreground tracking-widest mt-0.5">Zimbabwe & Diaspora Ministry</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowAuthModal(false)}
-                className="text-xs text-muted-foreground hover:text-foreground p-1 rounded hover:bg-secondary"
-              >
-                ✕
-              </button>
-            </div>
-
-            {authError && (
-              <div className="p-2.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs">
-                {authError}
-              </div>
-            )}
-
-            <form onSubmit={handleAuthSubmit} className="space-y-3 text-xs">
-              {authMode === 'signup' && (
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">Full Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={authFullName}
-                    onChange={(e) => setAuthFullName(e.target.value)}
-                    placeholder="e.g. Tendai Chikore"
-                    className="w-full bg-secondary border border-border rounded-xl p-2.5 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="block font-semibold text-foreground mb-1">
-                  Phone Number (No Email Required)
-                </label>
-                <input
-                  type="tel"
-                  required
-                  value={authPhone}
-                  onChange={(e) => setAuthPhone(e.target.value)}
-                  placeholder="e.g. 0772123456 or +263772123456"
-                  className="w-full bg-secondary border border-border rounded-xl p-2.5 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-foreground mb-1">Password</label>
-                <input
-                  type="password"
-                  required
-                  value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-secondary border border-border rounded-xl p-2.5 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary"
-                />
-              </div>
-
-              {authMode === 'signup' && (
-                <>
-                  <div>
-                    <label className="block font-semibold text-foreground mb-1">
-                      City / Location
-                    </label>
-                    <select
-                      value={authLocation}
-                      onChange={(e) => setAuthLocation(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-xl p-2.5 text-foreground focus:outline-hidden focus:border-primary"
-                    >
-                      {[
-                        'Harare', 'Bulawayo', 'Chitungwiza', 'Mutare', 'Gweru', 'Kwekwe', 
-                        'Kadoma', 'Masvingo', 'Chinhoyi', 'Norton', 'Marondera', 'Ruwa', 
-                        'Chegutu', 'Zvishavane', 'Bindura', 'Victoria Falls', 'Hwange', 
-                        'Redcliff', 'Rusape', 'Karoi', 'Kariba', 'Chipinge', 'Gokwe', 'Shurugwi'
-                      ].map(city => (
-                        <option key={city} value={city} className="bg-card text-foreground">
-                          {city}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block font-semibold text-foreground mb-1">
-                        Date of Birth
-                      </label>
-                      <input
-                        type="date"
-                        required
-                        value={authDateOfBirth}
-                        onChange={(e) => setAuthDateOfBirth(e.target.value)}
-                        className="w-full bg-secondary border border-border rounded-xl p-2.5 text-foreground focus:outline-hidden focus:border-primary text-xs"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-semibold text-foreground mb-1">
-                        Sex / Gender
-                      </label>
-                      <select
-                        value={authGender}
-                        onChange={(e) => setAuthGender(e.target.value as 'male' | 'female')}
-                        className="w-full bg-secondary border border-border rounded-xl p-2.5 text-foreground focus:outline-hidden focus:border-primary text-xs"
-                      >
-                        <option value="male" className="bg-card text-foreground">Male (Brother)</option>
-                        <option value="female" className="bg-card text-foreground">Female (Sister)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-foreground mb-1">
-                      Referral Code (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={authReferralCode}
-                      onChange={(e) => setAuthReferralCode(e.target.value)}
-                      placeholder="Enter referral (optional)"
-                      className="w-full bg-secondary border border-border rounded-xl p-2.5 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary"
-                    />
-                  </div>
-                </>
-              )}
-
-              <button
-                type="submit"
-                className="w-full py-2.5 bg-primary text-primary-foreground font-semibold uppercase tracking-wider rounded-xl shadow-xs hover:bg-primary/90 transition-all mt-2"
-              >
-                {authMode === 'login' ? 'Sign In to Gateway' : 'Create Covenant Account'}
-              </button>
-            </form>
-
-            <div className="flex items-center justify-between pt-2 border-t border-border text-xs">
-              <button
-                onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
-                className="text-primary hover:underline font-semibold"
-              >
-                {authMode === 'login' ? "Don't have an account? Sign Up" : 'Already have an account? Login'}
-              </button>
-
-              <button
-                onClick={handleGuestLogin}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                Continue as Guest
-              </button>
-            </div>
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-background/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+          <div className="w-full max-w-4xl my-auto animate-in fade-in zoom-in-95 duration-200">
+            <LoginScreen
+              initialView={authMode === 'signup' ? 'signup' : 'signin'}
+              onLoginSuccess={(user, isNewUser) => {
+                setCurrentUser(user);
+                refreshAppData();
+                setShowAuthModal(false);
+              }}
+              onInstantJoin={(nameOrHandle) => {
+                handleInstantJoin(nameOrHandle);
+                setShowAuthModal(false);
+              }}
+              onContinueAsGuest={() => {
+                handleGuestLogin();
+                setShowAuthModal(false);
+              }}
+              onClose={() => setShowAuthModal(false)}
+            />
           </div>
+        </div>
+      )}
+
+      {/* Manual / Re-launched Onboarding Modal (for existing members from MeTab) */}
+      {showOnboardingModal && currentUser && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-background/85 backdrop-blur-md">
+          <OnboardingWizard
+            user={currentUser}
+            onComplete={(updatedUser) => {
+              setCurrentUser(updatedUser);
+              setShowOnboardingModal(false);
+              refreshAppData();
+            }}
+            onClose={() => setShowOnboardingModal(false)}
+          />
         </div>
       )}
 

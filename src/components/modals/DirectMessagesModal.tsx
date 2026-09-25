@@ -598,9 +598,6 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   const refreshThreads = () => {
     const threadList = StorageService.getAllDirectMessageThreads(currentUser.id);
     setThreads(threadList);
-    if (!isMobile && !activeUserId && threadList.length > 0) {
-      setActiveUserId(threadList[0].other_user.id);
-    }
   };
 
   // Refresh direct messages
@@ -823,7 +820,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   const totalUnreadDms = threads.reduce((acc, t) => acc + (t.unread_count || 0), 0);
   const totalUnreadGroups = StorageService.getTotalUnreadGroupMessagesCount(currentUser.id);
 
-  const activeGroup = groups.find(g => g.id === activeGroupId) || (typeof window !== 'undefined' && !isMobile ? (visibleGroups[0] || null) : null);
+  const activeGroup = activeGroupId ? (groups.find(g => g.id === activeGroupId) || null) : null;
 
   const groupOnlineCount = React.useMemo(() => {
     if (!activeGroup || !activeGroup.member_ids) return 0;
@@ -1313,7 +1310,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   <span className="text-[10px] uppercase font-bold tracking-wider text-primary">Official Group Invitation</span>
                 </div>
                 <h4 className="font-bold text-foreground text-xs truncate">{matchedGroup.name}</h4>
-                <p className="text-[10px] text-muted-foreground">{matchedGroup.member_ids.length} members â€¢ Official Admin & Mod Link</p>
+                <p className="text-[10px] text-muted-foreground">{matchedGroup.member_ids.length} members • Official Admin & Mod Link</p>
               </div>
             </div>
 
@@ -2049,7 +2046,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             )}
                           </div>
                           <p className="text-[11px] text-muted-foreground truncate font-mono">
-                            {contact.handle || `@${contact.full_name.toLowerCase().replace(/\s+/g, '_')}`} â€¢ {contact.location || 'Harare'}
+                            {contact.handle || `@${contact.full_name.toLowerCase().replace(/\s+/g, '_')}`} • {contact.location || 'Harare'}
                           </p>
                         </div>
                       </button>
@@ -2098,7 +2095,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                   )}
                                   <span>{thread.other_user.full_name}</span>
                                   {thread.other_user.role === 'super_admin' && (
-                                    <span className="text-[10px] text-primary">âœ¦</span>
+                                    <Crown className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />
                                   )}
                                 </span>
                                 <span className="text-[10px] text-muted-foreground">
@@ -2420,7 +2417,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                       </>
                                     ) : (
                                       <span className="truncate font-medium">
-                                        {StorageService.getUserLastSeen(activeUser) || `Active â€¢ ${activeUser.location || 'Harare'}`}
+                                        {StorageService.getUserLastSeen(activeUser) || `Active • ${activeUser.location || 'Harare'}`}
                                       </span>
                                     )}
                                   </>
@@ -3028,7 +3025,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             ) : (
                               <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 truncate">
                                 <span>{activeGroup.member_ids.length} members</span>
-                                <span>â€¢</span>
+                                <span>•</span>
                                 <span className="text-emerald-600 dark:text-emerald-400 font-semibold inline-flex items-center gap-1">
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                                   <span>{groupOnlineCount} online</span>
@@ -3222,7 +3219,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           className="text-[10px] px-2 py-1 rounded-md bg-secondary border border-border text-foreground hover:bg-secondary/80 font-semibold"
                           title="Simulate membership expiry notice"
                         >
-                          âš¡ Test Expiry Notice
+                          ⚡ Test Expiry Notice
                         </button>
 
                         {isFsExpiringSoon && (
@@ -4197,7 +4194,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             )}
                           </p>
                           <p className="text-[10px] text-muted-foreground truncate font-mono">
-                            {contact.phone} â€¢ {contact.location || 'Harare'}
+                            {contact.phone} • {contact.location || 'Harare'}
                           </p>
                         </div>
                       </div>
@@ -4504,7 +4501,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
             <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Paperclip className="w-4 h-4 text-primary" />
-                <div><h3 className="font-bold text-sm text-foreground">Send attachment</h3><p className="text-[10px] text-muted-foreground truncate max-w-[250px]">{stagedLocalMedia.name} â€¢ {stagedLocalMedia.size}</p></div>
+                <div><h3 className="font-bold text-sm text-foreground">Send attachment</h3><p className="text-[10px] text-muted-foreground truncate max-w-[250px]">{stagedLocalMedia.name} • {stagedLocalMedia.size}</p></div>
               </div>
               <button type="button" onClick={() => { setShowShareMediaPrompt(false); setStagedLocalMedia(null); }} className="p-1.5 rounded-lg hover:bg-secondary"><X className="w-4 h-4" /></button>
             </div>

@@ -98,12 +98,8 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   ]);
   const [inputChat, setInputChat] = useState<string>('');
   const [showChat, setShowChat] = useState<boolean>(false);
-  const [activeReactionCount, setActiveReactionCount] = useState<Record<string, number>>({
-    '👍': 5,
-    '❤️': 8,
-    '🙏': 7,
-    '🔥': 6,
-    '👏': 4
+  const [activeReactionCount, setActiveReactionCount] = useState<Record<string, number>>(() => {
+    return StorageService.getBroadcastReactions();
   });
   const [userReacted, setUserReacted] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -216,6 +212,14 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       setIsPostLiked(StorageService.hasUserLikedBroadcast(currentUser?.id));
     };
 
+    const handleReactionsUpdated = (e: any) => {
+      if (e?.detail?.reactions) {
+        setActiveReactionCount(e.detail.reactions);
+      } else {
+        setActiveReactionCount(StorageService.getBroadcastReactions());
+      }
+    };
+
     window.addEventListener('gcz_testimony_updated', handleSync);
     window.addEventListener('gcz_testimony_deleted', handleSync);
     window.addEventListener('gcz_stream_url_updated', handleUrlChange);
@@ -223,6 +227,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     window.addEventListener('gcz_live_status_updated', handleLiveStatusChange);
     window.addEventListener('gcz_live_broadcast_started', handleLiveStatusChange);
     window.addEventListener('gcz_broadcast_likes_updated', handleBroadcastLikesUpdated);
+    window.addEventListener('gcz_broadcast_reactions_updated', handleReactionsUpdated);
 
     return () => {
       window.removeEventListener('gcz_testimony_updated', handleSync);
@@ -232,6 +237,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       window.removeEventListener('gcz_live_status_updated', handleLiveStatusChange);
       window.removeEventListener('gcz_live_broadcast_started', handleLiveStatusChange);
       window.removeEventListener('gcz_broadcast_likes_updated', handleBroadcastLikesUpdated);
+      window.removeEventListener('gcz_broadcast_reactions_updated', handleReactionsUpdated);
     };
   }, [currentUser?.id]);
 
@@ -321,10 +327,8 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       onRequireAuth();
       return;
     }
-    setActiveReactionCount(prev => ({
-      ...prev,
-      [emoji]: (prev[emoji] || 0) + 1
-    }));
+    const updated = StorageService.recordBroadcastReaction(emoji);
+    setActiveReactionCount(updated);
     setUserReacted(prev => ({ ...prev, [emoji]: true }));
     confetti({
       particleCount: 15,
@@ -399,17 +403,19 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   };
 
   const handleTogglePostHeart = () => {
-    const res = StorageService.incrementBroadcastLike(currentUser?.id);
-    setIsPostLiked(true);
+    const res = StorageService.toggleBroadcastLike(currentUser?.id);
+    setIsPostLiked(res.isLiked);
     setBroadcastLikes(StorageService.getBroadcastLikes());
     setBroadcastLikers(res.likerUsers);
-    setHeartAnim(true);
-    setTimeout(() => setHeartAnim(false), 500);
+    if (res.isLiked) {
+      setHeartAnim(true);
+      setTimeout(() => setHeartAnim(false), 500);
 
-    liveSyncService.broadcastEvent({
-      type: 'stream_reaction',
-      payload: { emoji: '❤️', reactionType: 'love', user: currentUser?.full_name || 'Believer' }
-    });
+      liveSyncService.broadcastEvent({
+        type: 'stream_reaction',
+        payload: { emoji: '❤️', reactionType: 'love', user: currentUser?.full_name || 'Believer' }
+      });
+    }
   };
 
   const handleToggleSaveSermon = () => {
@@ -1564,7 +1570,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                   className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <HandHeart className="w-3.5 h-3.5" />
-                  <span>Amen! ({featuredTestimony.likes_count || 12})</span>
+                  <span>Amen! ({featuredTestimony.likes_count || 0})</span>
                 </button>
 
                 <button

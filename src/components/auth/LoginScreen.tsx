@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { 
   ShieldCheck, 
   Phone, 
+  Mail, 
   User, 
   Sparkles, 
   CheckCircle2, 
@@ -9,20 +10,17 @@ import {
   EyeOff, 
   Lock, 
   Users, 
-  BookOpen, 
   ArrowRight,
-  Tv,
-  Crown,
-  Info,
-  Inbox,
-  Key,
-  X,
-  Send,
-  MapPin,
-  Globe,
+  ArrowLeft,
+  KeyRound, 
+  Globe, 
+  MapPin, 
   Calendar,
-  Upload,
-  Check
+  AlertCircle,
+  RefreshCw,
+  HelpCircle,
+  Inbox,
+  X
 } from 'lucide-react';
 import { User as UserType, SUPPORTED_CITIES, SupportedCity, COUNTRY_CODES } from '../../types';
 import { StorageService } from '../../services/storageService';
@@ -30,824 +28,1053 @@ import { getSupabase } from '../../services/supabaseClient';
 import confetti from 'canvas-confetti';
 
 interface LoginScreenProps {
-  onLoginSuccess: (user: UserType) => void;
+  onLoginSuccess: (user: UserType, isNewUser?: boolean) => void;
   onInstantJoin: (nameOrHandle: string) => void;
   onContinueAsGuest: () => void;
+  onClose?: () => void;
+  initialView?: 'signin' | 'signup' | 'forgot_password';
 }
+
+type AuthView = 'signin' | 'signup' | 'forgot_password';
+type ForgotStep = 'request' | 'verify' | 'new_password' | 'success';
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({
   onLoginSuccess,
   onInstantJoin,
-  onContinueAsGuest
+  onContinueAsGuest,
+  onClose,
+  initialView = 'signin'
 }) => {
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
-  const [countryCode, setCountryCode] = useState<string>('+263');
-  const [phone, setPhone] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
-  const [fullName, setFullName] = useState<string>('');
-  const [cityLocation, setCityLocation] = useState<SupportedCity>('Harare');
-  const [dateOfBirth, setDateOfBirth] = useState<string>('');
-  const [gender, setGender] = useState<'male' | 'female'>('male');
-  const [referralCode, setReferralCode] = useState<string>('');
+  const [view, setView] = useState<AuthView>(initialView);
+  
+  // Credentials State (Strictly Email/Phone + Password)
+  const [loginIdentifier, setLoginIdentifier] = useState<string>('');
+  const [loginPassword, setLoginPassword] = useState<string>('');
+  const [rememberMe, setRememberMe] = useState<boolean>(true);
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [instantJoinName, setInstantJoinName] = useState<string>('');
-  const [showInstantJoin, setShowInstantJoin] = useState<boolean>(false);
 
-  // Helper to format full international phone number or pass through username
+  // Sign Up Form State
+  const [signupFullName, setSignupFullName] = useState<string>('');
+  const [signupContactType, setSignupContactType] = useState<'phone' | 'email'>('phone');
+  const [signupCountryCode, setSignupCountryCode] = useState<string>('+263');
+  const [signupPhone, setSignupPhone] = useState<string>('');
+  const [signupEmail, setSignupEmail] = useState<string>('');
+  const [signupPassword, setSignupPassword] = useState<string>('');
+  const [signupCity, setSignupCity] = useState<SupportedCity>('Harare');
+  const [signupDateOfBirth, setSignupDateOfBirth] = useState<string>('');
+  const [signupGender, setSignupGender] = useState<'male' | 'female'>('male');
+  const [signupReferralCode, setSignupReferralCode] = useState<string>('');
+
+  // UI & Loading States
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [showInstantJoin, setShowInstantJoin] = useState<boolean>(false);
+  const [instantJoinName, setInstantJoinName] = useState<string>('');
+
+  // Forgot Password Flow State Machine
+  const [forgotStep, setForgotStep] = useState<ForgotStep>('request');
+  const [forgotIdentifier, setForgotIdentifier] = useState<string>('');
+  const [forgotOtpCode, setForgotOtpCode] = useState<string>('');
+  const [generatedOtp, setGeneratedOtp] = useState<string | null>(null);
+  const [forgotTargetUser, setForgotTargetUser] = useState<UserType | null>(null);
+  const [forgotNewPassword, setForgotNewPassword] = useState<string>('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState<string>('');
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [showForgotSuccessToast, setShowForgotSuccessToast] = useState<boolean>(false);
+
+  // Unban Appeal Modal
+  const [showAppealModal, setShowAppealModal] = useState<boolean>(false);
+  const [appealIdentifier, setAppealIdentifier] = useState<string>('');
+  const [appealName, setAppealName] = useState<string>('');
+  const [appealReason, setAppealReason] = useState<string>('');
+  const [appealSuccessMsg, setAppealSuccessMsg] = useState<string | null>(null);
+
+  // Helper to normalize phone with country code
   const formatPhoneWithCountryCode = (rawPhone: string, code: string) => {
     const trimmed = rawPhone.trim();
     if (!trimmed) return '';
-    // If user enters a handle (@handle or text username with letters), return as-is
-    if (trimmed.startsWith('@') || /[a-zA-Z]/.test(trimmed)) {
-      return trimmed;
-    }
+    if (trimmed.startsWith('@') || trimmed.includes('@')) return trimmed;
     if (trimmed.startsWith('+')) return trimmed;
-    // Strip leading 0 if present
     const cleanLocal = trimmed.replace(/^0+/, '');
     return `${code}${cleanLocal}`;
   };
 
-  // Unban Appeal & Password Reset Modal States
-  const [showAppealModal, setShowAppealModal] = useState<boolean>(false);
-  const [appealName, setAppealName] = useState<string>('');
-  const [appealPhone, setAppealPhone] = useState<string>('');
-  const [appealReason, setAppealReason] = useState<string>('');
-  const [appealSuccessMsg, setAppealSuccessMsg] = useState<string | null>(null);
-
-  const [showResetModal, setShowResetModal] = useState<boolean>(false);
-  const [resetPhone, setResetPhone] = useState<string>('');
-  const [resetNote, setResetNote] = useState<string>('');
-  const [resetSuccessMsg, setResetSuccessMsg] = useState<string | null>(null);
-
-  // Real-time Password Reset State Machine
-  const [resetStep, setResetStep] = useState<'request' | 'verify' | 'success'>('request');
-  const [resetOtpCode, setResetOtpCode] = useState<string>('');
-  const [generatedOtp, setGeneratedOtp] = useState<string | null>(null);
-  const [resetNewPassword, setResetNewPassword] = useState<string>('');
-  const [resetConfirmPassword, setResetConfirmPassword] = useState<string>('');
-  const [resetTargetUser, setResetTargetUser] = useState<UserType | null>(null);
-  const [resetError, setResetError] = useState<string | null>(null);
-  const [isSubmittingReset, setIsSubmittingReset] = useState<boolean>(false);
-
-  // Avatar Selection for Signup
-  const [adminAvatars, setAdminAvatars] = useState(() => StorageService.getAdminAvatarLibrary());
-  const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string>(() => StorageService.getDefaultAvatar());
-  const customAvatarFileRef = useRef<HTMLInputElement>(null);
-
-  const handleCustomAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setErrorMessage('Please select a valid image file for your avatar.');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (reader.result) {
-        setSelectedAvatarUrl(reader.result as string);
-        confetti({ particleCount: 15, spread: 40 });
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleOpenAppealModal = () => {
-    setAppealPhone(phone);
-    setAppealReason('');
-    setAppealSuccessMsg(null);
-    setShowAppealModal(true);
-  };
-
-  const handleOpenResetModal = () => {
-    setResetPhone(phone);
-    setResetNote('');
-    setResetSuccessMsg(null);
-    setResetStep('request');
-    setResetError(null);
-    setResetOtpCode('');
-    setGeneratedOtp(null);
-    setResetNewPassword('');
-    setResetConfirmPassword('');
-    setResetTargetUser(null);
-    setShowResetModal(true);
-  };
-
-  const handleRequestResetOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    setResetError(null);
-    if (!resetPhone.trim()) {
-      setResetError('Please enter your registered mobile number or username.');
-      return;
-    }
-
-    const res = StorageService.requestRealtimePasswordResetCode(resetPhone.trim());
-    if (!res.success || !res.user) {
-      setResetError(res.message);
-      return;
-    }
-
-    setResetTargetUser(res.user);
-    setGeneratedOtp(res.code || '123456');
-    setResetOtpCode(res.code || '');
-    setResetStep('verify');
-    confetti({ particleCount: 25, spread: 55 });
-  };
-
-  const handleConfirmResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setResetError(null);
-    if (!resetTargetUser) return;
-
-    if (!resetOtpCode.trim()) {
-      setResetError('Please enter the 6-digit verification code.');
-      return;
-    }
-    if (resetNewPassword.length < 4) {
-      setResetError('Password must be at least 4 characters long.');
-      return;
-    }
-    if (resetNewPassword !== resetConfirmPassword) {
-      setResetError('New passwords do not match. Please verify.');
-      return;
-    }
-
-    setIsSubmittingReset(true);
-    try {
-      const res = StorageService.verifyAndResetPasswordRealtime(
-        resetTargetUser.id,
-        resetOtpCode.trim(),
-        resetNewPassword.trim()
-      );
-
-      if (!res.success) {
-        setResetError(res.message);
-        setIsSubmittingReset(false);
-        return;
-      }
-
-      // Also attempt update in Supabase auth if session exists
-      const supabase = getSupabase();
-      if (supabase) {
-        try {
-          await supabase.auth.updateUser({ password: resetNewPassword.trim() });
-        } catch {}
-      }
-
-      setResetSuccessMsg('Your password was updated in real time! You can now sign in.');
-      setResetStep('success');
-      confetti({ particleCount: 40, spread: 70 });
-    } catch (err: any) {
-      setResetError(err.message || 'Failed to reset password.');
-    } finally {
-      setIsSubmittingReset(false);
-    }
-  };
-
-  const handleSubmitAppeal = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!appealPhone.trim() || !appealReason.trim()) return;
-    StorageService.submitUnbanAppeal({
-      user_id: `user_${appealPhone.replace(/\D/g, '')}`,
-      user_name: appealName.trim() || 'Church Member',
-      user_phone: appealPhone.trim(),
-      reason: appealReason.trim()
-    });
-    setAppealSuccessMsg('Your appeal has been securely submitted to Ministry Administrators for review.');
-    confetti({ particleCount: 25, spread: 60 });
-  };
-
-  const handleSubmitPasswordReset = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resetPhone.trim()) return;
-    StorageService.submitPasswordResetRequest(
-      resetPhone.trim(),
-      resetNote.trim() || 'User requested password assistance.'
-    );
-    setResetSuccessMsg('Your password reset request has been logged with the Lead Developer.');
-    confetti({ particleCount: 25, spread: 60 });
-  };
-
-
-  const handleLoginSubmit = async (e: React.FormEvent) => {
+  // =========================================================================
+  // 1. SIGN IN SUBMISSION (STRICTLY EMAIL/PHONE + PASSWORD)
+  // =========================================================================
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!phone.trim()) {
-      setErrorMessage('Please enter your mobile phone number.');
+    const identifier = loginIdentifier.trim();
+    const pwd = loginPassword.trim();
+
+    if (!identifier) {
+      setErrorMessage('Please enter your registered email address or mobile phone number.');
       return;
     }
-    if (!password.trim()) {
+    if (!pwd) {
       setErrorMessage('Please enter your account password.');
       return;
     }
 
-    const fullPhone = formatPhoneWithCountryCode(phone, countryCode);
-    const syntheticEmail = fullPhone.replace('+', '') + '@gatewayconnect.joedaniels.org';
-    const supabase = getSupabase();
-
-    if (!supabase) {
-      setErrorMessage('Supabase is not configured.');
-      return;
-    }
+    setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: phone.includes('@') ? phone : syntheticEmail,
-        password: password.trim(),
-      });
+      const isEmail = identifier.includes('@');
+      const fullPhone = isEmail ? '' : (identifier.startsWith('+') ? identifier : formatPhoneWithCountryCode(identifier, '+263'));
+      const syntheticEmail = isEmail ? identifier : `${fullPhone.replace('+', '')}@gatewayconnect.joedaniels.org`;
 
-      if (error) {
-        setErrorMessage(error.message);
-      } else if (data.user) {
-        confetti({ particleCount: 35, spread: 60 });
-        
-        // Construct basic user profile from metadata to match local User type expected by App
-        const meta = data.user.user_metadata || {};
-        let mappedUser: any = {
-          id: data.user.id,
-          phone: meta.phone || fullPhone,
-          full_name: meta.full_name || 'Member',
-          handle: meta.handle || `@${(meta.full_name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-          role: meta.role || 'member',
-          location: meta.location || 'Harare',
-          member_id: meta.member_id || data.user.id.substring(0, 8),
-          avatar_url: meta.avatar_url || '',
-          created_at: data.user.created_at,
-          is_premium: meta.is_premium || false,
-          badge_type: meta.badge_type || 'none'
-        };
-
+      // 1. Attempt Supabase Auth
+      const supabase = getSupabase();
+      if (supabase) {
         try {
-          const { data: dbUser } = await supabase.from('users').select('*').eq('id', data.user.id).single();
-          if (dbUser) {
-            mappedUser = { ...mappedUser, ...dbUser };
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: syntheticEmail,
+            password: pwd
+          });
+
+          if (!error && data.user) {
+            const meta = data.user.user_metadata || {};
+            let mappedUser: UserType = {
+              id: data.user.id,
+              phone: meta.phone || fullPhone || '0780000000',
+              email: isEmail ? identifier : meta.email,
+              full_name: meta.full_name || 'Member',
+              handle: meta.handle || `@${(meta.full_name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+              role: meta.role || 'member',
+              location: meta.location || 'Harare',
+              member_id: meta.member_id || data.user.id.substring(0, 8),
+              avatar_url: meta.avatar_url || '',
+              created_at: data.user.created_at,
+              is_premium: meta.is_premium || false,
+              badge_type: meta.badge_type || 'none',
+              is_verified: meta.is_verified || false,
+              onboarding_completed: meta.onboarding_completed !== undefined ? meta.onboarding_completed : Boolean(meta.avatar_url)
+            };
+
+            try {
+              const { data: dbUser } = await supabase.from('users').select('*').eq('id', data.user.id).single();
+              if (dbUser) {
+                mappedUser = { ...mappedUser, ...dbUser };
+              }
+            } catch {}
+
+            StorageService.saveUser(mappedUser);
+            StorageService.autoFollowSuperAdminAndDeveloper(mappedUser.id);
+            StorageService.setCurrentUser(mappedUser);
+            confetti({ particleCount: 35, spread: 60 });
+            onLoginSuccess(mappedUser, false);
+            return;
           }
-        } catch {}
-        
-        StorageService.saveUser(mappedUser);
-        StorageService.autoFollowSuperAdminAndDeveloper(mappedUser.id);
-        StorageService.setCurrentUser(mappedUser);
-        onLoginSuccess(mappedUser as any);
+        } catch {
+          // Fall through to local storage login
+        }
+      }
+
+      // 2. Local Storage Authentication Fallback
+      const res = StorageService.login(identifier, pwd);
+      if (res.success && res.user) {
+        confetti({ particleCount: 35, spread: 60 });
+        onLoginSuccess(res.user, false);
+      } else {
+        setErrorMessage(res.error || 'Invalid credentials. Please verify your email/phone and password, or use Forgot Password.');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Authentication failed.');
+      setErrorMessage(err.message || 'Authentication failed. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-
-  const handleSignupSubmit = async (e: React.FormEvent) => {
+  // =========================================================================
+  // 2. SIGN UP SUBMISSION (STRICTLY EMAIL/PHONE + PASSWORD)
+  // =========================================================================
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!fullName.trim() || !phone.trim() || !password.trim()) {
-      setErrorMessage('Please fill in all required fields.');
+    if (!signupFullName.trim()) {
+      setErrorMessage('Please enter your full name.');
       return;
     }
 
-    if (!dateOfBirth) {
-      setErrorMessage('Please select your Date of Birth.');
+    const contactVal = signupContactType === 'email' ? signupEmail.trim() : signupPhone.trim();
+    if (!contactVal) {
+      setErrorMessage(`Please enter your ${signupContactType === 'email' ? 'email address' : 'mobile phone number'}.`);
       return;
     }
 
-    const fullPhone = formatPhoneWithCountryCode(phone, countryCode);
-    const syntheticEmail = fullPhone.replace('+', '') + '@gatewayconnect.joedaniels.org';
-    const supabase = getSupabase();
-
-    if (!supabase) {
-      setErrorMessage('Supabase is not configured.');
+    if (signupContactType === 'email' && !signupEmail.includes('@')) {
+      setErrorMessage('Please enter a valid email address.');
       return;
     }
+
+    if (!signupPassword || signupPassword.length < 6) {
+      setErrorMessage('Password must be at least 6 characters long.');
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: syntheticEmail,
-        password: password.trim(),
-        options: {
-          data: {
-            full_name: fullName.trim(),
-            phone: fullPhone,
-            role: 'member',
-            location: cityLocation,
-            member_id: 'G' + Math.floor(100000 + Math.random() * 900000).toString(),
-            date_of_birth: dateOfBirth,
-            gender: gender
-          }
-        }
-      });
+      const fullPhone = signupContactType === 'phone' 
+        ? formatPhoneWithCountryCode(signupPhone, signupCountryCode) 
+        : `user_${Date.now().toString().slice(-6)}`;
+      const emailVal = signupContactType === 'email' ? signupEmail.trim() : undefined;
+      const syntheticEmail = emailVal || `${fullPhone.replace('+', '')}@gatewayconnect.joedaniels.org`;
 
-      if (error) {
-        setErrorMessage(error.message);
-      } else if (data.user) {
-        confetti({ particleCount: 45, spread: 70 });
-        
-        const meta = data.user.user_metadata || {};
-        const memberId = meta.member_id || 'G' + Math.floor(100000 + Math.random() * 900000).toString();
-        const handle = `@${fullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-        const finalAvatar = selectedAvatarUrl || StorageService.getDefaultAvatar();
-        const mappedUser: any = {
-          id: data.user.id,
-          phone: meta.phone || fullPhone,
-          full_name: meta.full_name || fullName.trim(),
-          handle,
-          role: 'member',
-          location: meta.location || cityLocation,
-          member_id: memberId,
-          avatar_url: finalAvatar,
-          created_at: data.user.created_at,
-          is_premium: false,
-          badge_type: 'none',
-          date_of_birth: dateOfBirth,
-          gender: gender,
-          saved_verses: [],
-          offline_sermon_ids: [],
-          followers_count: 0,
-          following_count: 0
-        };
-
+      const supabase = getSupabase();
+      if (supabase) {
         try {
-          await supabase.from('users').upsert({
-            id: data.user.id,
-            phone: fullPhone,
-            full_name: fullName.trim(),
-            handle,
-            role: 'member',
-            location: cityLocation,
-            member_id: memberId,
-            date_of_birth: dateOfBirth,
-            gender: gender,
-            avatar_url: finalAvatar,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'id' });
-        } catch {}
-        
-        StorageService.saveUser(mappedUser);
-        StorageService.autoFollowSuperAdminAndDeveloper(mappedUser.id);
-        StorageService.setCurrentUser(mappedUser);
-        onLoginSuccess(mappedUser as any);
+          const { data, error } = await supabase.auth.signUp({
+            email: syntheticEmail,
+            password: signupPassword.trim(),
+            options: {
+              data: {
+                full_name: signupFullName.trim(),
+                phone: fullPhone,
+                email: emailVal,
+                role: 'member',
+                location: signupCity,
+                date_of_birth: signupDateOfBirth,
+                gender: signupGender,
+                onboarding_completed: false
+              }
+            }
+          });
+
+          if (error) {
+            setErrorMessage(error.message);
+            setIsLoading(false);
+            return;
+          }
+
+          if (data.user) {
+            const memberId = 'G' + Math.floor(100000 + Math.random() * 900000).toString();
+            const handle = `@${signupFullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+            const newUser: UserType = {
+              id: data.user.id,
+              phone: fullPhone,
+              email: emailVal,
+              full_name: signupFullName.trim(),
+              handle,
+              role: 'member',
+              location: signupCity,
+              member_id: memberId,
+              avatar_url: '', // Unset so onboarding forces photo choice
+              onboarding_completed: false, // Forces multi-step onboarding wizard
+              created_at: data.user.created_at,
+              is_premium: false,
+              badge_type: 'none',
+              is_verified: false,
+              date_of_birth: signupDateOfBirth,
+              gender: signupGender,
+              saved_verses: [],
+              offline_sermon_ids: [],
+              followers_count: 0,
+              following_count: 0
+            };
+
+            try {
+              await supabase.from('users').upsert({
+                id: data.user.id,
+                phone: fullPhone,
+                email: emailVal,
+                full_name: signupFullName.trim(),
+                handle,
+                role: 'member',
+                location: signupCity,
+                member_id: memberId,
+                date_of_birth: signupDateOfBirth,
+                gender: signupGender,
+                avatar_url: '',
+                onboarding_completed: false,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'id' });
+            } catch {}
+
+            StorageService.saveUser(newUser);
+            StorageService.autoFollowSuperAdminAndDeveloper(newUser.id);
+            StorageService.setCurrentUser(newUser);
+            confetti({ particleCount: 40, spread: 70 });
+            onLoginSuccess(newUser, true);
+            return;
+          }
+        } catch {
+          // Fall through to local signup
+        }
+      }
+
+      // Local storage signup
+      const res = StorageService.signup(
+        signupFullName.trim(),
+        fullPhone,
+        signupPassword.trim(),
+        signupCity,
+        signupReferralCode.trim(),
+        undefined,
+        signupDateOfBirth,
+        signupGender,
+        '',
+        emailVal
+      );
+
+      if (res.success && res.user) {
+        confetti({ particleCount: 40, spread: 70 });
+        onLoginSuccess(res.user, true);
+      } else {
+        setErrorMessage(res.error || 'Failed to create account.');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Account creation failed.');
+      setErrorMessage(err.message || 'Account registration failed.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  // =========================================================================
+  // 3. FORGOT PASSWORD FLOW STATE MACHINE
+  // =========================================================================
+  const handleRequestOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError(null);
+    const target = forgotIdentifier.trim();
+    if (!target) {
+      setForgotError('Please enter your registered email address or mobile phone number.');
+      return;
+    }
+
+    const res = StorageService.requestRealtimePasswordResetCode(target);
+    if (!res.success || !res.user) {
+      setForgotError(res.message);
+      return;
+    }
+
+    setForgotTargetUser(res.user);
+    setGeneratedOtp(res.code || '123456');
+    setForgotOtpCode(res.code || '');
+    setForgotStep('verify');
+    confetti({ particleCount: 20, spread: 45 });
+  };
+
+  const handleVerifyOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError(null);
+    if (!forgotOtpCode.trim()) {
+      setForgotError('Please enter the 6-digit verification code.');
+      return;
+    }
+    if (generatedOtp && forgotOtpCode.trim() !== generatedOtp.trim()) {
+      setForgotError('Invalid verification code. Please check the security code shown above.');
+      return;
+    }
+    setForgotStep('new_password');
+  };
+
+  const handleSaveNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError(null);
+
+    if (!forgotTargetUser) return;
+    if (forgotNewPassword.length < 6) {
+      setForgotError('New password must be at least 6 characters long.');
+      return;
+    }
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setForgotError('Passwords do not match. Please verify.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = StorageService.verifyAndResetPasswordRealtime(
+        forgotTargetUser.id,
+        forgotOtpCode.trim(),
+        forgotNewPassword.trim()
+      );
+
+      if (!res.success) {
+        setForgotError(res.message);
+        setIsLoading(false);
+        return;
+      }
+
+      const supabase = getSupabase();
+      if (supabase) {
+        try {
+          await supabase.auth.updateUser({ password: forgotNewPassword.trim() });
+        } catch {}
+      }
+
+      setForgotStep('success');
+      setShowForgotSuccessToast(true);
+      confetti({ particleCount: 50, spread: 70 });
+    } catch (err: any) {
+      setForgotError(err.message || 'Failed to update password.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Submit Unban Appeal
+  const handleSubmitAppeal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!appealIdentifier.trim() || !appealReason.trim()) return;
+
+    StorageService.submitUnbanAppeal({
+      user_id: `user_${appealIdentifier.replace(/\D/g, '') || Date.now().toString().slice(-6)}`,
+      user_name: appealName.trim() || 'Church Member',
+      user_phone: appealIdentifier.trim(),
+      reason: appealReason.trim()
+    });
+
+    setAppealSuccessMsg('Your appeal has been securely submitted to Ministry Leadership for expedited review.');
+    confetti({ particleCount: 25, spread: 60 });
+  };
+
   return (
-    <div className="min-h-screen min-h-[100dvh] bg-background text-foreground flex flex-col items-center justify-start sm:justify-center p-3 sm:p-6 overflow-y-auto py-8">
+    <div className="min-h-screen min-h-[100dvh] bg-background text-foreground flex flex-col justify-center items-center p-3 sm:p-6 lg:p-10 overflow-y-auto py-8">
       
-      {/* Background Subtle Accent */}
-      <div className="w-full max-w-lg space-y-5">
+      {/* Container with Modern Responsive Split Layout on Desktop & Compact Card on Mobile */}
+      <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
         
-        {/* Ministry Brand Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary text-primary-foreground shadow-sm border border-border mb-1">
+        {/* ========================================================================= */}
+        {/* LEFT COLUMN: APOSTOLIC BRANDING & VISION (DESKTOP + MOBILE HEADER)       */}
+        {/* ========================================================================= */}
+        <div className="lg:col-span-5 text-center lg:text-left space-y-4 px-2">
+          
+          {/* Logo Crest */}
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary text-primary-foreground shadow-lg border border-border">
             <img 
               src="/assets/apostle_silhouette.svg" 
-              alt="Apostle Joe Daniels Silhouette" 
-              className="w-12 h-12 object-contain"
+              alt="Gateway Church" 
+              className="w-11 h-11 object-contain"
             />
           </div>
-          <h1 className="font-serif-church font-bold text-2xl sm:text-3xl text-primary tracking-tight">
-            GATEWAY CHURCH
-          </h1>
-          <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">
-            Apostle Joe Daniels • Zimbabwe & Diaspora
-          </p>
-          <p className="text-[11px] text-muted-foreground italic max-w-sm mx-auto">
-            "For where two or three gather in my name, there am I with them." — Matthew 18:20
-          </p>
-        </div>
 
-        {/* Auth Card */}
-        <div className="bg-card border border-border rounded-2xl p-5 sm:p-7 shadow-xl space-y-5">
-          
-          {/* Tabs: Login vs Register */}
-          <div className="flex bg-secondary/50 rounded-xl p-1 border border-border text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => { setMode('login'); setErrorMessage(null); }}
-              className={`flex-1 py-2 rounded-lg transition-all ${
-                mode === 'login' 
-                  ? 'bg-primary text-primary-foreground shadow-xs' 
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => { setMode('signup'); setErrorMessage(null); }}
-              className={`flex-1 py-2 rounded-lg transition-all ${
-                mode === 'signup' 
-                  ? 'bg-primary text-primary-foreground shadow-xs' 
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Create Account
-            </button>
+          <div className="space-y-1">
+            <div className="flex items-center justify-center lg:justify-start gap-1.5 text-xs text-primary font-bold uppercase tracking-wider">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Apostle Joe Daniels Ministry</span>
+            </div>
+            <h1 className="font-serif-church font-bold text-2xl sm:text-3xl text-foreground tracking-tight leading-tight">
+              GATEWAY CONNECT
+            </h1>
+            <p className="text-xs text-muted-foreground font-medium">
+              Zimbabwe & Diaspora Apostolic Community
+            </p>
           </div>
 
-          {showInstantJoin ? (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (instantJoinName.trim()) onInstantJoin(instantJoinName);
-              }}
-              className="p-3 rounded-xl border border-primary/30 bg-secondary/30 space-y-2"
-            >
-              <label className="block text-xs font-semibold text-foreground">Name or handle</label>
-              <div className="flex gap-2">
-                <input
-                  autoFocus
-                  required
-                  value={instantJoinName}
-                  onChange={(event) => setInstantJoinName(event.target.value)}
-                  placeholder="e.g. @tendai or Tendai Moyo"
-                  className="min-w-0 flex-1 bg-secondary border border-border rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary text-sm"
-                />
-                <button type="submit" className="px-4 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-xs whitespace-nowrap shadow-xs hover:bg-primary/90 transition-colors">
-                  Join Live
-                </button>
-              </div>
-            </form>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowInstantJoin(true)}
-              className="w-full py-2.5 rounded-xl border border-primary/40 text-primary hover:bg-primary/10 transition-all text-xs font-semibold flex items-center justify-center gap-2"
-            >
-              <Users className="w-4 h-4" />
-              <span>Instant Join the Live Community</span>
-            </button>
-          )}
+          {/* Scripture Quote Card (Pure Bible Verse) */}
+          <div className="hidden sm:block p-4 rounded-2xl bg-card border border-border/80 text-left space-y-2 shadow-sm">
+            <p className="text-xs text-foreground/90 font-serif-church italic leading-relaxed">
+              "For where two or three gather in my name, there am I with them." — Matthew 18:20
+            </p>
+            <div className="flex items-center gap-2 pt-1.5 border-t border-border/50 text-[10px] text-muted-foreground">
+              <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+              <span>Covenant Protection • Verified Fellowship</span>
+            </div>
+          </div>
+        </div>
 
-          {errorMessage && (
-            <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs space-y-2 animate-in fade-in duration-200">
-              <div className="flex items-center gap-2">
-                <Info className="w-4 h-4 shrink-0 text-destructive" />
-                <span>{errorMessage}</span>
-              </div>
-              {(errorMessage.toLowerCase().includes('suspended') || errorMessage.toLowerCase().includes('banned')) && (
+        {/* ========================================================================= */}
+        {/* RIGHT COLUMN: INTERACTIVE AUTH CARD (SIGN IN / SIGN UP / FORGOT PASSWORD) */}
+        {/* ========================================================================= */}
+        <div className="lg:col-span-7 w-full max-w-md mx-auto">
+          <div className="bg-card border border-border rounded-2xl p-5 sm:p-7 shadow-2xl space-y-5 transition-all relative">
+            
+            {/* Optional Close Button */}
+            {onClose && (
+              <div className="flex justify-end -mt-1 -mb-2">
                 <button
                   type="button"
-                  onClick={handleOpenAppealModal}
-                  className="w-full py-2 px-3 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 font-semibold flex items-center justify-center gap-1.5 transition-all text-xs"
+                  onClick={onClose}
+                  className="w-8 h-8 rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors cursor-pointer border border-border"
+                  title="Close Auth Screen"
+                  aria-label="Close"
                 >
-                  <Inbox className="w-3.5 h-3.5" />
-                  <span>Submit Unban Appeal to Ministry Desk</span>
+                  <X className="w-4 h-4" />
                 </button>
-              )}
-            </div>
-          )}
+              </div>
+            )}
 
-          {/* Form Content */}
-          {mode === 'login' ? (
-            <form onSubmit={handleLoginSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-foreground mb-1">
-                  Mobile Phone Number or Username
-                </label>
-                <div className="flex gap-2">
-                  <div className="relative w-32 shrink-0">
-                    <Globe className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                    <select
-                      value={countryCode}
-                      onChange={(e) => setCountryCode(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-xl pl-8 pr-2 py-2.5 text-foreground focus:outline-hidden focus:border-primary text-xs font-semibold appearance-none cursor-pointer"
-                    >
-                      {COUNTRY_CODES.map((c) => (
-                        <option key={`${c.name}_${c.dialCode}`} value={c.dialCode} className="bg-card text-foreground">
-                          {c.flag} {c.dialCode}
-                        </option>
-                      ))}
-                    </select>
+            {/* View Header / Navigation Tabs */}
+            {view !== 'forgot_password' ? (
+              <div className="flex bg-secondary/60 rounded-xl p-1 border border-border text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => { setView('signin'); setErrorMessage(null); }}
+                  className={`flex-1 py-2.5 rounded-lg transition-all cursor-pointer ${
+                    view === 'signin' 
+                      ? 'bg-primary text-primary-foreground shadow-xs font-bold' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setView('signup'); setErrorMessage(null); }}
+                  className={`flex-1 py-2.5 rounded-lg transition-all cursor-pointer ${
+                    view === 'signup' 
+                      ? 'bg-primary text-primary-foreground shadow-xs font-bold' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Create Account
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <button
+                  type="button"
+                  onClick={() => { setView('signin'); setForgotError(null); }}
+                  className="flex items-center gap-1.5 text-xs text-primary hover:underline font-semibold cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back to Sign In</span>
+                </button>
+                <span className="text-xs font-bold text-foreground">Password Recovery</span>
+              </div>
+            )}
+
+            {/* Error Notification Banner */}
+            {errorMessage && (
+              <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs space-y-2 animate-in fade-in">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-destructive mt-0.5" />
+                  <span>{errorMessage}</span>
+                </div>
+                {(errorMessage.toLowerCase().includes('suspended') || errorMessage.toLowerCase().includes('banned')) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppealIdentifier(loginIdentifier);
+                      setShowAppealModal(true);
+                    }}
+                    className="w-full py-1.5 px-3 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 font-semibold flex items-center justify-center gap-1.5 transition-all text-xs cursor-pointer"
+                  >
+                    <Inbox className="w-3.5 h-3.5" />
+                    <span>Submit Unban Appeal to Ministry Desk</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* ========================================================================= */}
+            {/* VIEW A: SIGN IN FORM (STRICTLY EMAIL/PHONE & PASSWORD)                   */}
+            {/* ========================================================================= */}
+            {view === 'signin' && (
+              <form onSubmit={handleSignIn} className="space-y-4 text-xs">
+                
+                {/* Email or Phone Input */}
+                <div>
+                  <label className="block font-semibold text-foreground mb-1.5">
+                    Email Address or Mobile Phone Number
+                  </label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
+                      {loginIdentifier.includes('@') ? (
+                        <Mail className="w-4 h-4" />
+                      ) : (
+                        <Phone className="w-4 h-4" />
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      autoComplete="username"
+                      required
+                      value={loginIdentifier}
+                      onChange={(e) => setLoginIdentifier(e.target.value)}
+                      placeholder="e.g. member@email.com or 0771234567"
+                      className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-3 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary text-sm min-h-[44px]"
+                    />
                   </div>
-                  <div className="relative flex-1">
-                    <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                </div>
+
+                {/* Password Input */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="font-semibold text-foreground">
+                      Password
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotIdentifier(loginIdentifier);
+                        setForgotStep('request');
+                        setForgotError(null);
+                        setView('forgot_password');
+                      }}
+                      className="text-[11px] text-primary hover:underline font-semibold cursor-pointer"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      required
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      placeholder="Enter account password"
+                      className="w-full bg-secondary border border-border rounded-xl pl-9 pr-10 py-3 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary text-sm min-h-[44px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer p-1"
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Remember Me Checkbox */}
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-foreground">
+                    <input 
+                      type="checkbox" 
+                      checked={rememberMe} 
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="w-3.5 h-3.5 accent-primary cursor-pointer rounded"
+                    />
+                    <span>Keep me signed in</span>
+                  </label>
+                  <span className="text-[10px] text-muted-foreground">Secured by Gateway Protocol</span>
+                </div>
+
+                {/* Submit CTA */}
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-3.5 bg-primary text-primary-foreground font-bold text-xs uppercase tracking-wider rounded-xl shadow-md hover:bg-primary/90 transition-all flex items-center justify-center gap-2 min-h-[46px] cursor-pointer mt-2"
+                >
+                  {isLoading ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <span>Sign In to Gateway Connect</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* ========================================================================= */}
+            {/* VIEW B: SIGN UP FORM (STRICTLY EMAIL/PHONE & PASSWORD)                   */}
+            {/* ========================================================================= */}
+            {view === 'signup' && (
+              <form onSubmit={handleSignUp} className="space-y-3.5 text-xs">
+                
+                {/* Full Name */}
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                     <input
                       type="text"
                       required
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="e.g. 0771234567 or @handle"
-                      className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary text-sm"
+                      value={signupFullName}
+                      onChange={(e) => setSignupFullName(e.target.value)}
+                      placeholder="e.g. Tendai Moyo"
+                      className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary text-sm min-h-[44px]"
                     />
                   </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block font-semibold text-foreground mb-1">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter account password"
-                    className="w-full bg-secondary border border-border rounded-xl pl-9 pr-10 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] pt-1.5 px-0.5">
-                  <span className="text-muted-foreground">Protected by Gateway Protocol</span>
-                  <button
-                    type="button"
-                    onClick={handleOpenResetModal}
-                    className="text-primary hover:underline font-semibold"
-                  >
-                    Forgot password? Request reset
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-primary text-primary-foreground font-semibold text-sm uppercase tracking-wider rounded-xl shadow-xs hover:bg-primary/90 transition-all flex items-center justify-center gap-2 mt-2"
-              >
-                <span>Sign In to Gateway Connect</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleSignupSubmit} className="space-y-3 text-xs">
-              {/* Profile Avatar Selection */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block font-semibold text-foreground">
-                    Choose Profile Avatar
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => customAvatarFileRef.current?.click()}
-                    className="text-[11px] text-primary hover:underline font-bold flex items-center gap-1 cursor-pointer"
-                  >
-                    <Upload className="w-3 h-3" />
-                    <span>Upload Custom Photo</span>
-                  </button>
-                  <input
-                    ref={customAvatarFileRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleCustomAvatarSelect}
-                    className="hidden"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none">
-                  {adminAvatars.map((av) => {
-                    const isSelected = selectedAvatarUrl === av.url;
-                    return (
+                {/* Contact Method Selector (Email vs Phone) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-semibold text-foreground">
+                      Contact Method
+                    </label>
+                    <div className="flex gap-1 bg-secondary rounded-lg p-0.5 border border-border">
                       <button
-                        key={av.id}
                         type="button"
-                        onClick={() => setSelectedAvatarUrl(av.url)}
-                        className={`relative rounded-full shrink-0 transition-transform active:scale-95 cursor-pointer p-0.5 ${
-                          isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-card scale-105' : 'opacity-70 hover:opacity-100'
+                        onClick={() => setSignupContactType('phone')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${
+                          signupContactType === 'phone' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
                         }`}
-                        title={av.name}
                       >
-                        <img
-                          src={av.url}
-                          alt={av.name}
-                          className="w-10 h-10 rounded-full object-cover border border-white/20"
-                        />
-                        {isSelected && (
-                          <span className="absolute -bottom-0.5 -right-0.5 bg-primary text-primary-foreground rounded-full p-0.5 shadow-sm">
-                            <Check className="w-2.5 h-2.5" />
-                          </span>
-                        )}
+                        Mobile Phone
                       </button>
-                    );
-                  })}
-                  {selectedAvatarUrl && !adminAvatars.some(a => a.url === selectedAvatarUrl) && (
-                    <div className="relative rounded-full shrink-0 ring-2 ring-primary ring-offset-2 ring-offset-card p-0.5">
-                      <img
-                        src={selectedAvatarUrl}
-                        alt="Custom Upload"
-                        className="w-10 h-10 rounded-full object-cover border border-white/20"
+                      <button
+                        type="button"
+                        onClick={() => setSignupContactType('email')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${
+                          signupContactType === 'email' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
+                        }`}
+                      >
+                        Email Address
+                      </button>
+                    </div>
+                  </div>
+
+                  {signupContactType === 'phone' ? (
+                    <div className="flex gap-2">
+                      <div className="relative w-28 shrink-0">
+                        <Globe className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                        <select
+                          value={signupCountryCode}
+                          onChange={(e) => setSignupCountryCode(e.target.value)}
+                          className="w-full bg-secondary border border-border rounded-xl pl-8 pr-2 py-2.5 text-foreground focus:outline-hidden focus:border-primary text-xs font-semibold appearance-none cursor-pointer min-h-[44px]"
+                        >
+                          {COUNTRY_CODES.map((c) => (
+                            <option key={`${c.name}_${c.dialCode}`} value={c.dialCode} className="bg-card text-foreground">
+                              {c.dialCode} ({c.name})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="relative flex-1">
+                        <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                        <input
+                          type="tel"
+                          required
+                          value={signupPhone}
+                          onChange={(e) => setSignupPhone(e.target.value)}
+                          placeholder="0771234567"
+                          className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary text-sm min-h-[44px]"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                      <input
+                        type="email"
+                        required
+                        value={signupEmail}
+                        onChange={(e) => setSignupEmail(e.target.value)}
+                        placeholder="youremail@example.com"
+                        className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary text-sm min-h-[44px]"
                       />
-                      <span className="absolute -bottom-0.5 -right-0.5 bg-primary text-primary-foreground rounded-full p-0.5 shadow-sm">
-                        <Check className="w-2.5 h-2.5" />
-                      </span>
                     </div>
                   )}
                 </div>
-              </div>
 
-              <div>
-                <label className="block font-semibold text-foreground mb-1">
-                  Full Name
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type="text"
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="e.g. Brother Tendai Moyo"
-                    className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-foreground mb-1">
-                  Mobile Phone Number
-                </label>
-                <div className="flex gap-2">
-                  <div className="relative w-32 shrink-0">
-                    <Globe className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                    <select
-                      value={countryCode}
-                      onChange={(e) => setCountryCode(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-xl pl-8 pr-2 py-2 text-foreground focus:outline-hidden focus:border-primary text-xs font-semibold appearance-none cursor-pointer"
+                {/* Password Input */}
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">
+                    Password (min. 6 characters)
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      required
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
+                      placeholder="Create a secure password"
+                      className="w-full bg-secondary border border-border rounded-xl pl-9 pr-10 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary text-sm min-h-[44px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer p-1"
                     >
-                      {COUNTRY_CODES.map((c) => (
-                        <option key={`${c.name}_${c.dialCode}`} value={c.dialCode} className="bg-card text-foreground">
-                          {c.flag} {c.dialCode}
-                        </option>
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* City & Assembly */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block font-semibold text-foreground mb-1">
+                      City / Assembly
+                    </label>
+                    <select
+                      value={signupCity}
+                      onChange={(e) => setSignupCity(e.target.value as SupportedCity)}
+                      className="w-full bg-secondary border border-border rounded-xl p-2.5 text-foreground focus:outline-hidden focus:border-primary text-xs font-semibold cursor-pointer min-h-[44px]"
+                    >
+                      {SUPPORTED_CITIES.map((c) => (
+                        <option key={c} value={c} className="bg-card text-foreground">{c}</option>
                       ))}
                     </select>
                   </div>
-                  <div className="relative flex-1">
-                    <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type="tel"
-                      required
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="e.g. 0771234567"
-                      className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary"
-                    />
-                  </div>
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  1 mobile number per account strictly enforced.
-                </p>
-              </div>
 
-              <div>
-                <label className="block font-semibold text-foreground mb-1">
-                  Location / City Congregation Hub
-                </label>
-                <div className="relative">
-                  <MapPin className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
-                  <select
-                    value={cityLocation}
-                    onChange={(e) => setCityLocation(e.target.value as SupportedCity)}
-                    className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-2 text-foreground focus:outline-hidden focus:border-primary appearance-none cursor-pointer text-xs"
-                  >
-                    {SUPPORTED_CITIES.map((city) => (
-                      <option key={city} value={city} className="bg-card text-foreground">
-                        {city}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  Connects you to local believers & clusters into official Congregations.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">
-                    Date of Birth
-                  </label>
-                  <div className="relative">
-                    <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
-                    <input
-                      type="date"
-                      required
-                      value={dateOfBirth}
-                      onChange={(e) => setDateOfBirth(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-xl pl-9 pr-2 py-2 text-foreground focus:outline-hidden focus:border-primary text-xs"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">
-                    Sex / Gender
-                  </label>
-                  <div className="relative">
-                    <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+                  <div>
+                    <label className="block font-semibold text-foreground mb-1">
+                      Gender / Group
+                    </label>
                     <select
-                      value={gender}
-                      onChange={(e) => setGender(e.target.value as 'male' | 'female')}
-                      className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-2 text-foreground focus:outline-hidden focus:border-primary appearance-none cursor-pointer text-xs"
+                      value={signupGender}
+                      onChange={(e) => setSignupGender(e.target.value as 'male' | 'female')}
+                      className="w-full bg-secondary border border-border rounded-xl p-2.5 text-foreground focus:outline-hidden focus:border-primary text-xs font-semibold cursor-pointer min-h-[44px]"
                     >
-                      <option value="male" className="bg-card text-foreground">Male (Brother)</option>
-                      <option value="female" className="bg-card text-foreground">Female (Sister)</option>
+                      <option value="male" className="bg-card text-foreground">Brother (Men)</option>
+                      <option value="female" className="bg-card text-foreground">Sister (Women)</option>
                     </select>
                   </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block font-semibold text-foreground mb-1">
-                  Choose Password
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="At least 6 characters"
-                    className="w-full bg-secondary border border-border rounded-xl pl-9 pr-10 py-2 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+                {/* Onboarding Notice */}
+                <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 text-[11px] text-primary flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 shrink-0" />
+                  <span>After sign-up, you will customize your profile avatar and fellowship pass.</span>
                 </div>
-              </div>
 
-              <div>
-                <label className="block font-semibold text-foreground mb-1">
-                  Referral Code (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={referralCode}
-                  onChange={(e) => setReferralCode(e.target.value)}
-                  placeholder="Enter referral (optional)"
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary"
-                />
-              </div>
+                {/* Submit Sign Up */}
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-3.5 bg-primary text-primary-foreground font-bold text-xs uppercase tracking-wider rounded-xl shadow-md hover:bg-primary/90 transition-all flex items-center justify-center gap-2 min-h-[46px] cursor-pointer mt-1"
+                >
+                  {isLoading ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <span>Create Account & Continue</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
 
+            {/* ========================================================================= */}
+            {/* VIEW C: FORGOT PASSWORD MULTI-STEP FLOW                                  */}
+            {/* ========================================================================= */}
+            {view === 'forgot_password' && (
+              <div className="space-y-4 text-xs">
+                
+                {forgotError && (
+                  <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{forgotError}</span>
+                  </div>
+                )}
+
+                {/* Step 1: Request OTP */}
+                {forgotStep === 'request' && (
+                  <form onSubmit={handleRequestOtp} className="space-y-4">
+                    <div className="space-y-1 text-center">
+                      <KeyRound className="w-8 h-8 text-primary mx-auto" />
+                      <h3 className="font-bold text-sm text-foreground">Reset Account Password</h3>
+                      <p className="text-[11px] text-muted-foreground">
+                        Enter your registered email address or mobile phone number to receive an instant verification code.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-foreground mb-1.5">
+                        Registered Email or Mobile Phone
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={forgotIdentifier}
+                        onChange={(e) => setForgotIdentifier(e.target.value)}
+                        placeholder="e.g. member@email.com or 0771234567"
+                        className="w-full bg-secondary border border-border rounded-xl p-3 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary text-sm min-h-[44px]"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-3.5 bg-primary text-primary-foreground font-bold text-xs uppercase tracking-wider rounded-xl shadow-md hover:bg-primary/90 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <span>Send 6-Digit Verification Code</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </form>
+                )}
+
+                {/* Step 2: Verify OTP Code */}
+                {forgotStep === 'verify' && (
+                  <form onSubmit={handleVerifyOtp} className="space-y-4">
+                    <div className="space-y-1 text-center">
+                      <ShieldCheck className="w-8 h-8 text-emerald-400 mx-auto" />
+                      <h3 className="font-bold text-sm text-foreground">Enter Verification Code</h3>
+                      <p className="text-[11px] text-muted-foreground">
+                        We sent a 6-digit security code for account: <strong className="text-foreground">{forgotTargetUser?.full_name}</strong>
+                      </p>
+                    </div>
+
+                    {/* Instant Test Code Display */}
+                    {generatedOtp && (
+                      <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/30 text-center space-y-1">
+                        <span className="text-[10px] text-primary uppercase font-bold tracking-wider block">Security OTP Code</span>
+                        <span className="font-mono text-xl font-bold tracking-widest text-primary">{generatedOtp}</span>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block font-semibold text-foreground mb-1.5">
+                        6-Digit Security Code
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={6}
+                        value={forgotOtpCode}
+                        onChange={(e) => setForgotOtpCode(e.target.value.replace(/\D/g, ''))}
+                        placeholder="123456"
+                        className="w-full bg-secondary border border-border rounded-xl p-3 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary text-center font-mono text-lg tracking-widest min-h-[44px]"
+                      />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setForgotStep('request')}
+                        className="py-3 px-4 rounded-xl border border-border bg-secondary hover:bg-secondary/80 text-foreground font-semibold text-xs"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="submit"
+                        className="flex-1 py-3 px-4 bg-primary text-primary-foreground font-bold text-xs uppercase tracking-wider rounded-xl shadow-md hover:bg-primary/90 flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <span>Verify & Continue</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Step 3: Set New Password */}
+                {forgotStep === 'new_password' && (
+                  <form onSubmit={handleSaveNewPassword} className="space-y-4">
+                    <div className="space-y-1 text-center">
+                      <Lock className="w-8 h-8 text-primary mx-auto" />
+                      <h3 className="font-bold text-sm text-foreground">Create New Password</h3>
+                      <p className="text-[11px] text-muted-foreground">
+                        Set a new password for <strong className="text-foreground">{forgotTargetUser?.full_name}</strong>
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-foreground mb-1">
+                        New Password
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={forgotNewPassword}
+                        onChange={(e) => setForgotNewPassword(e.target.value)}
+                        placeholder="At least 6 characters"
+                        className="w-full bg-secondary border border-border rounded-xl p-3 text-foreground focus:outline-hidden focus:border-primary text-sm min-h-[44px]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-foreground mb-1">
+                        Confirm New Password
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={forgotConfirmPassword}
+                        onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                        placeholder="Re-enter new password"
+                        className="w-full bg-secondary border border-border rounded-xl p-3 text-foreground focus:outline-hidden focus:border-primary text-sm min-h-[44px]"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full py-3.5 bg-primary text-primary-foreground font-bold text-xs uppercase tracking-wider rounded-xl shadow-md hover:bg-primary/90 transition-all flex items-center justify-center gap-2 min-h-[46px] cursor-pointer"
+                    >
+                      {isLoading ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <>
+                          <span>Update Password & Return to Sign In</span>
+                          <CheckCircle2 className="w-4 h-4" />
+                        </>
+                      )}
+                    </button>
+                  </form>
+                )}
+
+                {/* Step 4: Success State */}
+                {forgotStep === 'success' && (
+                  <div className="text-center space-y-4 py-3">
+                    <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+                      <CheckCircle2 className="w-7 h-7" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="font-bold text-base text-foreground">Password Successfully Updated!</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Your credentials have been securely updated. You can now sign in with your new password.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setView('signin');
+                        setForgotStep('request');
+                        setLoginIdentifier(forgotTargetUser?.email || forgotTargetUser?.phone || '');
+                        setLoginPassword('');
+                      }}
+                      className="w-full py-3.5 bg-primary text-primary-foreground font-bold text-xs uppercase tracking-wider rounded-xl shadow-md hover:bg-primary/90 transition-all cursor-pointer"
+                    >
+                      Sign In Now
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Guest Option */}
+            <div className="pt-3 border-t border-border flex items-center justify-center text-xs text-muted-foreground">
               <button
-                type="submit"
-                className="w-full py-3 bg-primary text-primary-foreground font-semibold text-sm uppercase tracking-wider rounded-xl shadow-xs hover:bg-primary/90 transition-all mt-1"
+                type="button"
+                onClick={onContinueAsGuest}
+                className="hover:text-primary transition-colors font-medium cursor-pointer py-1 px-3 rounded-lg hover:bg-secondary/60"
               >
-                Create Covenant Account
+                Continue as Guest Explorer →
               </button>
-            </form>
-          )}
+            </div>
 
-          {/* Guest Access Option */}
-          <div className="pt-2 border-t border-border flex items-center justify-center">
-            <button
-              type="button"
-              onClick={onContinueAsGuest}
-              className="text-xs text-muted-foreground hover:text-primary transition-colors font-medium flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>Want to explore first?</span>
-              <span className="underline font-semibold text-foreground">Continue as Guest Believer</span>
-            </button>
           </div>
         </div>
 
       </div>
 
-      {/* MODAL: UNBAN APPEAL DESK */}
+      {/* ========================================================================= */}
+      {/* UNBAN APPEAL MODAL                                                        */}
+      {/* ========================================================================= */}
       {showAppealModal && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-2xl p-5 w-full max-w-md space-y-4 shadow-xl animate-in fade-in text-foreground">
-            <div className="flex items-center justify-between border-b border-border pb-2.5">
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="flex justify-between items-center border-b border-border pb-3">
               <div className="flex items-center gap-2">
-                <Inbox className="w-5 h-5 text-primary" />
-                <h3 className="font-bold text-sm text-foreground">Unban Appeal Desk</h3>
+                <ShieldCheck className="w-5 h-5 text-primary" />
+                <h3 className="font-bold text-sm text-foreground">Ministry Desk Unban Appeal</h3>
               </div>
-              <button onClick={() => setShowAppealModal(false)} className="text-muted-foreground hover:text-foreground">
-                <X className="w-5 h-5" />
+              <button 
+                type="button" 
+                onClick={() => setShowAppealModal(false)}
+                className="text-muted-foreground hover:text-foreground text-xs p-1 rounded"
+              >
+                ✕
               </button>
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              Submit your formal appeal directly to the Ministry Administrators. Provide your details and reasons for reinstatement.
-            </p>
-
             {appealSuccessMsg ? (
-              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-500 text-xs space-y-3">
-                <div className="flex items-center gap-2 font-bold">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span>Appeal Submitted Successfully</span>
-                </div>
-                <p className="text-[11px] text-muted-foreground">{appealSuccessMsg}</p>
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs space-y-3">
+                <p>{appealSuccessMsg}</p>
                 <button
                   type="button"
                   onClick={() => setShowAppealModal(false)}
-                  className="w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition-all shadow-xs"
+                  className="w-full py-2 bg-emerald-600 text-white rounded-lg font-semibold text-xs"
                 >
-                  Close Window
+                  Close Appeal Desk
                 </button>
               </div>
             ) : (
@@ -858,248 +1085,45 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                     type="text"
                     required
                     value={appealName}
-                    onChange={e => setAppealName(e.target.value)}
-                    placeholder="e.g. Brother Tendai Moyo"
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary outline-hidden"
+                    onChange={(e) => setAppealName(e.target.value)}
+                    placeholder="e.g. Tendai Moyo"
+                    className="w-full bg-secondary border border-border rounded-xl p-2.5 text-foreground focus:outline-hidden focus:border-primary text-xs"
                   />
                 </div>
-
                 <div>
-                  <label className="block font-semibold text-foreground mb-1">Account Phone Number</label>
-                  <input
-                    type="tel"
-                    required
-                    value={appealPhone}
-                    onChange={e => setAppealPhone(e.target.value)}
-                    placeholder="e.g. 0772123456"
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">Appeal Statement / Explanation</label>
-                  <textarea
-                    rows={4}
-                    required
-                    value={appealReason}
-                    onChange={e => setAppealReason(e.target.value)}
-                    placeholder="Please explain the situation or apologize for any misunderstanding. This statement will be reviewed by the Lead Administrator."
-                    className="w-full bg-secondary border border-border rounded-xl p-3 text-foreground placeholder:text-muted-foreground focus:border-primary outline-hidden"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAppealModal(false)}
-                    className="px-4 py-2 rounded-xl bg-secondary text-muted-foreground hover:text-foreground font-semibold transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs flex items-center gap-1.5 transition-all"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Send Appeal to Admin</span>
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: REAL-TIME PASSWORD RESET WORKFLOW */}
-      {showResetModal && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-2xl p-5 w-full max-w-md space-y-4 shadow-xl animate-in fade-in text-foreground">
-            <div className="flex items-center justify-between border-b border-border pb-2.5">
-              <div className="flex items-center gap-2">
-                <Key className="w-5 h-5 text-primary" />
-                <h3 className="font-bold text-sm text-foreground">Real-Time Password Recovery</h3>
-              </div>
-              <button 
-                onClick={() => setShowResetModal(false)} 
-                className="text-muted-foreground hover:text-foreground p-1 rounded-lg cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {resetError && (
-              <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-center gap-2">
-                <Info className="w-4 h-4 shrink-0" />
-                <span>{resetError}</span>
-              </div>
-            )}
-
-            {resetStep === 'request' && (
-              <form onSubmit={handleRequestResetOtp} className="space-y-3.5 text-xs">
-                <p className="text-muted-foreground text-[11px] leading-relaxed">
-                  Enter your registered phone number or username. The Gateway Security Engine will instantly verify your account and generate a 6-digit recovery OTP code in real time.
-                </p>
-
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">
-                    Registered Mobile Number or @handle
-                  </label>
-                  <div className="relative">
-                    <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type="text"
-                      required
-                      value={resetPhone}
-                      onChange={e => setResetPhone(e.target.value)}
-                      placeholder="e.g. 0771234567 or @tendai"
-                      className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary outline-hidden text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowResetModal(false)}
-                    className="px-4 py-2 rounded-xl bg-secondary text-muted-foreground hover:text-foreground font-semibold transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Generate Instant Code</span>
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {resetStep === 'verify' && resetTargetUser && (
-              <form onSubmit={handleConfirmResetPassword} className="space-y-3.5 text-xs">
-                <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-primary" />
-                      <span>{resetTargetUser.full_name}</span>
-                    </span>
-                    <span className="text-[10px] text-muted-foreground font-mono">{resetTargetUser.phone}</span>
-                  </div>
-                  
-                  {generatedOtp && (
-                    <div className="flex items-center justify-between bg-card/80 p-2 rounded-lg border border-primary/30 mt-1">
-                      <div>
-                        <span className="text-[10px] text-muted-foreground block">Real-time OTP Code:</span>
-                        <span className="font-mono font-black text-sm text-primary tracking-widest">{generatedOtp}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setResetOtpCode(generatedOtp)}
-                        className="px-2 py-1 rounded bg-primary text-primary-foreground text-[10px] font-bold shadow-xs cursor-pointer active:scale-95"
-                      >
-                        Auto-Fill Code
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">
-                    6-Digit Verification Code
-                  </label>
+                  <label className="block font-semibold text-foreground mb-1">Registered Phone or Email</label>
                   <input
                     type="text"
                     required
-                    maxLength={6}
-                    value={resetOtpCode}
-                    onChange={e => setResetOtpCode(e.target.value)}
-                    placeholder="Enter 6-digit code"
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-foreground text-center font-mono font-bold tracking-widest text-base focus:border-primary outline-hidden"
+                    value={appealIdentifier}
+                    onChange={(e) => setAppealIdentifier(e.target.value)}
+                    placeholder="e.g. 0771234567 or member@email.com"
+                    className="w-full bg-secondary border border-border rounded-xl p-2.5 text-foreground focus:outline-hidden focus:border-primary text-xs"
                   />
                 </div>
-
                 <div>
-                  <label className="block font-semibold text-foreground mb-1">
-                    New Password
-                  </label>
-                  <input
-                    type="password"
+                  <label className="block font-semibold text-foreground mb-1">Appeal Reason / Message</label>
+                  <textarea
+                    rows={3}
                     required
-                    value={resetNewPassword}
-                    onChange={e => setResetNewPassword(e.target.value)}
-                    placeholder="At least 4 characters"
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-foreground focus:border-primary outline-hidden"
+                    value={appealReason}
+                    onChange={(e) => setAppealReason(e.target.value)}
+                    placeholder="Explain your fellowship activity or request for account reactivation..."
+                    className="w-full bg-secondary border border-border rounded-xl p-2.5 text-foreground focus:outline-hidden focus:border-primary text-xs resize-none"
                   />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">
-                    Confirm New Password
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={resetConfirmPassword}
-                    onChange={e => setResetConfirmPassword(e.target.value)}
-                    placeholder="Re-enter new password"
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-foreground focus:border-primary outline-hidden"
-                  />
-                </div>
-
-                <div className="flex justify-between gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setResetStep('request')}
-                    className="px-3 py-2 rounded-xl bg-secondary text-muted-foreground hover:text-foreground font-semibold transition-colors cursor-pointer"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmittingReset}
-                    className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>{isSubmittingReset ? 'Updating...' : 'Reset Password Now'}</span>
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {resetStep === 'success' && (
-              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-500 text-xs space-y-3 text-center">
-                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
-                  <CheckCircle2 className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-sm text-foreground">Password Reset Successfully!</h4>
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Your password was updated in real time. You can now sign in to Gateway Connect with your new credentials.
-                  </p>
                 </div>
                 <button
-                  type="button"
-                  onClick={() => {
-                    if (resetTargetUser) {
-                      setPhone(resetTargetUser.phone || resetPhone);
-                      setPassword(resetNewPassword);
-                    }
-                    setShowResetModal(false);
-                    setMode('login');
-                  }}
-                  className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  type="submit"
+                  className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-xl text-xs shadow-md hover:bg-primary/90 cursor-pointer"
                 >
-                  Sign In with New Password
+                  Submit Appeal to Ministry Desk
                 </button>
-              </div>
+              </form>
             )}
           </div>
         </div>
       )}
+
     </div>
   );
 };
-
-
-

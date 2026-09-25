@@ -61,6 +61,7 @@ import { ChurchPagesSection } from '../common/ChurchPagesSection';
 import { ChurchPageViewModal } from '../modals/ChurchPageViewModal';
 import { PageCreationModal } from '../modals/PageCreationModal';
 import { VerifiedBadge } from '../common/VerifiedBadge';
+import { BelieverPassModal } from '../modals/BelieverPassModal';
 import confetti from 'canvas-confetti';
 
 interface MeTabProps {
@@ -76,6 +77,7 @@ interface MeTabProps {
   onOpenLogin?: () => void;
   onOpenSignUp?: () => void;
   onOpenDirectChat?: () => void;
+  onOpenOnboarding?: () => void;
 }
 
 interface StoryHighlight {
@@ -98,7 +100,8 @@ export const MeTab: React.FC<MeTabProps> = ({
   onUpdateUser,
   onOpenLogin,
   onOpenSignUp,
-  onOpenDirectChat
+  onOpenDirectChat,
+  onOpenOnboarding
 }) => {
   // Navigation Sub-tab
   const [activeSubTab, setActiveSubTab] = useState<'posts' | 'reels' | 'pages' | 'downloads' | 'saved' | 'settings'>('posts');
@@ -126,6 +129,7 @@ export const MeTab: React.FC<MeTabProps> = ({
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [showBadgesModal, setShowBadgesModal] = useState(false);
   const [showChatDevModal, setShowChatDevModal] = useState(false);
+  const [showBelieverPassModal, setShowBelieverPassModal] = useState(false);
   const [showPageCreationModal, setShowPageCreationModal] = useState(false);
   const [showOptionsSheet, setShowOptionsSheet] = useState(false);
   const [showMemberIdCard, setShowMemberIdCard] = useState(false);
@@ -803,7 +807,18 @@ export const MeTab: React.FC<MeTabProps> = ({
             <span>Share</span>
           </button>
 
-          {/* 3. Partner / Role Status Icon Button (Crown only with no text label) */}
+          {/* 3. Believer Digital Pass Button */}
+          <button
+            id="btn-me-believer-pass"
+            onClick={() => setShowBelieverPassModal(true)}
+            className="flex-1 h-8 px-3 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary font-semibold text-xs border border-primary/30 flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+            title="Gateway Believer Digital Pass"
+          >
+            <QrCode className="w-3.5 h-3.5" />
+            <span>Pass</span>
+          </button>
+
+          {/* 4. Partner / Role Status Icon Button (Crown only with no text label) */}
           {isSuperAdmin ? (
             <button
               onClick={onOpenAdminPanel}
@@ -1426,6 +1441,46 @@ export const MeTab: React.FC<MeTabProps> = ({
               {lowDataMode ? 'Enabled' : 'Disabled'}
             </button>
           </div>
+
+          {/* Gateway Believer Digital Pass Card */}
+          <div className="p-4 bg-card border border-primary/30 rounded-xl flex items-center justify-between text-xs shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center border border-primary/20 shrink-0">
+                <QrCode className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <p className="font-bold text-foreground">Gateway Believer Digital Pass</p>
+                <p className="text-[11px] text-muted-foreground">Official membership card with QR verification & Apostle Joe Daniels endorsement</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowBelieverPassModal(true)}
+              className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs shadow-xs hover:bg-primary/90 transition-colors cursor-pointer shrink-0"
+            >
+              View Pass
+            </button>
+          </div>
+
+          {/* Spiritual Fellowship & Ministries Setup */}
+          {onOpenOnboarding && (
+            <div className="p-4 bg-card border border-border rounded-xl flex items-center justify-between text-xs shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/20 shrink-0">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="font-bold text-foreground">Spiritual Fellowship & Ministries</p>
+                  <p className="text-[11px] text-muted-foreground">Update your assembly city, spiritual callings, bio, and assigned groups</p>
+                </div>
+              </div>
+              <button
+                onClick={onOpenOnboarding}
+                className="px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-semibold text-xs border border-border transition-colors cursor-pointer shrink-0"
+              >
+                Update
+              </button>
+            </div>
+          )}
 
           {/* Change Password & Account Security */}
           <div className="p-4 bg-card border border-border rounded-xl flex items-center justify-between text-xs shadow-xs">
@@ -2467,6 +2522,15 @@ export const MeTab: React.FC<MeTabProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Believer Digital Pass Modal */}
+      {showBelieverPassModal && (
+        <BelieverPassModal
+          user={localUser}
+          onClose={() => setShowBelieverPassModal(false)}
+          onOpenOnboarding={onOpenOnboarding}
+        />
       )}
 
     </div>

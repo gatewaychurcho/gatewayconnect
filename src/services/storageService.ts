@@ -145,6 +145,7 @@ const KEYS = {
   OVERRIDE_PLAYING_VIDEO: 'gcz_override_playing_video_v1',
   SAVED_POSTS: 'gcz_saved_posts_v1',
   BROADCAST_LIKES_TABLE: 'gcz_broadcast_likes_v1',
+  BROADCAST_REACTIONS_TABLE: 'gcz_broadcast_reactions_v1',
   CHURCH_PAGES: 'gcz_church_pages_v1',
   PAGE_POSTS: 'gcz_page_posts_v1',
   ADMIN_AVATAR_LIBRARY: 'gcz_admin_avatar_library_v1',
@@ -156,14 +157,11 @@ export const DEFAULT_ADMIN_AVATARS: MediaLibraryItem[] = [
   { id: 'lib_av_2', url: '/assets/apostle_joe_daniels_preach.jpg', name: 'Apostle Joe Daniels (Preaching)', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
   { id: 'lib_av_3', url: '/assets/apostle_joe_daniels_grad.jpg', name: 'Apostle Joe Daniels (Academic / Gown)', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
   { id: 'lib_av_4', url: '/assets/apostle_joe_daniels_podcast.jpg', name: 'Apostle Joe Daniels (Studio / Podcast)', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
-  { id: 'lib_av_5', url: '/assets/apostle_silhouette.svg', name: 'Gateway Cross Silhouette', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
-  { id: 'lib_av_6', url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=300&auto=format&fit=crop&q=80', name: 'Prophetess Melinda Daniels', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
-  { id: 'lib_av_7', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80', name: 'Pastor Easter', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
-  { id: 'lib_av_8', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80', name: 'Prayer Intercessor Believer', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
-  { id: 'lib_av_9', url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=300&auto=format&fit=crop&q=80', name: 'Praise & Worship Leader', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
-  { id: 'lib_av_10', url: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=300&auto=format&fit=crop&q=80', name: 'Youth Ministry Ambassador', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
-  { id: 'lib_av_11', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300&auto=format&fit=crop&q=80', name: 'Deacon & Sanctuary Steward', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
-  { id: 'lib_av_12', url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&auto=format&fit=crop&q=80', name: 'Cathedral Partner Circle', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' }
+  { id: 'lib_av_5', url: '/assets/avatar_believer_brother_1790322792637.jpg', name: 'Brother Believer (Smart Navy)', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_av_6', url: '/assets/avatar_believer_sister_1790322802458.jpg', name: 'Sister Believer (Grace & Elegance)', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_av_7', url: '/assets/avatar_worship_youth_1790322812538.jpg', name: 'Youth Worshipper (Praise & Fire)', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_av_8', url: '/assets/avatar_church_elder_1790322822242.jpg', name: 'Church Elder (Wisdom & Stewardship)', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_av_9', url: '/assets/apostle_silhouette.svg', name: 'Gateway Cross Silhouette', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' }
 ];
 
 export const DEFAULT_ADMIN_THUMBNAILS: MediaLibraryItem[] = [
@@ -874,8 +872,10 @@ export class StorageService {
     );
     const isCurrentlyFollowing = existingIndex >= 0;
 
-    // Protection: Super Admins and Platform Developers cannot be unfollowed!
-    if (isCurrentlyFollowing && this.isProtectedLeader(effectiveTargetId)) {
+    // Protection: Super Admins and Platform Developers cannot be unfollowed by standard members!
+    // But Developer surpasses restrictions and can follow or unfollow anyone at will.
+    const isFollowerDeveloper = currentUser?.role === 'developer' || currentUser?.id === 'usr_developer' || (currentUser?.phone ? arePhoneNumbersEqual(currentUser.phone, '0780699988') : false);
+    if (isCurrentlyFollowing && this.isProtectedLeader(effectiveTargetId) && !isFollowerDeveloper) {
       const targetUser = allUsers.find(u => u.id === effectiveTargetId || u.id === targetUserId);
       return {
         isFollowing: true,
@@ -973,11 +973,15 @@ export class StorageService {
     return allUsers.filter(u => followerIds.includes(u.id));
   }
 
-  // BROADCAST LIKES & LIKERS MANAGEMENT (REAL USERS ONLY)
+  // BROADCAST LIKES & LIKERS MANAGEMENT (REAL USERS ONLY - ZERO FAKE DATA)
   static getBroadcastLikes(): string[] {
-    // Initial real likes by active registered ministry members: Pastor Tendai and Pastor Grace
-    const defaultLikes = ['usr_pastor_tendai', 'usr_pastor_grace'];
-    return getLocal<string[]>(KEYS.BROADCAST_LIKES_TABLE, defaultLikes);
+    const likes = getLocal<string[]>(KEYS.BROADCAST_LIKES_TABLE, []);
+    // Ensure any previously seeded fake defaults are cleared so if no one liked, count is 0
+    if (Array.isArray(likes) && likes.length === 2 && likes.includes('usr_pastor_tendai') && likes.includes('usr_pastor_grace')) {
+      setLocal(KEYS.BROADCAST_LIKES_TABLE, []);
+      return [];
+    }
+    return Array.isArray(likes) ? likes : [];
   }
 
   static getBroadcastLikerUsers(): User[] {
@@ -1031,6 +1035,36 @@ export class StorageService {
       }));
     }
     return { isLiked: true, count: likes.length, likerUsers };
+  }
+
+  // REAL BROADCAST REACTIONS (EMOJIS) - STARTS AT ZERO, INCREMENTS ONLY ON REAL USER ACTION
+  static getBroadcastReactions(): Record<string, number> {
+    const raw = getLocal<Record<string, number>>(KEYS.BROADCAST_REACTIONS_TABLE, {
+      '👍': 0,
+      '❤️': 0,
+      '🙏': 0,
+      '🔥': 0,
+      '👏': 0
+    });
+    return {
+      '👍': Number(raw['👍']) || 0,
+      '❤️': Number(raw['❤️']) || 0,
+      '🙏': Number(raw['🙏']) || 0,
+      '🔥': Number(raw['🔥']) || 0,
+      '👏': Number(raw['👏']) || 0
+    };
+  }
+
+  static recordBroadcastReaction(emoji: string): Record<string, number> {
+    const reactions = this.getBroadcastReactions();
+    reactions[emoji] = (reactions[emoji] || 0) + 1;
+    setLocal(KEYS.BROADCAST_REACTIONS_TABLE, reactions);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_broadcast_reactions_updated', {
+        detail: { reactions }
+      }));
+    }
+    return reactions;
   }
 
   static async hydrateFollowsFromSupabase(userId: string): Promise<void> {
@@ -2181,6 +2215,31 @@ export class StorageService {
     return newComment;
   }
 
+  static deleteCommentFromTestimony(postId: string, commentId: string): boolean {
+    const list = this.getTestimonies();
+    const target = list.find(t => t.id === postId);
+    if (!target || !Array.isArray(target.comments)) return false;
+
+    const prevLen = target.comments.length;
+    target.comments = target.comments.filter(c => c.id !== commentId);
+    if (target.comments.length === prevLen) return false;
+
+    target.comments_count = target.comments.length;
+    setLocal(KEYS.TESTIMONIES, list);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: target }));
+      try {
+        if ('BroadcastChannel' in window) {
+          const bc = new BroadcastChannel('gcz_cross_tab_sync');
+          bc.postMessage({ type: 'comment_deleted', payload: { postId, commentId } });
+          setTimeout(() => { try { bc.close(); } catch {} }, 500);
+        }
+      } catch {}
+    }
+    return true;
+  }
+
   static updateTestimony(id: string, updates: Partial<Testimony>): void {
     const list = this.getTestimonies();
     const targetIndex = list.findIndex(t => t.id === id);
@@ -2197,17 +2256,62 @@ export class StorageService {
     }
   }
 
+  static handleRemotePostDeleted(id: string): void {
+    if (!id) return;
+    const currentList = this.getTestimonies();
+    const filtered = currentList.filter(t => t.id !== id);
+    if (filtered.length !== currentList.length) {
+      setLocal(KEYS.TESTIMONIES, filtered);
+    }
+    const saved = getLocal<string[]>(KEYS.SAVED_POSTS, []);
+    if (saved.includes(id)) {
+      setLocal(KEYS.SAVED_POSTS, saved.filter(sid => sid !== id));
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_testimony_deleted', { detail: { id, deleted: true } }));
+      window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: { id, deleted: true } }));
+    }
+  }
+
+  static {
+    if (typeof window !== 'undefined') {
+      (window as any).gcz_handle_remote_post_deleted = (id: string) => {
+        StorageService.handleRemotePostDeleted(id);
+      };
+      (window as any).gcz_handle_remote_group_member_changed = (groupId: string, userId: string, isJoining: boolean) => {
+        StorageService.handleRemoteGroupMemberChanged(groupId, userId, isJoining);
+      };
+      window.addEventListener('gcz_remote_post_deleted', (e: any) => {
+        const id = e?.detail?.id;
+        if (id) StorageService.handleRemotePostDeleted(id);
+      });
+      window.addEventListener('gcz_remote_group_member_changed', (e: any) => {
+        const detail = e?.detail;
+        if (detail?.groupId && detail?.userId) {
+          StorageService.handleRemoteGroupMemberChanged(detail.groupId, detail.userId, detail.isJoining);
+        }
+      });
+    }
+  }
+
   static deleteTestimony(id: string): void {
+    if (!id) return;
     const list = this.getTestimonies().filter(t => t.id !== id);
     setLocal(KEYS.TESTIMONIES, list);
+    const saved = getLocal<string[]>(KEYS.SAVED_POSTS, []);
+    if (saved.includes(id)) {
+      setLocal(KEYS.SAVED_POSTS, saved.filter(sid => sid !== id));
+    }
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: { id, deleted: true } }));
       window.dispatchEvent(new CustomEvent('gcz_testimony_deleted', { detail: { id, deleted: true } }));
+      window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: { id, deleted: true } }));
       try {
         if ('BroadcastChannel' in window) {
           const bc = new BroadcastChannel('gcz_cross_tab_sync');
           bc.postMessage({ type: 'testimony', payload: { id, deleted: true } });
-          bc.close();
+          setTimeout(() => {
+            try { bc.close(); } catch {}
+          }, 500);
         }
       } catch {}
     }
@@ -2299,13 +2403,18 @@ export class StorageService {
     delete memoryStore[KEYS.CURRENT_USER];
   }
 
-  // Auto-follow Super Admin and Developer on login or registration
+  // Auto-follow Super Admin and Developer on login or registration (Developer is exempt from forced auto-follow)
   static autoFollowSuperAdminAndDeveloper(userId: string): void {
     if (!userId || userId === 'guest') return;
 
     const allUsers = this.getAllUsers();
     const newUser = allUsers.find(u => u.id === userId);
     if (!newUser) return;
+
+    // Developer surpasses auto-follow: developer can choose not to follow other super admins
+    if (newUser.role === 'developer' || newUser.id === 'usr_developer' || (newUser.phone ? arePhoneNumbersEqual(newUser.phone, '0780699988') : false)) {
+      return;
+    }
 
     // Identify all super admins and lead developer accounts
     const leaders = allUsers.filter(u => 
@@ -2405,14 +2514,15 @@ export class StorageService {
     return `${code}${cleanLocal}`;
   }
 
-  // Auth: Login & Signup with strict 1 Number Per Account & Unique Username enforcement
+  // Auth: Login & Signup with strict 1 Number / Email Per Account & Unique Username enforcement
   static login(phoneOrIdentifier: string, password?: string): { success: boolean; user?: User; error?: string } {
     const users = this.getAllUsers();
     const query = phoneOrIdentifier.trim();
     const queryClean = query.startsWith('@') ? query.slice(1).toLowerCase() : query.toLowerCase();
     
-    // Find user by phone number OR by username (@handle)
+    // Find user by email, phone number OR by username (@handle)
     const found = users.find(u => 
+      (u.email && u.email.toLowerCase() === query.toLowerCase()) ||
       arePhoneNumbersEqual(u.phone, query) || 
       (u.handle && (
         u.handle.toLowerCase() === query.toLowerCase() || 
@@ -2424,7 +2534,7 @@ export class StorageService {
     if (!found) {
       return { 
         success: false, 
-        error: `No account found for "${phoneOrIdentifier}". Please enter your registered phone number or username (@handle), or sign up.` 
+        error: `No account found for "${phoneOrIdentifier}". Please enter your registered email, mobile phone number, or handle (@username).` 
       };
     }
 
@@ -2457,17 +2567,29 @@ export class StorageService {
     referralCode?: string,
     chosenHandle?: string,
     dateOfBirth?: string,
-    gender?: 'male' | 'female' | 'other'
+    gender?: 'male' | 'female' | 'other',
+    chosenAvatar?: string,
+    email?: string
   ): { success: boolean; user?: User; error?: string } {
     const users = this.getAllUsers();
     
-    // Strict 1 Number Per Account Rule
-    const existing = users.find(u => arePhoneNumbersEqual(u.phone, phone));
-    if (existing) {
+    // Strict 1 Number / Email Per Account Rule
+    const existingPhone = phone.trim() ? users.find(u => arePhoneNumbersEqual(u.phone, phone)) : null;
+    if (existingPhone) {
       return {
         success: false,
         error: `An account is already registered with mobile number ${phone}. Only 1 account is permitted per phone number. Please sign in or request a password reset.`
       };
+    }
+
+    if (email && email.trim()) {
+      const existingEmail = users.find(u => u.email && u.email.toLowerCase() === email.trim().toLowerCase());
+      if (existingEmail) {
+        return {
+          success: false,
+          error: `An account is already registered with email ${email}. Please sign in or request a password reset.`
+        };
+      }
     }
 
     // Enforce 1 unique handle per user to prevent fraud
@@ -2488,10 +2610,12 @@ export class StorageService {
     const badge: BadgeType = isDevPhone ? 'gold' : 'none';
     const isVerified = isDevPhone;
     const city = location?.trim() || 'Harare';
+    const defaultAv = chosenAvatar || '';
 
     const newUser: User = {
       id: `usr_${Date.now()}`,
-      phone: phone.trim(),
+      phone: phone.trim() || `user_${Date.now().toString().slice(-6)}`,
+      email: email?.trim(),
       password: password.trim() || 'juice2026',
       full_name: fullName.trim(),
       handle,
@@ -2506,6 +2630,8 @@ export class StorageService {
       member_id: `GCZ-${role === 'developer' ? 'DEV' : 'MEM'}-${Math.floor(1000 + Math.random() * 9000)}`,
       is_verified: isVerified,
       created_at: new Date().toISOString(),
+      avatar_url: defaultAv,
+      onboarding_completed: false, // Forces multi-step onboarding wizard
       saved_verses: [],
       offline_sermon_ids: [],
       unlocked_sermon_ids: [],
@@ -2933,7 +3059,7 @@ export class StorageService {
 
   static resetUserPasswordRealtime(phoneOrIdentifier: string, newPass: string): { success: boolean; user?: User; error?: string } {
     if (!phoneOrIdentifier || !phoneOrIdentifier.trim()) {
-      return { success: false, error: 'Please enter your registered phone number or username.' };
+      return { success: false, error: 'Please enter your registered email, phone number, or username.' };
     }
     if (!newPass || newPass.trim().length < 4) {
       return { success: false, error: 'Password must be at least 4 characters.' };
@@ -2945,6 +3071,7 @@ export class StorageService {
 
     const target = allUsers.find(u => 
       u.id === query ||
+      (u.email && u.email.toLowerCase() === query.toLowerCase()) ||
       arePhoneNumbersEqual(u.phone, query) || 
       (u.handle && (
         u.handle.toLowerCase() === query.toLowerCase() || 
@@ -2956,7 +3083,7 @@ export class StorageService {
     if (!target) {
       return { 
         success: false, 
-        error: `No registered account found for "${phoneOrIdentifier}". Please check your number or handle.` 
+        error: `No registered account found for "${phoneOrIdentifier}". Please check your email, phone number, or handle.` 
       };
     }
 
@@ -2979,6 +3106,58 @@ export class StorageService {
     }
 
     return { success: true, user: target };
+  }
+
+  /**
+   * Complete multi-step onboarding wizard for newly registered users
+   */
+  static completeOnboarding(
+    userId: string, 
+    data: { 
+      avatar_url: string; 
+      bio?: string; 
+      spiritual_interests?: string[]; 
+      location?: string;
+    }
+  ): User | null {
+    const users = this.getAllUsers();
+    const user = users.find(u => u.id === userId);
+    if (!user) return null;
+
+    user.avatar_url = data.avatar_url;
+    if (data.bio !== undefined) user.bio = data.bio;
+    if (data.spiritual_interests !== undefined) user.spiritual_interests = data.spiritual_interests;
+    if (data.location) {
+      user.location = data.location;
+      user.city_location = data.location;
+    }
+    user.onboarding_completed = true;
+
+    this.saveUser(user);
+    this.setPermanentCustomAvatar(user.id, user.phone, data.avatar_url);
+    this.setCurrentUser(user);
+
+    // Sync to Supabase
+    const supabase = getSupabase();
+    if (supabase) {
+      supabase.from('users').update({
+        avatar_url: data.avatar_url,
+        bio: data.bio || user.bio || '',
+        location: user.location,
+        onboarding_completed: true
+      }).eq('id', user.id).then(({ error }) => {
+        if (error) console.warn('Supabase onboarding update warning:', error);
+      });
+    }
+
+    SupabaseSyncService.syncUser(user).catch(() => {});
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: user }));
+      window.dispatchEvent(new CustomEvent('gcz_users_synced', { detail: users }));
+    }
+
+    return user;
   }
 
   static getStories(): CommunityStory[] {
@@ -3127,7 +3306,7 @@ export class StorageService {
   /**
    * Pulls all stories from every user (last 24h) from Supabase and merges
    * them into local storage. Without this, stories posted on other devices
-   * never appear here at all â€” syncStory() only ever wrote to Supabase and
+   * never appear here at all — syncStory() only ever wrote to Supabase and
    * nothing ever read it back.
    */
   static async syncStoriesWithRemote(): Promise<void> {
@@ -3367,7 +3546,7 @@ export class StorageService {
       return false;
     };
 
-    return all.filter(m => {
+    const filtered = all.filter(m => {
       const matchThread = (matchesUserA(m.sender_id) && matchesUserB(m.receiver_id)) ||
                           (matchesUserB(m.sender_id) && matchesUserA(m.receiver_id));
       if (!matchThread) return false;
@@ -3376,6 +3555,16 @@ export class StorageService {
       }
       return true;
     });
+
+    const unique: DirectMessage[] = [];
+    for (const msg of filtered) {
+      const isDup = unique.some(u => 
+        u.id === msg.id || 
+        (u.sender_id === msg.sender_id && u.receiver_id === msg.receiver_id && u.text === msg.text && Math.abs(new Date(u.created_at).getTime() - new Date(msg.created_at).getTime()) < 4000)
+      );
+      if (!isDup) unique.push(msg);
+    }
+    return unique;
   }
 
   static sendDirectMessage(
@@ -3432,7 +3621,13 @@ export class StorageService {
   static receiveIncomingDirectMessage(message: DirectMessage): void {
     if (!message) return;
     const all = getLocal<DirectMessage[]>(KEYS.DIRECT_MESSAGES, []);
-    const exists = all.some(m => m.id === message.id);
+    const exists = all.some(m => 
+      m.id === message.id || 
+      (m.sender_id === message.sender_id &&
+       m.receiver_id === message.receiver_id &&
+       m.text === message.text &&
+       Math.abs(new Date(m.created_at).getTime() - new Date(message.created_at).getTime()) < 4000)
+    );
     if (!exists) {
       all.push(message);
       setLocal(KEYS.DIRECT_MESSAGES, all);
@@ -3567,9 +3762,9 @@ export class StorageService {
     const savedUrl = this.getLiveStreamUrl();
     const realViewersCount = this.getStreamViewers().length;
     const status = getLocal(KEYS.LIVE_SERMON, {
-      isLive: true,
-      title: 'Church & Politics (Controversial Issues) â€¢ Apostle Joe Daniels Live',
-      sermonId: 'sermon_church_politics',
+      isLive: false,
+      title: 'Gateway Cathedral • Sunday Sanctuary Live Service',
+      sermonId: 'sermon_live_stream',
       viewerCount: realViewersCount,
       streamUrl: savedUrl
     });
@@ -3623,7 +3818,7 @@ export class StorageService {
       city: user.location || user.city_location || 'Harare',
       avatar_url: user.avatar_url,
       device: typeof navigator !== 'undefined' && /Mobi|Android|iPhone/i.test(navigator.userAgent) ? 'Mobile' : 'Desktop',
-      login_details: `${user.phone || 'Phone'} â€¢ Role: ${user.role} â€¢ ID: ${user.member_id || user.id.substring(0, 8)}`,
+      login_details: `${user.phone || 'Phone'} • Role: ${user.role} • ID: ${user.member_id || user.id.substring(0, 8)}`,
       joined_at: new Date().toISOString(),
       is_active: true
     };
@@ -4826,11 +5021,64 @@ export class StorageService {
       is_system: true
     });
 
+    // Real-time synchronization across Supabase and tabs
+    SupabaseSyncService.syncGroupMember(groupId, targetUserId, false).catch(() => {});
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('gcz_cross_tab_sync');
+        bc.postMessage({ type: 'group_member_changed', payload: { groupId, userId: targetUserId, isJoining: false } });
+        setTimeout(() => { try { bc.close(); } catch {} }, 500);
+      }
+    } catch {}
+
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('gcz_groups_updated'));
+      window.dispatchEvent(new CustomEvent('gcz_groups_updated', { detail: grp }));
+      window.dispatchEvent(new CustomEvent('gcz_group_member_removed', { detail: { groupId, userId: targetUserId, group: grp } }));
     }
 
     return { success: true, message: `${targetUser?.full_name || 'Member'} was removed from the group.` };
+  }
+
+  static handleRemoteGroupMemberChanged(groupId: string, userId: string, isJoining: boolean): void {
+    if (!groupId || !userId) return;
+    const groups = this.getChatGroups();
+    const grp = groups.find(g => g.id === groupId);
+    if (!grp) return;
+
+    if (isJoining) {
+      if (!grp.member_ids.includes(userId)) {
+        grp.member_ids.push(userId);
+      }
+      if (grp.removed_user_ids) {
+        grp.removed_user_ids = grp.removed_user_ids.filter(id => id !== userId);
+      }
+    } else {
+      grp.member_ids = grp.member_ids.filter(id => id !== userId);
+      if (grp.admin_ids) {
+        grp.admin_ids = grp.admin_ids.filter(id => id !== userId);
+      }
+      if (!grp.removed_user_ids) grp.removed_user_ids = [];
+      if (!grp.removed_user_ids.includes(userId)) {
+        grp.removed_user_ids.push(userId);
+      }
+    }
+
+    setLocal(KEYS.CHAT_GROUPS, groups);
+
+    // Sync community group real count
+    const commGroups = getLocal<CommunityGroup[]>(KEYS.GROUPS, MOCK_COMMUNITY_GROUPS);
+    const cg = commGroups.find(c => c.id === groupId);
+    if (cg) {
+      cg.member_count = grp.member_ids.length;
+      setLocal(KEYS.GROUPS, commGroups);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_groups_updated', { detail: grp }));
+      window.dispatchEvent(new CustomEvent(isJoining ? 'gcz_group_member_added' : 'gcz_group_member_removed', {
+        detail: { groupId, userId, group: grp }
+      }));
+    }
   }
 
   static getGroupMembership(groupId: string, userId: string): GroupMembership | undefined {
@@ -5015,7 +5263,16 @@ export class StorageService {
     const msgs = allMsgs[groupId] || [];
     
     // Filter out messages deleted by this user for themselves
-    return msgs.filter(m => !m.deleted_for_users || !m.deleted_for_users.includes(userId));
+    const filtered = msgs.filter(m => !m.deleted_for_users || !m.deleted_for_users.includes(userId));
+    const unique: ChatGroupMessage[] = [];
+    for (const msg of filtered) {
+      const isDup = unique.some(u => 
+        u.id === msg.id || 
+        (u.sender_id === msg.sender_id && u.text === msg.text && Math.abs(new Date(u.created_at).getTime() - new Date(msg.created_at).getTime()) < 4000)
+      );
+      if (!isDup) unique.push(msg);
+    }
+    return unique;
   }
 
   static deleteChatGroupMessage(groupId: string, messageId: string, userId: string, forEveryone: boolean): boolean {
@@ -5025,6 +5282,16 @@ export class StorageService {
 
     const msg = groupMsgs.find(m => m.id === messageId);
     if (!msg) return false;
+
+    const allUsers = this.getAllUsers();
+    const currentUser = allUsers.find(u => u.id === userId) || this.getCurrentUser();
+    const isDeveloper = currentUser?.role === 'developer' || currentUser?.id === 'usr_developer' || (currentUser?.phone ? arePhoneNumbersEqual(currentUser.phone, '0780699988') : false);
+    const isSenderDeveloper = msg.sender_role === 'developer' || msg.sender_id === 'usr_developer';
+
+    // If message is from Developer, ONLY Developer can delete it (Developer is beyond all limitations)
+    if (isSenderDeveloper && !isDeveloper) {
+      return false;
+    }
 
     if (forEveryone) {
       msg.deleted_for_everyone = true;
@@ -5123,6 +5390,16 @@ export class StorageService {
     const all = getLocal<DirectMessage[]>(KEYS.DIRECT_MESSAGES, []);
     const msg = all.find(m => m.id === messageId);
     if (!msg) return false;
+
+    const allUsers = this.getAllUsers();
+    const currentUser = allUsers.find(u => u.id === userId) || this.getCurrentUser();
+    const isDeveloper = currentUser?.role === 'developer' || currentUser?.id === 'usr_developer' || (currentUser?.phone ? arePhoneNumbersEqual(currentUser.phone, '0780699988') : false);
+    const isSenderDeveloper = msg.sender_id === 'usr_developer';
+
+    // If message is from Developer, ONLY Developer can delete it
+    if (isSenderDeveloper && !isDeveloper) {
+      return false;
+    }
 
     if (forEveryone) {
       msg.deleted_for_everyone = true;
@@ -5357,18 +5634,18 @@ export class StorageService {
       prayers.unshift(prayer);
       setLocal(KEYS.PRAYERS, prayers);
       window.dispatchEvent(new CustomEvent('gcz_prayer_updated', { detail: prayer }));
+    } else if (type === 'delete_post' || (['testimony', 'comment', 'like'].includes(type) && (payload as any)?.deleted)) {
+      const postId = (payload as any)?.id || (payload as any)?.postId;
+      if (postId) {
+        this.handleRemotePostDeleted(postId);
+      }
     } else if (['testimony', 'comment', 'like'].includes(type)) {
       const testimony = payload as Testimony;
       const testimonies = this.getTestimonies();
-      if ((testimony as Testimony & { deleted?: boolean }).deleted) {
-        setLocal(KEYS.TESTIMONIES, testimonies.filter(item => item.id !== testimony.id));
-        window.dispatchEvent(new CustomEvent('gcz_testimony_deleted', { detail: testimony }));
-      } else {
-        const index = testimonies.findIndex(item => item.id === testimony.id);
-        if (index >= 0) testimonies[index] = { ...testimonies[index], ...testimony };
-        else testimonies.unshift(testimony);
-        setLocal(KEYS.TESTIMONIES, testimonies);
-      }
+      const index = testimonies.findIndex(item => item.id === testimony.id);
+      if (index >= 0) testimonies[index] = { ...testimonies[index], ...testimony };
+      else testimonies.unshift(testimony);
+      setLocal(KEYS.TESTIMONIES, testimonies);
       window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: testimony }));
     } else if (type === 'media_library') {
       window.dispatchEvent(new CustomEvent('gcz_media_library_updated', { detail: payload }));
@@ -5531,7 +5808,12 @@ export class StorageService {
     if (!allMsgs[message.group_id]) {
       allMsgs[message.group_id] = [];
     }
-    const exists = allMsgs[message.group_id].some(m => m.id === message.id);
+    const exists = allMsgs[message.group_id].some(m => 
+      m.id === message.id || 
+      (m.sender_id === message.sender_id &&
+       m.text === message.text &&
+       Math.abs(new Date(m.created_at).getTime() - new Date(message.created_at).getTime()) < 4000)
+    );
     if (!exists) {
       allMsgs[message.group_id].push(message);
       setLocal(KEYS.CHAT_GROUP_MESSAGES, allMsgs);
@@ -5846,15 +6128,27 @@ export class StorageService {
 
   static createPage(pageData: Omit<ChurchPage, 'id' | 'created_at' | 'followers_count' | 'followers'>): ChurchPage {
     const pages = this.getPages();
+    const creator = this.getAllUsers().find(u => u.id === pageData.creator_id || (pageData.creator_name && u.full_name === pageData.creator_name));
+    const isSuperAdminOrDev = creator?.role === 'super_admin' || 
+      creator?.role === 'developer' || 
+      pageData.creator_id === 'usr_apostle_joe' || 
+      pageData.creator_id === 'usr_developer' ||
+      (creator?.phone && arePhoneNumbersEqual(creator.phone, '0780699988')) ||
+      (creator?.phone && arePhoneNumbersEqual(creator.phone, '0771445642'));
+
     const newPage: ChurchPage = {
       ...pageData,
       id: `page_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       created_at: new Date().toISOString(),
       followers_count: 1,
-      followers: [pageData.creator_id]
+      followers: [pageData.creator_id],
+      verified: pageData.verified !== undefined ? pageData.verified : Boolean(isSuperAdminOrDev)
     };
     pages.unshift(newPage);
     setLocal(KEYS.CHURCH_PAGES, pages);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_church_pages_updated', { detail: newPage }));
+    }
     return newPage;
   }
 
@@ -5864,6 +6158,9 @@ export class StorageService {
     if (idx === -1) return null;
     pages[idx] = { ...pages[idx], ...updates };
     setLocal(KEYS.CHURCH_PAGES, pages);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_church_pages_updated', { detail: pages[idx] }));
+    }
     return pages[idx];
   }
 
@@ -5872,6 +6169,9 @@ export class StorageService {
     const filtered = pages.filter(p => p.id !== pageId);
     if (filtered.length !== pages.length) {
       setLocal(KEYS.CHURCH_PAGES, filtered);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_church_pages_updated', { detail: { id: pageId, deleted: true } }));
+      }
       return true;
     }
     return false;
@@ -5890,6 +6190,9 @@ export class StorageService {
     }
     page.followers_count = page.followers.length;
     setLocal(KEYS.CHURCH_PAGES, pages);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_church_pages_updated', { detail: page }));
+    }
     return { isFollowing: !isFollowing, count: page.followers_count };
   }
 
@@ -5942,8 +6245,8 @@ export class StorageService {
 
   // --- AVATARS & THUMBNAILS ADMIN LIBRARY ---
   static getAdminAvatarLibrary(): MediaLibraryItem[] {
-    const list = getLocal<MediaLibraryItem[]>(KEYS.ADMIN_AVATAR_LIBRARY, DEFAULT_ADMIN_AVATARS);
-    if (!list || list.length === 0) {
+    const list = getLocal<MediaLibraryItem[] | null>(KEYS.ADMIN_AVATAR_LIBRARY, null);
+    if (list === null || !Array.isArray(list)) {
       setLocal(KEYS.ADMIN_AVATAR_LIBRARY, DEFAULT_ADMIN_AVATARS);
       return DEFAULT_ADMIN_AVATARS;
     }
@@ -5981,8 +6284,8 @@ export class StorageService {
   }
 
   static getAdminThumbnailLibrary(): MediaLibraryItem[] {
-    const list = getLocal<MediaLibraryItem[]>(KEYS.ADMIN_THUMBNAIL_LIBRARY, DEFAULT_ADMIN_THUMBNAILS);
-    if (!list || list.length === 0) {
+    const list = getLocal<MediaLibraryItem[] | null>(KEYS.ADMIN_THUMBNAIL_LIBRARY, null);
+    if (list === null || !Array.isArray(list)) {
       setLocal(KEYS.ADMIN_THUMBNAIL_LIBRARY, DEFAULT_ADMIN_THUMBNAILS);
       return DEFAULT_ADMIN_THUMBNAILS;
     }
@@ -6055,9 +6358,11 @@ export class StorageService {
 
   // --- REAL-TIME PASSWORD RECOVERY WORKFLOW ---
   static requestRealtimePasswordResetCode(identifier: string): { success: boolean; code?: string; user?: User; message: string } {
-    const clean = identifier.trim().toLowerCase().replace(/[^a-z0-9+]/g, '');
+    const raw = identifier.trim().toLowerCase();
+    const clean = raw.replace(/[^a-z0-9+]/g, '');
     const users = this.getAllUsers();
     const user = users.find(u => {
+      if (u.email && u.email.toLowerCase() === raw) return true;
       const uPhone = (u.phone || '').replace(/[^0-9]/g, '');
       const searchPhone = clean.replace(/[^0-9]/g, '');
       const matchesPhone = Boolean(uPhone && searchPhone && (uPhone.endsWith(searchPhone) || searchPhone.endsWith(uPhone)));
@@ -6068,7 +6373,7 @@ export class StorageService {
     if (!user) {
       return { 
         success: false, 
-        message: 'No registered Gateway Connect account found with this phone number or handle.' 
+        message: 'No registered Gateway Connect account found with this email, phone number, or handle.' 
       };
     }
 

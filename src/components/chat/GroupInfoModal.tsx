@@ -136,6 +136,8 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
   
   // Real-time group state
   const [currentGroup, setCurrentGroup] = useState<ChatGroup>(group);
+  const [memberToRemove, setMemberToRemove] = useState<User | null>(null);
+
   useEffect(() => {
     setCurrentGroup(group);
   }, [group]);
@@ -150,8 +152,23 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
         if (fresh) setCurrentGroup(fresh);
       }
     };
+
+    const handleMemberChanged = (e: any) => {
+      const detail = e?.detail;
+      if (detail?.groupId === group.id) {
+        const fresh = StorageService.getChatGroups().find(g => g.id === group.id);
+        if (fresh) setCurrentGroup(fresh);
+      }
+    };
+
     window.addEventListener('gcz_groups_updated', handleGroupUpdated);
-    return () => window.removeEventListener('gcz_groups_updated', handleGroupUpdated);
+    window.addEventListener('gcz_group_member_added', handleMemberChanged);
+    window.addEventListener('gcz_group_member_removed', handleMemberChanged);
+    return () => {
+      window.removeEventListener('gcz_groups_updated', handleGroupUpdated);
+      window.removeEventListener('gcz_group_member_added', handleMemberChanged);
+      window.removeEventListener('gcz_group_member_removed', handleMemberChanged);
+    };
   }, [group.id]);
 
   // Icon change & preset picker modal
@@ -856,8 +873,8 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
                                 </span>
                               )}
                               {user.role === 'super_admin' && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-primary/10 text-primary font-bold border border-primary/20">
-                                  Apostle ✦
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/25">
+                                  Apostle
                                 </span>
                               )}
                               {user.role === 'developer' && (
@@ -912,12 +929,7 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
 
                               <button
                                 type="button"
-                                onClick={() => {
-                                  if (confirm(`Remove ${user.full_name} from ${group.name}?`)) {
-                                    StorageService.removeMemberFromGroup(group.id, user.id, currentUser.id);
-                                    onUpdateGroup();
-                                  }
-                                }}
+                                onClick={() => setMemberToRemove(user)}
                                 className="p-1.5 rounded-lg bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/25 transition-colors cursor-pointer"
                                 title="Remove member"
                                 aria-label="Remove member"
@@ -1293,6 +1305,55 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* In-app Remove Member Confirmation Modal */}
+        {memberToRemove && (
+          <div 
+            className="fixed inset-0 z-70 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+            onClick={() => setMemberToRemove(null)}
+          >
+            <div 
+              className="bg-card border border-destructive/30 rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl text-card-foreground text-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-12 h-12 rounded-2xl bg-destructive/10 border border-destructive/30 text-destructive flex items-center justify-center mx-auto">
+                <UserMinus className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-bold text-base text-foreground">Remove from Group?</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Remove <strong className="text-foreground">{memberToRemove.full_name}</strong> from <strong>{group.name}</strong>? They can be re-invited at any time.
+                </p>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setMemberToRemove(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground font-semibold text-xs border border-border transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = memberToRemove;
+                    setMemberToRemove(null);
+                    StorageService.removeMemberFromGroup(group.id, target.id, currentUser.id);
+                    setCurrentGroup(prev => ({
+                      ...prev,
+                      member_ids: prev.member_ids.filter(id => id !== target.id),
+                      admin_ids: prev.admin_ids ? prev.admin_ids.filter(id => id !== target.id) : []
+                    }));
+                    onUpdateGroup();
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold text-xs transition-colors shadow-sm cursor-pointer"
+                >
+                  Remove Member
+                </button>
+              </div>
             </div>
           </div>
         )}

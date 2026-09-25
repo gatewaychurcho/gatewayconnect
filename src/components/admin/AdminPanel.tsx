@@ -266,6 +266,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   const [activePrayerDecree, setActivePrayerDecree] = useState<PrayerRequest | null>(null);
   const [decreeNote, setDecreeNote] = useState<string>('I decree the supernatural favor of God and total deliverance in Jesus name!');
 
+  // Reliable In-App Confirmation Modal (Replaces blocked window.confirm for 100% reliable deletes)
+  const [adminConfirmModal, setAdminConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+  } | null>(null);
+
   // Calculations for KPI Cards
   const totalGivingUsd = donations
     .filter(d => d.currency === 'USD')
@@ -337,11 +345,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   };
 
   const handleDeleteCommunityPost = (postId: string) => {
-    if (!window.confirm('Delete this community post/testimony permanently from the feed?')) return;
-    StorageService.deleteTestimony(postId);
-    setTestimonies(StorageService.getTestimonies());
-    setModerationMessage('Post removed by Moderator.');
-    onRefreshAppState();
+    setAdminConfirmModal({
+      title: 'Delete Community Post',
+      message: 'Permanently remove this community post/testimony from the feed? This change will sync immediately across all active believers in real time.',
+      confirmLabel: 'Delete Post',
+      onConfirm: () => {
+        StorageService.deleteTestimony(postId);
+        setTestimonies(StorageService.getTestimonies());
+        setModerationMessage('Post permanently removed by Moderator.');
+        onRefreshAppState();
+      }
+    });
   };
 
   // Congregation Live Stream Local MP4 File Upload
@@ -357,42 +371,60 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     setIsUploadingMp4(true);
     setMp4UploadFeedback(`Processing ${file.name}...`);
     try {
-      let videoUrl: string | null = null;
-      try {
-        videoUrl = await StorageBucketService.uploadFileToMediaBucket(file, 'media');
-      } catch (err) {
-        console.warn('Storage bucket video upload fallback:', err);
-      }
-
-      if (!videoUrl) {
-        try {
-          const mediaId = `stream_mp4_${Date.now()}`;
-          await LocalMediaStore.saveMedia(mediaId, file);
-          videoUrl = URL.createObjectURL(file);
-        } catch {
-          videoUrl = URL.createObjectURL(file);
-        }
-      }
-
+      // 1. Instant local object URL & IndexedDB persistence for zero lag
+      const mediaId = `stream_mp4_${Date.now()}`;
+      const instantUrl = URL.createObjectURL(file);
+      await LocalMediaStore.saveMedia(mediaId, file).catch(() => {});
+      
+      let videoUrl: string = instantUrl;
       setAdminStreamUrl(videoUrl);
       setShowAdminStreamPreview(true);
       StorageService.setLiveStreamUrl(videoUrl);
+
+      const streamTitle = sermonTitle || `${file.name.replace(/\.[^/.]+$/, '')} • Live Stream`;
       const newStatus = {
         ...liveSermonStatus,
         streamUrl: videoUrl,
         isLive: true,
-        title: sermonTitle || `${file.name.replace(/\.[^/.]+$/, '')} • Sanctuary Live Stream`
+        title: streamTitle
       };
       StorageService.setLiveSermonStatus(newStatus);
       setLiveSermonStatus(newStatus);
       StorageService.setOverridePlayingVideo({
         id: `stream_${Date.now()}`,
-        title: newStatus.title,
-        youtube_id: videoUrl
+        title: streamTitle,
+        youtube_id: videoUrl,
+        video_url: videoUrl
       });
-      setMp4UploadFeedback(`✓ Local MP4 active & broadcasting: ${file.name}`);
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_override_video_updated', {
+          detail: {
+            id: `stream_${Date.now()}`,
+            title: streamTitle,
+            youtube_id: videoUrl,
+            video_url: videoUrl
+          }
+        }));
+        window.dispatchEvent(new CustomEvent('gcz_live_status_updated', { detail: newStatus }));
+      }
+
+      setMp4UploadFeedback(`✓ MP4 live & broadcasting on top: ${file.name}`);
       confetti({ particleCount: 30, spread: 60 });
       onRefreshAppState();
+
+      // 2. Background attempt to upload to Supabase storage bucket without blocking playback
+      StorageBucketService.uploadFileToMediaBucket(file, 'media').then(remoteUrl => {
+        if (remoteUrl) {
+          StorageService.setLiveStreamUrl(remoteUrl);
+          StorageService.setOverridePlayingVideo({
+            id: `stream_${Date.now()}`,
+            title: streamTitle,
+            youtube_id: remoteUrl,
+            video_url: remoteUrl
+          });
+        }
+      }).catch(() => {});
     } catch (err: any) {
       setMp4UploadFeedback(`Upload failed: ${err.message || 'Error loading video'}`);
     } finally {
@@ -672,11 +704,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   };
 
   const handleDeleteSermon = (sermonId: string) => {
-    if (confirm('Are you sure you want to remove this sermon from the church archive?')) {
-      StorageService.deleteSermon(sermonId);
-      setSermons(StorageService.getSermons());
-      onRefreshAppState();
-    }
+    setAdminConfirmModal({
+      title: 'Delete Sermon',
+      message: 'Are you sure you want to permanently remove this sermon from the church archive? This action cannot be undone.',
+      confirmLabel: 'Delete Sermon',
+      onConfirm: () => {
+        StorageService.deleteSermon(sermonId);
+        setSermons(StorageService.getSermons());
+        setModerationMessage('Sermon permanently removed from archive.');
+        onRefreshAppState();
+      }
+    });
   };
 
   const handleSendPush = (e: React.FormEvent) => {

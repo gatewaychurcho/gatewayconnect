@@ -83,11 +83,8 @@ export class StorageBucketService {
     }
 
     try {
-      let finalFile = file;
-      
-      if (file.type.startsWith('video/')) {
-        finalFile = await this.compressVideo(file);
-      }
+      // Direct stream upload for instantaneous video processing without browser thread freezing
+      const finalFile = file;
 
       // Map any legacy bucket names to clean folders inside 'media' bucket
       let targetFolder = folder;
