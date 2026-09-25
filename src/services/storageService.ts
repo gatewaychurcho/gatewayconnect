@@ -6434,6 +6434,24 @@ export class StorageService {
     };
   }
 
+  static isDeveloperMode(): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      return getLocal<boolean>('gcz_developer_mode', false) || localStorage.getItem('gcz_developer_mode') === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  static setDeveloperMode(enabled: boolean): void {
+    try {
+      setLocal('gcz_developer_mode', enabled);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_developer_mode_changed', { detail: { enabled } }));
+      }
+    } catch {}
+  }
+
   static getAllMediaLibrary(): MediaLibraryItem[] {
     return [...this.getAdminAvatarLibrary(), ...this.getAdminThumbnailLibrary()];
   }
@@ -6463,6 +6481,16 @@ export class StorageService {
     }
   }
 }
+
+// Bind methods to prototype and global window to guarantee availability in all contexts
+(StorageService as any).prototype.isDeveloperMode = StorageService.isDeveloperMode;
+(StorageService as any).prototype.setDeveloperMode = StorageService.setDeveloperMode;
+if (typeof window !== 'undefined') {
+  (window as any).StorageService = StorageService;
+}
+
+export const isDeveloperMode = (): boolean => StorageService.isDeveloperMode();
+export const setDeveloperMode = (enabled: boolean): void => StorageService.setDeveloperMode(enabled);
 
 type DonationsList = Donation[];
 

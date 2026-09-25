@@ -1551,7 +1551,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                       const isDeveloperUser = currentUser?.role === 'developer' || 
                                               Boolean(currentUser?.phone && arePhoneNumbersEqual(currentUser.phone, '0780699988')) || 
                                               (currentUser as any)?.is_developer || 
-                                              StorageService.isDeveloperMode();
+                                              Boolean(typeof StorageService?.isDeveloperMode === 'function' && StorageService.isDeveloperMode());
                       const isModOrAdmin = isDeveloperUser || isAdminOrDev || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || (currentUser?.role as string) === 'moderator' || (currentUser?.role as string) === 'mod' || canModeratePosts;
                       const canManagePost = isPostAuthor || isModOrAdmin;
 
@@ -3360,7 +3360,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
               const isDeveloperUser = currentUser?.role === 'developer' || 
                                       Boolean(currentUser?.phone && arePhoneNumbersEqual(currentUser.phone, '0780699988')) || 
                                       (currentUser as any)?.is_developer || 
-                                      StorageService.isDeveloperMode();
+                                      Boolean(typeof StorageService?.isDeveloperMode === 'function' && StorageService.isDeveloperMode());
               const isModOrAdmin = isDeveloperUser || isAdminOrDev || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || (currentUser?.role as string) === 'moderator' || (currentUser?.role as string) === 'mod' || canModeratePosts;
               const canManagePost = isPostAuthor || isModOrAdmin;
 
