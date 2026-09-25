@@ -6,7 +6,32 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { CONFIG } from './config';
 
 type LiveEvent = {
-  type: 'testimony' | 'comment' | 'like' | 'direct_message' | 'fellowship_post' | 'prayer' | 'follow' | 'notification' | 'story' | 'group' | 'reaction' | 'stream' | 'pulpit' | 'stream_chat' | 'stream_reaction' | 'user_created' | 'user_banned' | 'unban_user' | 'stream_viewer_joined' | 'stream_viewer_left';
+  type: 
+    | 'testimony' 
+    | 'comment' 
+    | 'like' 
+    | 'direct_message' 
+    | 'fellowship_post' 
+    | 'prayer' 
+    | 'follow' 
+    | 'notification' 
+    | 'story' 
+    | 'group' 
+    | 'reaction' 
+    | 'stream' 
+    | 'stream_status'
+    | 'override_video'
+    | 'pulpit' 
+    | 'stream_chat' 
+    | 'stream_reaction' 
+    | 'user_created' 
+    | 'user_updated'
+    | 'user_banned' 
+    | 'unban_user' 
+    | 'stream_viewer_joined' 
+    | 'stream_viewer_left'
+    | 'donation'
+    | 'media_library';
   payload: unknown;
 };
 
@@ -22,9 +47,10 @@ const clients = new Map<WebSocket, { id: string; full_name: string; handle?: str
 const state: LiveState = { testimonies: [], prayers: [], directMessages: [], fellowshipPosts: [], activeMembers: [] };
 const knownEventTypes = new Set<LiveEvent['type']>([
   'testimony', 'comment', 'like', 'direct_message', 'fellowship_post', 'prayer',
-  'follow', 'notification', 'story', 'group', 'reaction', 'stream', 'pulpit',
-  'stream_chat', 'stream_reaction', 'user_created', 'user_banned', 'unban_user',
-  'stream_viewer_joined', 'stream_viewer_left'
+  'follow', 'notification', 'story', 'group', 'reaction', 'stream', 'stream_status',
+  'override_video', 'pulpit', 'stream_chat', 'stream_reaction', 'user_created',
+  'user_updated', 'user_banned', 'unban_user', 'stream_viewer_joined', 'stream_viewer_left',
+  'donation', 'media_library'
 ]);
 
 const broadcast = (message: unknown, except?: WebSocket) => {
@@ -282,9 +308,14 @@ socketServer.on('connection', (socket) => {
               : ['testimony', 'comment', 'like'].includes(event.type)
                 ? state.testimonies
                 : null;
-        const entity = event.payload as { id?: string };
-        if (collection && entity?.id && !collection.some(item => (item as { id?: string }).id === entity.id)) {
-          collection.push(event.payload);
+        const entity = event.payload as { id?: string; deleted?: boolean };
+        if (collection && entity?.id) {
+          if (entity.deleted) {
+            const idx = collection.findIndex(item => (item as { id?: string }).id === entity.id);
+            if (idx >= 0) collection.splice(idx, 1);
+          } else if (!collection.some(item => (item as { id?: string }).id === entity.id)) {
+            collection.push(event.payload);
+          }
         }
         broadcast({ type: 'event', payload: event }, socket);
       }
