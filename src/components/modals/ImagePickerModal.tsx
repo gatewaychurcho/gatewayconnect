@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { StorageBucketService } from '../../services/StorageBucketService';
+import { StorageService } from '../../services/storageService';
 
 interface ImagePickerModalProps {
   isOpen: boolean;
@@ -254,54 +255,76 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({
           </div>
 
           {/* TAB 1: Ministry Photo Gallery (Pick & Tick) */}
-          {activeTab === 'gallery' && (
-            <div className="space-y-2">
-              <span className="text-[11px] font-semibold text-primary uppercase tracking-wider block">
-                Tick Any Photo To Select
-              </span>
-              <div className="grid grid-cols-2 gap-2.5">
-                {MINISTRY_GALLERY_PRESETS.map((item) => {
-                  const isChecked = selectedImage === item.url;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedImage(item.url);
-                        setFileName(null);
-                      }}
-                      className={`relative group rounded-xl overflow-hidden border text-left p-1.5 transition-all bg-secondary/30 flex flex-col gap-1.5 ${
-                        isChecked
-                          ? 'border-primary shadow-sm bg-primary/10'
-                          : 'border-border hover:border-foreground/20'
-                      }`}
-                    >
-                      <div className="relative aspect-video rounded-lg overflow-hidden bg-background">
-                        <img
-                          src={item.url}
-                          alt={item.label}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        {isChecked && (
-                          <div className="absolute top-1 right-1 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xs">
-                            <Check className="w-4 h-4 stroke-[3]" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="px-1">
-                        <p className="text-xs font-semibold text-foreground leading-none truncate">
-                          {item.label}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground truncate mt-0.5">
-                          {item.category}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
+          {activeTab === 'gallery' && (() => {
+            const adminThumbs = StorageService.getAdminThumbnailLibrary();
+            const adminAvs = StorageService.getAdminAvatarLibrary();
+            const combined = [
+              ...adminThumbs.map(t => ({ id: t.id, url: t.url, label: t.name, category: 'Ministry Thumbnail' })),
+              ...adminAvs.map(a => ({ id: a.id, url: a.url, label: a.name, category: 'Official Avatar' })),
+              ...MINISTRY_GALLERY_PRESETS
+            ];
+            // Filter unique URLs
+            const seen = new Set<string>();
+            const uniqueItems = combined.filter(item => {
+              if (seen.has(item.url)) return false;
+              seen.add(item.url);
+              return true;
+            });
+
+            return (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-primary uppercase tracking-wider block">
+                    Choose from Library ({uniqueItems.length} Photos)
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                  {uniqueItems.map((item) => {
+                    const isChecked = selectedImage === item.url;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedImage(item.url);
+                          setFileName(null);
+                        }}
+                        className={`relative group rounded-xl overflow-hidden border text-left p-1.5 transition-all bg-secondary/30 flex flex-col gap-1.5 cursor-pointer ${
+                          isChecked
+                            ? 'border-primary shadow-sm bg-primary/10'
+                            : 'border-border hover:border-foreground/20'
+                        }`}
+                      >
+                        <div className="relative aspect-video rounded-lg overflow-hidden bg-background">
+                          <img
+                            src={item.url}
+                            alt={item.label}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                          {isChecked && (
+                            <div className="absolute top-1 right-1 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xs">
+                              <Check className="w-4 h-4 stroke-[3]" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="px-1">
+                          <p className="text-xs font-semibold text-foreground leading-none truncate">
+                            {item.label}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                            {item.category}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* TAB 2: Upload from Device Local Storage */}
           {activeTab === 'upload' && (

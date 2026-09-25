@@ -217,6 +217,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     };
 
     window.addEventListener('gcz_testimony_updated', handleSync);
+    window.addEventListener('gcz_testimony_deleted', handleSync);
     window.addEventListener('gcz_stream_url_updated', handleUrlChange);
     window.addEventListener('gcz_override_video_updated', handleOverrideChange);
     window.addEventListener('gcz_live_status_updated', handleLiveStatusChange);
@@ -225,6 +226,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
 
     return () => {
       window.removeEventListener('gcz_testimony_updated', handleSync);
+      window.removeEventListener('gcz_testimony_deleted', handleSync);
       window.removeEventListener('gcz_stream_url_updated', handleUrlChange);
       window.removeEventListener('gcz_override_video_updated', handleOverrideChange);
       window.removeEventListener('gcz_live_status_updated', handleLiveStatusChange);
@@ -814,6 +816,14 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               autoPlay
               playsInline
               className="w-full h-full object-contain"
+            />
+          ) : (streamEmbedInfo.isMp4 || streamEmbedInfo.isDirectVideo || currentStreamTarget.endsWith('.mp4') || currentStreamTarget.startsWith('blob:') || currentStreamTarget.startsWith('data:video/')) ? (
+            <video
+              src={streamEmbedInfo.embedUrl || currentStreamTarget}
+              controls
+              autoPlay
+              playsInline
+              className="w-full h-full object-contain bg-black"
             />
           ) : isFacebook ? (
             <FacebookStreamPlayer

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   ShieldCheck, 
   Phone, 
@@ -20,7 +20,9 @@ import {
   Send,
   MapPin,
   Globe,
-  Calendar
+  Calendar,
+  Upload,
+  Check
 } from 'lucide-react';
 import { User as UserType, SUPPORTED_CITIES, SupportedCity, COUNTRY_CODES } from '../../types';
 import { StorageService } from '../../services/storageService';
@@ -78,6 +80,38 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [resetNote, setResetNote] = useState<string>('');
   const [resetSuccessMsg, setResetSuccessMsg] = useState<string | null>(null);
 
+  // Real-time Password Reset State Machine
+  const [resetStep, setResetStep] = useState<'request' | 'verify' | 'success'>('request');
+  const [resetOtpCode, setResetOtpCode] = useState<string>('');
+  const [generatedOtp, setGeneratedOtp] = useState<string | null>(null);
+  const [resetNewPassword, setResetNewPassword] = useState<string>('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState<string>('');
+  const [resetTargetUser, setResetTargetUser] = useState<UserType | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [isSubmittingReset, setIsSubmittingReset] = useState<boolean>(false);
+
+  // Avatar Selection for Signup
+  const [adminAvatars, setAdminAvatars] = useState(() => StorageService.getAdminAvatarLibrary());
+  const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string>(() => StorageService.getDefaultAvatar());
+  const customAvatarFileRef = useRef<HTMLInputElement>(null);
+
+  const handleCustomAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setErrorMessage('Please select a valid image file for your avatar.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result) {
+        setSelectedAvatarUrl(reader.result as string);
+        confetti({ particleCount: 15, spread: 40 });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleOpenAppealModal = () => {
     setAppealPhone(phone);
     setAppealReason('');
@@ -89,7 +123,85 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     setResetPhone(phone);
     setResetNote('');
     setResetSuccessMsg(null);
+    setResetStep('request');
+    setResetError(null);
+    setResetOtpCode('');
+    setGeneratedOtp(null);
+    setResetNewPassword('');
+    setResetConfirmPassword('');
+    setResetTargetUser(null);
     setShowResetModal(true);
+  };
+
+  const handleRequestResetOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError(null);
+    if (!resetPhone.trim()) {
+      setResetError('Please enter your registered mobile number or username.');
+      return;
+    }
+
+    const res = StorageService.requestRealtimePasswordResetCode(resetPhone.trim());
+    if (!res.success || !res.user) {
+      setResetError(res.message);
+      return;
+    }
+
+    setResetTargetUser(res.user);
+    setGeneratedOtp(res.code || '123456');
+    setResetOtpCode(res.code || '');
+    setResetStep('verify');
+    confetti({ particleCount: 25, spread: 55 });
+  };
+
+  const handleConfirmResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError(null);
+    if (!resetTargetUser) return;
+
+    if (!resetOtpCode.trim()) {
+      setResetError('Please enter the 6-digit verification code.');
+      return;
+    }
+    if (resetNewPassword.length < 4) {
+      setResetError('Password must be at least 4 characters long.');
+      return;
+    }
+    if (resetNewPassword !== resetConfirmPassword) {
+      setResetError('New passwords do not match. Please verify.');
+      return;
+    }
+
+    setIsSubmittingReset(true);
+    try {
+      const res = StorageService.verifyAndResetPasswordRealtime(
+        resetTargetUser.id,
+        resetOtpCode.trim(),
+        resetNewPassword.trim()
+      );
+
+      if (!res.success) {
+        setResetError(res.message);
+        setIsSubmittingReset(false);
+        return;
+      }
+
+      // Also attempt update in Supabase auth if session exists
+      const supabase = getSupabase();
+      if (supabase) {
+        try {
+          await supabase.auth.updateUser({ password: resetNewPassword.trim() });
+        } catch {}
+      }
+
+      setResetSuccessMsg('Your password was updated in real time! You can now sign in.');
+      setResetStep('success');
+      confetti({ particleCount: 40, spread: 70 });
+    } catch (err: any) {
+      setResetError(err.message || 'Failed to reset password.');
+    } finally {
+      setIsSubmittingReset(false);
+    }
   };
 
   const handleSubmitAppeal = (e: React.FormEvent) => {
@@ -232,6 +344,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         const meta = data.user.user_metadata || {};
         const memberId = meta.member_id || 'G' + Math.floor(100000 + Math.random() * 900000).toString();
         const handle = `@${fullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+        const finalAvatar = selectedAvatarUrl || StorageService.getDefaultAvatar();
         const mappedUser: any = {
           id: data.user.id,
           phone: meta.phone || fullPhone,
@@ -240,7 +353,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           role: 'member',
           location: meta.location || cityLocation,
           member_id: memberId,
-          avatar_url: '',
+          avatar_url: finalAvatar,
           created_at: data.user.created_at,
           is_premium: false,
           badge_type: 'none',
@@ -263,6 +376,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             member_id: memberId,
             date_of_birth: dateOfBirth,
             gender: gender,
+            avatar_url: finalAvatar,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           }, { onConflict: 'id' });
@@ -467,6 +581,70 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             </form>
           ) : (
             <form onSubmit={handleSignupSubmit} className="space-y-3 text-xs">
+              {/* Profile Avatar Selection */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-semibold text-foreground">
+                    Choose Profile Avatar
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => customAvatarFileRef.current?.click()}
+                    className="text-[11px] text-primary hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Upload className="w-3 h-3" />
+                    <span>Upload Custom Photo</span>
+                  </button>
+                  <input
+                    ref={customAvatarFileRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCustomAvatarSelect}
+                    className="hidden"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none">
+                  {adminAvatars.map((av) => {
+                    const isSelected = selectedAvatarUrl === av.url;
+                    return (
+                      <button
+                        key={av.id}
+                        type="button"
+                        onClick={() => setSelectedAvatarUrl(av.url)}
+                        className={`relative rounded-full shrink-0 transition-transform active:scale-95 cursor-pointer p-0.5 ${
+                          isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-card scale-105' : 'opacity-70 hover:opacity-100'
+                        }`}
+                        title={av.name}
+                      >
+                        <img
+                          src={av.url}
+                          alt={av.name}
+                          className="w-10 h-10 rounded-full object-cover border border-white/20"
+                        />
+                        {isSelected && (
+                          <span className="absolute -bottom-0.5 -right-0.5 bg-primary text-primary-foreground rounded-full p-0.5 shadow-sm">
+                            <Check className="w-2.5 h-2.5" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                  {selectedAvatarUrl && !adminAvatars.some(a => a.url === selectedAvatarUrl) && (
+                    <div className="relative rounded-full shrink-0 ring-2 ring-primary ring-offset-2 ring-offset-card p-0.5">
+                      <img
+                        src={selectedAvatarUrl}
+                        alt="Custom Upload"
+                        className="w-10 h-10 rounded-full object-cover border border-white/20"
+                      />
+                      <span className="absolute -bottom-0.5 -right-0.5 bg-primary text-primary-foreground rounded-full p-0.5 shadow-sm">
+                        <Check className="w-2.5 h-2.5" />
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div>
                 <label className="block font-semibold text-foreground mb-1">
                   Full Name
@@ -732,81 +910,189 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         </div>
       )}
 
-      {/* MODAL: PASSWORD RESET REQUEST */}
+      {/* MODAL: REAL-TIME PASSWORD RESET WORKFLOW */}
       {showResetModal && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-2xl p-5 w-full max-w-md space-y-4 shadow-xl animate-in fade-in text-foreground">
             <div className="flex items-center justify-between border-b border-border pb-2.5">
               <div className="flex items-center gap-2">
                 <Key className="w-5 h-5 text-primary" />
-                <h3 className="font-bold text-sm text-foreground">Password Recovery Request</h3>
+                <h3 className="font-bold text-sm text-foreground">Real-Time Password Recovery</h3>
               </div>
-              <button onClick={() => setShowResetModal(false)} className="text-muted-foreground hover:text-foreground">
+              <button 
+                onClick={() => setShowResetModal(false)} 
+                className="text-muted-foreground hover:text-foreground p-1 rounded-lg cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              Forgot your password? Send a recovery request directly to the Lead Developer and Church Admin desk.
-            </p>
-
-            {resetSuccessMsg ? (
-              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-500 text-xs space-y-3">
-                <div className="flex items-center gap-2 font-bold">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span>Request Logged</span>
-                </div>
-                <p className="text-[11px] text-muted-foreground">{resetSuccessMsg}</p>
-                <button
-                  type="button"
-                  onClick={() => setShowResetModal(false)}
-                  className="w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition-all shadow-xs"
-                >
-                  Close Window
-                </button>
+            {resetError && (
+              <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-center gap-2">
+                <Info className="w-4 h-4 shrink-0" />
+                <span>{resetError}</span>
               </div>
-            ) : (
-              <form onSubmit={handleSubmitPasswordReset} className="space-y-3 text-xs">
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">Your Registered Phone Number</label>
-                  <input
-                    type="tel"
-                    required
-                    value={resetPhone}
-                    onChange={e => setResetPhone(e.target.value)}
-                    placeholder="e.g. 0772123456"
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary outline-hidden"
-                  />
-                </div>
+            )}
+
+            {resetStep === 'request' && (
+              <form onSubmit={handleRequestResetOtp} className="space-y-3.5 text-xs">
+                <p className="text-muted-foreground text-[11px] leading-relaxed">
+                  Enter your registered phone number or username. The Gateway Security Engine will instantly verify your account and generate a 6-digit recovery OTP code in real time.
+                </p>
 
                 <div>
-                  <label className="block font-semibold text-foreground mb-1">Additional Note (Optional)</label>
-                  <input
-                    type="text"
-                    value={resetNote}
-                    onChange={e => setResetNote(e.target.value)}
-                    placeholder="e.g. Please reset my password, I forgot it yesterday"
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary outline-hidden"
-                  />
+                  <label className="block font-semibold text-foreground mb-1">
+                    Registered Mobile Number or @handle
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="text"
+                      required
+                      value={resetPhone}
+                      onChange={e => setResetPhone(e.target.value)}
+                      placeholder="e.g. 0771234567 or @tendai"
+                      className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary outline-hidden text-sm"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2">
                   <button
                     type="button"
                     onClick={() => setShowResetModal(false)}
-                    className="px-4 py-2 rounded-xl bg-secondary text-muted-foreground hover:text-foreground font-semibold transition-colors"
+                    className="px-4 py-2 rounded-xl bg-secondary text-muted-foreground hover:text-foreground font-semibold transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs flex items-center gap-1.5 transition-all"
+                    className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
                   >
-                    <Key className="w-3.5 h-3.5" />
-                    <span>Submit Reset Request</span>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Generate Instant Code</span>
                   </button>
                 </div>
               </form>
+            )}
+
+            {resetStep === 'verify' && resetTargetUser && (
+              <form onSubmit={handleConfirmResetPassword} className="space-y-3.5 text-xs">
+                <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-primary" />
+                      <span>{resetTargetUser.full_name}</span>
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-mono">{resetTargetUser.phone}</span>
+                  </div>
+                  
+                  {generatedOtp && (
+                    <div className="flex items-center justify-between bg-card/80 p-2 rounded-lg border border-primary/30 mt-1">
+                      <div>
+                        <span className="text-[10px] text-muted-foreground block">Real-time OTP Code:</span>
+                        <span className="font-mono font-black text-sm text-primary tracking-widest">{generatedOtp}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setResetOtpCode(generatedOtp)}
+                        className="px-2 py-1 rounded bg-primary text-primary-foreground text-[10px] font-bold shadow-xs cursor-pointer active:scale-95"
+                      >
+                        Auto-Fill Code
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">
+                    6-Digit Verification Code
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={resetOtpCode}
+                    onChange={e => setResetOtpCode(e.target.value)}
+                    placeholder="Enter 6-digit code"
+                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-foreground text-center font-mono font-bold tracking-widest text-base focus:border-primary outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={resetNewPassword}
+                    onChange={e => setResetNewPassword(e.target.value)}
+                    placeholder="At least 4 characters"
+                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-foreground focus:border-primary outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={resetConfirmPassword}
+                    onChange={e => setResetConfirmPassword(e.target.value)}
+                    placeholder="Re-enter new password"
+                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-foreground focus:border-primary outline-hidden"
+                  />
+                </div>
+
+                <div className="flex justify-between gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setResetStep('request')}
+                    className="px-3 py-2 rounded-xl bg-secondary text-muted-foreground hover:text-foreground font-semibold transition-colors cursor-pointer"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingReset}
+                    className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>{isSubmittingReset ? 'Updating...' : 'Reset Password Now'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {resetStep === 'success' && (
+              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-500 text-xs space-y-3 text-center">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-foreground">Password Reset Successfully!</h4>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Your password was updated in real time. You can now sign in to Gateway Connect with your new credentials.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (resetTargetUser) {
+                      setPhone(resetTargetUser.phone || resetPhone);
+                      setPassword(resetNewPassword);
+                    }
+                    setShowResetModal(false);
+                    setMode('login');
+                  }}
+                  className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  Sign In with New Password
+                </button>
+              </div>
             )}
           </div>
         </div>

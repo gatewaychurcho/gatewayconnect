@@ -592,9 +592,21 @@ export interface StreamEmbedInfo {
   videoId?: string;
   isFacebook: boolean;
   isYoutube: boolean;
+  isMp4?: boolean;
+  isDirectVideo?: boolean;
   facebookDirectUrl?: string;
   hasNumericVideoId?: boolean;
   isLivePageHub?: boolean;
+}
+
+export interface MediaLibraryItem {
+  id: string;
+  url: string;
+  name: string;
+  category: 'avatar' | 'thumbnail';
+  is_default?: boolean;
+  uploaded_at: string;
+  size?: string;
 }
 
 export interface BibleDictionaryEntry {

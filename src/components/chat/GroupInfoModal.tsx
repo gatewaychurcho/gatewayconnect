@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   X, 
@@ -134,6 +134,26 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
   const [memberRoleFilter, setMemberRoleFilter] = useState<'all' | 'admins' | 'members'>('all');
   const [mediaFilter, setMediaFilter] = useState<'all' | 'image' | 'video' | 'audio' | 'document'>('all');
   
+  // Real-time group state
+  const [currentGroup, setCurrentGroup] = useState<ChatGroup>(group);
+  useEffect(() => {
+    setCurrentGroup(group);
+  }, [group]);
+
+  useEffect(() => {
+    const handleGroupUpdated = (e: any) => {
+      const updated = e?.detail as ChatGroup;
+      if (updated && updated.id === group.id) {
+        setCurrentGroup(updated);
+      } else {
+        const fresh = StorageService.getChatGroups().find(g => g.id === group.id);
+        if (fresh) setCurrentGroup(fresh);
+      }
+    };
+    window.addEventListener('gcz_groups_updated', handleGroupUpdated);
+    return () => window.removeEventListener('gcz_groups_updated', handleGroupUpdated);
+  }, [group.id]);
+
   // Icon change & preset picker modal
   const [showIconPicker, setShowIconPicker] = useState(false);
   const iconFileInputRef = useRef<HTMLInputElement>(null);
@@ -141,14 +161,14 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
 
   // Group details editing state
   const [isEditingDetails, setIsEditingDetails] = useState(false);
-  const [editName, setEditName] = useState(group.name);
-  const [editDesc, setEditDesc] = useState(group.description);
-  const [editCategory, setEditCategory] = useState<string>(group.category || 'General');
+  const [editName, setEditName] = useState(currentGroup.name);
+  const [editDesc, setEditDesc] = useState(currentGroup.description);
+  const [editCategory, setEditCategory] = useState<string>(currentGroup.category || 'General');
 
   // Mute notification simulation state
   const [isMuted, setIsMuted] = useState(() => {
     try {
-      return localStorage.getItem(`gcz_mute_group_${group.id}`) === 'true';
+      return localStorage.getItem(`gcz_mute_group_${currentGroup.id}`) === 'true';
     } catch {
       return false;
     }
@@ -157,9 +177,9 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
   const allUsers = StorageService.getAllUsers();
   const isDeveloper = currentUser.role === 'developer' || currentUser.id === 'usr_developer' || arePhoneNumbersEqual(currentUser.phone, '0780699988');
   const isSuperAdmin = currentUser.role === 'super_admin' || currentUser.id === 'usr_apostle_joe';
-  const isGroupAdmin = isDeveloper || isSuperAdmin || (group.admin_ids || [group.created_by]).includes(currentUser.id);
-  const isGroupPinned = group.pinned_by_users?.includes(currentUser.id);
-  const isUserMember = group.member_ids.includes(currentUser.id);
+  const isGroupAdmin = isDeveloper || isSuperAdmin || (currentGroup.admin_ids || [currentGroup.created_by]).includes(currentUser.id);
+  const isGroupPinned = currentGroup.pinned_by_users?.includes(currentUser.id);
+  const isUserMember = currentGroup.member_ids.includes(currentUser.id);
 
   // Extract shared media from group messages
   const mediaItems = useMemo(() => {
@@ -173,7 +193,7 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
 
   // Filtered members list
   const filteredMembers = useMemo(() => {
-    const list = group.member_ids.map(mid => {
+    const list = currentGroup.member_ids.map(mid => {
       const u = allUsers.find(user => user.id === mid) || {
         id: mid,
         full_name: 'Believer Member',
@@ -182,8 +202,8 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
         is_verified: false,
         member_id: mid
       } as User;
-      const isAdmin = (group.admin_ids || [group.created_by]).includes(mid) || u.role === 'super_admin' || u.role === 'developer';
-      const isCreator = mid === group.created_by;
+      const isAdmin = (currentGroup.admin_ids || [currentGroup.created_by]).includes(mid) || u.role === 'super_admin' || u.role === 'developer';
+      const isCreator = mid === currentGroup.created_by;
       return { user: u, isAdmin, isCreator };
     });
 
@@ -205,11 +225,11 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
       if (!a.isAdmin && b.isAdmin) return 1;
       return a.user.full_name.localeCompare(b.user.full_name);
     });
-  }, [group, allUsers, memberSearch, memberRoleFilter]);
+  }, [currentGroup, allUsers, memberSearch, memberRoleFilter]);
 
   // Compute number of members currently active / online in this group
   const onlineMembersCount = useMemo(() => {
-    return group.member_ids.reduce((acc, mid) => {
+    return currentGroup.member_ids.reduce((acc, mid) => {
       if (mid === currentUser.id) return acc + 1;
       const u = allUsers.find(user => user.id === mid);
       if (u) {
@@ -218,7 +238,7 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
       }
       return acc;
     }, 0);
-  }, [group.member_ids, allUsers, currentUser.id]);
+  }, [currentGroup.member_ids, allUsers, currentUser.id]);
 
   if (!isOpen) return null;
 

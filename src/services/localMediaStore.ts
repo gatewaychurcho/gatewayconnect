@@ -110,6 +110,17 @@ class LocalMediaStoreService {
   }
 
   /**
+   * Alias for saveSermonMedia to support general media file storage.
+   */
+  async saveMedia(
+    id: string,
+    fileOrBlob: Blob | File,
+    metadata?: { name?: string; type?: string; size?: number; duration?: string }
+  ): Promise<string> {
+    return this.saveSermonMedia(id, fileOrBlob, metadata);
+  }
+
+  /**
    * Retrieves an object URL for playback by sermon ID.
    */
   async getSermonMediaUrl(id: string): Promise<string | null> {

@@ -45,7 +45,8 @@ export type LiveEventType =
   | 'unban_user'
   | 'stream_viewer_joined'
   | 'stream_viewer_left'
-  | 'donation';
+  | 'donation'
+  | 'media_library';
 
 export type LiveEvent = { type: LiveEventType; payload: unknown };
 
@@ -502,6 +503,8 @@ export class LiveSyncService {
   bindLocalEvents(): () => void {
     const eventNames: Array<[string, LiveEventType]> = [
       ['gcz_testimony_updated', 'testimony'],
+      ['gcz_testimony_deleted', 'testimony'],
+      ['gcz_media_library_updated', 'media_library'],
       ['gcz_direct_messages_updated', 'direct_message'],
       ['gcz_group_messages_updated', 'fellowship_post'],
       ['gcz_prayer_updated', 'prayer'],

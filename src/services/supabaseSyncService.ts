@@ -870,6 +870,13 @@ export class SupabaseSyncService {
             if (!payload) return;
             this.socialSubscribers.forEach(cb => cb.onDeleteDirectMessage?.(payload));
           })
+          .on('broadcast', { event: 'delete_post' }, ({ payload }: any) => {
+            if (!payload || !payload.id) return;
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_testimony_deleted', { detail: payload }));
+              window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: payload }));
+            }
+          })
           .on('broadcast', { event: 'user_profile_updated' }, ({ payload }: any) => {
             if (!payload) return;
             this.socialSubscribers.forEach(cb => cb.onUserProfileUpdated?.(payload));
@@ -1233,6 +1240,26 @@ export class SupabaseSyncService {
         media_url: null,
         deleted_for_everyone: true
       }).eq('id', messageId)).catch(() => {});
+    }
+    return true;
+  }
+
+  /**
+   * Syncs post / testimony deletion in real time across clients and remote DB
+   */
+  static async deletePost(postId: string): Promise<boolean> {
+    if (!postId) return false;
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'delete_post',
+        payload: { id: postId, deleted: true }
+      });
+    }
+    const supabase = getSupabase();
+    if (supabase) {
+      Promise.resolve(supabase.from('posts').delete().eq('id', postId)).catch(() => {});
     }
     return true;
   }

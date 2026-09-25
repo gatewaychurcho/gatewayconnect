@@ -267,6 +267,10 @@ export default function App() {
     };
     window.addEventListener('gcz_banned_users_updated', refreshLiveState);
     window.addEventListener('gcz_current_user_banned', refreshLiveState);
+    window.addEventListener('gcz_testimony_updated', refreshLiveState);
+    window.addEventListener('gcz_testimony_deleted', refreshLiveState);
+    window.addEventListener('gcz_live_state_updated', refreshLiveState);
+    window.addEventListener('gcz_live_event_received', refreshLiveState);
     const handleUserDeleted = (e: any) => {
       const deletedId = e?.detail?.userId;
       if (!deletedId || currentUser?.id === deletedId) {
@@ -284,6 +288,10 @@ export default function App() {
       liveSyncService.disconnect();
       window.removeEventListener('gcz_banned_users_updated', refreshLiveState);
       window.removeEventListener('gcz_current_user_banned', refreshLiveState);
+      window.removeEventListener('gcz_testimony_updated', refreshLiveState);
+      window.removeEventListener('gcz_testimony_deleted', refreshLiveState);
+      window.removeEventListener('gcz_live_state_updated', refreshLiveState);
+      window.removeEventListener('gcz_live_event_received', refreshLiveState);
       window.removeEventListener('gcz_open_user_profile', handleOpenProfile);
       window.removeEventListener('gcz_user_profile_updated', handleProfileUpdated);
       window.removeEventListener('gcz_user_deleted', handleUserDeleted);

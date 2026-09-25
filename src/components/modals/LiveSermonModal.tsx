@@ -367,7 +367,7 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
           {/* Left: Stream Video Player with In-Stream Floating Popup */}
           <div className="flex-1 bg-black flex flex-col relative overflow-hidden">
             
-            {/* Real Video Player Embed (Facebook Live or YouTube Live with audio and controls) */}
+            {/* Real Video Player Embed (Facebook Live, Local MP4 / Direct Video, or YouTube Live with audio and controls) */}
             <div className="flex-1 relative bg-black flex items-center justify-center">
               {streamEmbedInfo.isFacebook ? (
                 <FacebookStreamPlayer
@@ -377,6 +377,15 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
                   isLivePageHub={Boolean(streamEmbedInfo.isLivePageHub)}
                   isLive={status.isLive}
                   className="absolute inset-0 h-full !aspect-auto"
+                />
+              ) : (streamEmbedInfo.isMp4 || streamEmbedInfo.isDirectVideo) ? (
+                <video
+                  id="mp4-congregation-stream-player"
+                  className="w-full h-full object-contain absolute inset-0 bg-black"
+                  src={streamEmbedInfo.embedUrl}
+                  controls
+                  autoPlay
+                  playsInline
                 />
               ) : (
                 <iframe

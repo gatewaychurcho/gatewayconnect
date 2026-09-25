@@ -43,7 +43,8 @@ import {
   Receipt,
   ChurchPage,
   PagePost,
-  PageCategory
+  PageCategory,
+  MediaLibraryItem
 } from '../types';
 
 import { 
@@ -145,8 +146,36 @@ const KEYS = {
   SAVED_POSTS: 'gcz_saved_posts_v1',
   BROADCAST_LIKES_TABLE: 'gcz_broadcast_likes_v1',
   CHURCH_PAGES: 'gcz_church_pages_v1',
-  PAGE_POSTS: 'gcz_page_posts_v1'
+  PAGE_POSTS: 'gcz_page_posts_v1',
+  ADMIN_AVATAR_LIBRARY: 'gcz_admin_avatar_library_v1',
+  ADMIN_THUMBNAIL_LIBRARY: 'gcz_admin_thumbnail_library_v1'
 };
+
+export const DEFAULT_ADMIN_AVATARS: MediaLibraryItem[] = [
+  { id: 'lib_av_1', url: '/assets/apostle_joe_daniels_main.jpg', name: 'Apostle Joe Daniels (Main Portrait)', category: 'avatar', is_default: true, uploaded_at: '2026-01-01' },
+  { id: 'lib_av_2', url: '/assets/apostle_joe_daniels_preach.jpg', name: 'Apostle Joe Daniels (Preaching)', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_av_3', url: '/assets/apostle_joe_daniels_grad.jpg', name: 'Apostle Joe Daniels (Academic / Gown)', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_av_4', url: '/assets/apostle_joe_daniels_podcast.jpg', name: 'Apostle Joe Daniels (Studio / Podcast)', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_av_5', url: '/assets/apostle_silhouette.svg', name: 'Gateway Cross Silhouette', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_av_6', url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=300&auto=format&fit=crop&q=80', name: 'Prophetess Melinda Daniels', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_av_7', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80', name: 'Pastor Easter', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_av_8', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80', name: 'Prayer Intercessor Believer', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_av_9', url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=300&auto=format&fit=crop&q=80', name: 'Praise & Worship Leader', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_av_10', url: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=300&auto=format&fit=crop&q=80', name: 'Youth Ministry Ambassador', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_av_11', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300&auto=format&fit=crop&q=80', name: 'Deacon & Sanctuary Steward', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_av_12', url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&auto=format&fit=crop&q=80', name: 'Cathedral Partner Circle', category: 'avatar', is_default: false, uploaded_at: '2026-01-01' }
+];
+
+export const DEFAULT_ADMIN_THUMBNAILS: MediaLibraryItem[] = [
+  { id: 'lib_th_1', url: '/assets/apostle_joe_daniels_preach.jpg', name: 'Apostolic Acceleration & Fire Altar', category: 'thumbnail', is_default: true, uploaded_at: '2026-01-01' },
+  { id: 'lib_th_2', url: 'https://images.unsplash.com/photo-1548625361-16eb722c1ec4?w=800&auto=format&fit=crop&q=80', name: 'Glorious Cathedral 2026 Foundation', category: 'thumbnail', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_th_3', url: 'https://images.unsplash.com/photo-1519791883288-dc8bd696e667?w=800&auto=format&fit=crop&q=80', name: 'Dominion Hour Live Stream Banner', category: 'thumbnail', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_th_4', url: 'https://images.unsplash.com/photo-1507692049790-de58290a4334?w=800&auto=format&fit=crop&q=80', name: 'Prophetic Speed & Supernatural Miracles', category: 'thumbnail', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_th_5', url: 'https://images.unsplash.com/photo-1438232992991-995b7058bbb3?w=800&auto=format&fit=crop&q=80', name: 'Harare Main Assembly Sanctuary', category: 'thumbnail', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_th_6', url: 'https://images.unsplash.com/photo-1504052434569-70ad5836ab65?w=800&auto=format&fit=crop&q=80', name: 'Open Bible & Golden Altar', category: 'thumbnail', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_th_7', url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=80', name: 'Night of Wonders & Altar Praise', category: 'thumbnail', is_default: false, uploaded_at: '2026-01-01' },
+  { id: 'lib_th_8', url: '/assets/apostle_joe_daniels_grad.jpg', name: 'Academic Impartation & Prophetic School', category: 'thumbnail', is_default: false, uploaded_at: '2026-01-01' }
+];
 
 // In-memory fallback dictionary for when third-party cookies or localStorage are restricted/blocked
 const memoryStore: Record<string, string> = {};
@@ -2173,7 +2202,17 @@ export class StorageService {
     setLocal(KEYS.TESTIMONIES, list);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: { id, deleted: true } }));
+      window.dispatchEvent(new CustomEvent('gcz_testimony_deleted', { detail: { id, deleted: true } }));
+      try {
+        if ('BroadcastChannel' in window) {
+          const bc = new BroadcastChannel('gcz_cross_tab_sync');
+          bc.postMessage({ type: 'testimony', payload: { id, deleted: true } });
+          bc.close();
+        }
+      } catch {}
     }
+    // Delete from Supabase & broadcast over social channel
+    SupabaseSyncService.deletePost(id).catch(() => {});
   }
 
   // Premium Plans Management (Configurable by Admin)
@@ -2888,14 +2927,58 @@ export class StorageService {
   }
 
   static updateUserPassword(phoneOrUserId: string, newPass: string): boolean {
-    const allUsers = this.getAllUsers();
-    const u = allUsers.find(user => user.id === phoneOrUserId || user.phone === phoneOrUserId);
-    if (u) {
-      u.password = newPass;
-      this.saveUser(u);
-      return true;
+    const res = this.resetUserPasswordRealtime(phoneOrUserId, newPass);
+    return res.success;
+  }
+
+  static resetUserPasswordRealtime(phoneOrIdentifier: string, newPass: string): { success: boolean; user?: User; error?: string } {
+    if (!phoneOrIdentifier || !phoneOrIdentifier.trim()) {
+      return { success: false, error: 'Please enter your registered phone number or username.' };
     }
-    return false;
+    if (!newPass || newPass.trim().length < 4) {
+      return { success: false, error: 'Password must be at least 4 characters.' };
+    }
+
+    const allUsers = this.getAllUsers();
+    const query = phoneOrIdentifier.trim();
+    const queryClean = query.startsWith('@') ? query.slice(1).toLowerCase() : query.toLowerCase();
+
+    const target = allUsers.find(u => 
+      u.id === query ||
+      arePhoneNumbersEqual(u.phone, query) || 
+      (u.handle && (
+        u.handle.toLowerCase() === query.toLowerCase() || 
+        u.handle.toLowerCase() === `@${queryClean}` || 
+        u.handle.toLowerCase().replace('@', '') === queryClean
+      ))
+    );
+
+    if (!target) {
+      return { 
+        success: false, 
+        error: `No registered account found for "${phoneOrIdentifier}". Please check your number or handle.` 
+      };
+    }
+
+    target.password = newPass.trim();
+    this.saveUser(target);
+
+    // Update active user in session if matches
+    const curr = this.getCurrentUser();
+    if (curr && (curr.id === target.id || arePhoneNumbersEqual(curr.phone, target.phone))) {
+      this.setCurrentUser({ ...curr, password: newPass.trim() });
+    }
+
+    // Sync to Supabase in background
+    SupabaseSyncService.syncUser(target).catch(() => {});
+
+    // Broadcast real-time profile and users events
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: target }));
+      window.dispatchEvent(new CustomEvent('gcz_users_synced', { detail: allUsers }));
+    }
+
+    return { success: true, user: target };
   }
 
   static getStories(): CommunityStory[] {
@@ -3259,7 +3342,7 @@ export class StorageService {
         id: 'dm_init_1',
         sender_id: userBId,
         receiver_id: userAId,
-        text: 'Grace and peace! Welcome to Gateway Connect. How can I stand in agreement with you today in prayer? ðŸ™',
+        text: 'Grace and peace! Welcome to Gateway Connect. How can I stand in agreement with you today in prayer? 🙏',
         created_at: new Date(Date.now() - 3600000).toISOString(),
         is_read: true
       }
@@ -4164,14 +4247,21 @@ export class StorageService {
       };
     }
 
-    // 2. Direct video file (.mp4, .webm, .m3u8)
-    if (/\.(mp4|webm|ogg|m3u8)(\?.*)?$/i.test(target)) {
+    // 2. Direct video file (.mp4, .mov, .webm, .mkv, .m3u8, blob, indexeddb, data)
+    if (
+      /\.(mp4|webm|ogg|mov|m4v|mkv|m3u8)(\?.*)?$/i.test(target) ||
+      target.startsWith('blob:') ||
+      target.startsWith('data:video/') ||
+      target.startsWith('indexeddb://')
+    ) {
       return {
         platform: 'direct',
         embedUrl: target,
         originalUrl: raw,
         isFacebook: false,
-        isYoutube: false
+        isYoutube: false,
+        isMp4: true,
+        isDirectVideo: true
       };
     }
 
@@ -4289,7 +4379,7 @@ export class StorageService {
             changed = true;
           }
         });
-      } else if (['group_ignite_worship', 'group_pride_of_lions', 'group_foundation_school', 'group_gymstars_foundation', 'group_isn_mentorship'].includes(g.id)) {
+      } else if (['group_ignite_worship', 'group_pride_of_lions', 'group_foundation_school', 'group_gymstars_foundation', 'group_isn_mentorship', 'group_international_school_of_mentorship'].includes(g.id)) {
         if (g.created_by !== 'usr_apostle_joe') {
           g.created_by = 'usr_apostle_joe';
           g.creator_name = 'Apostle Joe Daniels';
@@ -4302,7 +4392,7 @@ export class StorageService {
             changed = true;
           }
         });
-        if (g.id === 'group_isn_mentorship' && !g.admin_ids.includes('usr_prophetess_melinda')) {
+        if ((g.id === 'group_isn_mentorship' || g.id === 'group_international_school_of_mentorship') && !g.admin_ids.includes('usr_prophetess_melinda')) {
           g.admin_ids.push('usr_prophetess_melinda');
           changed = true;
         }
@@ -4313,11 +4403,11 @@ export class StorageService {
             changed = true;
           }
         });
-        if (g.id === 'group_isn_mentorship' && !g.member_ids.includes('usr_prophetess_melinda')) {
+        if ((g.id === 'group_isn_mentorship' || g.id === 'group_international_school_of_mentorship') && !g.member_ids.includes('usr_prophetess_melinda')) {
           g.member_ids.push('usr_prophetess_melinda');
           changed = true;
         }
-        if (g.id === 'group_isn_mentorship' && (!g.avatar_url || g.avatar_url.includes('/assets/images/'))) {
+        if ((g.id === 'group_isn_mentorship' || g.id === 'group_international_school_of_mentorship') && (!g.avatar_url || g.avatar_url.includes('/assets/images/'))) {
           g.avatar_url = '/assets/apostle_grad_dark_1788354117156.jpg';
           changed = true;
         }
@@ -4611,7 +4701,7 @@ export class StorageService {
     this.sendChatGroupMessage(groupId, {
       sender_id: 'system',
       sender_name: 'Gateway System',
-      text: `${joinedUser?.full_name || 'A believer'} joined ${grp.name}. Welcome in Jesus' name! ðŸ•Šï¸`,
+      text: `${joinedUser?.full_name || 'A believer'} joined ${grp.name}. Welcome in Jesus' name! 🕊️`,
       is_system: true
     });
 
@@ -4626,7 +4716,8 @@ export class StorageService {
     SupabaseSyncService.syncGroupMember(groupId, userId, true).catch(() => {});
 
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('gcz_groups_updated'));
+      window.dispatchEvent(new CustomEvent('gcz_groups_updated', { detail: grp }));
+      window.dispatchEvent(new CustomEvent('gcz_group_member_added', { detail: { groupId, userId, group: grp } }));
     }
 
     return { success: true, message: `Successfully joined ${grp.name}!`, group: grp };
@@ -5271,6 +5362,7 @@ export class StorageService {
       const testimonies = this.getTestimonies();
       if ((testimony as Testimony & { deleted?: boolean }).deleted) {
         setLocal(KEYS.TESTIMONIES, testimonies.filter(item => item.id !== testimony.id));
+        window.dispatchEvent(new CustomEvent('gcz_testimony_deleted', { detail: testimony }));
       } else {
         const index = testimonies.findIndex(item => item.id === testimony.id);
         if (index >= 0) testimonies[index] = { ...testimonies[index], ...testimony };
@@ -5278,6 +5370,8 @@ export class StorageService {
         setLocal(KEYS.TESTIMONIES, testimonies);
       }
       window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: testimony }));
+    } else if (type === 'media_library') {
+      window.dispatchEvent(new CustomEvent('gcz_media_library_updated', { detail: payload }));
     } else if (type === 'notification') {
       const notif = payload as AppNotification;
       if (notif && notif.id) {
@@ -5844,6 +5938,199 @@ export class StorageService {
     }
     setLocal(KEYS.PAGE_POSTS, all);
     return !isLiked;
+  }
+
+  // --- AVATARS & THUMBNAILS ADMIN LIBRARY ---
+  static getAdminAvatarLibrary(): MediaLibraryItem[] {
+    const list = getLocal<MediaLibraryItem[]>(KEYS.ADMIN_AVATAR_LIBRARY, DEFAULT_ADMIN_AVATARS);
+    if (!list || list.length === 0) {
+      setLocal(KEYS.ADMIN_AVATAR_LIBRARY, DEFAULT_ADMIN_AVATARS);
+      return DEFAULT_ADMIN_AVATARS;
+    }
+    return list;
+  }
+
+  static addAdminAvatar(item: { name: string; url: string; size?: string; is_default?: boolean }): MediaLibraryItem {
+    const list = this.getAdminAvatarLibrary();
+    const newItem: MediaLibraryItem = {
+      id: `lib_av_${Date.now()}`,
+      url: item.url.trim(),
+      name: item.name.trim() || 'Church Avatar',
+      category: 'avatar',
+      is_default: Boolean(item.is_default),
+      uploaded_at: new Date().toISOString(),
+      size: item.size
+    };
+    if (newItem.is_default) {
+      list.forEach(i => { i.is_default = false; });
+    }
+    list.unshift(newItem);
+    setLocal(KEYS.ADMIN_AVATAR_LIBRARY, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_media_library_updated', { detail: { category: 'avatar', item: newItem } }));
+    }
+    return newItem;
+  }
+
+  static deleteAdminAvatar(id: string): void {
+    const list = this.getAdminAvatarLibrary().filter(i => i.id !== id);
+    setLocal(KEYS.ADMIN_AVATAR_LIBRARY, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_media_library_updated', { detail: { category: 'avatar', id } }));
+    }
+  }
+
+  static getAdminThumbnailLibrary(): MediaLibraryItem[] {
+    const list = getLocal<MediaLibraryItem[]>(KEYS.ADMIN_THUMBNAIL_LIBRARY, DEFAULT_ADMIN_THUMBNAILS);
+    if (!list || list.length === 0) {
+      setLocal(KEYS.ADMIN_THUMBNAIL_LIBRARY, DEFAULT_ADMIN_THUMBNAILS);
+      return DEFAULT_ADMIN_THUMBNAILS;
+    }
+    return list;
+  }
+
+  static addAdminThumbnail(item: { name: string; url: string; size?: string; is_default?: boolean }): MediaLibraryItem {
+    const list = this.getAdminThumbnailLibrary();
+    const newItem: MediaLibraryItem = {
+      id: `lib_th_${Date.now()}`,
+      url: item.url.trim(),
+      name: item.name.trim() || 'Ministry Thumbnail',
+      category: 'thumbnail',
+      is_default: Boolean(item.is_default),
+      uploaded_at: new Date().toISOString(),
+      size: item.size
+    };
+    if (newItem.is_default) {
+      list.forEach(i => { i.is_default = false; });
+    }
+    list.unshift(newItem);
+    setLocal(KEYS.ADMIN_THUMBNAIL_LIBRARY, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_media_library_updated', { detail: { category: 'thumbnail', item: newItem } }));
+    }
+    return newItem;
+  }
+
+  static deleteAdminThumbnail(id: string): void {
+    const list = this.getAdminThumbnailLibrary().filter(i => i.id !== id);
+    setLocal(KEYS.ADMIN_THUMBNAIL_LIBRARY, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_media_library_updated', { detail: { category: 'thumbnail', id } }));
+    }
+  }
+
+  static setAdminAvatarDefault(id: string): void {
+    const list = this.getAdminAvatarLibrary();
+    list.forEach(i => {
+      i.is_default = (i.id === id);
+    });
+    setLocal(KEYS.ADMIN_AVATAR_LIBRARY, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_media_library_updated', { detail: { category: 'avatar', defaultId: id } }));
+    }
+  }
+
+  static setAdminThumbnailDefault(id: string): void {
+    const list = this.getAdminThumbnailLibrary();
+    list.forEach(i => {
+      i.is_default = (i.id === id);
+    });
+    setLocal(KEYS.ADMIN_THUMBNAIL_LIBRARY, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_media_library_updated', { detail: { category: 'thumbnail', defaultId: id } }));
+    }
+  }
+
+  static getDefaultAvatar(): string {
+    const list = this.getAdminAvatarLibrary();
+    const def = list.find(i => i.is_default);
+    return def ? def.url : (list[0]?.url || '/assets/apostle_joe_daniels_main.jpg');
+  }
+
+  static getDefaultThumbnail(): string {
+    const list = this.getAdminThumbnailLibrary();
+    const def = list.find(i => i.is_default);
+    return def ? def.url : (list[0]?.url || '/assets/apostle_joe_daniels_preach.jpg');
+  }
+
+  // --- REAL-TIME PASSWORD RECOVERY WORKFLOW ---
+  static requestRealtimePasswordResetCode(identifier: string): { success: boolean; code?: string; user?: User; message: string } {
+    const clean = identifier.trim().toLowerCase().replace(/[^a-z0-9+]/g, '');
+    const users = this.getAllUsers();
+    const user = users.find(u => {
+      const uPhone = (u.phone || '').replace(/[^0-9]/g, '');
+      const searchPhone = clean.replace(/[^0-9]/g, '');
+      const matchesPhone = Boolean(uPhone && searchPhone && (uPhone.endsWith(searchPhone) || searchPhone.endsWith(uPhone)));
+      const matchesHandle = Boolean(u.handle && u.handle.toLowerCase().replace(/[^a-z0-9]/g, '') === clean);
+      return matchesPhone || matchesHandle;
+    });
+
+    if (!user) {
+      return { 
+        success: false, 
+        message: 'No registered Gateway Connect account found with this phone number or handle.' 
+      };
+    }
+
+    // Generate real-time 6 digit verification code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const resets = getLocal<Record<string, { code: string; userId: string; expiresAt: number }>>('gcz_active_pwd_codes', {});
+    resets[user.id] = {
+      code,
+      userId: user.id,
+      expiresAt: Date.now() + 15 * 60 * 1000 // 15 mins
+    };
+    setLocal('gcz_active_pwd_codes', resets);
+
+    // Also record standard reset request for admin tracking
+    this.submitPasswordResetRequest(user.phone, `Real-time OTP requested. Code: ${code}`, user.full_name);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_password_code_generated', { detail: { userId: user.id, code } }));
+    }
+
+    return {
+      success: true,
+      code,
+      user,
+      message: `Gateway Security verification code generated for ${user.full_name}.`
+    };
+  }
+
+  static verifyAndResetPasswordRealtime(userId: string, code: string, newPassword: string): { success: boolean; message: string; user?: User } {
+    const resets = getLocal<Record<string, { code: string; userId: string; expiresAt: number }>>('gcz_active_pwd_codes', {});
+    const record = resets[userId];
+    if (!record || record.code !== code.trim()) {
+      return { success: false, message: 'Invalid or expired 6-digit verification code.' };
+    }
+    if (Date.now() > record.expiresAt) {
+      delete resets[userId];
+      setLocal('gcz_active_pwd_codes', resets);
+      return { success: false, message: 'Verification code has expired. Please request a fresh code.' };
+    }
+
+    // Update password in StorageService
+    this.updateUserPassword(userId, newPassword.trim());
+
+    // Clean up reset code
+    delete resets[userId];
+    setLocal('gcz_active_pwd_codes', resets);
+
+    const user = this.getAllUsers().find(u => u.id === userId);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_password_reset_success', { detail: { userId } }));
+    }
+
+    return {
+      success: true,
+      message: 'Password successfully reset! You can now log in with your new credentials.',
+      user
+    };
+  }
+
+  static getAllMediaLibrary(): MediaLibraryItem[] {
+    return [...this.getAdminAvatarLibrary(), ...this.getAdminThumbnailLibrary()];
   }
 
   static resetAppToDefaults(): void {

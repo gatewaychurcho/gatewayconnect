@@ -73,7 +73,7 @@ interface DirectMessagesModalProps {
   onClose: () => void;
 }
 
-const EMOJI_REACTIONS = ['ðŸ™', 'â¤ï¸', 'ðŸ”¥', 'âœï¸', 'ðŸ•Šï¸', 'ðŸ™Œ', 'ðŸ‘‘', 'ðŸŒŸ'];
+const EMOJI_REACTIONS = ['🙏', '❤️', '🔥', '✝️', '🕊️', '🙌', '👑', '🌟'];
 
 const formatMessageDateDivider = (dateStr?: string): string => {
   if (!dateStr) return '';
@@ -153,24 +153,20 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   // Navigation tabs: 'direct' or 'groups'
   const [activeTab, setActiveTab] = useState<'direct' | 'groups'>(initialGroupId ? 'groups' : 'direct');
 
-  // Direct messages state - On mobile, leave unselected if no initial recipient so user sees chats list with FAB
+  // Direct messages state - Start empty unless initialRecipientId was passed
   const [threads, setThreads] = useState<DmThread[]>([]);
   const [activeUserId, setActiveUserId] = useState<string>(() => {
-    if (initialRecipientId) return initialRecipientId;
-    if (typeof window !== 'undefined' && window.innerWidth < 640) return '';
-    return 'usr_apostle_joe';
+    return initialRecipientId || '';
   });
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewChatPicker, setShowNewChatPicker] = useState<boolean>(false);
 
-  // Group chat state - On mobile, leave unselected if no initial group so user sees groups list with FAB
+  // Group chat state - Start empty unless initialGroupId was passed
   const [groups, setGroups] = useState<ChatGroup[]>([]);
   const [activeGroupId, setActiveGroupId] = useState<string>(() => {
-    if (initialGroupId) return initialGroupId;
-    if (typeof window !== 'undefined' && window.innerWidth < 640) return '';
-    return 'group_ignite_worship';
+    return initialGroupId || '';
   });
   const [groupMessages, setGroupMessages] = useState<ChatGroupMessage[]>([]);
   const [groupInputText, setGroupInputText] = useState('');
@@ -338,6 +334,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
   // WhatsApp-style Media, Links, and Docs Browser states
   const [showMediaBrowserModal, setShowMediaBrowserModal] = useState(false);
+  const [mediaBrowserTab, setMediaBrowserTab] = useState<'media' | 'docs' | 'links'>('media');
   const [selectedMediaPreview, setSelectedMediaPreview] = useState<{
     url: string;
     caption?: string;
@@ -541,7 +538,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     setViewUserProfile(null);
     if (isSelectMode) handleCancelSelectMode();
     setShowNewChatPicker(false);
-    setActiveUserId(null);
+    setActiveUserId('');
     setActiveGroupId('');
   };
 
@@ -692,6 +689,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     window.addEventListener('gcz_user_registered', handleProfileUpdated);
     window.addEventListener('gcz_users_synced', handleProfileUpdated);
     window.addEventListener('gcz_groups_updated', refreshGroupsData);
+    window.addEventListener('gcz_group_member_added', refreshGroupsData);
 
     // Cross-device Supabase Realtime Subscription (postgres_changes INSERT + broadcast)
     const unsubscribe = SupabaseSyncService.subscribeToSocialMessaging({
@@ -733,17 +731,16 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
         refreshThreads();
       },
       onUserProfileUpdated: () => {
-        // Pull the new/updated account from Supabase and merge it into local
-        // storage first â€” otherwise a sender who just registered (or just
-        // changed their photo) on another device won't resolve to a real
-        // user here, and their messages/threads won't render.
         StorageService.syncUsersWithRemote().finally(() => {
           refreshThreads();
           refreshGroupsData();
         });
       },
-      onGroupMemberChanged: () => {
+      onGroupMemberChanged: (detail) => {
         refreshGroupsData();
+        if (activeGroupId && (!detail?.groupId || detail.groupId === activeGroupId)) {
+          setGroupMessages(StorageService.getChatGroupMessagesForUser(activeGroupId, currentUser.id));
+        }
       }
     });
 
@@ -754,6 +751,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       window.removeEventListener('gcz_user_registered', handleProfileUpdated);
       window.removeEventListener('gcz_users_synced', handleProfileUpdated);
       window.removeEventListener('gcz_groups_updated', refreshGroupsData);
+      window.removeEventListener('gcz_group_member_added', refreshGroupsData);
       unsubscribe();
     };
   }, [currentUser.id, activeGroupId, activeUserId]);
@@ -1615,10 +1613,12 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
   const handleAddMemberToGroup = (targetUser: User) => {
     if (!activeGroup) return;
-    const res = StorageService.sendGroupInvite(activeGroup.id, targetUser.id, currentUser.id);
+    const res = StorageService.joinChatGroup(activeGroup.id, targetUser.id, undefined, true);
     setShowAddMemberModal(false);
     refreshGroupsData();
-    setCopyFeedback(res.message);
+    setGroupMessages(StorageService.getChatGroupMessagesForUser(activeGroup.id, currentUser.id));
+    confetti({ particleCount: 30, spread: 55 });
+    setCopyFeedback(res.message || `${targetUser.full_name} added to ${activeGroup.name}!`);
     setTimeout(() => setCopyFeedback(null), 3500);
   };
 
@@ -2237,7 +2237,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             grpUnread > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'
                           }`}>
                             {lastMsg 
-                              ? `${lastMsg.sender_name ? `${lastMsg.sender_name.split(' ')[0]}: ` : ''}${lastMsg.text || (lastMsg.media_type ? `ðŸ“· ${lastMsg.media_type}` : 'New message')}`
+                              ? `${lastMsg.sender_name ? `${lastMsg.sender_name.split(' ')[0]}: ` : ''}${lastMsg.text || (lastMsg.media_type ? `📷 ${lastMsg.media_type}` : 'New message')}`
                               : grp.description
                             }
                           </p>
@@ -2442,15 +2442,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         </button>
 
                         <button
-                          onClick={() => {
-                            if (isMobile) {
-                              onClose();
-                            } else {
-                              setActiveUserId('');
-                            }
-                          }}
+                          onClick={handleCloseAllChats}
                           className="p-2 rounded-xl hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
-                          title={isMobile ? "Close Messages" : "Close Chat"}
+                          title="Close Chat"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -2633,7 +2627,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                 <div className={`opacity-0 group-hover/msg:opacity-100 transition-opacity absolute -top-8.5 z-20 flex items-center gap-0.5 bg-card/95 backdrop-blur-md border border-border/80 shadow-md rounded-full px-2 py-0.5 ${
                                   isMine ? 'right-0' : 'left-0'
                                 }`}>
-                                  {['ðŸ™', 'â¤ï¸', 'ðŸ”¥', 'ðŸ‘', 'ðŸ˜‚', 'ðŸ•Šï¸'].map((emoji) => (
+                                  {['🙏', '❤️', '🔥', '👍', '😂', '🕊️'].map((emoji) => (
                                     <button
                                       key={emoji}
                                       type="button"
@@ -3191,15 +3185,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         </div>
 
                         <button
-                          onClick={() => {
-                            if (isMobile) {
-                              onClose();
-                            } else {
-                              setActiveGroupId('');
-                            }
-                          }}
+                          onClick={handleCloseAllChats}
                           className="p-2 rounded-xl hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
-                          title={isMobile ? "Close Messages" : "Close Group"}
+                          title="Close Group"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -3419,7 +3407,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                     <div className={`opacity-0 group-hover/msg:opacity-100 transition-opacity absolute -top-8.5 z-20 flex items-center gap-0.5 bg-card/95 backdrop-blur-md border border-border/80 shadow-md rounded-full px-2 py-0.5 ${
                                       isMine ? 'right-0' : 'left-0'
                                     }`}>
-                                      {['ðŸ™', 'â¤ï¸', 'ðŸ”¥', 'ðŸ‘', 'ðŸ˜‚', 'ðŸ•Šï¸'].map((emoji) => (
+                                      {['🙏', '❤️', '🔥', '👍', '😂', '🕊️'].map((emoji) => (
                                         <button
                                           key={emoji}
                                           type="button"
@@ -3485,12 +3473,12 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                       </button>
                                       {msg.sender_role === 'super_admin' && (
                                         <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/30">
-                                          Apostle âœ¦
+                                          Apostle ✧
                                         </span>
                                       )}
                                       {msg.sender_role === 'developer' && (
                                         <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-400 font-bold border border-purple-500/30">
-                                          Dev ðŸ›¡ï¸
+                                          Dev 🛡️
                                         </span>
                                       )}
                                     </div>

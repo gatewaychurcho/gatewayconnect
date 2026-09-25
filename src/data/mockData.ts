@@ -635,7 +635,7 @@ export const MOCK_COMMUNITY_GROUPS: CommunityGroup[] = [
   },
   {
     id: 'group_international_school_of_mentorship',
-    name: 'International School of Mentoship',
+    name: 'International School of Mentorship',
     category: 'School',
     location: 'Apostolic Academy & Global Portal',
     leader_name: 'Apostle Joe Daniels & Apostolic Leadership',
@@ -1298,7 +1298,7 @@ export const INITIAL_CHAT_GROUPS: ChatGroup[] = [
   },
   {
     id: 'group_international_school_of_mentorship',
-    name: 'International School of Mentoship',
+    name: 'International School of Mentorship',
     description: 'International School of Mentorship - Intensive apostolic mentorship, prophetic impartation, and global kingdom leadership academy.',
     category: 'School',
     is_paid: true,
@@ -1311,7 +1311,7 @@ export const INITIAL_CHAT_GROUPS: ChatGroup[] = [
     avatar_url: '/assets/apostle_grad_dark_1788354117156.jpg',
     created_at: '2026-03-01T00:00:00Z',
     member_ids: ['usr_apostle_joe', 'usr_prophetess_melinda', 'usr_pastor_easter', 'usr_developer', 'usr_pastor_tendai'],
-    pinned_notice: 'Welcome to International School of Mentoship. Classes, live modules, and prophetic assignments begin every Monday.'
+    pinned_notice: 'Welcome to International School of Mentorship. Classes, live modules, and prophetic assignments begin every Monday.'
   }
 ];
 
@@ -1414,7 +1414,7 @@ export const INITIAL_CHAT_GROUP_MESSAGES: Record<string, ChatGroupMessage[]> = {
       sender_id: 'usr_apostle_joe',
       sender_name: 'Apostle Joe Daniels',
       sender_role: 'super_admin',
-      text: 'Welcome to the International School of Mentoship. This portal is consecrated for discipleship, leadership calibration, and spiritual acceleration. Prepare your spirits for deep revelation.',
+      text: 'Welcome to the International School of Mentorship. This portal is consecrated for discipleship, leadership calibration, and spiritual acceleration. Prepare your spirits for deep revelation.',
       created_at: new Date(Date.now() - 3600000 * 6).toISOString()
     },
     {
@@ -1423,7 +1423,7 @@ export const INITIAL_CHAT_GROUP_MESSAGES: Record<string, ChatGroupMessage[]> = {
       sender_id: 'usr_developer',
       sender_name: 'mr_juice7',
       sender_role: 'developer',
-      text: 'International School of Mentoship portal and secure curriculum channels are online. All enrolled ministers and students have synchronized access.',
+      text: 'International School of Mentorship portal and secure curriculum channels are online. All enrolled ministers and students have synchronized access.',
       created_at: new Date(Date.now() - 3600000 * 3).toISOString()
     }
   ]

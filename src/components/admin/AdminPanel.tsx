@@ -51,7 +51,8 @@ import {
   UploadCloud,
   Headphones,
   Film,
-  Camera
+  Camera,
+  Image as ImageIcon
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -87,7 +88,7 @@ interface AdminPanelProps {
   onRefreshAppState: () => void;
 }
 
-type AdminSection = 'overview' | 'congregations' | 'stream_attendees' | 'broadcast' | 'content_moderation' | 'inventory' | 'members' | 'prayers' | 'push' | 'finances' | 'vibes';
+type AdminSection = 'overview' | 'congregations' | 'stream_attendees' | 'broadcast' | 'content_moderation' | 'inventory' | 'members' | 'prayers' | 'push' | 'finances' | 'vibes' | 'media_library';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppState }) => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
@@ -130,6 +131,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   const [liveSermonStatus, setLiveSermonStatus] = useState(StorageService.getLiveSermonStatus());
   const [adminStreamUrl, setAdminStreamUrl] = useState<string>(liveSermonStatus.streamUrl || 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP');
   const [showAdminStreamPreview, setShowAdminStreamPreview] = useState<boolean>(false);
+  const [isUploadingMp4, setIsUploadingMp4] = useState<boolean>(false);
+  const [mp4UploadFeedback, setMp4UploadFeedback] = useState<string | null>(null);
+  const congregationMp4InputRef = useRef<HTMLInputElement>(null);
+
+  // Avatars and Thumbnails Library Management States
+  const [adminAvatars, setAdminAvatars] = useState(() => StorageService.getAdminAvatarLibrary());
+  const [adminThumbnails, setAdminThumbnails] = useState(() => StorageService.getAdminThumbnailLibrary());
+  const [mediaLibraryTab, setMediaLibraryTab] = useState<'avatars' | 'thumbnails'>('avatars');
+  const [newMediaTitle, setNewMediaTitle] = useState<string>('');
+  const [newMediaCategory, setNewMediaCategory] = useState<string>('Official');
+  const [mediaUploadError, setMediaUploadError] = useState<string | null>(null);
+  const [mediaUploadSuccess, setMediaUploadSuccess] = useState<string | null>(null);
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const thumbnailFileInputRef = useRef<HTMLInputElement>(null);
+
   const [products, setProducts] = useState<Product[]>(StorageService.getProducts());
   const [donations, setDonations] = useState<Donation[]>(StorageService.getDonations());
   const [prayers, setPrayers] = useState<PrayerRequest[]>(StorageService.getPrayerRequests());
@@ -326,6 +342,126 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     setTestimonies(StorageService.getTestimonies());
     setModerationMessage('Post removed by Moderator.');
     onRefreshAppState();
+  };
+
+  // Congregation Live Stream Local MP4 File Upload
+  const handleUploadLocalMp4 = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('video/') && !/\.(mp4|webm|mov|mkv|m4v)$/i.test(file.name)) {
+      setMp4UploadFeedback('Please select a valid MP4 or video file.');
+      setTimeout(() => setMp4UploadFeedback(null), 4000);
+      return;
+    }
+
+    setIsUploadingMp4(true);
+    setMp4UploadFeedback(`Processing ${file.name}...`);
+    try {
+      let videoUrl: string | null = null;
+      try {
+        videoUrl = await StorageBucketService.uploadFileToMediaBucket(file, 'media');
+      } catch (err) {
+        console.warn('Storage bucket video upload fallback:', err);
+      }
+
+      if (!videoUrl) {
+        try {
+          const mediaId = `stream_mp4_${Date.now()}`;
+          await LocalMediaStore.saveMedia(mediaId, file);
+          videoUrl = URL.createObjectURL(file);
+        } catch {
+          videoUrl = URL.createObjectURL(file);
+        }
+      }
+
+      setAdminStreamUrl(videoUrl);
+      setShowAdminStreamPreview(true);
+      StorageService.setLiveStreamUrl(videoUrl);
+      const newStatus = {
+        ...liveSermonStatus,
+        streamUrl: videoUrl,
+        isLive: true,
+        title: sermonTitle || `${file.name.replace(/\.[^/.]+$/, '')} • Sanctuary Live Stream`
+      };
+      StorageService.setLiveSermonStatus(newStatus);
+      setLiveSermonStatus(newStatus);
+      StorageService.setOverridePlayingVideo({
+        id: `stream_${Date.now()}`,
+        title: newStatus.title,
+        youtube_id: videoUrl
+      });
+      setMp4UploadFeedback(`✓ Local MP4 active & broadcasting: ${file.name}`);
+      confetti({ particleCount: 30, spread: 60 });
+      onRefreshAppState();
+    } catch (err: any) {
+      setMp4UploadFeedback(`Upload failed: ${err.message || 'Error loading video'}`);
+    } finally {
+      setIsUploadingMp4(false);
+      setTimeout(() => setMp4UploadFeedback(null), 5000);
+    }
+  };
+
+  // Admin Avatar & Thumbnail Library Handlers
+  const handleUploadMediaItem = async (e: React.ChangeEvent<HTMLInputElement>, category: 'avatar' | 'thumbnail') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setMediaUploadError('Please select a valid image file (PNG, JPG, WebP).');
+      setTimeout(() => setMediaUploadError(null), 4000);
+      return;
+    }
+
+    setMediaUploadError(null);
+    setMediaUploadSuccess(`Uploading ${file.name}...`);
+    try {
+      let imageUrl: string | null = null;
+      try {
+        imageUrl = await StorageBucketService.uploadFileToMediaBucket(file, category === 'avatar' ? 'avatars' : 'media');
+      } catch (err) {
+        console.warn('Bucket upload note:', err);
+      }
+
+      if (!imageUrl) {
+        const reader = new FileReader();
+        imageUrl = await new Promise((resolve) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      if (!imageUrl) throw new Error('Could not read image file');
+
+      const sizeStr = `${(file.size / 1024).toFixed(0)} KB`;
+      const title = newMediaTitle.trim() || file.name.replace(/\.[^/.]+$/, '');
+
+      if (category === 'avatar') {
+        const created = StorageService.addAdminAvatar({
+          name: title,
+          url: imageUrl,
+          size: sizeStr
+        });
+        setAdminAvatars(StorageService.getAdminAvatarLibrary());
+        setMediaUploadSuccess(`✓ Added "${created.name}" to Avatars Library!`);
+      } else {
+        const created = StorageService.addAdminThumbnail({
+          name: title,
+          url: imageUrl,
+          size: sizeStr
+        });
+        setAdminThumbnails(StorageService.getAdminThumbnailLibrary());
+        setMediaUploadSuccess(`✓ Added "${created.name}" to Thumbnails Library!`);
+      }
+
+      setNewMediaTitle('');
+      confetti({ particleCount: 25, spread: 50 });
+    } catch (err: any) {
+      setMediaUploadError(err.message || 'Failed to upload image to library');
+    } finally {
+      setTimeout(() => {
+        setMediaUploadSuccess(null);
+        setMediaUploadError(null);
+      }, 4000);
+    }
   };
 
   const handleLocalMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -874,6 +1010,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                   { id: 'prayers', label: '🙏 Altar Petitions' },
                   { id: 'finances', label: '💰 Tithes & Seed Fund' },
                   { id: 'vibes', label: '🎵 Joe Vibes Submissions' },
+                  { id: 'media_library', label: `🎨 Avatars & Thumbnails Library (${adminAvatars.length + adminThumbnails.length})` },
                 ].map(opt => (
                   <option key={opt.id} value={opt.id} className="bg-card text-white">
                     {opt.label}
@@ -898,6 +1035,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
               { id: 'prayers', label: 'Prayers', icon: Heart },
               { id: 'finances', label: 'Finances', icon: DollarSign },
               { id: 'vibes', label: 'Vibes', icon: Music },
+              { id: 'media_library', label: 'Avatars & Art', icon: ImageIcon },
             ].map(pill => {
               const Icon = pill.icon;
               const isActive = activeSection === pill.id;
@@ -931,6 +1069,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
             { id: 'stream_attendees', label: 'Stream Attendees Log', icon: Users, badge: `${streamAttendees.length}` },
             { id: 'content_moderation', label: 'Post Moderation', icon: Trash2, badge: `${testimonies.length}` },
             { id: 'broadcast', label: 'Sermon & Live Stream', icon: Radio, badge: 'Live' },
+            { id: 'media_library', label: 'Avatars & Thumbnails', icon: ImageIcon, badge: `${adminAvatars.length + adminThumbnails.length}` },
             { id: 'inventory', label: 'Store & Inventory', icon: Package, badge: products.length },
             { id: 'push', label: 'Push Broadcasts', icon: Bell, badge: notifications.length },
             { id: 'members', label: 'Members & Roles', icon: Users, badge: users.length },
@@ -2021,9 +2160,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                     </div>
                   </div>
 
-                  {/* Quick Preset Links */}
+                  {/* Quick Preset Links & Local MP4 File Upload */}
                   <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                    <span className="text-white/40 text-[10px] font-medium">Quick Presets:</span>
+                    <span className="text-white/40 text-[10px] font-medium">Stream Ingest Sources:</span>
                     <button
                       type="button"
                       onClick={() => setAdminStreamUrl('https://www.facebook.com/ApostleJoeDaniels/live')}
@@ -2038,14 +2177,39 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                     >
                       YouTube Live
                     </button>
+
+                    <input
+                      ref={congregationMp4InputRef}
+                      type="file"
+                      accept="video/mp4,video/webm,video/quicktime,video/*"
+                      onChange={handleUploadLocalMp4}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => congregationMp4InputRef.current?.click()}
+                      disabled={isUploadingMp4}
+                      className="px-2.5 py-0.5 rounded bg-primary/20 hover:bg-primary/30 text-primary border border-primary/40 font-bold transition-all text-[11px] flex items-center gap-1 cursor-pointer active:scale-95"
+                      title="Upload MP4 from local storage to broadcast as the live stream video"
+                    >
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      <span>{isUploadingMp4 ? 'Loading MP4...' : '📁 Upload Local MP4 / Video'}</span>
+                    </button>
                   </div>
+
+                  {mp4UploadFeedback && (
+                    <div className="p-2 rounded-lg bg-primary/10 border border-primary/30 text-primary text-xs flex items-center gap-1.5 animate-in fade-in">
+                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                      <span>{mp4UploadFeedback}</span>
+                    </div>
+                  )}
 
                   {/* Admin Stream Preview Player */}
                   {showAdminStreamPreview && (
                     <div className="pt-2 border-t border-white/10 animate-in fade-in duration-200">
                       <div className="text-[11px] font-bold text-white/70 mb-2 flex items-center justify-between">
                         <span>Admin Live Stream Preview (How members see it):</span>
-                        {StorageService.isFacebookUrl(adminStreamUrl) && (
+                        {StorageService.isFacebookUrl(adminStreamUrl) ? (
                           <a
                             href={StorageService.getStreamEmbedInfo(adminStreamUrl).facebookDirectUrl || adminStreamUrl}
                             target="_blank"
@@ -2055,7 +2219,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                             <ExternalLink className="w-3 h-3" />
                             <span>Open on Facebook</span>
                           </a>
-                        )}
+                        ) : (StorageService.getStreamEmbedInfo(adminStreamUrl).isMp4 || StorageService.getStreamEmbedInfo(adminStreamUrl).isDirectVideo || adminStreamUrl.endsWith('.mp4') || adminStreamUrl.startsWith('blob:') || adminStreamUrl.startsWith('data:video/')) ? (
+                          <span className="text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30">
+                            Local MP4 / Direct Stream
+                          </span>
+                        ) : null}
                       </div>
                       <div className="aspect-video w-full max-w-lg mx-auto bg-black rounded-xl overflow-hidden border border-white/20 shadow-2xl relative">
                         {StorageService.isFacebookUrl(adminStreamUrl) ? (
@@ -2065,6 +2233,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                             title={liveSermonStatus.title || 'Sanctuary Live Stream'}
                             isLivePageHub={Boolean(StorageService.getStreamEmbedInfo(adminStreamUrl).isLivePageHub)}
                             isLive={liveSermonStatus.isLive}
+                          />
+                        ) : (StorageService.getStreamEmbedInfo(adminStreamUrl).isMp4 || StorageService.getStreamEmbedInfo(adminStreamUrl).isDirectVideo || adminStreamUrl.endsWith('.mp4') || adminStreamUrl.startsWith('blob:') || adminStreamUrl.startsWith('data:video/')) ? (
+                          <video
+                            controls
+                            autoPlay
+                            muted
+                            playsInline
+                            src={adminStreamUrl}
+                            className="w-full h-full object-contain bg-black"
                           />
                         ) : (
                           <iframe
@@ -3344,6 +3521,223 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 9: AVATARS & THUMBNAILS LIBRARY */}
+          {activeSection === 'media_library' && (
+            <div className="space-y-4">
+              <div className="bg-card border border-white/10 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                  <div>
+                    <h3 className="font-bold text-sm text-primary flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4" />
+                      <span>Official Avatars & Thumbnails Library</span>
+                    </h3>
+                    <p className="text-xs text-white/70">
+                      Upload and manage authentic photo assets for member profile signups, community posts, and testimony thumbnails.
+                    </p>
+                  </div>
+
+                  {/* Subtab Selector */}
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-background/80 border border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => setMediaLibraryTab('avatars')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        mediaLibraryTab === 'avatars'
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-white/70 hover:text-white'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>User Avatars ({adminAvatars.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMediaLibraryTab('thumbnails')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        mediaLibraryTab === 'thumbnails'
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-white/70 hover:text-white'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Post Thumbnails ({adminThumbnails.length})</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Upload Form Box */}
+                <div className="p-4 rounded-xl bg-secondary/30 border border-dashed border-primary/30 space-y-3">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                    <div className="flex-1 space-y-2">
+                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <UploadCloud className="w-4 h-4 text-primary" />
+                        <span>Upload New {mediaLibraryTab === 'avatars' ? 'Default Avatar' : 'Testimony Thumbnail'} from Local Device</span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-center gap-2">
+                        <input
+                          type="text"
+                          value={newMediaTitle}
+                          onChange={(e) => setNewMediaTitle(e.target.value)}
+                          placeholder={mediaLibraryTab === 'avatars' ? "e.g. Apostle Joe Daniels (Conference 2026)" : "e.g. Supernatural Acceleration Testimony Cover"}
+                          className="flex-1 w-full bg-background border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-primary"
+                        />
+                        <select
+                          value={newMediaCategory}
+                          onChange={(e) => setNewMediaCategory(e.target.value)}
+                          className="w-full sm:w-40 bg-background border border-white/15 rounded-xl px-3 py-2 text-xs text-white font-semibold focus:outline-none focus:border-primary"
+                        >
+                          <option value="Official">Official Ministry</option>
+                          <option value="Preaching">Preaching & Altar</option>
+                          <option value="Prophetic">Prophetic / Impartation</option>
+                          <option value="Discipleship">Discipleship & School</option>
+                          <option value="Youth">Youth Revival</option>
+                          <option value="Worship">Praise & Worship</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 self-end sm:self-center">
+                      <input
+                        ref={mediaLibraryTab === 'avatars' ? avatarFileInputRef : thumbnailFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleUploadMediaItem(e, mediaLibraryTab === 'avatars' ? 'avatar' : 'thumbnail')}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (mediaLibraryTab === 'avatars') {
+                            avatarFileInputRef.current?.click();
+                          } else {
+                            thumbnailFileInputRef.current?.click();
+                          }
+                        }}
+                        className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer active:scale-95"
+                      >
+                        <UploadCloud className="w-4 h-4" />
+                        <span>Choose Photo & Add</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {mediaUploadSuccess && (
+                    <div className="p-2.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span>{mediaUploadSuccess}</span>
+                    </div>
+                  )}
+
+                  {mediaUploadError && (
+                    <div className="p-2.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{mediaUploadError}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Gallery Grid */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs text-white/60">
+                    <span>
+                      {mediaLibraryTab === 'avatars' 
+                        ? 'Available to all users during Sign Up and Profile Settings' 
+                        : 'Available to all users when creating Community Posts & Testimonies'}
+                    </span>
+                    <span className="font-mono font-bold text-primary">
+                      {mediaLibraryTab === 'avatars' ? adminAvatars.length : adminThumbnails.length} Items Total
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    {(mediaLibraryTab === 'avatars' ? adminAvatars : adminThumbnails).map((item) => (
+                      <div
+                        key={item.id}
+                        className={`bg-background rounded-xl border p-2.5 flex flex-col justify-between transition-all group relative overflow-hidden ${
+                          item.is_default 
+                            ? 'border-primary shadow-[0_0_12px_rgba(212,175,55,0.2)]' 
+                            : 'border-white/10 hover:border-white/20'
+                        }`}
+                      >
+                        {item.is_default && (
+                          <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full bg-primary text-primary-foreground font-black text-[9px] shadow-sm flex items-center gap-1">
+                            <Sparkles className="w-2.5 h-2.5 fill-current" />
+                            <span>DEFAULT</span>
+                          </div>
+                        )}
+
+                        <div className={`w-full overflow-hidden bg-secondary mb-2 flex items-center justify-center relative ${
+                          mediaLibraryTab === 'avatars' ? 'aspect-square rounded-full max-w-[120px] mx-auto border border-white/15' : 'aspect-video rounded-lg'
+                        }`}>
+                          <img
+                            src={item.url}
+                            alt={item.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        </div>
+
+                        <div className="space-y-1 min-w-0">
+                          <h5 className="font-bold text-xs text-white truncate" title={item.name}>
+                            {item.name}
+                          </h5>
+                          <div className="flex items-center justify-between text-[10px] text-white/50">
+                            <span>{item.size || 'Preset'}</span>
+                            <span className="truncate">{new Date(item.uploaded_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-white/10 mt-2 flex items-center justify-between gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (mediaLibraryTab === 'avatars') {
+                                StorageService.setAdminAvatarDefault(item.id);
+                                setAdminAvatars(StorageService.getAdminAvatarLibrary());
+                              } else {
+                                StorageService.setAdminThumbnailDefault(item.id);
+                                setAdminThumbnails(StorageService.getAdminThumbnailLibrary());
+                              }
+                              confetti({ particleCount: 15, spread: 40 });
+                            }}
+                            className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                              item.is_default
+                                ? 'bg-primary/20 text-primary border border-primary/40'
+                                : 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white'
+                            }`}
+                          >
+                            {item.is_default ? '✓ Default' : 'Set Default'}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Delete "${item.name}" from the media library?`)) {
+                                if (mediaLibraryTab === 'avatars') {
+                                  StorageService.deleteAdminAvatar(item.id);
+                                  setAdminAvatars(StorageService.getAdminAvatarLibrary());
+                                } else {
+                                  StorageService.deleteAdminThumbnail(item.id);
+                                  setAdminThumbnails(StorageService.getAdminThumbnailLibrary());
+                                }
+                              }
+                            }}
+                            className="p-1 rounded-lg text-white/40 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}

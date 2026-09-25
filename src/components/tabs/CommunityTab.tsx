@@ -138,8 +138,13 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
   // Real-time synchronization for community posts, prayers, groups, and members
   useEffect(() => {
-    const handleTestimoniesUpdated = () => {
-      setTestimonyList(StorageService.getTestimonies());
+    const handleTestimoniesUpdated = (e?: any) => {
+      const deletedId = e?.detail?.deleted ? e?.detail?.id : null;
+      if (deletedId) {
+        setTestimonyList(prev => prev.filter(t => t.id !== deletedId));
+      } else {
+        setTestimonyList(StorageService.getTestimonies());
+      }
     };
     const handlePrayersUpdated = () => {
       setPrayerList(StorageService.getPrayerRequests());
@@ -174,6 +179,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
     window.addEventListener('gcz_events_updated', handleEventsUpdated);
     window.addEventListener('gcz_testimony_updated', handleTestimoniesUpdated);
+    window.addEventListener('gcz_testimony_deleted', handleTestimoniesUpdated);
     window.addEventListener('gcz_prayer_updated', handlePrayersUpdated);
     window.addEventListener('gcz_groups_updated', handleGroupsUpdated);
     window.addEventListener('gcz_user_registered', handleUsersUpdated);
@@ -205,6 +211,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     return () => {
       window.removeEventListener('gcz_events_updated', handleEventsUpdated);
       window.removeEventListener('gcz_testimony_updated', handleTestimoniesUpdated);
+      window.removeEventListener('gcz_testimony_deleted', handleTestimoniesUpdated);
       window.removeEventListener('gcz_prayer_updated', handlePrayersUpdated);
       window.removeEventListener('gcz_groups_updated', handleGroupsUpdated);
       window.removeEventListener('gcz_user_registered', handleUsersUpdated);
@@ -2067,36 +2074,36 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             ))}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full min-w-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full min-w-0 items-stretch">
             {filteredGroups.map(group => (
               <div
                 key={group.id}
                 className={cn(
-                  "rounded-xl p-4 space-y-3 flex flex-col justify-between w-full min-w-0 overflow-hidden box-border transition-all duration-300 relative",
+                  "rounded-xl p-4 flex flex-col justify-between w-full min-w-0 overflow-hidden box-border transition-all duration-200 relative h-full",
                   group.is_paid
-                    ? "bg-gradient-to-br from-amber-500/15 via-card to-amber-500/5 border-2 border-amber-400 dark:border-amber-400/90 shadow-[0_0_24px_rgba(245,158,11,0.28)] ring-1 ring-amber-400/50"
+                    ? "bg-card border border-amber-500/50 shadow-sm"
                     : "bg-card border border-border shadow-sm"
                 )}
               >
-                {/* Shining Premium Gold Banner for Paid Groups */}
+                {/* Shining Premium Gold Banner for Paid Groups - cleanly aligned without negative margins */}
                 {group.is_paid && (
-                  <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500 text-slate-950 shadow-md font-black -mt-1 -mx-1 mb-1 animate-pulse">
+                  <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 font-black mb-3 shadow-xs">
                     <span className="flex items-center gap-1.5 text-[10px] tracking-wider uppercase">
                       <Crown className="w-3.5 h-3.5 fill-current" />
                       <span>PREMIUM CELL GROUP</span>
                     </span>
-                    <span className="text-xs bg-slate-950/15 px-2 py-0.5 rounded-md font-black">
+                    <span className="text-[11px] bg-slate-950/20 text-slate-950 px-2 py-0.5 rounded-md font-black">
                       ${group.price_usd || 150} USD / {group.duration_months || 3} mo
                     </span>
                   </div>
                 )}
 
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1 flex flex-col">
                   <div className="flex items-center justify-between mb-1.5 min-w-0">
                     <span className={cn(
                       "px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 flex items-center gap-1",
                       group.is_paid
-                        ? "bg-amber-400/20 text-amber-600 dark:text-amber-400 border border-amber-400/40"
+                        ? "bg-amber-400/20 text-amber-600 dark:text-amber-400 border border-amber-400/30"
                         : "bg-primary/15 text-primary"
                     )}>
                       {group.is_paid && <Sparkles className="w-3 h-3 fill-current text-amber-500" />}
@@ -2108,9 +2115,9 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     {group.is_paid && <Crown className="w-3.5 h-3.5 text-amber-500 fill-current shrink-0" />}
                     <span>{group.name}</span>
                   </h4>
-                  <p className="text-xs text-muted-foreground mb-2 line-clamp-3 break-words">{group.description}</p>
+                  <p className="text-xs text-muted-foreground mb-3 line-clamp-2 break-words flex-1">{group.description}</p>
                   
-                  <div className="space-y-1 text-xs text-muted-foreground min-w-0">
+                  <div className="space-y-1.5 text-xs text-muted-foreground min-w-0 mb-3">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <MapPin className={cn("w-3.5 h-3.5 shrink-0", group.is_paid ? "text-amber-500" : "text-primary")} />
                       <span className="text-foreground truncate">{group.location}</span>
@@ -2122,7 +2129,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-border flex items-center justify-between gap-2 min-w-0">
+                <div className="pt-2.5 border-t border-border flex items-center justify-between gap-2 min-w-0 mt-auto">
                   <div className="text-xs text-muted-foreground truncate min-w-0 flex-1">
                     Leader: <strong className="text-foreground truncate">{group.leader_name}</strong>
                   </div>
