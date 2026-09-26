@@ -66,6 +66,7 @@ import {
   INITIAL_CHAT_GROUP_MESSAGES
 } from '../data/mockData';
 import { SupabaseSyncService } from './supabaseSyncService';
+import { StorageBucketService } from './StorageBucketService';
 import { CONFIG } from '../../config';
 import { LocalMediaStore } from './localMediaStore';
 
@@ -778,7 +779,13 @@ export class StorageService {
   }
 
   static getOfflineSermonsList(): string[] {
-    return getLocal<string[]>(KEYS.OFFLINE_SERMONS, ['sermon_1', 'sermon_2']);
+    const list = getLocal<string[]>(KEYS.OFFLINE_SERMONS, []);
+    const legacyMocks = ['sermon_1', 'sermon_2'];
+    if (list.length === legacyMocks.length && list.every((id, i) => id === legacyMocks[i])) {
+      setLocal(KEYS.OFFLINE_SERMONS, []);
+      return [];
+    }
+    return list;
   }
 
   static getDownloadedSermons(): Sermon[] {
@@ -1934,7 +1941,13 @@ export class StorageService {
 
   // Saved verses
   static getSavedVerses(): string[] {
-    return getLocal<string[]>(KEYS.SAVED_VERSES, ['Psalms 23:1', 'John 1:1', 'Isaiah 40:31', 'Habakkuk 2:2-3']);
+    const verses = getLocal<string[]>(KEYS.SAVED_VERSES, []);
+    const legacyMocks = ['Psalms 23:1', 'John 1:1', 'Isaiah 40:31', 'Habakkuk 2:2-3'];
+    if (verses.length === legacyMocks.length && verses.every((v, i) => v === legacyMocks[i])) {
+      setLocal(KEYS.SAVED_VERSES, []);
+      return [];
+    }
+    return verses;
   }
 
   static toggleSavedVerse(verseRef: string): boolean {
@@ -2296,6 +2309,18 @@ export class StorageService {
 
   static deleteTestimony(id: string): void {
     if (!id) return;
+    const postToDelete = this.getTestimonies().find(t => t.id === id);
+    if (postToDelete) {
+      if (postToDelete.image_url) {
+        StorageBucketService.deleteMediaByUrl(postToDelete.image_url).catch(() => {});
+      }
+      if (postToDelete.video_url) {
+        StorageBucketService.deleteMediaByUrl(postToDelete.video_url).catch(() => {});
+      }
+      if ((postToDelete as any).media_url) {
+        StorageBucketService.deleteMediaByUrl((postToDelete as any).media_url).catch(() => {});
+      }
+    }
     const list = this.getTestimonies().filter(t => t.id !== id);
     setLocal(KEYS.TESTIMONIES, list);
     const saved = getLocal<string[]>(KEYS.SAVED_POSTS, []);
@@ -4738,26 +4763,54 @@ export class StorageService {
       setLocal(KEYS.DISSOLVED_GROUPS, dissolved);
     }
 
-    // Remove from chat groups
+    // Find group to remove any bucket avatar/media
     const rawGroups = getLocal<ChatGroup[]>(KEYS.CHAT_GROUPS, INITIAL_CHAT_GROUPS);
+    const targetGroup = rawGroups.find(g => g.id === groupId);
+    if (targetGroup?.avatar_url) {
+      StorageBucketService.deleteMediaByUrl(targetGroup.avatar_url).catch(() => {});
+    }
+
+    // Remove from chat groups
     const filteredGroups = rawGroups.filter(g => g.id !== groupId);
     setLocal(KEYS.CHAT_GROUPS, filteredGroups);
 
     // Remove from community groups
     const rawComm = getLocal<CommunityGroup[]>(KEYS.GROUPS, MOCK_COMMUNITY_GROUPS);
+    const targetComm = rawComm.find(g => g.id === groupId);
+    if (targetComm?.image_url && targetComm.image_url !== targetGroup?.avatar_url) {
+      StorageBucketService.deleteMediaByUrl(targetComm.image_url).catch(() => {});
+    }
     const filteredComm = rawComm.filter(g => g.id !== groupId);
     setLocal(KEYS.GROUPS, filteredComm);
 
-    // Clean messages
+    // Clean messages & delete their media from storage bucket
     const allMsgs = getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
     if (allMsgs[groupId]) {
+      allMsgs[groupId].forEach(msg => {
+        if (msg.media_url) {
+          StorageBucketService.deleteMediaByUrl(msg.media_url).catch(() => {});
+        }
+      });
       delete allMsgs[groupId];
       setLocal(KEYS.CHAT_GROUP_MESSAGES, allMsgs);
     }
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_groups_updated'));
+      window.dispatchEvent(new CustomEvent('gcz_group_dissolved', { detail: { groupId } }));
+      try {
+        if ('BroadcastChannel' in window) {
+          const bc = new BroadcastChannel('gcz_cross_tab_sync');
+          bc.postMessage({ type: 'group_dissolved', payload: { groupId } });
+          setTimeout(() => {
+            try { bc.close(); } catch {}
+          }, 500);
+        }
+      } catch {}
     }
+
+    // Delete in Supabase backend & Realtime broadcast
+    SupabaseSyncService.deleteGroup(groupId).catch(() => {});
 
     return { success: true, message: 'Group dissolved successfully.' };
   }
@@ -5225,31 +5278,47 @@ export class StorageService {
   }
 
   static hydrateGroupMessages(groupId: string, messages: any[], reactionsData: any[] = []) {
+    if (!groupId) return;
     const allMsgs = getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
-    
-    // Process messages and attach reactions
-    const formattedMsgs = messages.map(row => {
-      // Find reactions for this message
-      const msgReactions = reactionsData.filter(r => r.message_id === row.id).map(r => r.emoji);
-      return {
-        id: row.id,
-        group_id: row.group_id,
-        sender_id: row.sender_id,
-        sender_name: row.sender_name || 'Church Member',
-        sender_avatar: row.sender_avatar,
-        sender_role: row.sender_role || 'member',
-        text: row.text,
-        reply_to: row.reply_to,
-        media_url: row.media_url,
-        media_type: row.media_type,
-        is_system: row.is_system || false,
-        read_by_user_ids: row.read_by_user_ids || [row.sender_id],
-        created_at: row.created_at,
-        reactions: msgReactions
-      } as ChatGroupMessage;
-    });
+    const existingList = allMsgs[groupId] || [];
 
-    allMsgs[groupId] = formattedMsgs;
+    // Map existing by ID
+    const mergedMap = new Map<string, ChatGroupMessage>();
+    existingList.forEach(m => {
+      if (m && m.id) mergedMap.set(m.id, m);
+    });
+    
+    // Process incoming remote messages and attach reactions
+    if (Array.isArray(messages) && messages.length > 0) {
+      messages.forEach(row => {
+        if (!row || !row.id) return;
+        const msgReactions = reactionsData.filter(r => r.message_id === row.id).map(r => r.emoji);
+        const prev = mergedMap.get(row.id);
+        const formatted: ChatGroupMessage = {
+          id: row.id,
+          group_id: row.group_id || groupId,
+          sender_id: row.sender_id,
+          sender_name: row.sender_name || prev?.sender_name || 'Church Member',
+          sender_avatar: row.sender_avatar || prev?.sender_avatar,
+          sender_role: row.sender_role || prev?.sender_role || 'member',
+          text: row.text,
+          reply_to: row.reply_to || prev?.reply_to,
+          media_url: row.media_url || prev?.media_url,
+          media_type: row.media_type || prev?.media_type,
+          is_system: row.is_system || false,
+          read_by_user_ids: row.read_by_user_ids || prev?.read_by_user_ids || [row.sender_id],
+          created_at: row.created_at || prev?.created_at || new Date().toISOString(),
+          reactions: msgReactions.length > 0 ? msgReactions : (prev?.reactions || [])
+        };
+        mergedMap.set(row.id, formatted);
+      });
+    }
+
+    const mergedList = Array.from(mergedMap.values()).sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    allMsgs[groupId] = mergedList;
     setLocal(KEYS.CHAT_GROUP_MESSAGES, allMsgs);
   }
 

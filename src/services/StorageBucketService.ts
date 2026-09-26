@@ -199,5 +199,64 @@ export class StorageBucketService {
       return null;
     }
   }
+
+  /**
+   * Deletes a file from Supabase Storage by its public URL or path.
+   * Supports 'media' and 'avatars' buckets.
+   */
+  static async deleteMediaByUrl(urlOrPath?: string | null): Promise<boolean> {
+    if (!urlOrPath || typeof urlOrPath !== 'string') return false;
+    const supabase = getSupabase();
+    if (!supabase) return false;
+
+    try {
+      let bucket = this.BUCKET_NAME;
+      let filePath = '';
+
+      if (urlOrPath.includes('/storage/v1/object/public/')) {
+        const afterPrefix = urlOrPath.split('/storage/v1/object/public/')[1];
+        if (afterPrefix) {
+          const slashIdx = afterPrefix.indexOf('/');
+          if (slashIdx !== -1) {
+            bucket = afterPrefix.substring(0, slashIdx);
+            filePath = afterPrefix.substring(slashIdx + 1);
+          } else {
+            filePath = afterPrefix;
+          }
+        }
+      } else if (urlOrPath.includes('/storage/v1/object/')) {
+        const afterPrefix = urlOrPath.split('/storage/v1/object/')[1];
+        if (afterPrefix) {
+          const parts = afterPrefix.split('/');
+          if (parts.length >= 3) {
+            bucket = parts[1];
+            filePath = parts.slice(2).join('/');
+          }
+        }
+      } else if (urlOrPath.startsWith('avatars/')) {
+        bucket = 'avatars';
+        filePath = urlOrPath.replace(/^avatars\//, '');
+      } else if (urlOrPath.startsWith('media/')) {
+        bucket = 'media';
+        filePath = urlOrPath.replace(/^media\//, '');
+      } else {
+        return false;
+      }
+
+      filePath = decodeURIComponent(filePath.split('?')[0]);
+      if (!filePath) return false;
+
+      const { error } = await supabase.storage.from(bucket).remove([filePath]);
+      if (error) {
+        console.warn(`Failed to delete storage object from '${bucket}':`, error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('Error during storage object deletion:', err);
+      return false;
+    }
+  }
 }
+
 
