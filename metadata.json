@@ -1,6 +1,6 @@
 {
-  "name": "Gatewayconnect",
-  "description": "joe daniels connect",
+  "name": "Remix gateway connect",
+  "description": "Imported from GitHub: gatewaychurcho/gatewayconnect",
   "requestFramePermissions": [
     "camera",
     "microphone"
