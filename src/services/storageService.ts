@@ -4823,6 +4823,10 @@ export class StorageService {
     return { success: true, message: 'Group dissolved successfully.' };
   }
 
+  static deleteGroup(groupId: string): { success: boolean; message: string } {
+    return this.deleteChatGroup(groupId);
+  }
+
   static updateGroupSettings(groupId: string, updates: Partial<ChatGroup>): { success: boolean; group?: ChatGroup; message: string } {
     const groups = this.getChatGroups();
     const grp = groups.find(g => g.id === groupId);

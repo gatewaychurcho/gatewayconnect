@@ -828,6 +828,30 @@ export class SupabaseSyncService {
     }
   }
 
+  /**
+   * Deletes group from Supabase and broadcasts group_dissolved event
+   */
+  static async deleteGroup(groupId: string): Promise<boolean> {
+    const supabase = getSupabase();
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'group_dissolved',
+        payload: { groupId }
+      });
+    }
+    if (!supabase || !groupId) return false;
+    try {
+      await supabase.from('chat_groups').delete().eq('id', groupId);
+      await supabase.from('group_members').delete().eq('group_id', groupId);
+      await supabase.from('chat_group_messages').delete().eq('group_id', groupId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private static socialChannelInstance: any = null;
   private static socialSubscribers = new Set<{
     onNewGroupMessage?: (msg: ChatGroupMessage) => void;

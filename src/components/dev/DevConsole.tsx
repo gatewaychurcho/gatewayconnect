@@ -137,7 +137,7 @@ interface DevConsoleProps {
 export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterExport, onSwitchUser }) => {
   const [activeTab, setActiveTab] = useState<'telemetry' | 'pages' | 'streamers' | 'bans' | 'appeals' | 'passwords' | 'godmode' | 'schema' | 'logs' | 'endpoints' | 'accounts'>('telemetry');
   const [devPages, setDevPages] = useState<ChurchPage[]>(() => StorageService.getPages());
-  const [devGroups, setDevGroups] = useState<ChatGroup[]>(() => StorageService.getGroups());
+  const [devGroups, setDevGroups] = useState<ChatGroup[]>(() => StorageService.getChatGroups());
   const [devPageSearch, setDevPageSearch] = useState<string>('');
   const [showPaynowModal, setShowPaynowModal] = useState(false);
   const [isPingingSupabase, setIsPingingSupabase] = useState(false);
@@ -501,7 +501,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
     setActiveStreamers(StorageService.getStreamViewers());
     setStreamAttendees(StorageService.getStreamAttendanceHistory());
     setDevPages(StorageService.getPages());
-    setDevGroups(StorageService.getGroups());
+    setDevGroups(StorageService.getChatGroups());
   }, [activeTab]);
 
   const handleToggleVerificationBadge = (user: User) => {
@@ -1465,7 +1465,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                               </span>
                             </div>
                             <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] text-slate-300">
-                              {group.members_count || (group.members || []).length || 0} members
+                              {group.member_ids?.length || 0} members
                             </span>
                           </div>
                           {group.description && (
@@ -1480,7 +1480,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                             onClick={() => {
                               if (window.confirm(`[DEVELOPER ACTION] Permanently dissolve Chat Group "${group.name}" (${group.id})?`)) {
                                 StorageService.deleteGroup(group.id);
-                                setDevGroups(StorageService.getGroups());
+                                setDevGroups(StorageService.getChatGroups());
                                 setLogs(prev => [
                                   `[${new Date().toLocaleTimeString()}] [DEV_GROUP_DISSOLVED] Dissolved group "${group.name}" (${group.id})`,
                                   ...prev
