@@ -235,9 +235,16 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
         // Ignore cache read errors
       }
 
-      // 4. If Offline Mode is Active or navigator is offline, do NOT fetch from network
+      // 4. If Offline Mode is Active or navigator is offline, verify bundled scriptures
       if (isOfflineMode || (typeof navigator !== 'undefined' && !navigator.onLine)) {
         if (isMounted) {
+          const bundledFallback = await bibleOfflineService.getCachedChapter(selectedBook, selectedChapter, version);
+          if (bundledFallback && bundledFallback.length > 0) {
+            setRealVerses(bundledFallback);
+            setIsLoadingBible(false);
+            setIsChapterCached(true);
+            return;
+          }
           setRealVerses([]);
           setIsLoadingBible(false);
           setIsChapterCached(false);
@@ -549,10 +556,45 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
   const displayBookName = (name: string) => name;
 
   return (
-    <div className="space-y-4 pb-20 max-w-4xl mx-auto px-0 sm:px-2 pt-1 w-full max-w-full">
+    <div className="space-y-3 pb-20 max-w-4xl mx-auto px-0 sm:px-2 pt-1 w-full max-w-full">
       
-      {/* 1. Main Top Navigation Bar */}
-      <div className="bg-card/95 backdrop-blur-md border border-border rounded-xl p-2 sm:p-2.5 shadow-sm sticky top-14 z-30 space-y-2">
+      {/* 1. Main Navigation Tabs (Holy Scriptures, Reading Plans, Bookmarks & Notes) */}
+      <div className="flex items-center gap-1.5 border-b border-border pb-2.5 pt-1 px-1 overflow-x-auto no-scrollbar shrink-0 w-full flex-nowrap mb-3 clear-both">
+        <button
+          onClick={() => setActiveTab('reader')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+            activeTab === 'reader'
+              ? 'bg-primary text-primary-foreground shadow-xs'
+              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+          }`}
+        >
+          Holy Scriptures
+        </button>
+        <button
+          onClick={() => setActiveTab('plans')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+            activeTab === 'plans'
+              ? 'bg-primary text-primary-foreground shadow-xs'
+              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+          }`}
+        >
+          Reading Plans ({READING_PLANS.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('highlights')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+            activeTab === 'highlights'
+              ? 'bg-primary text-primary-foreground shadow-xs'
+              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+          }`}
+        >
+          Bookmarks & Notes ({savedVerses.length})
+        </button>
+      </div>
+
+      {/* 2. Scripture Toolbar (Only shown in Reader tab, no sticky overlap) */}
+      {activeTab === 'reader' && (
+        <div className="bg-card border border-border rounded-xl p-2 sm:p-2.5 shadow-sm space-y-2 relative mt-2 clear-both w-full">
         
         <div className="flex items-center justify-between gap-1.5 sm:gap-2">
           {/* Left: Scripture Selector (Book + Chapter) & Chapter Stepper */}
@@ -945,41 +987,8 @@ export const BibleTab: React.FC<BibleTabProps> = ({ initialReference, lowDataMod
           </div>
         )}
 
-      </div>
-
-      {/* 2. Sub-navigation tabs (Reader, Reading Plans, Bookmarks) */}
-      <div className="flex items-center gap-1.5 border-b border-border pb-2">
-        <button
-          onClick={() => setActiveTab('reader')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            activeTab === 'reader'
-              ? 'bg-primary text-primary-foreground shadow-xs'
-              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-          }`}
-        >
-          Holy Scriptures
-        </button>
-        <button
-          onClick={() => setActiveTab('plans')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            activeTab === 'plans'
-              ? 'bg-primary text-primary-foreground shadow-xs'
-              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-          }`}
-        >
-          Reading Plans ({READING_PLANS.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('highlights')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            activeTab === 'highlights'
-              ? 'bg-primary text-primary-foreground shadow-xs'
-              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-          }`}
-        >
-          Bookmarks & Notes ({savedVerses.length})
-        </button>
-      </div>
+        </div>
+      )}
 
       {/* 3. Main Reading Content (Requires selecting a book first) */}
       {activeTab === 'reader' && (

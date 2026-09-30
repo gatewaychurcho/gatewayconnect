@@ -1431,8 +1431,44 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
               <span className="text-[11px] text-primary font-semibold">Gateway Community</span>
             </div>
             <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none">
+              {/* Church Pages in Suggested Carousel */}
+              {StorageService.getPages().map(page => {
+                const isFollowingPage = page.followers?.includes(currentUser.id);
+                return (
+                  <div
+                    key={page.id}
+                    className="w-36 shrink-0 bg-card border border-primary/30 rounded-lg p-2.5 flex flex-col items-center text-center relative shadow-xs"
+                  >
+                    <img
+                      src={page.avatar_url || '/assets/church_logo.png'}
+                      alt={page.name}
+                      className="w-11 h-11 rounded-lg object-cover border border-primary/20 mb-1.5"
+                    />
+                    <div className="flex items-center justify-center gap-1 w-full">
+                      <p className="text-xs font-semibold text-foreground truncate">{page.name}</p>
+                      <VerifiedBadge type="official" size="xs" />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground truncate w-full mb-2">{page.handle}</p>
+                    <button
+                      onClick={() => {
+                        StorageService.toggleFollowPage(page.id, currentUser.id);
+                        setSelectedViewChurchPage(page);
+                      }}
+                      className={`w-full py-1 rounded-md text-[11px] font-semibold transition-all ${
+                        isFollowingPage
+                          ? 'bg-secondary text-foreground border border-border'
+                          : 'bg-primary text-primary-foreground hover:opacity-90 shadow-xs'
+                      }`}
+                    >
+                      {isFollowingPage ? 'Following Page' : 'Follow Page'}
+                    </button>
+                  </div>
+                );
+              })}
+
               {allRegisteredUsers.filter(u => u.id !== currentUser.id && u.role !== 'guest').slice(0, 10).map(u => {
                 const isFollowing = followingUsers[u.id];
+                const hasVerifiedBadge = u.verified_badge || (u.role === 'apostle' || u.role === 'super_admin' || u.role === 'pastor' || (u as any).verified ? 'official' : undefined);
                 return (
                   <div
                     key={u.id}
@@ -1445,7 +1481,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     />
                     <div className="flex items-center justify-center gap-1 w-full">
                       <p className="text-xs font-semibold text-foreground truncate">{u.full_name}</p>
-                      {u.verified_badge && <VerifiedBadge type={u.verified_badge} size="xs" />}
+                      {hasVerifiedBadge && <VerifiedBadge type={hasVerifiedBadge as any} size="xs" />}
                     </div>
                     <p className="text-[10px] text-muted-foreground truncate w-full mb-2">{u.handle}</p>
                     <button

@@ -441,9 +441,11 @@ export class SupabaseSyncService {
         const byId = new Map<string, any>(
           localPosts.filter((p: any) => p && p.id).map((p: any) => [p.id, p])
         );
+        const deletedIds = new Set<string>(readLocalArray('gcz_deleted_post_ids_v1'));
         let changed = false;
 
         for (const p of posts) {
+          if (deletedIds.has(p.id)) continue;
           if (byId.has(p.id)) continue;
           byId.set(p.id, {
             id: p.id,
@@ -1264,6 +1266,13 @@ export class SupabaseSyncService {
    */
   static async deletePost(postId: string): Promise<boolean> {
     if (!postId) return false;
+    try {
+      const delList = readLocalArray('gcz_deleted_post_ids_v1');
+      if (!delList.includes(postId)) {
+        delList.push(postId);
+        localStorage.setItem('gcz_deleted_post_ids_v1', JSON.stringify(delList));
+      }
+    } catch {}
     const channel = this.getSocialChannel();
     if (channel) {
       channel.send({
@@ -1275,6 +1284,8 @@ export class SupabaseSyncService {
     const supabase = getSupabase();
     if (supabase) {
       Promise.resolve(supabase.from('posts').delete().eq('id', postId)).catch(() => {});
+      Promise.resolve(supabase.from('testimonies').delete().eq('id', postId)).catch(() => {});
+      Promise.resolve(supabase.from('post_comments').delete().eq('post_id', postId)).catch(() => {});
     }
     return true;
   }

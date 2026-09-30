@@ -134,10 +134,10 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
         <div className="flex flex-col">
           <span className="text-primary font-bold text-sm sm:text-base tracking-wide leading-tight">
-            GATEWAY
+            JOE DANIELS
           </span>
           <span className="text-[10px] sm:text-[11px] text-muted-foreground font-semibold tracking-widest uppercase">
-            HARARE
+            CONNECT
           </span>
         </div>
       </div>

@@ -51,6 +51,12 @@ export const ChurchPagesSection: React.FC<ChurchPagesSectionProps> = ({
     setPages(StorageService.getPages());
   };
 
+  useEffect(() => {
+    const handleUpdated = () => refreshPages();
+    window.addEventListener('gcz_church_pages_updated', handleUpdated);
+    return () => window.removeEventListener('gcz_church_pages_updated', handleUpdated);
+  }, []);
+
   const myManagedPages = pages.filter(
     p => p.creator_id === currentUser.id || p.admin_ids?.includes(currentUser.id)
   );

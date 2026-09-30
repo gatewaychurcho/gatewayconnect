@@ -61,7 +61,7 @@ import { testSupabaseConnection } from '../../services/supabaseClient';
 import { downloadCsvForExcel } from '../../utils/exportUtils';
 import { SUPABASE_SCHEMA_SQL } from '../../data/flutterExportData';
 import { PaynowConfigModal } from '../modals/PaynowConfigModal';
-import { User, UnbanAppeal, PasswordResetRequest, StreamAttendanceRecord, LiveStreamViewer, SUPPORTED_CITIES } from '../../types';
+import { User, UnbanAppeal, PasswordResetRequest, StreamAttendanceRecord, LiveStreamViewer, SUPPORTED_CITIES, ChurchPage, ChatGroup } from '../../types';
 import type { UserRole } from '../../types';
 import { AdminCyberBackground } from '../admin/AdminCyberBackground';
 import { CONFIG } from '../../../config';
@@ -135,7 +135,10 @@ interface DevConsoleProps {
 }
 
 export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterExport, onSwitchUser }) => {
-  const [activeTab, setActiveTab] = useState<'telemetry' | 'streamers' | 'bans' | 'appeals' | 'passwords' | 'godmode' | 'schema' | 'logs' | 'endpoints' | 'accounts'>('telemetry');
+  const [activeTab, setActiveTab] = useState<'telemetry' | 'pages' | 'streamers' | 'bans' | 'appeals' | 'passwords' | 'godmode' | 'schema' | 'logs' | 'endpoints' | 'accounts'>('telemetry');
+  const [devPages, setDevPages] = useState<ChurchPage[]>(() => StorageService.getPages());
+  const [devGroups, setDevGroups] = useState<ChatGroup[]>(() => StorageService.getGroups());
+  const [devPageSearch, setDevPageSearch] = useState<string>('');
   const [showPaynowModal, setShowPaynowModal] = useState(false);
   const [isPingingSupabase, setIsPingingSupabase] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
@@ -441,9 +444,9 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
     window.addEventListener('gcz_stream_reaction_sent', handleStreamReaction);
     window.addEventListener('gcz_live_presence_updated', handlePresence);
     window.addEventListener('gcz_group_messages_updated', handleGroupMsg);
-    window.addEventListener('gcz_direct_messages_updated', handleDirectMsg);
     window.addEventListener('gcz_dms_updated', refreshAll);
     window.addEventListener('gcz_groups_updated', refreshAll);
+    window.addEventListener('gcz_church_pages_updated', refreshAll);
 
     // Heartbeat live telemetry logs
     const heartbeat = setInterval(() => {
@@ -479,6 +482,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
       window.removeEventListener('gcz_direct_messages_updated', handleDirectMsg);
       window.removeEventListener('gcz_dms_updated', refreshAll);
       window.removeEventListener('gcz_groups_updated', refreshAll);
+      window.removeEventListener('gcz_church_pages_updated', refreshAll);
       clearInterval(heartbeat);
     };
   }, [isPausedLogs, supabaseConfig.isLiveConnected]);
@@ -496,6 +500,8 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
     setUnbanAppeals(StorageService.getUnbanAppeals());
     setActiveStreamers(StorageService.getStreamViewers());
     setStreamAttendees(StorageService.getStreamAttendanceHistory());
+    setDevPages(StorageService.getPages());
+    setDevGroups(StorageService.getGroups());
   }, [activeTab]);
 
   const handleToggleVerificationBadge = (user: User) => {
@@ -1019,6 +1025,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
       )}>
         {[
           { id: 'telemetry', label: 'Telemetry & Health', icon: Activity },
+          { id: 'pages', label: `Church Pages (${devPages.length})`, icon: Layers },
           { id: 'accounts', label: 'Ecosystem Accounts & Sync', icon: Users },
           { id: 'streamers', label: `Stream Attendees (${activeStreamers.length} Live)`, icon: Radio },
           { id: 'bans', label: 'Account Bans & Suspension', icon: ShieldOff },
@@ -1077,6 +1084,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
             >
               {[
                 { id: 'telemetry', label: 'Telemetry & Health' },
+                { id: 'pages', label: `Church Pages (${devPages.length} Pages)` },
                 { id: 'accounts', label: 'Ecosystem Accounts & Sync' },
                 { id: 'streamers', label: `Stream Attendees (${activeStreamers.length} Live / ${streamAttendees.length} Total)` },
                 { id: 'bans', label: 'Account Bans & Suspension' },
@@ -1103,6 +1111,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
         <div className="flex items-center gap-1.5 px-2 py-1.5 overflow-x-auto scrollbar-none">
           {[
             { id: 'telemetry', label: 'Telemetry', icon: Activity },
+            { id: 'pages', label: `Pages (${devPages.length})`, icon: Layers },
             { id: 'accounts', label: 'Accounts', icon: Users },
             { id: 'streamers', label: `Live (${activeStreamers.length})`, icon: Radio },
             { id: 'bans', label: 'Bans', icon: ShieldOff },
@@ -1217,6 +1226,278 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                   <span>{copiedSql ? 'Copied SQL Script!' : '📋 Copy Supabase SQL Schema'}</span>
                 </button>
               </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* CHURCH PAGES & CHAT GROUPS MASTER DIRECTORY (DEVELOPER GODMODE) */}
+        {activeTab === 'pages' && (
+          <div className="space-y-4 font-mono">
+            {/* Header Banner */}
+            <div className={cn(
+              "rounded-2xl p-4 sm:p-5 border shadow-xl relative overflow-hidden",
+              consoleTheme === 'jarvis'
+                ? "bg-cyan-950/40 border-cyan-500/40"
+                : "bg-slate-900 border-purple-500/30"
+            )}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div>
+                  <h3 className={cn(
+                    "font-bold text-sm flex items-center gap-2",
+                    consoleTheme === 'jarvis' ? "text-cyan-300" : "text-purple-400"
+                  )}>
+                    <Layers className="w-4 h-4" />
+                    <span>Church Pages & Chat Groups Master Control</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Developer portal to audit, verify, and permanently dissolve church pages and community chat groups in real-time.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    "px-2.5 py-1 rounded-full text-xs font-bold font-mono border",
+                    consoleTheme === 'jarvis'
+                      ? "bg-cyan-500/20 text-cyan-300 border-cyan-400/40"
+                      : "bg-purple-500/20 text-purple-300 border-purple-400/40"
+                  )}>
+                    {devPages.length} Pages • {devGroups.length} Groups
+                  </span>
+                </div>
+              </div>
+
+              {/* KPI Metrics */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mt-4">
+                <div className="bg-slate-950/70 p-3 rounded-xl border border-white/5 text-center">
+                  <span className="text-[10px] text-slate-400 uppercase">Pages Total</span>
+                  <span className="text-lg font-bold text-cyan-300 block">{devPages.length}</span>
+                </div>
+                <div className="bg-slate-950/70 p-3 rounded-xl border border-white/5 text-center">
+                  <span className="text-[10px] text-slate-400 uppercase">Chat Groups</span>
+                  <span className="text-lg font-bold text-purple-400 block">{devGroups.length}</span>
+                </div>
+                <div className="bg-slate-950/70 p-3 rounded-xl border border-white/5 text-center">
+                  <span className="text-[10px] text-slate-400 uppercase">Followers Count</span>
+                  <span className="text-lg font-bold text-emerald-400 block">
+                    {devPages.reduce((acc, p) => acc + (p.followers_count || (p.followers || []).length || 0), 0)}
+                  </span>
+                </div>
+                <div className="bg-slate-950/70 p-3 rounded-xl border border-white/5 text-center">
+                  <span className="text-[10px] text-slate-400 uppercase">Verified Official</span>
+                  <span className="text-lg font-bold text-amber-400 block">
+                    {devPages.filter(p => p.verified).length}
+                  </span>
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative mt-4">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Filter church pages and chat groups..."
+                  value={devPageSearch}
+                  onChange={(e) => setDevPageSearch(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+            </div>
+
+            {/* 1. CHURCH PAGES LIST */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Registered Church Pages ({devPages.length})</span>
+                </h4>
+              </div>
+
+              {(() => {
+                const filteredPages = devPages.filter(p =>
+                  !devPageSearch.trim() ||
+                  p.name.toLowerCase().includes(devPageSearch.toLowerCase()) ||
+                  p.handle.toLowerCase().includes(devPageSearch.toLowerCase()) ||
+                  p.category.toLowerCase().includes(devPageSearch.toLowerCase())
+                );
+
+                if (filteredPages.length === 0) {
+                  return (
+                    <div className="p-6 bg-slate-950/60 border border-slate-800 rounded-xl text-center text-xs text-slate-500">
+                      {devPageSearch ? `No pages matching "${devPageSearch}".` : "No church pages in system. Users can create pages in Community."}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {filteredPages.map(page => (
+                      <div
+                        key={page.id}
+                        className="bg-slate-950 border border-slate-800 hover:border-cyan-500/40 rounded-xl p-3.5 space-y-3 shadow-md flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-start gap-3">
+                            <img
+                              src={page.avatar_url || '/assets/church_logo.png'}
+                              alt={page.name}
+                              className="w-11 h-11 rounded-lg object-cover border border-slate-700 shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-xs text-white truncate">{page.name}</span>
+                                {page.verified && (
+                                  <BadgeCheck className="w-3.5 h-3.5 text-cyan-400 fill-cyan-400/20 shrink-0" />
+                                )}
+                              </div>
+                              <span className="text-[11px] text-cyan-400 block">{page.handle}</span>
+                              <span className="text-[10px] text-slate-400 block mt-0.5">
+                                Cat: <strong className="text-slate-300">{page.category}</strong> • ID: {page.id}
+                              </span>
+                            </div>
+                          </div>
+
+                          {page.bio && (
+                            <p className="text-[11px] text-slate-400 mt-2 line-clamp-2">
+                              {page.bio}
+                            </p>
+                          )}
+
+                          <div className="grid grid-cols-3 gap-1 mt-2.5 pt-2 border-t border-slate-800 text-[10px] text-center">
+                            <div className="bg-slate-900/60 rounded p-1">
+                              <span className="text-slate-500 block">Followers</span>
+                              <span className="font-bold text-emerald-400">{page.followers_count || (page.followers || []).length || 0}</span>
+                            </div>
+                            <div className="bg-slate-900/60 rounded p-1">
+                              <span className="text-slate-500 block">Admins</span>
+                              <span className="font-bold text-white">{(page.admin_ids || []).length || 1}</span>
+                            </div>
+                            <div className="bg-slate-900/60 rounded p-1">
+                              <span className="text-slate-500 block">Rules</span>
+                              <span className="font-bold text-white">{(page.rules || []).length}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Developer Actions */}
+                        <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+                          <button
+                            onClick={() => {
+                              const next = !page.verified;
+                              StorageService.updatePage(page.id, { verified: next });
+                              setDevPages(StorageService.getPages());
+                              setLogs(prev => [
+                                `[${new Date().toLocaleTimeString()}] [DEV_PAGE_VERIFY] Set verification=${next} for Page "${page.name}" (${page.id})`,
+                                ...prev
+                              ]);
+                            }}
+                            className={cn(
+                              "flex-1 py-1 px-2 rounded-lg text-[11px] font-bold border transition-colors flex items-center justify-center gap-1",
+                              page.verified
+                                ? "bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800"
+                                : "bg-cyan-950 text-cyan-300 border-cyan-500/40 hover:bg-cyan-900"
+                            )}
+                          >
+                            <BadgeCheck className="w-3 h-3" />
+                            <span>{page.verified ? 'Remove Badge' : 'Grant Verified'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`[DEVELOPER ACTION] Permanently dissolve Church Page "${page.name}" (${page.id})?\n\nThis will permanently delete the page and all page posts.`)) {
+                                StorageService.deletePage(page.id);
+                                setDevPages(StorageService.getPages());
+                                setLogs(prev => [
+                                  `[${new Date().toLocaleTimeString()}] [DEV_PAGE_DISSOLVED] Purged page "${page.name}" (${page.id}) and all posts`,
+                                  ...prev
+                                ]);
+                              }
+                            }}
+                            className="py-1 px-2.5 rounded-lg bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/40 text-[11px] font-bold flex items-center gap-1 transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Dissolve Page</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* 2. CHAT GROUPS DIRECTORY */}
+            <div className="space-y-3 pt-4 border-t border-slate-800">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Chat Groups Directory ({devGroups.length})</span>
+                </h4>
+              </div>
+
+              {(() => {
+                const filteredGroups = devGroups.filter(g =>
+                  !devPageSearch.trim() ||
+                  g.name.toLowerCase().includes(devPageSearch.toLowerCase()) ||
+                  g.category.toLowerCase().includes(devPageSearch.toLowerCase())
+                );
+
+                if (filteredGroups.length === 0) {
+                  return (
+                    <div className="p-6 bg-slate-950/60 border border-slate-800 rounded-xl text-center text-xs text-slate-500">
+                      No chat groups found.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {filteredGroups.map(group => (
+                      <div
+                        key={group.id}
+                        className="bg-slate-950 border border-slate-800 hover:border-purple-500/40 rounded-xl p-3.5 space-y-3 shadow-md flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <span className="font-bold text-xs text-white block">{group.name}</span>
+                              <span className="text-[10px] text-purple-400 block mt-0.5">
+                                Cat: <strong className="text-slate-300">{group.category}</strong> • ID: {group.id}
+                              </span>
+                            </div>
+                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] text-slate-300">
+                              {group.members_count || (group.members || []).length || 0} members
+                            </span>
+                          </div>
+                          {group.description && (
+                            <p className="text-[11px] text-slate-400 mt-2 line-clamp-2">
+                              {group.description}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-end pt-2 border-t border-slate-800">
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`[DEVELOPER ACTION] Permanently dissolve Chat Group "${group.name}" (${group.id})?`)) {
+                                StorageService.deleteGroup(group.id);
+                                setDevGroups(StorageService.getGroups());
+                                setLogs(prev => [
+                                  `[${new Date().toLocaleTimeString()}] [DEV_GROUP_DISSOLVED] Dissolved group "${group.name}" (${group.id})`,
+                                  ...prev
+                                ]);
+                              }
+                            }}
+                            className="py-1 px-2.5 rounded-lg bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/40 text-[11px] font-bold flex items-center gap-1 transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Dissolve Group</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
           </div>

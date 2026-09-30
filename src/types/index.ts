@@ -681,6 +681,8 @@ export interface ChurchPage {
   verified?: boolean;
   pinned_announcement?: string;
   posts_count?: number;
+  rules?: string[];
+  agreed_user_ids?: string[];
 }
 
 export interface PagePost {

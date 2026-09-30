@@ -491,14 +491,26 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
               )}
 
               {/* Floating Altar Seed / Donate Trigger Button on the Video */}
-              <div className="absolute bottom-4 right-4 z-20">
+              <div id="stream-seed-wrapper" className="absolute top-3 right-3 z-30 flex items-center gap-1 bg-black/70 backdrop-blur-md p-1 pl-2.5 rounded-full border border-primary/50 shadow-xl">
                 <button
                   id="btn-stream-floating-seed"
                   onClick={() => setShowInStreamDonation(true)}
-                  className="px-3.5 py-2 rounded-full bg-gradient-to-r from-primary via-amber-300 to-primary text-primary-foreground font-black text-xs flex items-center gap-2 shadow-2xl shadow-primary/50 hover:scale-105 active:scale-95 transition-all border border-white/40 animate-pulse"
+                  className="text-primary-foreground font-bold text-[11px] flex items-center gap-1.5 hover:opacity-90 active:scale-95 transition-all cursor-pointer"
                 >
-                  <Gift className="w-4 h-4 fill-current" />
-                  <span>Sow Altar Seed / Pay</span>
+                  <Gift className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                  <span className="bg-gradient-to-r from-amber-200 to-amber-400 bg-clip-text text-transparent font-extrabold">Sow Seed</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const el = document.getElementById('stream-seed-wrapper');
+                    if (el) el.style.display = 'none';
+                  }}
+                  className="w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white text-[10px] font-bold ml-1 transition-colors cursor-pointer"
+                  title="Close"
+                >
+                  ✕
                 </button>
               </div>
 

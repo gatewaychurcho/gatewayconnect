@@ -2316,7 +2316,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
           {/* ========================================================================= */}
           {/* RIGHT COLUMN (Active Conversation Canvas for Direct OR Group) */}
           {/* ========================================================================= */}
-          <div className={`flex-1 flex flex-col bg-background ${
+          <div className={`flex-1 flex flex-col bg-background min-w-0 max-w-full overflow-hidden ${
             (activeTab === 'direct' ? !activeUserId : !activeGroupId) ? 'hidden sm:flex' : 'flex'
           }`}>
             
@@ -3789,7 +3789,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               value={groupInputText}
                               onChange={handleGroupInputChange}
                               placeholder={`Message ${activeGroup.name} (type @ to tag)...`}
-                              className="flex-1 bg-secondary/80 border border-border rounded-full px-4 py-2 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1.5 focus:ring-primary shadow-2xs"
+                              className="flex-1 min-w-0 max-w-full bg-secondary/80 border border-border rounded-full px-3 sm:px-4 py-2 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1.5 focus:ring-primary shadow-2xs"
                             />
                             <button
                               type="submit"

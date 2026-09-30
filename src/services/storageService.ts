@@ -1978,12 +1978,13 @@ export class StorageService {
   static getTestimonies(): Testimony[] {
     const rawList = getLocal<Testimony[]>(KEYS.TESTIMONIES, MOCK_TESTIMONIES);
     
-    // Deduplicate by ID to ensure unique React keys even with stale local storage
+    // Deduplicate by ID to ensure unique React keys and filter out permanently deleted posts
+    const deletedPostIds = new Set(getLocal<string[]>('gcz_deleted_post_ids_v1', []));
     const seenIds = new Set<string>();
     const list: Testimony[] = [];
     let hadDuplicates = false;
     for (const t of rawList) {
-      if (t && t.id && !seenIds.has(t.id)) {
+      if (t && t.id && !seenIds.has(t.id) && !deletedPostIds.has(t.id)) {
         seenIds.add(t.id);
         list.push(t);
       } else {
@@ -2309,6 +2310,13 @@ export class StorageService {
 
   static deleteTestimony(id: string): void {
     if (!id) return;
+    try {
+      const delList = getLocal<string[]>('gcz_deleted_post_ids_v1', []);
+      if (!delList.includes(id)) {
+        delList.push(id);
+        setLocal('gcz_deleted_post_ids_v1', delList);
+      }
+    } catch {}
     const postToDelete = this.getTestimonies().find(t => t.id === id);
     if (postToDelete) {
       if (postToDelete.image_url) {
@@ -6178,9 +6186,9 @@ export class StorageService {
   // CHURCH PAGES & PAGE POSTS (Facebook Pages feature in Instagram UI/UX)
   // =========================================================================
   static getPages(): ChurchPage[] {
-    const DEMO_IDS = ['page_gcz_worship', 'page_youth_flame', 'page_kingdom_business'];
+    const DEMO_IDS = ['page_gcz_worship', 'page_youth_flame', 'page_kingdom_business', 'page_kc_hq'];
     const pages = getLocal<ChurchPage[]>(KEYS.CHURCH_PAGES, []);
-    const validPages = pages.filter(p => !DEMO_IDS.includes(p.id));
+    const validPages = pages.filter(p => p && p.id && !DEMO_IDS.includes(p.id));
     if (validPages.length !== pages.length) {
       setLocal(KEYS.CHURCH_PAGES, validPages);
     }
@@ -6211,7 +6219,14 @@ export class StorageService {
       created_at: new Date().toISOString(),
       followers_count: 1,
       followers: [pageData.creator_id],
-      verified: pageData.verified !== undefined ? pageData.verified : Boolean(isSuperAdminOrDev)
+      admin_ids: pageData.admin_ids && pageData.admin_ids.length > 0 ? pageData.admin_ids : [pageData.creator_id],
+      verified: pageData.verified !== undefined ? pageData.verified : Boolean(isSuperAdminOrDev),
+      rules: pageData.rules || [
+        'Christ-Centered Ministry: Keep all posts and comments uplifting, respectful, and scriptural.',
+        'Zero Spam: No unauthorized product promotion, unrelated ads, or solicitation.',
+        'Privacy & Grace: Respect other believers and maintain Christian fellowship standards.'
+      ],
+      agreed_user_ids: [pageData.creator_id]
     };
     pages.unshift(newPage);
     setLocal(KEYS.CHURCH_PAGES, pages);
@@ -6238,12 +6253,50 @@ export class StorageService {
     const filtered = pages.filter(p => p.id !== pageId);
     if (filtered.length !== pages.length) {
       setLocal(KEYS.CHURCH_PAGES, filtered);
+      // Also delete associated page posts
+      const allPosts = getLocal<PagePost[]>(KEYS.PAGE_POSTS, []);
+      const remainingPosts = allPosts.filter(p => p.page_id !== pageId);
+      setLocal(KEYS.PAGE_POSTS, remainingPosts);
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('gcz_church_pages_updated', { detail: { id: pageId, deleted: true } }));
       }
       return true;
     }
     return false;
+  }
+
+  static addPageAdmin(pageId: string, userId: string): ChurchPage | null {
+    const pages = this.getPages();
+    const page = pages.find(p => p.id === pageId);
+    if (!page) return null;
+    const adminIds = page.admin_ids ? [...page.admin_ids] : [page.creator_id];
+    if (!adminIds.includes(userId)) {
+      adminIds.push(userId);
+      return this.updatePage(pageId, { admin_ids: adminIds });
+    }
+    return page;
+  }
+
+  static removePageAdmin(pageId: string, userId: string): ChurchPage | null {
+    const pages = this.getPages();
+    const page = pages.find(p => p.id === pageId);
+    if (!page) return null;
+    if (page.creator_id === userId) return page; // cannot remove owner
+    const filtered = (page.admin_ids || []).filter(id => id !== userId);
+    return this.updatePage(pageId, { admin_ids: filtered });
+  }
+
+  static agreeToPageRules(pageId: string, userId: string): boolean {
+    const pages = this.getPages();
+    const page = pages.find(p => p.id === pageId);
+    if (!page) return false;
+    const agreed = page.agreed_user_ids ? [...page.agreed_user_ids] : [];
+    if (!agreed.includes(userId)) {
+      agreed.push(userId);
+      this.updatePage(pageId, { agreed_user_ids: agreed });
+    }
+    return true;
   }
 
   static toggleFollowPage(pageId: string, userId: string): { isFollowing: boolean; count: number } {
@@ -6272,11 +6325,7 @@ export class StorageService {
 
   static getPagePosts(pageId: string): PagePost[] {
     const all = getLocal<PagePost[]>(KEYS.PAGE_POSTS, []);
-    if (all.length === 0) {
-      setLocal(KEYS.PAGE_POSTS, INITIAL_PAGE_POSTS);
-      return INITIAL_PAGE_POSTS.filter(p => p.page_id === pageId);
-    }
-    return all.filter(p => p.page_id === pageId);
+    return all.filter(p => p && p.page_id === pageId);
   }
 
   static createPagePost(pageId: string, authorId: string, authorName: string, content: string, imageUrl?: string, authorAvatar?: string): PagePost {

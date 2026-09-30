@@ -73,7 +73,8 @@ import {
   StreamViewer,
   StreamAttendanceRecord,
   SUPPORTED_CITIES,
-  UnbanAppeal
+  UnbanAppeal,
+  ChurchPage
 } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { StorageBucketService } from '../../services/StorageBucketService';
@@ -88,7 +89,7 @@ interface AdminPanelProps {
   onRefreshAppState: () => void;
 }
 
-type AdminSection = 'overview' | 'congregations' | 'stream_attendees' | 'broadcast' | 'content_moderation' | 'inventory' | 'members' | 'prayers' | 'push' | 'finances' | 'vibes' | 'media_library';
+type AdminSection = 'overview' | 'church_pages' | 'congregations' | 'stream_attendees' | 'broadcast' | 'content_moderation' | 'inventory' | 'members' | 'prayers' | 'push' | 'finances' | 'vibes' | 'media_library';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppState }) => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
@@ -167,6 +168,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   const [editPasswordUser, setEditPasswordUser] = useState<User | null>(null);
   const [newPasswordInput, setNewPasswordInput] = useState<string>('');
 
+  // Church Pages Management State
+  const [churchPages, setChurchPages] = useState<ChurchPage[]>(() => StorageService.getPages());
+  const [churchPageSearch, setChurchPageSearch] = useState<string>('');
+
   // Live real-time event listeners for Admin Panel
   useEffect(() => {
     const refreshAdminData = () => {
@@ -179,6 +184,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       setStreamAttendees(StorageService.getStreamAttendanceHistory());
       setLiveSermonStatus(StorageService.getLiveSermonStatus());
       setAdminStreamUrl(StorageService.getLiveStreamUrl());
+      setChurchPages(StorageService.getPages());
     };
 
     window.addEventListener('gcz_user_profile_updated', refreshAdminData);
@@ -196,6 +202,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     window.addEventListener('gcz_live_status_updated', refreshAdminData);
     window.addEventListener('gcz_stream_url_updated', refreshAdminData);
     window.addEventListener('gcz_override_video_updated', refreshAdminData);
+    window.addEventListener('gcz_church_pages_updated', refreshAdminData);
 
     return () => {
       window.removeEventListener('gcz_user_profile_updated', refreshAdminData);
@@ -213,6 +220,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       window.removeEventListener('gcz_live_status_updated', refreshAdminData);
       window.removeEventListener('gcz_stream_url_updated', refreshAdminData);
       window.removeEventListener('gcz_override_video_updated', refreshAdminData);
+      window.removeEventListener('gcz_church_pages_updated', refreshAdminData);
     };
   }, []);
 
@@ -1038,6 +1046,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
               >
                 {[
                   { id: 'overview', label: '📊 Dashboard KPI' },
+                  { id: 'church_pages', label: `⛪ Church Pages (${churchPages.length} Active)` },
                   { id: 'congregations', label: `⛪ Congregations & Streaming (${congregationUnits.filter(c => c.is_congregation).length} Hubs)` },
                   { id: 'stream_attendees', label: `📡 Streamers & Attendees (${streamAttendees.length} Logged)` },
                   { id: 'content_moderation', label: `🛡️ Community Post Moderation (${testimonies.length} Posts)` },
@@ -1063,6 +1072,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
           <div className="flex items-center gap-1.5 px-2 py-1.5 overflow-x-auto scrollbar-none bg-background">
             {[
               { id: 'overview', label: 'Overview', icon: Activity },
+              { id: 'church_pages', label: 'Pages', icon: Layers },
               { id: 'congregations', label: 'Hubs', icon: Tv },
               { id: 'stream_attendees', label: 'Streamers', icon: Users },
               { id: 'content_moderation', label: 'Moderation', icon: Trash2 },
@@ -1103,6 +1113,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
 
           {[
             { id: 'overview', label: 'Dashboard KPI', icon: Activity, badge: null },
+            { id: 'church_pages', label: 'Pages & Groups', icon: Layers, badge: `${churchPages.length}` },
             { id: 'congregations', label: 'Congregations & Stream', icon: Tv, badge: `${congregationUnits.filter(c => c.is_congregation).length} Hubs` },
             { id: 'stream_attendees', label: 'Stream Attendees Log', icon: Users, badge: `${streamAttendees.length}` },
             { id: 'content_moderation', label: 'Post Moderation', icon: Trash2, badge: `${testimonies.length}` },
@@ -2077,6 +2088,192 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* SECTION: CHURCH PAGES & MINISTRIES */}
+          {activeSection === 'church_pages' && (
+            <div className="space-y-4">
+              {/* Header and KPI Stats */}
+              <div className="bg-card border border-primary/40 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                  <div>
+                    <h3 className="font-bold text-sm text-primary flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-primary" />
+                      <span>Church Pages & Ministry Directory</span>
+                    </h3>
+                    <p className="text-xs text-white/60 mt-0.5">
+                      Oversee user-created church pages, assign verification checkmarks, inspect administrators, and dissolve pages.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-1 rounded-full bg-primary/20 text-primary border border-primary/40 text-xs font-bold font-mono">
+                      {churchPages.length} Active {churchPages.length === 1 ? 'Page' : 'Pages'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* KPI Metrics */}
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  <div className="p-3 bg-secondary/50 rounded-xl border border-white/5 text-center">
+                    <span className="text-[10px] text-white/50 block uppercase tracking-wider font-mono">Total Pages</span>
+                    <span className="text-lg font-bold text-foreground font-mono">{churchPages.length}</span>
+                  </div>
+                  <div className="p-3 bg-secondary/50 rounded-xl border border-white/5 text-center">
+                    <span className="text-[10px] text-white/50 block uppercase tracking-wider font-mono">Total Followers</span>
+                    <span className="text-lg font-bold text-primary font-mono">
+                      {churchPages.reduce((acc, p) => acc + (p.followers_count || (p.followers || []).length || 0), 0)}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-secondary/50 rounded-xl border border-white/5 text-center">
+                    <span className="text-[10px] text-white/50 block uppercase tracking-wider font-mono">Official Badges</span>
+                    <span className="text-lg font-bold text-emerald-400 font-mono">
+                      {churchPages.filter(p => p.verified).length}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative">
+                  <Search className="w-4 h-4 text-white/40 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search church pages by title, @handle, or category..."
+                    value={churchPageSearch}
+                    onChange={(e) => setChurchPageSearch(e.target.value)}
+                    className="w-full bg-background border border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs text-foreground placeholder:text-white/40 focus:outline-none focus:border-primary"
+                  />
+                  {churchPageSearch && (
+                    <button
+                      onClick={() => setChurchPageSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white text-xs"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Pages List */}
+              {(() => {
+                const filtered = churchPages.filter(p => 
+                  !churchPageSearch.trim() ||
+                  p.name.toLowerCase().includes(churchPageSearch.toLowerCase()) ||
+                  p.handle.toLowerCase().includes(churchPageSearch.toLowerCase()) ||
+                  p.category.toLowerCase().includes(churchPageSearch.toLowerCase())
+                );
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="p-8 bg-card border border-white/10 rounded-2xl text-center space-y-2">
+                      <Layers className="w-8 h-8 text-white/30 mx-auto" />
+                      <p className="text-sm font-semibold text-white/80">No Church Pages Found</p>
+                      <p className="text-xs text-white/40 max-w-sm mx-auto">
+                        {churchPageSearch 
+                          ? `No pages matching "${churchPageSearch}".`
+                          : "No church pages created yet. Users and pastors can launch pages from the Community tab."}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {filtered.map(page => {
+                      const adminCount = (page.admin_ids || []).length || 1;
+                      const rulesCount = (page.rules || []).length;
+                      return (
+                        <div 
+                          key={page.id}
+                          className="bg-card border border-white/10 hover:border-primary/40 rounded-2xl p-4 transition-all space-y-3 relative overflow-hidden shadow-md flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="flex items-start gap-3">
+                              <img
+                                src={page.avatar_url || '/assets/church_logo.png'}
+                                alt={page.name}
+                                className="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <h4 className="font-bold text-sm text-foreground truncate">{page.name}</h4>
+                                  {page.verified && (
+                                    <BadgeCheck className="w-4 h-4 text-primary fill-primary/20 shrink-0" />
+                                  )}
+                                </div>
+                                <p className="text-xs text-primary font-mono">{page.handle}</p>
+                                <span className="inline-block px-2 py-0.5 mt-1 rounded-md bg-white/5 border border-white/10 text-[10px] text-white/70">
+                                  {page.category}
+                                </span>
+                              </div>
+                            </div>
+
+                            {page.bio && (
+                              <p className="text-xs text-white/70 mt-2 line-clamp-2 leading-relaxed">
+                                {page.bio}
+                              </p>
+                            )}
+
+                            <div className="grid grid-cols-3 gap-1.5 mt-3 pt-3 border-t border-white/5 text-center">
+                              <div className="bg-secondary/40 rounded-lg p-1.5">
+                                <span className="text-[10px] text-white/40 block">Followers</span>
+                                <span className="text-xs font-bold text-primary font-mono">
+                                  {page.followers_count || (page.followers || []).length || 0}
+                                </span>
+                              </div>
+                              <div className="bg-secondary/40 rounded-lg p-1.5">
+                                <span className="text-[10px] text-white/40 block">Admins</span>
+                                <span className="text-xs font-bold text-foreground font-mono">
+                                  {adminCount}
+                                </span>
+                              </div>
+                              <div className="bg-secondary/40 rounded-lg p-1.5">
+                                <span className="text-[10px] text-white/40 block">Rules</span>
+                                <span className="text-xs font-bold text-foreground font-mono">
+                                  {rulesCount}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                            <button
+                              onClick={() => {
+                                const nextVerified = !page.verified;
+                                StorageService.updatePage(page.id, { verified: nextVerified });
+                                setChurchPages(StorageService.getPages());
+                              }}
+                              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                                page.verified
+                                  ? 'bg-secondary text-white/80 hover:bg-white/10 border border-white/10'
+                                  : 'bg-primary/20 text-primary hover:bg-primary/30 border border-primary/40'
+                              }`}
+                            >
+                              <BadgeCheck className="w-3.5 h-3.5" />
+                              <span>{page.verified ? 'Remove Badge' : 'Verify Page'}</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Dissolve and permanently delete church page "${page.name}"? This action removes all page posts and cannot be undone.`)) {
+                                  StorageService.deletePage(page.id);
+                                  setChurchPages(StorageService.getPages());
+                                }
+                              }}
+                              className="py-1.5 px-3 rounded-xl bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 border border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                              title="Delete Page"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
