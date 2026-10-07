@@ -892,73 +892,19 @@ export class SupabaseSyncService {
         // 1. Unified Broadcast listeners (Instant real-time dispatch across all devices)
         channel
           .on('broadcast', { event: 'new_group_message' }, ({ payload }: any) => {
-            if (!payload || !payload.group_id) return;
-            try {
-              if (typeof localStorage !== 'undefined') {
-                const groupMsgs = JSON.parse(localStorage.getItem('gcz_chat_group_messages') || '{}');
-                if (!groupMsgs[payload.group_id]) groupMsgs[payload.group_id] = [];
-                const exists = groupMsgs[payload.group_id].some((m: any) => m.id === payload.id);
-                if (!exists) {
-                  groupMsgs[payload.group_id].push(payload);
-                  localStorage.setItem('gcz_chat_group_messages', JSON.stringify(groupMsgs));
-                }
-              }
-            } catch {}
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('gcz_group_messages_updated', { detail: { groupId: payload.group_id, message: payload } }));
-              try {
-                (window as any).gcz_handle_incoming_group_message?.(payload);
-              } catch {}
-            }
+            if (!payload) return;
             this.socialSubscribers.forEach(cb => cb.onNewGroupMessage?.(payload));
           })
           .on('broadcast', { event: 'new_direct_message' }, ({ payload }: any) => {
-            if (!payload || !payload.id) return;
-            try {
-              if (typeof localStorage !== 'undefined') {
-                const dms = readLocalArray('gcz_direct_messages');
-                const exists = dms.some((m: any) => m.id === payload.id);
-                if (!exists) {
-                  dms.push(payload);
-                  localStorage.setItem('gcz_direct_messages', JSON.stringify(dms));
-                }
-              }
-            } catch {}
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('gcz_direct_messages_updated', { detail: payload }));
-              try {
-                (window as any).gcz_handle_incoming_direct_message?.(payload);
-              } catch {}
-            }
+            if (!payload) return;
             this.socialSubscribers.forEach(cb => cb.onNewDirectMessage?.(payload));
           })
           .on('broadcast', { event: 'delete_group_message' }, ({ payload }: any) => {
             if (!payload) return;
-            try {
-              if (typeof localStorage !== 'undefined' && payload.groupId && payload.messageId) {
-                const groupMsgs = JSON.parse(localStorage.getItem('gcz_chat_group_messages') || '{}');
-                if (groupMsgs[payload.groupId]) {
-                  groupMsgs[payload.groupId] = groupMsgs[payload.groupId].filter((m: any) => m.id !== payload.messageId);
-                  localStorage.setItem('gcz_chat_group_messages', JSON.stringify(groupMsgs));
-                }
-              }
-            } catch {}
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('gcz_group_messages_updated', { detail: payload }));
-            }
             this.socialSubscribers.forEach(cb => cb.onDeleteGroupMessage?.(payload));
           })
           .on('broadcast', { event: 'delete_direct_message' }, ({ payload }: any) => {
             if (!payload) return;
-            try {
-              if (typeof localStorage !== 'undefined' && payload.messageId) {
-                const dms = readLocalArray('gcz_direct_messages').filter((m: any) => m.id !== payload.messageId);
-                localStorage.setItem('gcz_direct_messages', JSON.stringify(dms));
-              }
-            } catch {}
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('gcz_direct_messages_updated', { detail: payload }));
-            }
             this.socialSubscribers.forEach(cb => cb.onDeleteDirectMessage?.(payload));
           })
           .on('broadcast', { event: 'delete_post' }, ({ payload }: any) => {
@@ -975,28 +921,7 @@ export class SupabaseSyncService {
             this.socialSubscribers.forEach(cb => cb.onDeletePost?.({ id: postId, deleted: true }));
           })
           .on('broadcast', { event: 'user_profile_updated' }, ({ payload }: any) => {
-            if (!payload || !payload.id) return;
-            try {
-              if (typeof localStorage !== 'undefined') {
-                const allUsers = readLocalArray('gcz_all_users');
-                const idx = allUsers.findIndex((u: any) => u.id === payload.id || (u.phone && payload.phone && u.phone === payload.phone));
-                if (idx >= 0) {
-                  allUsers[idx] = { ...allUsers[idx], ...payload };
-                  localStorage.setItem('gcz_all_users', JSON.stringify(allUsers));
-                }
-                const curRaw = localStorage.getItem('gcz_current_user');
-                if (curRaw) {
-                  const cur = JSON.parse(curRaw);
-                  if (cur.id === payload.id || (cur.phone && payload.phone && cur.phone === payload.phone)) {
-                    localStorage.setItem('gcz_current_user', JSON.stringify({ ...cur, ...payload }));
-                  }
-                }
-              }
-            } catch {}
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: payload }));
-              window.dispatchEvent(new CustomEvent('gcz_users_synced'));
-            }
+            if (!payload) return;
             this.socialSubscribers.forEach(cb => cb.onUserProfileUpdated?.(payload));
           })
           .on('broadcast', { event: 'group_member_changed' }, ({ payload }: any) => {
@@ -1010,81 +935,7 @@ export class SupabaseSyncService {
           })
           .on('broadcast', { event: 'follow_updated' }, ({ payload }: any) => {
             if (!payload) return;
-            const followerId = payload.followerId || payload.follower_id;
-            const targetUserId = payload.targetUserId || payload.followingId || payload.following_id;
-            const isFollowing = payload.isFollowing !== undefined ? Boolean(payload.isFollowing) : Boolean(payload.is_following);
-            if (followerId && targetUserId) {
-              try {
-                if (typeof localStorage !== 'undefined') {
-                  const records = readLocalArray('gcz_user_follows_v1');
-                  const idx = records.findIndex((r: any) => r.follower_id === followerId && r.following_id === targetUserId);
-                  if (isFollowing) {
-                    if (idx === -1) records.push({ follower_id: followerId, following_id: targetUserId, created_at: new Date().toISOString() });
-                  } else {
-                    if (idx >= 0) records.splice(idx, 1);
-                  }
-                  localStorage.setItem('gcz_user_follows_v1', JSON.stringify(records));
-
-                  const allUsers = readLocalArray('gcz_all_users');
-                  const targetUser = allUsers.find((u: any) => u.id === targetUserId);
-                  const followerUser = allUsers.find((u: any) => u.id === followerId);
-                  if (targetUser) targetUser.followers_count = records.filter((r: any) => r.following_id === targetUserId).length;
-                  if (followerUser) followerUser.following_count = records.filter((r: any) => r.follower_id === followerId).length;
-                  localStorage.setItem('gcz_all_users', JSON.stringify(allUsers));
-
-                  const curRaw = localStorage.getItem('gcz_current_user');
-                  if (curRaw) {
-                    const cur = JSON.parse(curRaw);
-                    if (cur.id === targetUserId && targetUser) {
-                      cur.followers_count = targetUser.followers_count;
-                      localStorage.setItem('gcz_current_user', JSON.stringify(cur));
-                    } else if (cur.id === followerId && followerUser) {
-                      cur.following_count = followerUser.following_count;
-                      localStorage.setItem('gcz_current_user', JSON.stringify(cur));
-                    }
-                  }
-                }
-              } catch {}
-            }
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('gcz_follow_updated', { detail: payload }));
-              window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
-            }
             this.socialSubscribers.forEach(cb => cb.onFollowUpdated?.(payload));
-          })
-          .on('broadcast', { event: 'account_deleted' }, ({ payload }: any) => {
-            if (!payload) return;
-            const delUserId = payload.userId || payload.id;
-            const delPhone = payload.userPhone || payload.phone;
-            if (!delUserId && !delPhone) return;
-            try {
-              if (typeof localStorage !== 'undefined') {
-                const delIds = readLocalArray('gcz_deleted_user_ids_v1');
-                if (delUserId && !delIds.includes(delUserId)) delIds.push(delUserId);
-                if (delPhone && !delIds.includes(delPhone)) delIds.push(delPhone);
-                localStorage.setItem('gcz_deleted_user_ids_v1', JSON.stringify(delIds));
-
-                const allUsers = readLocalArray('gcz_all_users').filter((u: any) => u.id !== delUserId && (!delPhone || u.phone !== delPhone));
-                localStorage.setItem('gcz_all_users', JSON.stringify(allUsers));
-
-                const curRaw = localStorage.getItem('gcz_current_user');
-                if (curRaw) {
-                  const cur = JSON.parse(curRaw);
-                  if (cur.id === delUserId || (delPhone && cur.phone === delPhone)) {
-                    localStorage.removeItem('gcz_current_user');
-                    if (typeof window !== 'undefined') {
-                      window.dispatchEvent(new CustomEvent('gcz_current_user_deleted', { detail: { userId: delUserId } }));
-                      window.location.reload();
-                    }
-                  }
-                }
-              }
-            } catch {}
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('gcz_user_deleted', { detail: { userId: delUserId } }));
-              window.dispatchEvent(new CustomEvent('gcz_users_synced'));
-              window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
-            }
           })
           .on('broadcast', { event: 'streamer_joined' }, ({ payload }: any) => {
             if (!payload) return;
@@ -1097,19 +948,6 @@ export class SupabaseSyncService {
           })
           .on('broadcast', { event: 'new_notification' }, ({ payload }: any) => {
             if (!payload) return;
-            try {
-              if (typeof localStorage !== 'undefined' && payload.id) {
-                const notifs = readLocalArray('gcz_app_notifications');
-                if (!notifs.some((n: any) => n.id === payload.id)) {
-                  notifs.unshift(payload);
-                  localStorage.setItem('gcz_app_notifications', JSON.stringify(notifs));
-                }
-              }
-            } catch {}
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('gcz_new_notification', { detail: payload }));
-              window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
-            }
             this.socialSubscribers.forEach(cb => cb.onNotificationCreated?.(payload));
           })
           .on('broadcast', { event: 'ban_status_updated' }, ({ payload }: any) => {
@@ -1387,28 +1225,25 @@ export class SupabaseSyncService {
 
       if (error || !data) return [];
 
-      const deletedIds = new Set(readLocalArray('gcz_deleted_user_ids_v1'));
-      return data
-        .filter((row: any) => !deletedIds.has(row.id) && (!row.phone || !deletedIds.has(row.phone)))
-        .map((row: any) => ({
-          id: row.id,
-          phone: row.phone,
-          password: row.password_hash || 'juice2026',
-          full_name: row.full_name || 'Church Member',
-          handle: row.referral_code?.startsWith('@') ? row.referral_code : `@${(row.full_name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-          role: row.role || 'member',
-          badge_type: (row.role === 'super_admin' || row.role === 'developer') ? 'gold' : 'none',
-          avatar_url: row.avatar_url || null,
-          cell_group: row.cell_group || 'Harare Assembly',
-          is_verified: row.is_verified || false,
-          member_id: row.member_id || `GCZ-MEM-${Math.floor(1000 + Math.random() * 9000)}`,
-          location: row.location || 'Harare',
-          city_location: row.city_location || 'Harare',
-          created_at: row.created_at || new Date().toISOString(),
-          followers_count: row.followers_count || 0,
-          following_count: row.following_count || 0,
-          saved_verses: row.saved_verses || ['John 1:1', 'Isaiah 40:31']
-        }));
+      return data.map((row: any) => ({
+        id: row.id,
+        phone: row.phone,
+        password: row.password_hash || 'juice2026',
+        full_name: row.full_name || 'Church Member',
+        handle: row.referral_code?.startsWith('@') ? row.referral_code : `@${(row.full_name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+        role: row.role || 'member',
+        badge_type: (row.role === 'super_admin' || row.role === 'developer') ? 'gold' : 'none',
+        avatar_url: row.avatar_url || null,
+        cell_group: row.cell_group || 'Harare Assembly',
+        is_verified: row.is_verified || false,
+        member_id: row.member_id || `GCZ-MEM-${Math.floor(1000 + Math.random() * 9000)}`,
+        location: row.location || 'Harare',
+        city_location: row.city_location || 'Harare',
+        created_at: row.created_at || new Date().toISOString(),
+        followers_count: row.followers_count || 0,
+        following_count: row.following_count || 0,
+        saved_verses: row.saved_verses || ['John 1:1', 'Isaiah 40:31']
+      }));
     } catch {
       return [];
     }
@@ -1565,46 +1400,6 @@ export class SupabaseSyncService {
       Promise.resolve(supabase.from('posts').delete().eq('id', postId)).catch(() => {});
       Promise.resolve(supabase.from('testimonies').delete().eq('id', postId)).catch(() => {});
       Promise.resolve(supabase.from('post_comments').delete().eq('post_id', postId)).catch(() => {});
-    }
-    return true;
-  }
-
-  /**
-   * Permanently purges user account and cascading data from Supabase PostgreSQL and broadcasts platform-wide
-   */
-  static async deleteAccount(userId: string, userPhone?: string): Promise<boolean> {
-    if (!userId && !userPhone) return false;
-    try {
-      const delList = readLocalArray('gcz_deleted_user_ids_v1');
-      if (userId && !delList.includes(userId)) delList.push(userId);
-      if (userPhone && !delList.includes(userPhone)) delList.push(userPhone);
-      localStorage.setItem('gcz_deleted_user_ids_v1', JSON.stringify(delList));
-    } catch {}
-
-    const channel = this.getSocialChannel();
-    if (channel) {
-      channel.send({
-        type: 'broadcast',
-        event: 'account_deleted',
-        payload: { userId, userPhone, deleted: true }
-      });
-    }
-
-    const supabase = getSupabase();
-    if (supabase) {
-      if (userId) {
-        Promise.resolve(supabase.from('users').delete().eq('id', userId)).catch(() => {});
-        Promise.resolve(supabase.from('posts').delete().eq('user_id', userId)).catch(() => {});
-        Promise.resolve(supabase.from('testimonies').delete().eq('user_id', userId)).catch(() => {});
-        Promise.resolve(supabase.from('post_comments').delete().eq('user_id', userId)).catch(() => {});
-        Promise.resolve(supabase.from('messages').delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)).catch(() => {});
-        Promise.resolve(supabase.from('user_follows').delete().or(`follower_id.eq.${userId},following_id.eq.${userId}`)).catch(() => {});
-        Promise.resolve(supabase.from('notifications').delete().or(`recipient_id.eq.${userId},actor_id.eq.${userId}`)).catch(() => {});
-        Promise.resolve(supabase.from('church_pages').delete().eq('creator_id', userId)).catch(() => {});
-      }
-      if (userPhone) {
-        Promise.resolve(supabase.from('users').delete().eq('phone', userPhone)).catch(() => {});
-      }
     }
     return true;
   }

@@ -417,26 +417,6 @@ export const INITIAL_USERS: User[] = [
     saved_verses: ['Psalms 84:10', 'Colossians 3:23']
   },
   {
-    id: 'usr_1789657530055',
-    phone: '0771238269',
-    password: 'Jason2026!',
-    full_name: 'Jason Daniels',
-    handle: '@jason_daniels',
-    role: 'member',
-    avatar_url: '/assets/apostle_joe_daniels_main.jpg',
-    cell_group: 'Apostolic Youth Directorate',
-    bio: 'Gateway Cathedral Youth & Prophetic Ministry Partner.',
-    location: 'Harare, Zimbabwe',
-    is_verified: true,
-    badge_type: 'blue',
-    is_premium: true,
-    followers_count: 5,
-    following_count: 3,
-    member_id: 'GCZ-MEM-8269',
-    created_at: '2026-10-07T10:00:00Z',
-    saved_verses: ['Philippians 4:13', 'Romans 8:28']
-  },
-  {
     id: 'usr_guest',
     phone: '0770000000',
     password: 'Guest2026!',

@@ -226,11 +226,6 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Initialize persistent social realtime broadcast channel
-    try {
-      SupabaseSyncService.getSocialChannel();
-    } catch {}
-
     StorageService.syncUsersWithRemote().catch(() => {});
     StorageService.syncStoriesWithRemote().catch(() => {});
     // Hydrate community posts, comments and prayers from Supabase so a fresh
@@ -268,10 +263,6 @@ export default function App() {
     window.addEventListener('gcz_testimony_deleted', refreshLiveState);
     window.addEventListener('gcz_live_state_updated', refreshLiveState);
     window.addEventListener('gcz_live_event_received', refreshLiveState);
-    window.addEventListener('gcz_follow_updated', refreshLiveState);
-    window.addEventListener('gcz_notifications_updated', refreshLiveState);
-    window.addEventListener('gcz_direct_messages_updated', refreshLiveState);
-    window.addEventListener('gcz_group_messages_updated', refreshLiveState);
     const handleUserDeleted = (e: any) => {
       const deletedId = e?.detail?.userId;
       if (!deletedId || currentUser?.id === deletedId) {
@@ -293,10 +284,6 @@ export default function App() {
       window.removeEventListener('gcz_testimony_deleted', refreshLiveState);
       window.removeEventListener('gcz_live_state_updated', refreshLiveState);
       window.removeEventListener('gcz_live_event_received', refreshLiveState);
-      window.removeEventListener('gcz_follow_updated', refreshLiveState);
-      window.removeEventListener('gcz_notifications_updated', refreshLiveState);
-      window.removeEventListener('gcz_direct_messages_updated', refreshLiveState);
-      window.removeEventListener('gcz_group_messages_updated', refreshLiveState);
       window.removeEventListener('gcz_open_user_profile', handleOpenProfile);
       window.removeEventListener('gcz_user_profile_updated', handleProfileUpdated);
       window.removeEventListener('gcz_user_deleted', handleUserDeleted);

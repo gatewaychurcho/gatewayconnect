@@ -733,7 +733,7 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
                 Book a 1-on-1 Session with Apostle Joe Daniels
               </h3>
               <p className="text-xs text-muted-foreground">
-                Available in-person at Cathedral Office or via official WhatsApp Consultation Desk.
+                Available in-person at Cathedral Office or via secure private Zoom / Google Meet.
               </p>
             </div>
 
@@ -856,7 +856,7 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
                 className="w-full py-3 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs sm:text-sm uppercase tracking-wider shadow-sm transition-all flex items-center justify-center gap-2"
               >
                 <Calendar className="w-4 h-4" />
-                <span>Confirm Session & Connect via WhatsApp Desk</span>
+                <span>Confirm Session & Generate Zoom/SMS Link</span>
               </button>
 
             </form>
@@ -881,7 +881,7 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
                   <p><span className="text-muted-foreground">Date/Time:</span> {confirmedBooking.date} • {confirmedBooking.time_slot}</p>
                   <p><span className="text-muted-foreground">Status:</span> <span className="text-emerald-600 dark:text-emerald-400 font-bold">Confirmed</span></p>
                   <p className="pt-1 border-t border-border truncate">
-                    <span className="text-muted-foreground">WhatsApp Desk:</span>{' '}
+                    <span className="text-muted-foreground">Zoom:</span>{' '}
                     <a href={confirmedBooking.zoom_link} target="_blank" rel="noreferrer" className="text-blue-500 underline">
                       {confirmedBooking.zoom_link}
                     </a>
@@ -890,23 +890,23 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
 
                 <div className="flex flex-col gap-2 pt-2">
                   <a
-                    href={confirmedBooking.zoom_link}
+                    href={`https://wa.me/${confirmedBooking.reminder_phone.replace(/[^0-9]/g, '')}?text=Shalom%20${encodeURIComponent(confirmedBooking.user_name)},%20your%201-on-1%20prophetic%20session%20with%20Apostle%20Joe%20Daniels%20is%20confirmed%20for%20${confirmedBooking.date}%20at%20${confirmedBooking.time_slot}.%20Zoom%20link:%20${confirmedBooking.zoom_link}`}
                     target="_blank"
                     rel="noreferrer"
                     className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5"
                   >
                     <MessageCircle className="w-4 h-4" />
-                    <span>Open Direct WhatsApp Consultation</span>
+                    <span>Send Reminder to WhatsApp</span>
                   </a>
 
                   <a
-                    href={`https://wa.me/${confirmedBooking.reminder_phone.replace(/[^0-9]/g, '')}?text=Shalom%20${encodeURIComponent(confirmedBooking.user_name)},%20your%201-on-1%20prophetic%20session%20with%20Apostle%20Joe%20Daniels%20is%20confirmed%20for%20${confirmedBooking.date}%20at%20${confirmedBooking.time_slot}.%20WhatsApp%20Desk:%20${confirmedBooking.zoom_link}`}
+                    href={confirmedBooking.zoom_link}
                     target="_blank"
                     rel="noreferrer"
                     className="w-full py-2 bg-secondary hover:bg-secondary/80 border border-border text-foreground rounded-lg text-xs font-bold flex items-center justify-center gap-1.5"
                   >
-                    <MessageCircle className="w-4 h-4 text-primary" />
-                    <span>Send Reminder to WhatsApp</span>
+                    <Video className="w-4 h-4 text-primary" />
+                    <span>Launch Private Zoom Meeting</span>
                   </a>
                 </div>
               </div>
@@ -922,7 +922,7 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-primary font-bold">•</span>
-                    <span>You will receive an automated WhatsApp confirmation and direct access link before scheduled time.</span>
+                    <span>You will receive an automated WhatsApp reminder and Zoom access code 1 hour before scheduled time.</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-primary font-bold">•</span>
