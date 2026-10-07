@@ -1,4 +1,5 @@
 import { getSupabase } from './supabaseClient';
+import { StorageBucketService } from './StorageBucketService';
 import { Donation, PrayerRequest, ServiceBooking, Sermon, Devotional, Testimony, PostComment, CommunityStory, CartItem, MessageReaction, GroupMediaItem, NotificationSettings, Receipt, User, ChatGroupMessage, DirectMessage, ChatGroup, LiveStreamViewer, AppNotification, ChurchPage, PagePost } from '../types';
 
 // Reads a JSON array from localStorage, tolerating blocked storage / bad data.
@@ -239,9 +240,63 @@ export class SupabaseSyncService {
         metadata: { post_id: postId, reaction: reactionType, timestamp: new Date().toISOString() }
       });
       return !error;
+  }
+
+  /**
+   * Syncs a sermon view event to Supabase user_activities for real-time analytics
+   */
+  static async syncSermonView(sermonId: string, isTopPlayer: boolean = false): Promise<boolean> {
+    const supabase = getSupabase();
+    if (!supabase) return false;
+    try {
+      const curUser = typeof localStorage !== 'undefined' ? localStorage.getItem('gcz_current_user') : null;
+      const userId = curUser ? JSON.parse(curUser)?.id : 'usr_guest';
+      const { error } = await supabase.from('user_activities').insert({
+        user_id: userId,
+        activity_type: 'sermon_view',
+        metadata: { sermon_id: sermonId, is_top_player: isTopPlayer, timestamp: new Date().toISOString() }
+      });
+      return !error;
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Permanently purges posts older than cutoff date from Supabase database and storage
+   */
+  static async purgeOldPostsFromRemote(cutoffMs: number): Promise<number> {
+    const supabase = getSupabase();
+    if (!supabase) return 0;
+    try {
+      const cutoffDate = new Date(cutoffMs).toISOString();
+      const { data: oldPosts } = await supabase
+        .from('posts')
+        .select('id, image_url, video_url')
+        .lt('created_at', cutoffDate);
+
+      if (oldPosts && oldPosts.length > 0) {
+        for (const p of oldPosts) {
+          if (p.image_url) StorageBucketService.deleteMediaByUrl(p.image_url).catch(() => {});
+          if (p.video_url) StorageBucketService.deleteMediaByUrl(p.video_url).catch(() => {});
+          try {
+            const delList = readLocalArray('gcz_deleted_post_ids_v1');
+            if (!delList.includes(p.id)) {
+              delList.push(p.id);
+              localStorage.setItem('gcz_deleted_post_ids_v1', JSON.stringify(delList));
+            }
+          } catch {}
+        }
+        const ids = oldPosts.map((p: any) => p.id);
+        await supabase.from('posts').delete().in('id', ids);
+        await supabase.from('testimonies').delete().in('id', ids);
+        await supabase.from('post_comments').delete().in('post_id', ids);
+        return ids.length;
+      }
+    } catch (err) {
+      console.warn('Supabase old posts purge notice:', err);
+    }
+    return 0;
   }
 
   /**
@@ -446,7 +501,28 @@ export class SupabaseSyncService {
 
         for (const p of posts) {
           if (deletedIds.has(p.id)) continue;
-          if (byId.has(p.id)) continue;
+          if (byId.has(p.id)) {
+            const existing = byId.get(p.id);
+            if (p.likes_count !== undefined && p.likes_count > (existing.likes_count || 0)) {
+              existing.likes_count = p.likes_count;
+              changed = true;
+            }
+            if (p.comments_count !== undefined && p.comments_count > (existing.comments_count || 0)) {
+              existing.comments_count = p.comments_count;
+              changed = true;
+            }
+            continue;
+          }
+
+          // Duplicate post prevention: check if a post with identical author and content exists within 2 minutes
+          const isContentDuplicate = Array.from(byId.values()).some((existing: any) => 
+            existing.user_id === p.user_id &&
+            existing.content && p.content &&
+            existing.content.trim().toLowerCase() === p.content.trim().toLowerCase() &&
+            Math.abs(new Date(existing.created_at || 0).getTime() - new Date(p.created_at || 0).getTime()) < 120000
+          );
+          if (isContentDuplicate) continue;
+
           byId.set(p.id, {
             id: p.id,
             user_id: p.user_id || undefined,
@@ -650,6 +726,102 @@ export class SupabaseSyncService {
       };
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Fetches all persistent follows across the platform
+   */
+  static async fetchAllFollows(): Promise<{ follower_id: string; following_id: string; created_at?: string }[]> {
+    const supabase = getSupabase();
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase
+        .from('user_follows')
+        .select('follower_id, following_id, created_at');
+      if (error || !data || data.length === 0) {
+        const { data: fallbackData } = await supabase
+          .from('follows')
+          .select('follower_id, following_id, created_at');
+        return fallbackData || [];
+      }
+      return data;
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Syncs media like (video/sermon/broadcast) into user_activities in Supabase
+   */
+  static async syncMediaLike(mediaId: string, userId: string, isLiked: boolean): Promise<boolean> {
+    const supabase = getSupabase();
+    if (!supabase || !mediaId || !userId) return false;
+    try {
+      if (isLiked) {
+        await supabase.from('user_activities').insert({
+          user_id: userId,
+          activity_type: 'media_like',
+          target_id: mediaId,
+          metadata: { media_id: mediaId, timestamp: new Date().toISOString() }
+        });
+      } else {
+        await supabase.from('user_activities').delete().match({
+          user_id: userId,
+          activity_type: 'media_like',
+          target_id: mediaId
+        });
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Fetches real users who liked a media item from user_activities
+   */
+  static async fetchMediaLikes(mediaId: string): Promise<string[]> {
+    const supabase = getSupabase();
+    if (!supabase || !mediaId) return [];
+    try {
+      const { data, error } = await supabase
+        .from('user_activities')
+        .select('user_id')
+        .eq('activity_type', 'media_like')
+        .eq('target_id', mediaId);
+      if (error || !data) return [];
+      return data.map((r: any) => r.user_id);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Realtime broadcast for media like
+   */
+  static broadcastMediaLike(mediaId: string, userId: string, isLiked: boolean): void {
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'media_like_updated',
+        payload: { mediaId, userId, isLiked }
+      });
+    }
+  }
+
+  /**
+   * Realtime broadcast for live stream emoji reaction
+   */
+  static broadcastStreamReaction(emoji: string): void {
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'stream_reaction',
+        payload: { emoji }
+      });
     }
   }
 
@@ -892,19 +1064,73 @@ export class SupabaseSyncService {
         // 1. Unified Broadcast listeners (Instant real-time dispatch across all devices)
         channel
           .on('broadcast', { event: 'new_group_message' }, ({ payload }: any) => {
-            if (!payload) return;
+            if (!payload || !payload.group_id) return;
+            try {
+              if (typeof localStorage !== 'undefined') {
+                const groupMsgs = JSON.parse(localStorage.getItem('gcz_chat_group_messages') || '{}');
+                if (!groupMsgs[payload.group_id]) groupMsgs[payload.group_id] = [];
+                const exists = groupMsgs[payload.group_id].some((m: any) => m.id === payload.id);
+                if (!exists) {
+                  groupMsgs[payload.group_id].push(payload);
+                  localStorage.setItem('gcz_chat_group_messages', JSON.stringify(groupMsgs));
+                }
+              }
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_group_messages_updated', { detail: { groupId: payload.group_id, message: payload } }));
+              try {
+                (window as any).gcz_handle_incoming_group_message?.(payload);
+              } catch {}
+            }
             this.socialSubscribers.forEach(cb => cb.onNewGroupMessage?.(payload));
           })
           .on('broadcast', { event: 'new_direct_message' }, ({ payload }: any) => {
-            if (!payload) return;
+            if (!payload || !payload.id) return;
+            try {
+              if (typeof localStorage !== 'undefined') {
+                const dms = readLocalArray('gcz_direct_messages');
+                const exists = dms.some((m: any) => m.id === payload.id);
+                if (!exists) {
+                  dms.push(payload);
+                  localStorage.setItem('gcz_direct_messages', JSON.stringify(dms));
+                }
+              }
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_direct_messages_updated', { detail: payload }));
+              try {
+                (window as any).gcz_handle_incoming_direct_message?.(payload);
+              } catch {}
+            }
             this.socialSubscribers.forEach(cb => cb.onNewDirectMessage?.(payload));
           })
           .on('broadcast', { event: 'delete_group_message' }, ({ payload }: any) => {
             if (!payload) return;
+            try {
+              if (typeof localStorage !== 'undefined' && payload.groupId && payload.messageId) {
+                const groupMsgs = JSON.parse(localStorage.getItem('gcz_chat_group_messages') || '{}');
+                if (groupMsgs[payload.groupId]) {
+                  groupMsgs[payload.groupId] = groupMsgs[payload.groupId].filter((m: any) => m.id !== payload.messageId);
+                  localStorage.setItem('gcz_chat_group_messages', JSON.stringify(groupMsgs));
+                }
+              }
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_group_messages_updated', { detail: payload }));
+            }
             this.socialSubscribers.forEach(cb => cb.onDeleteGroupMessage?.(payload));
           })
           .on('broadcast', { event: 'delete_direct_message' }, ({ payload }: any) => {
             if (!payload) return;
+            try {
+              if (typeof localStorage !== 'undefined' && payload.messageId) {
+                const dms = readLocalArray('gcz_direct_messages').filter((m: any) => m.id !== payload.messageId);
+                localStorage.setItem('gcz_direct_messages', JSON.stringify(dms));
+              }
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_direct_messages_updated', { detail: payload }));
+            }
             this.socialSubscribers.forEach(cb => cb.onDeleteDirectMessage?.(payload));
           })
           .on('broadcast', { event: 'delete_post' }, ({ payload }: any) => {
@@ -921,7 +1147,28 @@ export class SupabaseSyncService {
             this.socialSubscribers.forEach(cb => cb.onDeletePost?.({ id: postId, deleted: true }));
           })
           .on('broadcast', { event: 'user_profile_updated' }, ({ payload }: any) => {
-            if (!payload) return;
+            if (!payload || !payload.id) return;
+            try {
+              if (typeof localStorage !== 'undefined') {
+                const allUsers = readLocalArray('gcz_all_users');
+                const idx = allUsers.findIndex((u: any) => u.id === payload.id || (u.phone && payload.phone && u.phone === payload.phone));
+                if (idx >= 0) {
+                  allUsers[idx] = { ...allUsers[idx], ...payload };
+                  localStorage.setItem('gcz_all_users', JSON.stringify(allUsers));
+                }
+                const curRaw = localStorage.getItem('gcz_current_user');
+                if (curRaw) {
+                  const cur = JSON.parse(curRaw);
+                  if (cur.id === payload.id || (cur.phone && payload.phone && cur.phone === payload.phone)) {
+                    localStorage.setItem('gcz_current_user', JSON.stringify({ ...cur, ...payload }));
+                  }
+                }
+              }
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: payload }));
+              window.dispatchEvent(new CustomEvent('gcz_users_synced'));
+            }
             this.socialSubscribers.forEach(cb => cb.onUserProfileUpdated?.(payload));
           })
           .on('broadcast', { event: 'group_member_changed' }, ({ payload }: any) => {
@@ -935,7 +1182,132 @@ export class SupabaseSyncService {
           })
           .on('broadcast', { event: 'follow_updated' }, ({ payload }: any) => {
             if (!payload) return;
+            const followerId = payload.followerId || payload.follower_id;
+            const targetUserId = payload.targetUserId || payload.followingId || payload.following_id;
+            const isFollowing = payload.isFollowing !== undefined ? Boolean(payload.isFollowing) : Boolean(payload.is_following);
+            if (followerId && targetUserId) {
+              try {
+                if (typeof localStorage !== 'undefined') {
+                  const records = readLocalArray('gcz_user_follows_table_v2');
+                  const idx = records.findIndex((r: any) => r.follower_id === followerId && r.following_id === targetUserId);
+                  if (isFollowing) {
+                    if (idx === -1) records.push({ follower_id: followerId, following_id: targetUserId, created_at: new Date().toISOString() });
+                  } else {
+                    if (idx >= 0) records.splice(idx, 1);
+                  }
+                  localStorage.setItem('gcz_user_follows_table_v2', JSON.stringify(records));
+
+                  const allUsers = readLocalArray('gcz_all_users');
+                  const targetUser = allUsers.find((u: any) => u.id === targetUserId);
+                  const followerUser = allUsers.find((u: any) => u.id === followerId);
+                  if (targetUser) targetUser.followers_count = records.filter((r: any) => r.following_id === targetUserId).length;
+                  if (followerUser) followerUser.following_count = records.filter((r: any) => r.follower_id === followerId).length;
+                  localStorage.setItem('gcz_all_users', JSON.stringify(allUsers));
+
+                  const curRaw = localStorage.getItem('gcz_current_user');
+                  if (curRaw) {
+                    const cur = JSON.parse(curRaw);
+                    if (cur.id === targetUserId && targetUser) {
+                      cur.followers_count = targetUser.followers_count;
+                      localStorage.setItem('gcz_current_user', JSON.stringify(cur));
+                    } else if (cur.id === followerId && followerUser) {
+                      cur.following_count = followerUser.following_count;
+                      localStorage.setItem('gcz_current_user', JSON.stringify(cur));
+                    }
+                  }
+                }
+              } catch {}
+            }
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_follow_updated', { detail: payload }));
+              window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+            }
             this.socialSubscribers.forEach(cb => cb.onFollowUpdated?.(payload));
+          })
+          .on('broadcast', { event: 'media_like_updated' }, ({ payload }: any) => {
+            if (!payload || !payload.mediaId || !payload.userId) return;
+            const { mediaId, userId, isLiked } = payload;
+            if (typeof localStorage !== 'undefined') {
+              try {
+                const records = readLocalArray('gcz_media_likes_table_v2');
+                const idx = records.findIndex((r: any) => r.media_id === mediaId && r.user_id === userId);
+                if (isLiked) {
+                  if (idx === -1) records.push({ media_id: mediaId, user_id: userId, created_at: new Date().toISOString() });
+                } else {
+                  if (idx >= 0) records.splice(idx, 1);
+                }
+                localStorage.setItem('gcz_media_likes_table_v2', JSON.stringify(records));
+
+                if (mediaId === 'live_broadcast' || mediaId === 'broadcast_live') {
+                  const bLikes = readLocalArray('gcz_broadcast_likes_v1');
+                  const bIdx = bLikes.indexOf(userId);
+                  if (isLiked && bIdx === -1) bLikes.push(userId);
+                  else if (!isLiked && bIdx >= 0) bLikes.splice(bIdx, 1);
+                  localStorage.setItem('gcz_broadcast_likes_v1', JSON.stringify(bLikes));
+                }
+              } catch {}
+            }
+            if (typeof window !== 'undefined') {
+              const likerIds = readLocalArray('gcz_media_likes_table_v2').filter((r: any) => r.media_id === mediaId).map((r: any) => r.user_id);
+              window.dispatchEvent(new CustomEvent('gcz_media_likes_updated', {
+                detail: { mediaId, isLiked, likerIds, count: likerIds.length }
+              }));
+              if (mediaId === 'live_broadcast' || mediaId === 'broadcast_live') {
+                window.dispatchEvent(new CustomEvent('gcz_broadcast_likes_updated', {
+                  detail: { isLiked, count: likerIds.length }
+                }));
+              }
+            }
+          })
+          .on('broadcast', { event: 'stream_reaction' }, ({ payload }: any) => {
+            if (!payload || !payload.emoji) return;
+            if (typeof localStorage !== 'undefined') {
+              try {
+                const raw = JSON.parse(localStorage.getItem('gcz_broadcast_reactions_v1') || '{}');
+                raw[payload.emoji] = (Number(raw[payload.emoji]) || 0) + 1;
+                localStorage.setItem('gcz_broadcast_reactions_v1', JSON.stringify(raw));
+              } catch {}
+            }
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_broadcast_reactions_updated'));
+              window.dispatchEvent(new CustomEvent('gcz_live_event_received', {
+                detail: { type: 'stream_reaction', payload }
+              }));
+            }
+          })
+          .on('broadcast', { event: 'account_deleted' }, ({ payload }: any) => {
+            if (!payload) return;
+            const delUserId = payload.userId || payload.id;
+            const delPhone = payload.userPhone || payload.phone;
+            if (!delUserId && !delPhone) return;
+            try {
+              if (typeof localStorage !== 'undefined') {
+                const delIds = readLocalArray('gcz_deleted_user_ids_v1');
+                if (delUserId && !delIds.includes(delUserId)) delIds.push(delUserId);
+                if (delPhone && !delIds.includes(delPhone)) delIds.push(delPhone);
+                localStorage.setItem('gcz_deleted_user_ids_v1', JSON.stringify(delIds));
+
+                const allUsers = readLocalArray('gcz_all_users').filter((u: any) => u.id !== delUserId && (!delPhone || u.phone !== delPhone));
+                localStorage.setItem('gcz_all_users', JSON.stringify(allUsers));
+
+                const curRaw = localStorage.getItem('gcz_current_user');
+                if (curRaw) {
+                  const cur = JSON.parse(curRaw);
+                  if (cur.id === delUserId || (delPhone && cur.phone === delPhone)) {
+                    localStorage.removeItem('gcz_current_user');
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new CustomEvent('gcz_current_user_deleted', { detail: { userId: delUserId } }));
+                      window.location.reload();
+                    }
+                  }
+                }
+              }
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_user_deleted', { detail: { userId: delUserId } }));
+              window.dispatchEvent(new CustomEvent('gcz_users_synced'));
+              window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+            }
           })
           .on('broadcast', { event: 'streamer_joined' }, ({ payload }: any) => {
             if (!payload) return;
@@ -948,6 +1320,19 @@ export class SupabaseSyncService {
           })
           .on('broadcast', { event: 'new_notification' }, ({ payload }: any) => {
             if (!payload) return;
+            try {
+              if (typeof localStorage !== 'undefined' && payload.id) {
+                const notifs = readLocalArray('gcz_app_notifications');
+                if (!notifs.some((n: any) => n.id === payload.id)) {
+                  notifs.unshift(payload);
+                  localStorage.setItem('gcz_app_notifications', JSON.stringify(notifs));
+                }
+              }
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_new_notification', { detail: payload }));
+              window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
+            }
             this.socialSubscribers.forEach(cb => cb.onNotificationCreated?.(payload));
           })
           .on('broadcast', { event: 'ban_status_updated' }, ({ payload }: any) => {
@@ -1130,6 +1515,98 @@ export class SupabaseSyncService {
               window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: { id: postId, deleted: true } }));
             }
             this.socialSubscribers.forEach(cb => cb.onDeletePost?.({ id: postId, deleted: true }));
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'user_follows' }, (payload: any) => {
+            const row = payload.new || payload.old;
+            if (!row) return;
+            const followerId = row.follower_id || row.followerId;
+            const targetUserId = row.following_id || row.targetUserId || row.followingId;
+            const isFollowing = payload.eventType !== 'DELETE';
+            if (followerId && targetUserId && typeof localStorage !== 'undefined') {
+              try {
+                const records = readLocalArray('gcz_user_follows_table_v2');
+                const idx = records.findIndex((r: any) => r.follower_id === followerId && r.following_id === targetUserId);
+                if (isFollowing) {
+                  if (idx === -1) records.push({ follower_id: followerId, following_id: targetUserId, created_at: new Date().toISOString() });
+                } else {
+                  if (idx >= 0) records.splice(idx, 1);
+                }
+                localStorage.setItem('gcz_user_follows_table_v2', JSON.stringify(records));
+
+                const allUsers = readLocalArray('gcz_all_users');
+                const targetUser = allUsers.find((u: any) => u.id === targetUserId);
+                const followerUser = allUsers.find((u: any) => u.id === followerId);
+                if (targetUser) targetUser.followers_count = records.filter((r: any) => r.following_id === targetUserId).length;
+                if (followerUser) followerUser.following_count = records.filter((r: any) => r.follower_id === followerId).length;
+                localStorage.setItem('gcz_all_users', JSON.stringify(allUsers));
+              } catch {}
+            }
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_follow_updated', { detail: { followerId, targetUserId, isFollowing } }));
+              window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+            }
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'follows' }, (payload: any) => {
+            const row = payload.new || payload.old;
+            if (!row) return;
+            const followerId = row.follower_id || row.followerId;
+            const targetUserId = row.following_id || row.targetUserId || row.followingId;
+            const isFollowing = payload.eventType !== 'DELETE';
+            if (followerId && targetUserId && typeof localStorage !== 'undefined') {
+              try {
+                const records = readLocalArray('gcz_user_follows_table_v2');
+                const idx = records.findIndex((r: any) => r.follower_id === followerId && r.following_id === targetUserId);
+                if (isFollowing) {
+                  if (idx === -1) records.push({ follower_id: followerId, following_id: targetUserId, created_at: new Date().toISOString() });
+                } else {
+                  if (idx >= 0) records.splice(idx, 1);
+                }
+                localStorage.setItem('gcz_user_follows_table_v2', JSON.stringify(records));
+              } catch {}
+            }
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_follow_updated', { detail: { followerId, targetUserId, isFollowing } }));
+              window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+            }
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'user_activities' }, (payload: any) => {
+            const row = payload.new || payload.old;
+            if (row && row.activity_type === 'media_like' && row.target_id && row.user_id) {
+              const mediaId = row.target_id;
+              const userId = row.user_id;
+              const isLiked = payload.eventType !== 'DELETE';
+              if (typeof localStorage !== 'undefined') {
+                try {
+                  const records = readLocalArray('gcz_media_likes_table_v2');
+                  const idx = records.findIndex((r: any) => r.media_id === mediaId && r.user_id === userId);
+                  if (isLiked) {
+                    if (idx === -1) records.push({ media_id: mediaId, user_id: userId, created_at: new Date().toISOString() });
+                  } else {
+                    if (idx >= 0) records.splice(idx, 1);
+                  }
+                  localStorage.setItem('gcz_media_likes_table_v2', JSON.stringify(records));
+
+                  if (mediaId === 'live_broadcast' || mediaId === 'broadcast_live') {
+                    const bLikes = readLocalArray('gcz_broadcast_likes_v1');
+                    const bIdx = bLikes.indexOf(userId);
+                    if (isLiked && bIdx === -1) bLikes.push(userId);
+                    else if (!isLiked && bIdx >= 0) bLikes.splice(bIdx, 1);
+                    localStorage.setItem('gcz_broadcast_likes_v1', JSON.stringify(bLikes));
+                  }
+                } catch {}
+              }
+              if (typeof window !== 'undefined') {
+                const likerIds = readLocalArray('gcz_media_likes_table_v2').filter((r: any) => r.media_id === mediaId).map((r: any) => r.user_id);
+                window.dispatchEvent(new CustomEvent('gcz_media_likes_updated', {
+                  detail: { mediaId, isLiked, likerIds, count: likerIds.length }
+                }));
+                if (mediaId === 'live_broadcast' || mediaId === 'broadcast_live') {
+                  window.dispatchEvent(new CustomEvent('gcz_broadcast_likes_updated', {
+                    detail: { isLiked, count: likerIds.length }
+                  }));
+                }
+              }
+            }
           });
 
         channel.subscribe();
@@ -1225,25 +1702,28 @@ export class SupabaseSyncService {
 
       if (error || !data) return [];
 
-      return data.map((row: any) => ({
-        id: row.id,
-        phone: row.phone,
-        password: row.password_hash || 'juice2026',
-        full_name: row.full_name || 'Church Member',
-        handle: row.referral_code?.startsWith('@') ? row.referral_code : `@${(row.full_name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-        role: row.role || 'member',
-        badge_type: (row.role === 'super_admin' || row.role === 'developer') ? 'gold' : 'none',
-        avatar_url: row.avatar_url || null,
-        cell_group: row.cell_group || 'Harare Assembly',
-        is_verified: row.is_verified || false,
-        member_id: row.member_id || `GCZ-MEM-${Math.floor(1000 + Math.random() * 9000)}`,
-        location: row.location || 'Harare',
-        city_location: row.city_location || 'Harare',
-        created_at: row.created_at || new Date().toISOString(),
-        followers_count: row.followers_count || 0,
-        following_count: row.following_count || 0,
-        saved_verses: row.saved_verses || ['John 1:1', 'Isaiah 40:31']
-      }));
+      const deletedIds = new Set(readLocalArray('gcz_deleted_user_ids_v1'));
+      return data
+        .filter((row: any) => !deletedIds.has(row.id) && (!row.phone || !deletedIds.has(row.phone)))
+        .map((row: any) => ({
+          id: row.id,
+          phone: row.phone,
+          password: row.password_hash || 'juice2026',
+          full_name: row.full_name || 'Church Member',
+          handle: row.referral_code?.startsWith('@') ? row.referral_code : `@${(row.full_name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+          role: row.role || 'member',
+          badge_type: (row.role === 'super_admin' || row.role === 'developer') ? 'gold' : 'none',
+          avatar_url: row.avatar_url || null,
+          cell_group: row.cell_group || 'Harare Assembly',
+          is_verified: row.is_verified || false,
+          member_id: row.member_id || `GCZ-MEM-${Math.floor(1000 + Math.random() * 9000)}`,
+          location: row.location || 'Harare',
+          city_location: row.city_location || 'Harare',
+          created_at: row.created_at || new Date().toISOString(),
+          followers_count: row.followers_count || 0,
+          following_count: row.following_count || 0,
+          saved_verses: row.saved_verses || ['John 1:1', 'Isaiah 40:31']
+        }));
     } catch {
       return [];
     }
@@ -1397,9 +1877,58 @@ export class SupabaseSyncService {
     }
     const supabase = getSupabase();
     if (supabase) {
+      try {
+        const { data: p } = await supabase.from('posts').select('image_url, video_url').eq('id', postId).maybeSingle();
+        if (p) {
+          if (p.image_url) StorageBucketService.deleteMediaByUrl(p.image_url).catch(() => {});
+          if (p.video_url) StorageBucketService.deleteMediaByUrl(p.video_url).catch(() => {});
+        }
+      } catch {}
+
       Promise.resolve(supabase.from('posts').delete().eq('id', postId)).catch(() => {});
       Promise.resolve(supabase.from('testimonies').delete().eq('id', postId)).catch(() => {});
       Promise.resolve(supabase.from('post_comments').delete().eq('post_id', postId)).catch(() => {});
+      Promise.resolve(supabase.from('user_activities').delete().filter('metadata->>post_id', 'eq', postId)).catch(() => {});
+    }
+    return true;
+  }
+
+  /**
+   * Permanently purges user account and cascading data from Supabase PostgreSQL and broadcasts platform-wide
+   */
+  static async deleteAccount(userId: string, userPhone?: string): Promise<boolean> {
+    if (!userId && !userPhone) return false;
+    try {
+      const delList = readLocalArray('gcz_deleted_user_ids_v1');
+      if (userId && !delList.includes(userId)) delList.push(userId);
+      if (userPhone && !delList.includes(userPhone)) delList.push(userPhone);
+      localStorage.setItem('gcz_deleted_user_ids_v1', JSON.stringify(delList));
+    } catch {}
+
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'account_deleted',
+        payload: { userId, userPhone, deleted: true }
+      });
+    }
+
+    const supabase = getSupabase();
+    if (supabase) {
+      if (userId) {
+        Promise.resolve(supabase.from('users').delete().eq('id', userId)).catch(() => {});
+        Promise.resolve(supabase.from('posts').delete().eq('user_id', userId)).catch(() => {});
+        Promise.resolve(supabase.from('testimonies').delete().eq('user_id', userId)).catch(() => {});
+        Promise.resolve(supabase.from('post_comments').delete().eq('user_id', userId)).catch(() => {});
+        Promise.resolve(supabase.from('messages').delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)).catch(() => {});
+        Promise.resolve(supabase.from('user_follows').delete().or(`follower_id.eq.${userId},following_id.eq.${userId}`)).catch(() => {});
+        Promise.resolve(supabase.from('notifications').delete().or(`recipient_id.eq.${userId},actor_id.eq.${userId}`)).catch(() => {});
+        Promise.resolve(supabase.from('church_pages').delete().eq('creator_id', userId)).catch(() => {});
+      }
+      if (userPhone) {
+        Promise.resolve(supabase.from('users').delete().eq('phone', userPhone)).catch(() => {});
+      }
     }
     return true;
   }
