@@ -26,7 +26,13 @@ import {
   FileVideo, 
   Layers, 
   ShieldCheck,
-  Video
+  Video,
+  Youtube,
+  Radio,
+  Lock,
+  Unlock,
+  Crown,
+  ShieldAlert
 } from 'lucide-react';
 import { Sermon, User } from '../../types';
 import { StorageService } from '../../services/storageService';
@@ -62,12 +68,19 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'newest' | 'most_viewed' | 'title' | 'duration'>('newest');
+  const [selectedChannel, setSelectedChannel] = useState<'all' | '@joedaniels-official' | '@JoeDanielsPodcastshow'>('all');
 
   // Modals state
   const [activePlayingSermon, setActivePlayingSermon] = useState<Sermon | null>(null);
   const [showUploadModal, setShowUploadModal] = useState<boolean>(false);
   const [showCategoryModal, setShowCategoryModal] = useState<boolean>(false);
   const [showAnalyticsModal, setShowAnalyticsModal] = useState<boolean>(false);
+  const [showAccessDeniedModal, setShowAccessDeniedModal] = useState<boolean>(false);
+  const [restrictedSermon, setRestrictedSermon] = useState<Sermon | null>(null);
+
+  // User Profile & Strict Blue/Gold Access Control
+  const [userProfile, setUserProfile] = useState<User | null>(() => currentUser || StorageService.getCurrentUser());
+  const hasLibraryAccess = Boolean(StorageService.canAccessSermonLibrary(userProfile));
 
   // Download / Offline state
   const [offlineIds, setOfflineIds] = useState<string[]>(() => StorageService.getOfflineSermonsList());
@@ -111,16 +124,22 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
       setCategories(StorageService.getSermonCategories());
     };
 
+    const handleUserUpdate = () => {
+      setUserProfile(StorageService.getCurrentUser());
+    };
+
     window.addEventListener('gcz_sermon_added', handleSermonUpdate);
     window.addEventListener('gcz_sermon_updated', handleSermonUpdate);
     window.addEventListener('gcz_sermon_deleted', handleSermonUpdate);
     window.addEventListener('gcz_sermon_categories_updated', handleCategoryUpdate);
+    window.addEventListener('gcz_user_profile_updated', handleUserUpdate);
 
     return () => {
       window.removeEventListener('gcz_sermon_added', handleSermonUpdate);
       window.removeEventListener('gcz_sermon_updated', handleSermonUpdate);
       window.removeEventListener('gcz_sermon_deleted', handleSermonUpdate);
       window.removeEventListener('gcz_sermon_categories_updated', handleCategoryUpdate);
+      window.removeEventListener('gcz_user_profile_updated', handleUserUpdate);
     };
   }, []);
 
@@ -136,7 +155,18 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
       );
     }
 
-    // 2. Filter by search query
+    // 2. Filter by channel (@joedaniels-official or @JoeDanielsPodcastshow)
+    if (selectedChannel !== 'all') {
+      result = result.filter(s => {
+        if (selectedChannel === '@JoeDanielsPodcastshow') {
+          return s.channel === '@JoeDanielsPodcastshow' || s.series?.toLowerCase().includes('podcast') || s.title?.toLowerCase().includes('podcast');
+        } else {
+          return s.channel === '@joedaniels-official' || !s.channel || (!s.series?.toLowerCase().includes('podcast') && !s.title?.toLowerCase().includes('podcast'));
+        }
+      });
+    }
+
+    // 3. Filter by search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter(s => 
@@ -148,7 +178,7 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
       );
     }
 
-    // 3. Sort
+    // 4. Sort
     switch (sortBy) {
       case 'most_viewed':
         result.sort((a, b) => (b.view_count || 0) - (a.view_count || 0));
@@ -171,10 +201,30 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
     }
 
     return result;
-  }, [sermons, selectedCategory, searchQuery, sortBy]);
+  }, [sermons, selectedCategory, selectedChannel, searchQuery, sortBy]);
 
-  // Play Sermon Handler
+  // Recommended & Related Videos for Player Modal
+  const relatedSermons = useMemo(() => {
+    if (!activePlayingSermon) return [];
+    return sermons
+      .filter(s => s.id !== activePlayingSermon.id)
+      .filter(s => 
+        (activePlayingSermon.series && s.series === activePlayingSermon.series) ||
+        (activePlayingSermon.channel && s.channel === activePlayingSermon.channel) ||
+        s.speaker === activePlayingSermon.speaker
+      )
+      .slice(0, 6);
+  }, [activePlayingSermon, sermons]);
+
+  // Play Sermon Handler with Strict Blue/Gold Access Control
   const handlePlaySermon = (sermon: Sermon, isTopPlayer: boolean = false) => {
+    const hasAccess = StorageService.canAccessSermonLibrary(userProfile);
+    if (!hasAccess && sermon.requires_verification !== false) {
+      setRestrictedSermon(sermon);
+      setShowAccessDeniedModal(true);
+      return;
+    }
+
     // Record real-time view
     StorageService.recordSermonView(sermon.id, isTopPlayer);
     
@@ -196,6 +246,20 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
       }
     } else {
       setActivePlayingSermon(sermon);
+    }
+  };
+
+  // Instant Verification Upgrade Handler
+  const handleUpgradeTier = (badge: 'blue' | 'gold') => {
+    const updated = StorageService.purchaseBadge(badge, 1);
+    if (updated) {
+      setUserProfile(updated);
+      setShowAccessDeniedModal(false);
+      confetti({ particleCount: 50, spread: 70 });
+      if (restrictedSermon) {
+        setActivePlayingSermon(restrictedSermon);
+        StorageService.recordSermonView(restrictedSermon.id, false);
+      }
     }
   };
 
@@ -416,6 +480,48 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
         </div>
       </div>
 
+      {/* 2.5 Channel Selector Filter Pills */}
+      <div className="flex items-center gap-1.5 p-1 bg-card rounded-xl border border-border overflow-x-auto no-scrollbar">
+        <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground px-2 flex items-center gap-1 shrink-0">
+          <Youtube className="w-3.5 h-3.5 text-red-500" /> Channel:
+        </span>
+        <button
+          onClick={() => setSelectedChannel('all')}
+          className={cn(
+            "px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-all cursor-pointer",
+            selectedChannel === 'all'
+              ? "bg-primary text-primary-foreground shadow-xs font-bold"
+              : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+          )}
+        >
+          All Channels ({sermons.length})
+        </button>
+        <button
+          onClick={() => setSelectedChannel('@joedaniels-official')}
+          className={cn(
+            "px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-all cursor-pointer flex items-center gap-1.5",
+            selectedChannel === '@joedaniels-official'
+              ? "bg-red-600 text-white shadow-xs font-bold"
+              : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+          )}
+        >
+          <Youtube className="w-3.5 h-3.5 fill-current" />
+          <span>📺 @joedaniels-official</span>
+        </button>
+        <button
+          onClick={() => setSelectedChannel('@JoeDanielsPodcastshow')}
+          className={cn(
+            "px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-all cursor-pointer flex items-center gap-1.5",
+            selectedChannel === '@JoeDanielsPodcastshow'
+              ? "bg-amber-600 text-white shadow-xs font-bold"
+              : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+          )}
+        >
+          <Radio className="w-3.5 h-3.5" />
+          <span>🎙️ @JoeDanielsPodcastshow</span>
+        </button>
+      </div>
+
       {/* 3. Category Chips Bar */}
       <div className="flex items-center gap-1.5 p-1 bg-secondary/50 rounded-xl border border-border overflow-x-auto no-scrollbar">
         <button
@@ -504,8 +610,29 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                       {sermon.duration}
                     </span>
 
+                    {/* Channel Tag Badge */}
+                    {sermon.channel === '@JoeDanielsPodcastshow' ? (
+                      <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-amber-600/90 text-[9px] font-bold text-white shadow-xs flex items-center gap-1">
+                        <Radio className="w-2.5 h-2.5" />
+                        Podcast
+                      </span>
+                    ) : (
+                      <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-red-600/90 text-[9px] font-bold text-white shadow-xs flex items-center gap-1">
+                        <Youtube className="w-2.5 h-2.5 fill-current" />
+                        Official
+                      </span>
+                    )}
+
+                    {/* Access Indicator if restricted and user doesn't have Blue/Gold */}
+                    {!hasLibraryAccess && sermon.requires_verification !== false && (
+                      <span className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/80 border border-primary/40 text-[9px] font-bold text-primary shadow-xs">
+                        <Lock className="w-2.5 h-2.5" />
+                        <span>Blue/Gold</span>
+                      </span>
+                    )}
+
                     {isDownloaded && (
-                      <span className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500 text-[10px] font-bold text-white shadow-xs">
+                      <span className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500 text-[10px] font-bold text-white shadow-xs">
                         <Check className="w-3 h-3" />
                         Saved
                       </span>
@@ -547,10 +674,19 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                     <button
                       onClick={() => handlePlaySermon(sermon)}
                       className="px-3 py-1.5 rounded-xl bg-primary hover:brightness-110 text-primary-foreground font-semibold flex items-center gap-1 cursor-pointer shadow-xs text-[11px]"
-                      title="Play video inline"
+                      title={!hasLibraryAccess && sermon.requires_verification !== false ? "Requires Blue or Gold verification" : "Play video inline"}
                     >
-                      <Play className="w-3 h-3 fill-current" />
-                      <span>Watch</span>
+                      {!hasLibraryAccess && sermon.requires_verification !== false ? (
+                        <>
+                          <Lock className="w-3 h-3" />
+                          <span>Unlock</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-3 h-3 fill-current" />
+                          <span>Watch</span>
+                        </>
+                      )}
                     </button>
 
                     <button
@@ -617,6 +753,24 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                     <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[9px] text-white font-bold">
                       {sermon.duration}
                     </span>
+
+                    {/* Channel Tag Badge */}
+                    {sermon.channel === '@JoeDanielsPodcastshow' ? (
+                      <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-amber-600/90 text-[8px] font-bold text-white shadow-xs">
+                        Podcast
+                      </span>
+                    ) : (
+                      <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-red-600/90 text-[8px] font-bold text-white shadow-xs">
+                        Official
+                      </span>
+                    )}
+
+                    {!hasLibraryAccess && sermon.requires_verification !== false && (
+                      <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[8px] font-bold text-primary border border-primary/40 shadow-xs flex items-center gap-0.5">
+                        <Lock className="w-2 h-2" />
+                        <span>Lock</span>
+                      </span>
+                    )}
                   </div>
 
                   <div className="min-w-0">
@@ -644,9 +798,19 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                   <button
                     onClick={() => handlePlaySermon(sermon)}
                     className="px-3 py-1.5 rounded-xl bg-primary hover:brightness-110 text-primary-foreground font-semibold text-xs flex items-center gap-1 cursor-pointer shadow-xs"
+                    title={!hasLibraryAccess && sermon.requires_verification !== false ? "Requires Blue or Gold verification" : "Watch sermon"}
                   >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Watch</span>
+                    {!hasLibraryAccess && sermon.requires_verification !== false ? (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>Unlock</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Watch</span>
+                      </>
+                    )}
                   </button>
 
                   <button
@@ -720,36 +884,198 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
               </button>
             </div>
 
-            {/* Video Details Bar */}
-            <div className="p-4 sm:p-5 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <span className="text-[10px] font-bold text-primary uppercase tracking-wider">
-                    {activePlayingSermon.series}
-                  </span>
+            {/* Video Details Bar & Recommended Queue */}
+            <div className="p-4 sm:p-5 space-y-4 max-h-[50vh] overflow-y-auto">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="text-[10px] font-bold text-primary uppercase tracking-wider">
+                      {activePlayingSermon.series || 'Apostolic Series'}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-primary/20 text-primary border border-primary/30 flex items-center gap-1">
+                      <Crown className="w-3 h-3" />
+                      <span>👑 Covenant Partner HD Access</span>
+                    </span>
+                    {activePlayingSermon.channel && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/10 text-white flex items-center gap-1">
+                        {activePlayingSermon.channel === '@JoeDanielsPodcastshow' ? '🎙️ Podcast Show' : '📺 Official Channel'}
+                      </span>
+                    )}
+                  </div>
                   <h2 className="text-sm sm:text-base font-bold text-foreground">
                     {activePlayingSermon.title}
                   </h2>
                 </div>
-                <button
-                  onClick={() => handlePlaySermon(activePlayingSermon, true)}
-                  className="px-3 py-1.5 rounded-xl bg-secondary hover:bg-primary hover:text-primary-foreground text-foreground border border-border text-xs font-semibold flex items-center gap-1.5 cursor-pointer shrink-0 transition-all"
-                  title="Play on Top Player"
-                >
-                  <Tv className="w-3.5 h-3.5" />
-                  <span>Pin to Top Player</span>
-                </button>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => handlePlaySermon(activePlayingSermon, true)}
+                    className="px-3 py-1.5 rounded-xl bg-secondary hover:bg-primary hover:text-primary-foreground text-foreground border border-border text-xs font-semibold flex items-center gap-1.5 cursor-pointer shrink-0 transition-all"
+                    title="Play on Top Player"
+                  >
+                    <Tv className="w-3.5 h-3.5" />
+                    <span>Pin to Top</span>
+                  </button>
+                  <button
+                    onClick={() => handleToggleDownload(activePlayingSermon.id)}
+                    className="p-2 rounded-xl bg-secondary hover:bg-secondary/80 border border-border text-foreground transition-colors cursor-pointer"
+                    title="Save offline"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 {activePlayingSermon.description}
               </p>
 
-              <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t border-border">
+              <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-b border-border pb-3">
                 <span>{activePlayingSermon.speaker} • {activePlayingSermon.duration}</span>
                 <span>{(activePlayingSermon.view_count || 0).toLocaleString()} views</span>
               </div>
+
+              {/* Recommended & Related Videos Queue */}
+              {relatedSermons.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-primary" />
+                      Recommended & Related Videos ({relatedSermons.length})
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">Up Next</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {relatedSermons.map(rel => (
+                      <div
+                        key={rel.id}
+                        onClick={() => {
+                          StorageService.recordSermonView(rel.id, false);
+                          setActivePlayingSermon(rel);
+                        }}
+                        className="p-2 rounded-xl bg-secondary/40 hover:bg-secondary border border-border flex items-center gap-2.5 cursor-pointer transition-all group"
+                      >
+                        <div className="relative w-20 aspect-video rounded-lg overflow-hidden shrink-0 bg-black">
+                          <img
+                            src={rel.thumbnail_url}
+                            alt={rel.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                            <Play className="w-3 h-3 text-white fill-current" />
+                          </div>
+                          <span className="absolute bottom-0.5 right-0.5 text-[8px] px-1 bg-black/80 text-white rounded">
+                            {rel.duration}
+                          </span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">
+                            {rel.title}
+                          </h4>
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            {rel.speaker} • {(rel.view_count || 0).toLocaleString()} views
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5.5 Covenant Partner Verification Required Modal */}
+      {showAccessDeniedModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+          onClick={() => setShowAccessDeniedModal(false)}
+        >
+          <div 
+            className="w-full max-w-md bg-card border border-primary/40 rounded-3xl shadow-2xl p-5 sm:p-6 space-y-4 text-center relative overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-primary/20 to-blue-500/20 border border-primary/40 text-primary mx-auto flex items-center justify-center shadow-lg">
+              <Crown className="w-8 h-8 text-primary animate-pulse" />
+            </div>
+
+            <div className="space-y-1">
+              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-primary/20 text-primary border border-primary/30">
+                Partner Privilege
+              </span>
+              <h2 className="text-lg sm:text-xl font-black text-foreground">
+                Covenant Partner Verification Required
+              </h2>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                The Apostolic Sermon Archive (200+ HD teachings) is reserved exclusively for Blue and Gold verified covenant partners.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-secondary/50 border border-border text-left space-y-1 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Your Status:</span>
+                <span className="font-bold text-foreground capitalize">
+                  {userProfile?.badge_type ? `${userProfile.badge_type} Partner` : 'Unverified / Silver Member'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Video Selected:</span>
+                <span className="font-bold text-primary truncate max-w-[200px]">
+                  {restrictedSermon?.title || 'Apostolic Teaching'}
+                </span>
+              </div>
+            </div>
+
+            {/* Verification Tiers */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              {/* Blue Verification */}
+              <div className="p-3.5 rounded-2xl border border-blue-500/40 bg-blue-500/10 flex flex-col justify-between text-left space-y-2">
+                <div>
+                  <div className="flex items-center gap-1.5 text-blue-400 font-bold text-xs">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Blue Partner</span>
+                  </div>
+                  <div className="text-lg font-black text-foreground mt-1">$9.99<span className="text-[10px] font-normal text-muted-foreground">/mo</span></div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Full HD library access, downloads, verified badge.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleUpgradeTier('blue')}
+                  className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-xs cursor-pointer active:scale-95 transition-all"
+                >
+                  Unlock with Blue
+                </button>
+              </div>
+
+              {/* Gold Verification */}
+              <div className="p-3.5 rounded-2xl border border-amber-500/40 bg-amber-500/10 flex flex-col justify-between text-left space-y-2">
+                <div>
+                  <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs">
+                    <Crown className="w-4 h-4" />
+                    <span>Gold VIP</span>
+                  </div>
+                  <div className="text-lg font-black text-foreground mt-1">$29.99<span className="text-[10px] font-normal text-muted-foreground">/mo</span></div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Everything in Blue + pastoral prayer priority.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleUpgradeTier('gold')}
+                  className="w-full py-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 text-black font-black text-xs shadow-xs cursor-pointer active:scale-95 transition-all"
+                >
+                  Unlock with Gold
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowAccessDeniedModal(false)}
+              className="text-xs text-muted-foreground hover:text-foreground font-semibold py-1 cursor-pointer"
+            >
+              Browse Catalog Only (No Playback)
+            </button>
           </div>
         </div>
       )}

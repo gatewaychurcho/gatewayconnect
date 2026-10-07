@@ -102,6 +102,11 @@ export interface Sermon {
   is_premium?: boolean;
   snippet_duration?: string;
   unlock_price_usd?: number;
+  channel?: '@joedaniels-official' | '@JoeDanielsPodcastshow' | string;
+  requires_verification?: boolean;
+  size_mb?: number;
+  likes_count?: number;
+  top_player_views?: number;
 }
 
 export interface PremiumPlan {

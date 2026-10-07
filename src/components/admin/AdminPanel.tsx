@@ -57,6 +57,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { VideoAnalyticsDashboard } from './VideoAnalyticsDashboard';
+import { VideoLibraryManager } from './VideoLibraryManager';
 import { 
   User, 
   UserRole, 
@@ -91,7 +92,7 @@ interface AdminPanelProps {
   onRefreshAppState: () => void;
 }
 
-type AdminSection = 'overview' | 'church_pages' | 'congregations' | 'stream_attendees' | 'broadcast' | 'content_moderation' | 'inventory' | 'members' | 'prayers' | 'push' | 'finances' | 'vibes' | 'media_library';
+type AdminSection = 'video_library_analytics' | 'content_moderation' | 'broadcast' | 'overview' | 'church_pages' | 'congregations' | 'stream_attendees' | 'inventory' | 'members' | 'prayers' | 'push' | 'finances' | 'vibes' | 'media_library';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppState }) => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
@@ -1062,6 +1063,82 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
         <span className="ml-auto text-primary/70">ADMIN / OPERATIONS</span>
       </div>
 
+      {/* 3 CORE PILLARS SWITCHER: POST MODERATION | LIVE STREAM | VIDEO LIBRARY & ANALYTICS */}
+      <div className="relative z-20 bg-gradient-to-r from-card/95 via-background/95 to-card/95 border-b border-white/10 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 overflow-x-auto shrink-0 shadow-md">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <span className="text-[10px] font-black uppercase tracking-wider text-primary font-mono hidden md:inline px-2 py-0.5 rounded bg-primary/10 border border-primary/20">
+            Core Pillars
+          </span>
+
+          {/* Pillar 1: Post Moderation */}
+          <button
+            type="button"
+            onClick={() => setActiveSection('content_moderation')}
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer border ${
+              activeSection === 'content_moderation'
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.25)]'
+                : 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border-white/10'
+            }`}
+          >
+            <Trash2 className="w-4 h-4 text-rose-400" />
+            <span>Post Moderation</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500/20 text-rose-300 font-mono">
+              {testimonies.length}
+            </span>
+          </button>
+
+          {/* Pillar 2: Live Stream */}
+          <button
+            type="button"
+            onClick={() => setActiveSection('broadcast')}
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer border ${
+              activeSection === 'broadcast'
+                ? 'bg-red-600/20 text-red-300 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.25)]'
+                : 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border-white/10'
+            }`}
+          >
+            <Radio className="w-4 h-4 text-red-400 animate-pulse" />
+            <span>Live Stream</span>
+            {liveSermonStatus.isLive ? (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-red-600 text-white font-mono animate-pulse">LIVE</span>
+            ) : (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/10 text-white/60 font-mono">Standby</span>
+            )}
+          </button>
+
+          {/* Pillar 3: Video Library & Analytics */}
+          <button
+            type="button"
+            onClick={() => setActiveSection('video_library_analytics')}
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer border ${
+              activeSection === 'video_library_analytics'
+                ? 'bg-gradient-to-r from-primary/30 to-amber-500/20 text-primary border-primary/50 shadow-[0_0_15px_rgba(212,175,55,0.25)]'
+                : 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border-white/10'
+            }`}
+          >
+            <Tv className="w-4 h-4 text-primary" />
+            <span>Video Library & Analytics</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-primary/20 text-primary font-mono">
+              {sermons.length}+ HD
+            </span>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setActiveSection('overview')}
+          className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer border ${
+            activeSection === 'overview'
+              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+              : 'bg-white/5 hover:bg-white/10 text-white/60 hover:text-white border-white/5'
+          }`}
+          title="Open Overview KPI"
+        >
+          <Activity className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Overview KPI</span>
+        </button>
+      </div>
+
       {/* 2. BODY WITH SIDEBAR NAVIGATION + MAIN CONTENT */}
       <div className="relative z-10 flex-1 flex flex-col md:flex-row overflow-hidden">
         
@@ -1077,12 +1154,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                 className="w-full bg-card border border-primary/40 rounded-xl px-3 py-1.5 text-xs text-primary font-bold appearance-none pr-8 focus:outline-none focus:border-primary"
               >
                 {[
+                  { id: 'content_moderation', label: `🛡️ 1. Post Moderation (${testimonies.length} Posts)` },
+                  { id: 'broadcast', label: '🔴 2. Live Stream & Broadcast' },
+                  { id: 'video_library_analytics', label: `🎬 3. Video Library & Analytics (${sermons.length}+ HD)` },
                   { id: 'overview', label: '📊 Dashboard KPI' },
                   { id: 'church_pages', label: `⛪ Church Pages (${churchPages.length} Active)` },
                   { id: 'congregations', label: `⛪ Congregations & Streaming (${congregationUnits.filter(c => c.is_congregation).length} Hubs)` },
                   { id: 'stream_attendees', label: `📡 Streamers & Attendees (${streamAttendees.length} Logged)` },
-                  { id: 'content_moderation', label: `🛡️ Community Post Moderation (${testimonies.length} Posts)` },
-                  { id: 'broadcast', label: '🔴 Sermon & Live Stream' },
                   { id: 'inventory', label: '📦 Store & Inventory' },
                   { id: 'push', label: '🔔 Push Broadcasts' },
                   { id: 'members', label: '👥 Members & Roles' },
@@ -1103,12 +1181,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
           {/* Mobile Scrollable Module Pills */}
           <div className="flex items-center gap-1.5 px-2 py-1.5 overflow-x-auto scrollbar-none bg-background">
             {[
+              { id: 'content_moderation', label: 'Moderation', icon: Trash2 },
+              { id: 'broadcast', label: 'Live Stream', icon: Radio },
+              { id: 'video_library_analytics', label: 'Video Library', icon: Tv },
               { id: 'overview', label: 'Overview', icon: Activity },
               { id: 'church_pages', label: 'Pages', icon: Layers },
               { id: 'congregations', label: 'Hubs', icon: Tv },
               { id: 'stream_attendees', label: 'Streamers', icon: Users },
-              { id: 'content_moderation', label: 'Moderation', icon: Trash2 },
-              { id: 'broadcast', label: 'Live Pulpit', icon: Radio },
               { id: 'inventory', label: 'Store', icon: Package },
               { id: 'push', label: 'Push', icon: Bell },
               { id: 'members', label: 'Members', icon: Users },
@@ -1139,7 +1218,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
 
         {/* Desktop Sidebar */}
         <aside className="hidden md:flex w-56 bg-gradient-to-b from-card/95 to-background/95 border-r border-emerald-500/15 shrink-0 flex-col overflow-y-auto p-2 gap-1">
-          <div className="px-3 py-2 text-[10px] font-bold text-white/40 uppercase tracking-wider">
+          <div className="px-3 py-1.5 text-[10px] font-bold text-primary uppercase tracking-wider border-b border-white/5">
+            Core Pillars
+          </div>
+          {[
+            { id: 'content_moderation', label: 'Post Moderation', icon: Trash2, badge: `${testimonies.length}` },
+            { id: 'broadcast', label: 'Live Stream & Pulpit', icon: Radio, badge: liveSermonStatus.isLive ? 'Live' : null },
+            { id: 'video_library_analytics', label: 'Video Library & Analytics', icon: Tv, badge: `${sermons.length}+` },
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeSection === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSection(tab.id as AdminSection)}
+                className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                  isActive
+                    ? 'bg-gradient-to-r from-primary to-amber-500 text-primary-foreground shadow-[0_0_16px_rgba(212,175,55,0.25)]'
+                    : 'text-white/80 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/5'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-primary-foreground' : 'text-primary'}`} />
+                  <span>{tab.label}</span>
+                </div>
+                {tab.badge !== null && (
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-2 ${
+                    isActive ? 'bg-card/30 text-primary-foreground' : 'bg-white/10 text-white/70'
+                  }`}>
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+
+          <div className="px-3 pt-3 pb-1 text-[10px] font-bold text-white/40 uppercase tracking-wider">
             Management Modules
           </div>
 
@@ -1148,8 +1262,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
             { id: 'church_pages', label: 'Pages & Groups', icon: Layers, badge: `${churchPages.length}` },
             { id: 'congregations', label: 'Congregations & Stream', icon: Tv, badge: `${congregationUnits.filter(c => c.is_congregation).length} Hubs` },
             { id: 'stream_attendees', label: 'Stream Attendees Log', icon: Users, badge: `${streamAttendees.length}` },
-            { id: 'content_moderation', label: 'Post Moderation', icon: Trash2, badge: `${testimonies.length}` },
-            { id: 'broadcast', label: 'Sermon & Live Stream', icon: Radio, badge: 'Live' },
             { id: 'media_library', label: 'Avatars & Thumbnails', icon: ImageIcon, badge: `${adminAvatars.length + adminThumbnails.length}` },
             { id: 'inventory', label: 'Store & Inventory', icon: Package, badge: products.length },
             { id: 'push', label: 'Push Broadcasts', icon: Bell, badge: notifications.length },
@@ -1189,6 +1301,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
         {/* MAIN WORKSPACE CONTENT - Cyber background streams purely behind all cards and content */}
         <main className="flex-1 overflow-y-auto p-4 space-y-4 bg-background/70 backdrop-blur-[2px]">
           
+          {/* CORE PILLAR 3: CENTRAL VIDEO LIBRARY & ANALYTICS MANAGER */}
+          {activeSection === 'video_library_analytics' && (
+            <VideoLibraryManager
+              currentUser={currentUser}
+              onPlaySermon={(sermon) => {
+                StorageService.recordSermonView(sermon.id, true);
+                StorageService.setOverridePlayingVideo({
+                  id: sermon.id,
+                  title: sermon.title,
+                  youtube_id: sermon.youtube_id,
+                  video_url: sermon.video_url,
+                  audio_url: sermon.audio_url,
+                  thumbnail_url: sermon.thumbnail_url,
+                  speaker: sermon.speaker,
+                  series: sermon.series
+                });
+                alert(`Now playing "${sermon.title}" on top player.`);
+              }}
+              onSetOverridePlayingVideo={(video) => {
+                StorageService.setOverridePlayingVideo(video);
+              }}
+            />
+          )}
+
           {/* SECTION 1: DASHBOARD OVERVIEW */}
           {activeSection === 'overview' && (
             <div className="space-y-4">
