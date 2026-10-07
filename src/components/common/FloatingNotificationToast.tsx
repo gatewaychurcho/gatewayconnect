@@ -1,20 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Bell, 
-  X, 
   Radio, 
-  Users, 
-  MessageSquare, 
-  Heart, 
-  UserPlus, 
   Sparkles, 
-  ChevronRight,
-  HandHeart,
-  Calendar
+  MessageSquare, 
+  HandHeart, 
+  Calendar, 
+  Bell, 
+  X,
+  ChevronRight
 } from 'lucide-react';
 import { User, AppNotification } from '../../types';
 import { StorageService } from '../../services/storageService';
-import { cn } from '../../lib/utils';
+
+interface ToastItem {
+  id: string;
+  type: 'live' | 'post' | 'message' | 'prayer' | 'event' | 'alert';
+  title: string;
+  subtitle: string;
+  targetType: string;
+  targetId?: string;
+  timestamp: number;
+}
 
 interface FloatingNotificationToastProps {
   currentUser?: User | null;
@@ -33,281 +39,367 @@ export const FloatingNotificationToast: React.FC<FloatingNotificationToastProps>
   onNavigateTab,
   onOpenAllNotifications
 }) => {
-  const [currentNotif, setCurrentNotif] = useState<AppNotification | null>(null);
+  const [activeToast, setActiveToast] = useState<ToastItem | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recentKeysRef = useRef<Map<string, number>>(new Map());
 
-  const showNotification = (notif: AppNotification) => {
-    const activeUser = currentUser || StorageService.getCurrentUser();
-    const activeUserId = activeUser?.id;
+  // Track recent user interaction in the app to determine if user is actively using it
+  const lastActiveRef = useRef<number>(Date.now());
+  useEffect(() => {
+    const markActive = () => {
+      lastActiveRef.current = Date.now();
+    };
+    window.addEventListener('mousemove', markActive, { passive: true });
+    window.addEventListener('mousedown', markActive, { passive: true });
+    window.addEventListener('keydown', markActive, { passive: true });
+    window.addEventListener('touchstart', markActive, { passive: true });
+    window.addEventListener('scroll', markActive, { passive: true });
+    return () => {
+      window.removeEventListener('mousemove', markActive);
+      window.removeEventListener('mousedown', markActive);
+      window.removeEventListener('keydown', markActive);
+      window.removeEventListener('touchstart', markActive);
+      window.removeEventListener('scroll', markActive);
+    };
+  }, []);
 
-    // Strict recipient isolation:
-    // If notification has a recipient_id, ONLY display if it matches the current user
-    if (notif.recipient_id) {
-      if (!activeUserId || notif.recipient_id !== activeUserId) {
-        return;
-      }
-    } else {
-      // If no recipient_id, only general church broadcasts can appear app-wide
-      if (notif.type !== 'broadcast') {
-        return;
-      }
-    }
+  const isUserActivelyUsingApp = (): boolean => {
+    if (typeof document === 'undefined') return false;
+    if (document.hidden) return false;
+    if (typeof document.hasFocus === 'function' && !document.hasFocus()) return false;
+    if (typeof window !== 'undefined' && Boolean((window as any).AndroidBridge?.isAppInBackground?.())) return false;
+    // Interacted within the last 15 seconds while window has focus
+    return Date.now() - lastActiveRef.current < 15000;
+  };
 
-    // Do NOT show notification to the user who triggered the action
-    if (notif.actor_id && activeUserId && notif.actor_id === activeUserId) {
+  const triggerToast = (
+    type: ToastItem['type'],
+    title: string,
+    subtitle: string,
+    targetType: string,
+    targetId?: string
+  ) => {
+    // Only important events (live, message, post) can trigger toasts
+    if (!['live', 'message', 'post'].includes(type)) {
       return;
     }
 
-    // Suppress any "join live stream" or viewer join toasts; leave only the official live broadcast toast
-    const lowerTitle = (notif.title || '').toLowerCase();
-    const lowerMsg = (notif.message || '').toLowerCase();
-    if (
-      lowerTitle.includes('join live') || 
-      lowerMsg.includes('join live') || 
-      lowerTitle.includes('joined stream') || 
-      lowerMsg.includes('joined stream') || 
-      lowerTitle.includes('joined live') || 
-      lowerMsg.includes('joined live')
-    ) {
+    const now = Date.now();
+    const dedupKey = `${type}_${targetId || title}`;
+    const lastSeen = recentKeysRef.current.get(dedupKey) || 0;
+
+    // Deduplication: prevent identical alert within 15 seconds
+    if (now - lastSeen < 15000) {
       return;
     }
+    recentKeysRef.current.set(dedupKey, now);
+
+    // Clean up old keys older than 30s
+    if (recentKeysRef.current.size > 50) {
+      recentKeysRef.current.forEach((time, key) => {
+        if (now - time > 30000) recentKeysRef.current.delete(key);
+      });
+    }
+
+    // Check if app is in background (minimized/closed screen/different tab)
+    const isBackground = typeof document !== 'undefined' && document.hidden;
+    const isAndroidBackground = typeof window !== 'undefined' && 
+      Boolean((window as any).AndroidBridge?.isAppInBackground?.());
+
+    if (isBackground || isAndroidBackground) {
+      // 1. Android Native Background Notification with Sound + Vibration + Launcher Icon Badge
+      try {
+        if (typeof window !== 'undefined' && (window as any).AndroidBridge?.showSystemNotification) {
+          (window as any).AndroidBridge.showSystemNotification(
+            title,
+            subtitle,
+            1,
+            targetType,
+            targetId || ''
+          );
+        }
+      } catch (err) {
+        console.warn('Native background notification warning:', err);
+      }
+
+      // 2. Web browser background push / system notification
+      try {
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          new Notification(title, {
+            body: subtitle,
+            icon: '/assets/church_logo.png'
+          });
+        }
+      } catch {}
+
+      return;
+    }
+
+    // While user is actively using the app/web: NO pop-up/toast notifications.
+    // They go only into the bell notification system.
+    if (isUserActivelyUsingApp()) {
+      return;
+    }
+
+    // Top-screen pop-up shown ONLY when the user is NOT actively using the app/web
+    const newToast: ToastItem = {
+      id: `toast_${now}`,
+      type,
+      title,
+      subtitle,
+      targetType,
+      targetId,
+      timestamp: now
+    };
 
     if (timerRef.current) clearTimeout(timerRef.current);
-    setCurrentNotif(notif);
+    setActiveToast(newToast);
     setIsVisible(true);
-    StorageService.playNotificationChime();
 
-    // Auto-dismiss after 8 seconds
+    // Audio chime + haptic feedback
+    try {
+      StorageService.playNotificationChime();
+    } catch {}
+
+    try {
+      if (typeof window !== 'undefined' && (window as any).AndroidBridge?.vibrate) {
+        (window as any).AndroidBridge.vibrate(35);
+      }
+    } catch {}
+
+    // Auto-dismiss after 4.5 seconds
     timerRef.current = setTimeout(() => {
       setIsVisible(false);
-    }, 8000);
+    }, 4500);
   };
 
   useEffect(() => {
-    // 1. Listen for new real-time notifications
-    const handleNewNotif = (e: CustomEvent<AppNotification>) => {
-      if (e.detail) {
-        showNotification(e.detail);
-      }
-    };
-
-    window.addEventListener('gcz_new_notification' as any, handleNewNotif);
-
-    // Listen for live broadcast starting
+    // 1. LIVE Video Broadcast Started
     const handleLiveBroadcast = (e: any) => {
       const status = e?.detail || StorageService.getLiveSermonStatus();
       if (status?.isLive) {
-        showNotification({
-          id: `broadcast_${Date.now()}`,
-          actor_id: 'apostle_joe_daniels',
-          actor_name: 'Apostle Joe Daniels',
-          actor_avatar: '/assets/apostle_joe_daniels_main.jpg',
-          title: 'Apostle Joe Daniels Live Broadcast',
-          message: status.title || 'Sanctuary broadcast is now live on Home. Tap to watch.',
-          type: 'broadcast',
-          target_type: 'live',
-          created_at: new Date().toISOString(),
-          is_read: false
-        });
+        triggerToast(
+          'live',
+          'Live Broadcast Started',
+          'Sanctuary service is now live • Tap to watch',
+          'live'
+        );
       }
     };
-    window.addEventListener('gcz_live_broadcast_started' as any, handleLiveBroadcast);
 
-    // 2. On mount, preview the latest unread notification for this specific user
-    const previewTimer = setTimeout(() => {
-      const activeUser = currentUser || StorageService.getCurrentUser();
-      if (!activeUser || activeUser.id === 'guest') return;
-      const all = StorageService.getAppNotifications(activeUser.id);
-      const latestUnread = all.find(n => !n.is_read && n.recipient_id === activeUser.id);
-      if (latestUnread) {
-        showNotification(latestUnread);
+    // 2. LIVE Status Updated (checks if transitioned to live)
+    const handleLiveStatus = (e: any) => {
+      const status = e?.detail;
+      if (status?.isLive) {
+        triggerToast(
+          'live',
+          'Live Broadcast Started',
+          'Sanctuary service is now live • Tap to watch',
+          'live'
+        );
       }
-    }, 2500);
+    };
+
+    // 3. New Community Post Published
+    const handleNewPost = (e: any) => {
+      const post = e?.detail;
+      if (!post) return;
+      const activeUser = currentUser || StorageService.getCurrentUser();
+      // Do not notify author for their own submission
+      if (activeUser && post.user_id === activeUser.id) return;
+
+      triggerToast(
+        'post',
+        'New Community Post',
+        'A new post was published to the feed',
+        'testimony',
+        post.id
+      );
+    };
+
+    // 4. New App Notifications (Messages and Live only trigger toasts; likes/reactions/follows go purely into the bell system)
+    const handleNewNotif = (e: CustomEvent<AppNotification>) => {
+      const notif = e.detail;
+      if (!notif) return;
+      const activeUser = currentUser || StorageService.getCurrentUser();
+      const activeUserId = activeUser?.id;
+
+      // Recipient check
+      if (notif.recipient_id && activeUserId && notif.recipient_id !== activeUserId) return;
+      if (notif.actor_id && activeUserId && notif.actor_id === activeUserId) return;
+
+      const lowerTitle = (notif.title || '').toLowerCase();
+      const lowerType = (notif.type || '').toLowerCase();
+
+      // Only important events trigger a toast (when inactive). Small activity (likes, reactions, follows, prayers) goes only to the bell icon!
+      if (lowerType === 'broadcast' || lowerTitle.includes('live')) {
+        triggerToast(
+          'live',
+          'Live Broadcast Started',
+          'Sanctuary service is now live • Tap to watch',
+          'live'
+        );
+      } else if (lowerType === 'chat' || notif.target_type === 'dm' || notif.target_type === 'group') {
+        triggerToast(
+          'message',
+          'New Message',
+          'Tap to open conversation',
+          notif.target_type || 'chat',
+          notif.target_id || notif.actor_id
+        );
+      }
+    };
+
+    window.addEventListener('gcz_live_broadcast_started' as any, handleLiveBroadcast);
+    window.addEventListener('gcz_live_status_updated' as any, handleLiveStatus);
+    window.addEventListener('gcz_testimony_created' as any, handleNewPost);
+    window.addEventListener('gcz_new_notification' as any, handleNewNotif);
 
     return () => {
-      window.removeEventListener('gcz_new_notification' as any, handleNewNotif);
       window.removeEventListener('gcz_live_broadcast_started' as any, handleLiveBroadcast);
-      clearTimeout(previewTimer);
+      window.removeEventListener('gcz_live_status_updated' as any, handleLiveStatus);
+      window.removeEventListener('gcz_testimony_created' as any, handleNewPost);
+      window.removeEventListener('gcz_new_notification' as any, handleNewNotif);
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [currentUser?.id]);
 
-  if (!isVisible || !currentNotif) return null;
+  if (!isVisible || !activeToast) return null;
 
   const handleDismiss = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsVisible(false);
   };
 
-  const handleRedirect = () => {
+  const handleToastClick = () => {
     setIsVisible(false);
-    StorageService.markNotificationRead(currentNotif.id);
 
-    // 1. Live stream - stream directly on home
-    if (currentNotif.target_type === 'live' || currentNotif.type === 'broadcast' || currentNotif.title.toLowerCase().includes('live')) {
-      onNavigateTab('home');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
+    switch (activeToast.type) {
+      case 'live':
+        if (onOpenLiveSermon) onOpenLiveSermon();
+        else onNavigateTab('home');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        break;
 
-    // 2. Cell group / Group chat
-    if (currentNotif.target_type === 'group' || (currentNotif.target_id && (currentNotif.target_id.startsWith('grp_') || currentNotif.target_id.startsWith('group_')))) {
-      const groupId = currentNotif.target_id || 'group_ignite_worship';
-      onOpenGroupChat(groupId);
-      return;
-    }
+      case 'post':
+        onNavigateTab('community', 'feed');
+        break;
 
-    // 3. User Profile (Follow notifications)
-    if (currentNotif.type === 'follow' || currentNotif.target_type === 'profile') {
-      const targetUserId = currentNotif.target_id || currentNotif.actor_id;
-      if (targetUserId) {
-        window.dispatchEvent(new CustomEvent('gcz_open_user_profile', { detail: { userId: targetUserId } }));
-        return;
-      }
-    }
+      case 'message':
+        if (activeToast.targetType === 'group' && activeToast.targetId) {
+          onOpenGroupChat(activeToast.targetId);
+        } else if (activeToast.targetId) {
+          onOpenDirectChat(activeToast.targetId);
+        } else {
+          onNavigateTab('community', 'groups');
+        }
+        break;
 
-    // 4. Direct Message
-    if (currentNotif.target_type === 'dm' || currentNotif.type === 'chat') {
-      const targetUserId = currentNotif.target_id || currentNotif.actor_id;
-      if (targetUserId) {
-        onOpenDirectChat(targetUserId);
-        return;
-      }
-    }
+      case 'prayer':
+        onNavigateTab('community', 'prayers');
+        break;
 
-    // 4. Prayer request
-    if (currentNotif.target_type === 'prayer' || currentNotif.title.toLowerCase().includes('prayer') || currentNotif.message.toLowerCase().includes('prayer')) {
-      onNavigateTab('community', 'prayers');
-      return;
-    }
+      case 'event':
+        onNavigateTab('community', 'events');
+        break;
 
-    // 5. Testimony
-    if (currentNotif.target_type === 'testimony' || currentNotif.title.toLowerCase().includes('testimony') || currentNotif.message.toLowerCase().includes('testimony')) {
-      onNavigateTab('community', 'feed');
-      return;
-    }
-
-    // 6. Events
-    if (currentNotif.target_type === 'event' || currentNotif.title.toLowerCase().includes('event')) {
-      onNavigateTab('community', 'events');
-      return;
-    }
-
-    // Fallback: If actor_id is present, open chat
-    if (currentNotif.actor_id) {
-      onOpenDirectChat(currentNotif.actor_id);
-    } else {
-      onOpenAllNotifications();
-    }
-  };
-
-  const getIcon = () => {
-    if (currentNotif.target_type === 'group' || (currentNotif.target_id && (currentNotif.target_id.startsWith('grp_') || currentNotif.target_id.startsWith('group_')))) {
-      return Users;
-    }
-    if (currentNotif.type === 'broadcast' || currentNotif.target_type === 'live' || currentNotif.title.toLowerCase().includes('live')) {
-      return Radio;
-    }
-    if (currentNotif.title.toLowerCase().includes('prayer')) {
-      return HandHeart;
-    }
-    if (currentNotif.title.toLowerCase().includes('event')) {
-      return Calendar;
-    }
-    switch (currentNotif.type) {
-      case 'chat':
-        return MessageSquare;
-      case 'like':
-        return Heart;
-      case 'follow':
-        return UserPlus;
       default:
-        return Sparkles;
+        onOpenAllNotifications();
+        break;
     }
   };
 
-  const getActionLabel = () => {
-    if (currentNotif.target_type === 'live' || currentNotif.type === 'broadcast' || currentNotif.title.toLowerCase().includes('live')) {
-      return 'Live Broadcast';
+  const renderIcon = () => {
+    switch (activeToast.type) {
+      case 'live':
+        return (
+          <div className="relative w-8 h-8 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center shrink-0">
+            <span className="absolute w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+            <Radio className="w-4 h-4 text-red-500 relative z-10" />
+          </div>
+        );
+      case 'post':
+        return (
+          <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <Sparkles className="w-4 h-4 text-emerald-400" />
+          </div>
+        );
+      case 'message':
+        return (
+          <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <MessageSquare className="w-4 h-4 text-emerald-400" />
+          </div>
+        );
+      case 'prayer':
+        return (
+          <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+            <HandHeart className="w-4 h-4 text-amber-400" />
+          </div>
+        );
+      case 'event':
+        return (
+          <div className="w-8 h-8 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+            <Calendar className="w-4 h-4 text-sky-400" />
+          </div>
+        );
+      default:
+        return (
+          <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0">
+            <Bell className="w-4 h-4 text-primary" />
+          </div>
+        );
     }
-    if (currentNotif.target_type === 'group' || (currentNotif.target_id && (currentNotif.target_id.startsWith('grp_') || currentNotif.target_id.startsWith('group_')))) {
-      return 'Open Group Chat';
-    }
-    if (currentNotif.type === 'chat' || currentNotif.target_type === 'dm') {
-      return 'Reply in Chat';
-    }
-    if (currentNotif.type === 'follow') {
-      return 'View Profile';
-    }
-    if (currentNotif.title.toLowerCase().includes('prayer')) {
-      return 'View Prayer';
-    }
-    if (currentNotif.title.toLowerCase().includes('testimony')) {
-      return 'View Testimony';
-    }
-    return 'View Now';
   };
-
-  const Icon = getIcon();
-  const actionLabel = getActionLabel();
 
   return (
     <aside 
-      aria-label="New Alert"
-      className="fixed top-14 sm:top-16 left-1/2 -translate-x-1/2 z-50 max-w-[360px] w-[calc(100vw-32px)] animate-in slide-in-from-top-3 fade-in duration-200"
+      aria-label="Notification Alert"
+      className="fixed top-2 sm:top-3 left-1/2 -translate-x-1/2 z-50 max-w-[340px] w-[calc(100vw-24px)] pointer-events-auto transition-all animate-in slide-in-from-top-4 fade-in duration-200"
       onMouseEnter={() => {
         if (timerRef.current) clearTimeout(timerRef.current);
       }}
       onMouseLeave={() => {
-        timerRef.current = setTimeout(() => setIsVisible(false), 3500);
+        timerRef.current = setTimeout(() => setIsVisible(false), 2500);
       }}
     >
       <div 
         id="notification-floating-toast"
         role="button"
         tabIndex={0}
-        onClick={handleRedirect}
+        onClick={handleToastClick}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            handleRedirect();
+            handleToastClick();
           }
         }}
-        className="group relative bg-card/95 border border-border hover:border-primary/60 text-foreground rounded-full pl-2 pr-3 py-1.5 shadow-lg backdrop-blur-md cursor-pointer transition-all hover:scale-[1.01] active:scale-98 flex items-center gap-2.5 text-left"
+        className="group relative bg-[#111B21]/95 dark:bg-[#111B21]/95 text-white border border-[#222E35] hover:border-emerald-500/60 rounded-2xl pl-2.5 pr-2 py-2 shadow-2xl backdrop-blur-xl cursor-pointer transition-all hover:scale-[1.01] active:scale-98 flex items-center gap-2.5 text-left"
       >
-        {/* Avatar / Icon */}
-        <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0 overflow-hidden">
-          {currentNotif.actor_avatar ? (
-            <img 
-              src={currentNotif.actor_avatar} 
-              alt={currentNotif.actor_name || 'User'} 
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                (e.currentTarget as HTMLElement).style.display = 'none';
-              }}
-            />
-          ) : (
-            <Icon className="w-4 h-4 text-primary" />
-          )}
-        </div>
+        {/* Minimal Category Icon */}
+        {renderIcon()}
 
-        {/* 1-line Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold text-foreground truncate">
-              {currentNotif.title}
+        {/* Minimal WhatsApp-Style Label (No full message, no post content, no sender details) */}
+        <div className="flex-1 min-w-0 pr-1">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-xs font-bold text-white truncate leading-tight">
+              {activeToast.title}
+            </span>
+            <span className="text-[10px] text-[#8696A0] shrink-0 font-medium">
+              now
             </span>
           </div>
-          <p className="text-[11px] text-muted-foreground truncate leading-tight">
-            {currentNotif.message}
+          <p className="text-[11px] text-[#8696A0] truncate leading-tight mt-0.5">
+            {activeToast.subtitle}
           </p>
         </div>
 
+        {/* Dismiss Button */}
         <button
           id="btn-dismiss-floating-toast"
+          type="button"
           onClick={handleDismiss}
-          className="p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shrink-0"
+          className="p-1 rounded-full text-[#8696A0] hover:text-white hover:bg-white/10 transition-colors shrink-0"
           title="Dismiss"
           aria-label="Dismiss"
         >

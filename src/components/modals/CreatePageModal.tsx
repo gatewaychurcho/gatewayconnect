@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   X, 
   Flag, 
@@ -12,7 +12,8 @@ import {
   CheckCircle2, 
   Layers,
   ChevronRight,
-  Info
+  Info,
+  Upload
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { User, ChurchPage, PageCategory } from '../../types';
@@ -77,6 +78,29 @@ export const CreatePageModal: React.FC<CreatePageModalProps> = ({
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [pinnedAnnouncement, setPinnedAnnouncement] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDeviceAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (ev.target?.result) setAvatarUrl(ev.target.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDeviceCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (ev.target?.result) setCoverUrl(ev.target.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Auto-generate clean handle from name if user hasn't modified it
   const handleNameChange = (val: string) => {
@@ -308,19 +332,31 @@ export const CreatePageModal: React.FC<CreatePageModalProps> = ({
           ) : (
             <form onSubmit={handleCreatePage} className="space-y-4">
               
+              {/* Hidden file inputs for choosing photos from device storage */}
+              <input ref={avatarInputRef} type="file" accept="image/*" onChange={handleDeviceAvatarSelect} style={{ display: 'none' }} />
+              <input ref={coverInputRef} type="file" accept="image/*" onChange={handleDeviceCoverSelect} style={{ display: 'none' }} />
+
               {/* Profile Avatar Selection */}
               <div>
                 <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center justify-between">
                   <span>Profile Avatar Image</span>
-                  <span className="text-[10px] text-muted-foreground">Select preset or paste URL</span>
+                  <span className="text-[10px] text-muted-foreground">Pick from device or ministry portrait</span>
                 </label>
                 <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                  <button
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="h-12 px-3 rounded-2xl bg-primary/10 hover:bg-primary/20 border-2 border-dashed border-primary/50 text-primary flex items-center gap-1.5 shrink-0 text-xs font-bold transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>Choose from Device</span>
+                  </button>
                   {PRESET_AVATARS.map((p, idx) => (
                     <button
                       key={idx}
                       type="button"
                       onClick={() => setAvatarUrl(p)}
-                      className={`w-12 h-12 rounded-full overflow-hidden shrink-0 border-2 transition-transform active:scale-95 ${
+                      className={`w-12 h-12 rounded-full overflow-hidden shrink-0 border-2 transition-transform active:scale-95 cursor-pointer ${
                         avatarUrl === p ? 'border-primary ring-2 ring-primary/40 scale-105' : 'border-border opacity-70 hover:opacity-100'
                       }`}
                     >
@@ -328,28 +364,29 @@ export const CreatePageModal: React.FC<CreatePageModalProps> = ({
                     </button>
                   ))}
                 </div>
-                <input
-                  type="url"
-                  placeholder="Or paste custom image URL"
-                  value={avatarUrl}
-                  onChange={e => setAvatarUrl(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary mt-1"
-                />
               </div>
 
               {/* Cover Banner Photo */}
               <div>
                 <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center justify-between">
                   <span>Cover Banner Photo</span>
-                  <span className="text-[10px] text-muted-foreground">Select preset or paste URL</span>
+                  <span className="text-[10px] text-muted-foreground">Pick from device or ministry cover</span>
                 </label>
-                <div className="grid grid-cols-3 gap-2 pb-2">
+                <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                  <button
+                    type="button"
+                    onClick={() => coverInputRef.current?.click()}
+                    className="h-14 px-3 rounded-xl bg-primary/10 hover:bg-primary/20 border-2 border-dashed border-primary/50 text-primary flex items-center gap-1.5 shrink-0 text-xs font-bold transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Upload Cover from Device</span>
+                  </button>
                   {PRESET_COVERS.slice(0, 3).map((c, idx) => (
                     <button
                       key={idx}
                       type="button"
                       onClick={() => setCoverUrl(c)}
-                      className={`h-14 rounded-lg overflow-hidden border-2 transition-all ${
+                      className={`h-14 w-24 rounded-lg overflow-hidden border-2 shrink-0 transition-all cursor-pointer ${
                         coverUrl === c ? 'border-primary ring-2 ring-primary/40 scale-102' : 'border-border opacity-70 hover:opacity-100'
                       }`}
                     >
@@ -357,13 +394,6 @@ export const CreatePageModal: React.FC<CreatePageModalProps> = ({
                     </button>
                   ))}
                 </div>
-                <input
-                  type="url"
-                  placeholder="Or paste custom cover banner URL"
-                  value={coverUrl}
-                  onChange={e => setCoverUrl(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
               </div>
 
               {/* Contact & Assembly Details */}

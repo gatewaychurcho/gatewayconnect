@@ -431,6 +431,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
     window.addEventListener('gcz_user_profile_updated', refreshAll);
     window.addEventListener('gcz_user_registered', refreshAll);
     window.addEventListener('gcz_users_synced', refreshAll);
+    window.addEventListener('gcz_user_deleted', refreshAll);
     window.addEventListener('gcz_banned_users_updated', refreshAll);
     window.addEventListener('gcz_stream_viewers_updated', refreshAll);
     window.addEventListener('gcz_stream_attendance_updated', refreshAll);
@@ -466,6 +467,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
       window.removeEventListener('gcz_user_profile_updated', refreshAll);
       window.removeEventListener('gcz_user_registered', refreshAll);
       window.removeEventListener('gcz_users_synced', refreshAll);
+      window.removeEventListener('gcz_user_deleted', refreshAll);
       window.removeEventListener('gcz_banned_users_updated', refreshAll);
       window.removeEventListener('gcz_stream_viewers_updated', refreshAll);
       window.removeEventListener('gcz_stream_attendance_updated', refreshAll);
@@ -494,6 +496,9 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   }, [logs, autoScrollLogs]);
 
   useEffect(() => {
+    StorageService.syncUsersWithRemote().then(() => {
+      setUsersList(StorageService.getAllUsers());
+    }).catch(() => {});
     setUsersList(StorageService.getAllUsers());
     setBannedUsersMap(StorageService.getBannedUsers());
     setPasswordRequests(StorageService.getPasswordResetRequests());
