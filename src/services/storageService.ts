@@ -67,7 +67,6 @@ import {
 } from '../data/mockData';
 import { SupabaseSyncService } from './supabaseSyncService';
 import { StorageBucketService } from './StorageBucketService';
-import { liveSyncService } from './liveSyncService';
 import { DEFAULT_SERMON_CATEGORIES, INITIAL_EXTENDED_SERMONS } from '../data/sermonCatalog';
 import { CONFIG } from '../../config';
 import { LocalMediaStore } from './localMediaStore';
@@ -710,15 +709,115 @@ export class StorageService {
       list = [...(list || []), ...additions];
       setLocal(KEYS.SERMONS, list);
     }
-    // Inject any cached IndexedDB object URLs if present
+    // Inject any cached IndexedDB object URLs and ensure channel attribution & access control
     return list.map(s => {
+      const channel = s.channel || (
+        ['Kingdom Wealth & Business', 'Family & Marriage', 'Youth & Purpose'].includes(s.series) ||
+        (s.title && s.title.toLowerCase().includes('podcast'))
+          ? '@JoeDanielsPodcastshow'
+          : '@joedaniels-official'
+      );
+      const requires_verification = s.requires_verification !== undefined ? s.requires_verification : true;
       const cached = LocalMediaStore.getCachedMediaUrl(s.id);
+      let video_url = s.video_url;
+      let audio_url = s.audio_url;
       if (cached) {
-        if (s.video_url?.startsWith('indexeddb://')) return { ...s, video_url: cached };
-        if (s.audio_url?.startsWith('indexeddb://')) return { ...s, audio_url: cached };
+        if (s.video_url?.startsWith('indexeddb://')) video_url = cached;
+        if (s.audio_url?.startsWith('indexeddb://')) audio_url = cached;
       }
-      return s;
+      return {
+        ...s,
+        channel,
+        requires_verification,
+        video_url,
+        audio_url
+      };
     });
+  }
+
+  static importChannelVideos(channel: '@joedaniels-official' | '@JoeDanielsPodcastshow'): { count: number; imported: Sermon[] } {
+    const list = this.getSermons();
+    const existingIds = new Set(list.map(s => s.id));
+    const now = Date.now();
+
+    const sampleOfficial: Sermon[] = [
+      {
+        id: `sermon_official_${now}_1`,
+        title: "Prophetic Atmosphere & Breaking Generational Limits",
+        speaker: "Apostle Joe Daniels",
+        date: "Sunday Service 2026",
+        series: "Prophetic Decrees",
+        duration: "1h 12m",
+        youtube_id: "upeY03DKvTo",
+        thumbnail_url: "https://img.youtube.com/vi/upeY03DKvTo/hqdefault.jpg",
+        scriptures: ["Isaiah 54:2-3", "Galatians 3:13-14"],
+        description: "Official ministry teaching live from Gateway Church sanctuary. The atmosphere of apostolic mantle breaking yoke barriers.",
+        view_count: 54300,
+        channel: "@joedaniels-official",
+        requires_verification: true,
+        is_live: false,
+        is_premium: false
+      },
+      {
+        id: `sermon_official_${now}_2`,
+        title: "Walking in Divine Authority Over Altars",
+        speaker: "Apostle Joe Daniels",
+        date: "Apostolic Service 2026",
+        series: "Deliverance & Freedom",
+        duration: "1h 05m",
+        youtube_id: "-CibsaxijIk",
+        thumbnail_url: "https://img.youtube.com/vi/-CibsaxijIk/hqdefault.jpg",
+        scriptures: ["Luke 10:19", "Colossians 2:15"],
+        description: "Unraveling spiritual warfare and taking dominion through apostolic decrees.",
+        view_count: 42800,
+        channel: "@joedaniels-official",
+        requires_verification: true,
+        is_live: false,
+        is_premium: false
+      }
+    ];
+
+    const samplePodcast: Sermon[] = [
+      {
+        id: `sermon_podcast_${now}_1`,
+        title: "The Reality of Kingdom Wealth & Marketplace Dominion",
+        speaker: "Apostle Joe Daniels",
+        date: "Podcast Episode 42",
+        series: "Kingdom Wealth & Business",
+        duration: "54m",
+        youtube_id: "Im5BmoPwSHI",
+        thumbnail_url: "https://img.youtube.com/vi/Im5BmoPwSHI/hqdefault.jpg",
+        scriptures: ["Deuteronomy 8:18", "Proverbs 13:22"],
+        description: "The Joe Daniels Podcast Show: Unpacking economic power, covenant investments, and breaking the poverty mindset.",
+        view_count: 67100,
+        channel: "@JoeDanielsPodcastshow",
+        requires_verification: true,
+        is_live: false,
+        is_premium: false
+      },
+      {
+        id: `sermon_podcast_${now}_2`,
+        title: "Courage in Crisis: Controversial Faith & Modern Pressures",
+        speaker: "Apostle Joe Daniels",
+        date: "Podcast Episode 45",
+        series: "Youth & Purpose",
+        duration: "49m",
+        youtube_id: "2qN_fUdfh4Q",
+        thumbnail_url: "https://img.youtube.com/vi/2qN_fUdfh4Q/hqdefault.jpg",
+        scriptures: ["Daniel 3:16-18", "1 Corinthians 16:13"],
+        description: "The Joe Daniels Podcast Show: Frank conversations about church, culture, and unapologetic Christian living.",
+        view_count: 59200,
+        channel: "@JoeDanielsPodcastshow",
+        requires_verification: true,
+        is_live: false,
+        is_premium: false
+      }
+    ];
+
+    const targetList = channel === '@JoeDanielsPodcastshow' ? samplePodcast : sampleOfficial;
+    const toAdd = targetList.filter(s => !existingIds.has(s.id));
+    toAdd.forEach(s => this.addSermon(s));
+    return { count: toAdd.length, imported: toAdd };
   }
 
   static addSermon(sermon: Sermon): void {
@@ -2952,13 +3051,17 @@ export class StorageService {
   static canAccessSermonLibrary(user?: User | null): boolean {
     const u = user || this.getCurrentUser();
     if (!u) return false;
-    // Administrative & ministerial roles always have access
-    if (['super_admin', 'developer', 'pastor', 'elder', 'admin'].includes(u.role)) return true;
-    // Blue, Silver, or Gold badge holder
-    if (u.badge_type === 'gold' || u.badge_type === 'silver' || u.badge_type === 'blue') return true;
-    if (u.verified_badge === 'gold' || u.verified_badge === 'silver' || u.verified_badge === 'blue') return true;
-    // Verified status (default blue badge) or active premium covenant partner
-    if (u.is_verified || this.isUserPremiumActive(u)) return true;
+    // Administrative & ministerial leadership roles always have access
+    if (['super_admin', 'developer', 'pastor', 'admin'].includes(u.role) ||
+        u.id === 'usr_developer' || u.id === 'usr_apostle_joe' ||
+        (typeof this.isDeveloperMode === 'function' && this.isDeveloperMode())) {
+      return true;
+    }
+    // STRICT ACCESS CONTROL: Only paid members with Blue or Gold verification can watch the library!
+    // Silver or unverified users can view the library catalog, but cannot play restricted videos.
+    const badge = u.badge_type || u.verified_badge;
+    if (badge === 'gold' || badge === 'blue') return true;
+    if (u.is_verified && (!badge || badge === 'blue')) return true;
     return false;
   }
 
@@ -3082,7 +3185,6 @@ export class StorageService {
         window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
         window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
       }
-    }
   }
 
   static formatPhoneWithCountryCode(rawPhone: string, code = '+263'): string {
@@ -5350,10 +5452,6 @@ export class StorageService {
     return { success: true, newCode, message: 'Invite link reset successfully. Previous link is now invalid.', group: grp };
   }
 
-  static deleteGroup(groupId: string): { success: boolean; message: string } {
-    return this.deleteChatGroup(groupId);
-  }
-
   static deleteChatGroup(groupId: string): { success: boolean; message: string } {
     // Add to dissolved groups registry
     const dissolved = getLocal<string[]>(KEYS.DISSOLVED_GROUPS, []);
@@ -6460,6 +6558,7 @@ export class StorageService {
       const p = payload as any;
       const isFollowing = p?.isFollowing !== undefined ? Boolean(p?.isFollowing) : Boolean(p?.is_following !== false);
       this.syncFollowsRecordFromRealtime(isFollowing ? 'INSERT' : 'DELETE', p);
+    }
     } else {
       const eventName = type === 'story'
           ? 'gcz_story_updated'

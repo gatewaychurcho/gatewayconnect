@@ -240,9 +240,6 @@ export class SupabaseSyncService {
         metadata: { post_id: postId, reaction: reactionType, timestamp: new Date().toISOString() }
       });
       return !error;
-    } catch {
-      return false;
-    }
   }
 
   /**
@@ -2498,21 +2495,6 @@ export class SupabaseSyncService {
         event: 'church_page_post_created',
         payload: { post }
       }).catch(() => {});
-    }
-  }
-
-  /**
-   * Deletes a chat group from Supabase
-   */
-  static async deleteGroup(groupId: string): Promise<boolean> {
-    const supabase = getSupabase();
-    if (!supabase) return false;
-    try {
-      await supabase.from('chat_groups').delete().eq('id', groupId);
-      await supabase.from('community_groups').delete().eq('id', groupId);
-      return true;
-    } catch {
-      return false;
     }
   }
 }
