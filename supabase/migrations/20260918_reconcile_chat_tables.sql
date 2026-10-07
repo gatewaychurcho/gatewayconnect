@@ -83,11 +83,32 @@ BEGIN
 END $$;
 
 -- -----------------------------------------------------------------------------
--- 4b. Drop legacy NOT NULL constraints on columns the app no longer writes
 -- -----------------------------------------------------------------------------
-ALTER TABLE public.messages ALTER COLUMN user_id DROP NOT NULL;
-ALTER TABLE public.direct_messages ALTER COLUMN content DROP NOT NULL;
-ALTER TABLE public.profile_pictures ALTER COLUMN url DROP NOT NULL;
+-- 4b. Drop legacy NOT NULL constraints on columns the app no longer writes (safe check)
+-- -----------------------------------------------------------------------------
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'messages' AND column_name = 'user_id'
+    ) THEN
+        ALTER TABLE public.messages ALTER COLUMN user_id DROP NOT NULL;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'direct_messages' AND column_name = 'content'
+    ) THEN
+        ALTER TABLE public.direct_messages ALTER COLUMN content DROP NOT NULL;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'profile_pictures' AND column_name = 'url'
+    ) THEN
+        ALTER TABLE public.profile_pictures ALTER COLUMN url DROP NOT NULL;
+    END IF;
+END $$;
 
 -- -----------------------------------------------------------------------------
 -- 5. Re-assert grants + realtime for the reconciled tables

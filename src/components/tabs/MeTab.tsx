@@ -271,6 +271,7 @@ export const MeTab: React.FC<MeTabProps> = ({
     setFollowersList(StorageService.getFollowersList(freshUser.id));
     setFollowingList(StorageService.getFollowingList(freshUser.id));
     setFollowersUsers(StorageService.getFollowersUsers(freshUser.id));
+    StorageService.syncFollowsForUser(freshUser.id).catch(() => {});
 
     // Offline downloads & saved verses
     setDownloadedSermons(StorageService.getDownloadedSermons());

@@ -142,13 +142,29 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     };
   }, [currentUser?.id]);
 
-  const [broadcastLikes, setBroadcastLikes] = useState<string[]>(() => StorageService.getBroadcastLikes());
-  const [broadcastLikers, setBroadcastLikers] = useState<User[]>(() => StorageService.getBroadcastLikerUsers());
-  const [isPostLiked, setIsPostLiked] = useState<boolean>(() => StorageService.hasUserLikedBroadcast(currentUser?.id));
+  const playingMediaId = useMemo(() => {
+    if (liveSermonStatus.isLive) return 'live_broadcast';
+    if (overridePlayingVideo?.id) return overridePlayingVideo.id;
+    if (activeSermon?.id) return activeSermon.id;
+    return 'sermon_main';
+  }, [liveSermonStatus.isLive, overridePlayingVideo?.id, activeSermon?.id]);
+
+  const [broadcastLikes, setBroadcastLikes] = useState<string[]>(() => StorageService.getMediaLikes(liveSermonStatus.isLive ? 'live_broadcast' : (overridePlayingVideo?.id || activeSermon?.id || 'sermon_main')));
+  const [broadcastLikers, setBroadcastLikers] = useState<User[]>(() => StorageService.getMediaLikerUsers(liveSermonStatus.isLive ? 'live_broadcast' : (overridePlayingVideo?.id || activeSermon?.id || 'sermon_main')));
+  const [isPostLiked, setIsPostLiked] = useState<boolean>(() => StorageService.hasUserLikedMedia(liveSermonStatus.isLive ? 'live_broadcast' : (overridePlayingVideo?.id || activeSermon?.id || 'sermon_main'), currentUser?.id));
   const [heartAnim, setHeartAnim] = useState<boolean>(false);
   const [isSermonSaved, setIsSermonSaved] = useState<boolean>(false);
   const [showPostOptions, setShowPostOptions] = useState<boolean>(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  // Synchronize media likes whenever the playing video/sermon changes
+  useEffect(() => {
+    const likes = StorageService.getMediaLikes(playingMediaId);
+    setBroadcastLikes(likes);
+    setBroadcastLikers(StorageService.getMediaLikerUsers(playingMediaId));
+    setIsPostLiked(StorageService.hasUserLikedMedia(playingMediaId, currentUser?.id));
+    StorageService.syncMediaLikesFromSupabase(playingMediaId);
+  }, [playingMediaId, currentUser?.id]);
 
   // Compute daily devotional dynamically based on the current calendar day
   const currentDevotional = React.useMemo(() => {
@@ -207,9 +223,19 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     };
 
     const handleBroadcastLikesUpdated = () => {
-      setBroadcastLikes(StorageService.getBroadcastLikes());
-      setBroadcastLikers(StorageService.getBroadcastLikerUsers());
-      setIsPostLiked(StorageService.hasUserLikedBroadcast(currentUser?.id));
+      const likes = StorageService.getMediaLikes(playingMediaId);
+      setBroadcastLikes(likes);
+      setBroadcastLikers(StorageService.getMediaLikerUsers(playingMediaId));
+      setIsPostLiked(StorageService.hasUserLikedMedia(playingMediaId, currentUser?.id));
+    };
+
+    const handleMediaLikesUpdated = (e: any) => {
+      if (!e?.detail?.mediaId || e.detail.mediaId === playingMediaId) {
+        const likes = e?.detail?.likerIds || StorageService.getMediaLikes(playingMediaId);
+        setBroadcastLikes(likes);
+        setBroadcastLikers(e?.detail?.likerUsers || StorageService.getMediaLikerUsers(playingMediaId));
+        setIsPostLiked(likes.includes(currentUser?.id));
+      }
     };
 
     const handleReactionsUpdated = (e: any) => {
@@ -227,6 +253,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     window.addEventListener('gcz_live_status_updated', handleLiveStatusChange);
     window.addEventListener('gcz_live_broadcast_started', handleLiveStatusChange);
     window.addEventListener('gcz_broadcast_likes_updated', handleBroadcastLikesUpdated);
+    window.addEventListener('gcz_media_likes_updated', handleMediaLikesUpdated);
     window.addEventListener('gcz_broadcast_reactions_updated', handleReactionsUpdated);
 
     return () => {
@@ -237,9 +264,10 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       window.removeEventListener('gcz_live_status_updated', handleLiveStatusChange);
       window.removeEventListener('gcz_live_broadcast_started', handleLiveStatusChange);
       window.removeEventListener('gcz_broadcast_likes_updated', handleBroadcastLikesUpdated);
+      window.removeEventListener('gcz_media_likes_updated', handleMediaLikesUpdated);
       window.removeEventListener('gcz_broadcast_reactions_updated', handleReactionsUpdated);
     };
-  }, [currentUser?.id]);
+  }, [currentUser?.id, playingMediaId]);
 
   // Real-time viewer attendance tracking when watching live broadcast on HomeTab
   useEffect(() => {
@@ -298,10 +326,8 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       if (event.type === 'stream_reaction' && event.payload) {
         const { emoji } = event.payload;
         if (emoji) {
-          setActiveReactionCount(prev => ({
-            ...prev,
-            [emoji]: (prev[emoji] || 0) + 1
-          }));
+          const updated = StorageService.recordBroadcastReaction(emoji);
+          setActiveReactionCount(updated);
           confetti({
             particleCount: 12,
             spread: 35,
@@ -341,6 +367,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       type: 'stream_reaction',
       payload: { emoji, reactionType, user: currentUser?.full_name || 'Believer' }
     });
+    SupabaseSyncService.broadcastStreamReaction(emoji);
   };
 
   const handleToggleComments = () => {
@@ -403,9 +430,9 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   };
 
   const handleTogglePostHeart = () => {
-    const res = StorageService.toggleBroadcastLike(currentUser?.id);
+    const res = StorageService.toggleMediaLike(playingMediaId, currentUser?.id);
     setIsPostLiked(res.isLiked);
-    setBroadcastLikes(StorageService.getBroadcastLikes());
+    setBroadcastLikes(res.likerIds);
     setBroadcastLikers(res.likerUsers);
     if (res.isLiked) {
       setHeartAnim(true);
@@ -415,6 +442,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         type: 'stream_reaction',
         payload: { emoji: '❤️', reactionType: 'love', user: currentUser?.full_name || 'Believer' }
       });
+      SupabaseSyncService.broadcastStreamReaction('❤️');
     }
   };
 
@@ -1650,301 +1678,37 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         </div>
       </div>
 
-      {/* 6. Sermon Archive & Apostolic Messages */}
-      <div id="sermon-archive-section" className="space-y-4 pt-2">
-        
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* 6. Apostolic Sermons Video Library Direct Link */}
+      <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border border-primary/20 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+        <div className="flex items-center gap-3 text-left">
+          <div className="w-12 h-12 rounded-xl bg-primary/20 border border-primary/30 text-primary flex items-center justify-center font-bold shrink-0 shadow-xs">
+            <Tv className="w-6 h-6 text-primary" />
+          </div>
           <div>
-            <h3 className="text-base sm:text-xl font-bold text-foreground flex items-center gap-2">
-              <span>Sermon Archive & Apostolic Word</span>
-              {!isPremiumActive ? (
-                <button
-                  onClick={() => setShowBadgeUpgradeModal(true)}
-                  className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-400/40 flex items-center gap-1 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
-                >
-                  <Crown className="w-3 h-3 fill-current" />
-                  <span>Buy Pro</span>
-                </button>
-              ) : (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  <span>Unlocked</span>
-                </span>
-              )}
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Prophetic teachings, apostolic series, and high-fidelity video archives.
+            <div className="flex items-center gap-2">
+              <h4 className="font-bold text-sm sm:text-base text-foreground">
+                Apostolic Sermons Video Library
+              </h4>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-primary/20 text-primary border border-primary/30">
+                200+ Videos
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Explore the complete searchable library of apostolic series, Sunday services, and prophetic decrees in the dedicated Sermons tab.
             </p>
           </div>
-
-          {/* Search Box */}
-          <div className="relative w-full sm:w-64">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search sermons, scriptures..."
-              className="w-full bg-card border border-border rounded-xl pl-8.5 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary shadow-xs"
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
         </div>
 
-        {/* Series Filter Selector */}
-        <div className="flex items-center gap-1.5 p-1 bg-secondary/60 rounded-xl border border-border overflow-x-auto no-scrollbar">
-          {uniqueSeries.map((series) => (
-            <button
-              key={series}
-              onClick={() => setSelectedSeries(series)}
-              className={cn(
-                'px-3 py-1 rounded-lg text-xs font-medium tracking-wide shrink-0 transition-all uppercase cursor-pointer select-none',
-                selectedSeries === series
-                  ? 'bg-background text-foreground shadow-xs font-semibold'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary/40'
-              )}
-            >
-              {series}
-            </button>
-          ))}
-        </div>
-
-        {/* Premium Banner */}
-        {!isPremiumActive ? (
-          <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/15 border border-amber-400/50 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0 border border-amber-400/50 shadow-xs">
-                <Crown className="w-4 h-4 fill-current" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-foreground">
-                  <span>Pro Video Messages</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-400/25 text-amber-600 dark:text-amber-400 border border-amber-400/40">
-                    Pro
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                  Unlock full apostolic message recordings, high-quality audio, and offline downloads.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowBadgeUpgradeModal(true)}
-              className="px-4 py-2 rounded-full bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 font-bold text-xs shadow-xs hover:brightness-110 active:scale-95 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
-            >
-              <Crown className="w-3.5 h-3.5 fill-current" />
-              <span>Buy Pro</span>
-            </button>
-          </div>
-        ) : (
-          <div className="px-3.5 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-2">
-              <Crown className="w-4 h-4 text-emerald-500 fill-current" />
-              <span className="font-semibold text-foreground">
-                Sermon Archive Unlocked • {badgeStatus.badgeType ? `${badgeStatus.badgeType.toUpperCase()} Badge Active` : 'Verified Partner Active'}
-              </span>
-            </div>
-            {badgeStatus.expiresAt && (
-              <span className="text-[11px] text-muted-foreground">
-                Expires: {new Date(badgeStatus.expiresAt).toLocaleDateString()}
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Sermons Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {filteredSermons.map((sermon) => {
-            const isDownloaded = offlineIds.includes(sermon.id);
-            const isCurrent = activeSermon.id === sermon.id;
-
-            return (
-              <div
-                key={sermon.id}
-                className={cn(
-                  'group rounded-2xl border bg-card text-card-foreground shadow-xs transition-all flex flex-col justify-between overflow-hidden hover:shadow-md hover:border-border/80',
-                  isCurrent ? 'border-primary' : 'border-border'
-                )}
-              >
-                <div className="p-3 sm:p-4 space-y-2.5">
-                  <div 
-                    onClick={() => {
-                      if (!isPremiumActive) {
-                        setShowBadgeUpgradeModal(true);
-                        return;
-                      }
-                      setActiveSermon(sermon);
-                      setOverridePlayingVideo({
-                        id: sermon.id,
-                        title: sermon.title,
-                        youtube_id: sermon.youtube_id,
-                        video_url: sermon.video_url,
-                        audio_url: sermon.audio_url,
-                        thumbnail_url: sermon.thumbnail_url,
-                        speaker: sermon.speaker,
-                        series: sermon.series
-                      });
-                      if (videoPlayerRef.current) {
-                        videoPlayerRef.current.scrollIntoView({ behavior: 'smooth' });
-                      }
-                    }}
-                    className="relative aspect-video rounded-xl overflow-hidden bg-black cursor-pointer group"
-                  >
-                    <img
-                      src={sermon.thumbnail_url}
-                      alt={sermon.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      loading="lazy"
-                    />
-
-                    <div 
-                      className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-xs border border-amber-400/40 text-amber-400 text-[10px] font-bold tracking-wider uppercase shadow-xs z-15"
-                      title="Pro Sermon Video"
-                    >
-                      <Crown className="w-3 h-3 fill-current text-amber-400" />
-                      <span>PRO</span>
-                    </div>
-
-                    {!isPremiumActive ? (
-                      <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px] flex flex-col items-center justify-center p-3 text-center transition-all group-hover:bg-slate-950/80 z-10">
-                        <div className="w-9 h-9 rounded-full bg-amber-500/20 border border-amber-400/50 flex items-center justify-center mb-1 text-amber-400 shadow-xs">
-                          <Crown className="w-4 h-4 fill-current" />
-                        </div>
-                        <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1">
-                          Buy Pro
-                        </span>
-                        <span className="text-[10px] text-muted-foreground mt-0.5">
-                          Tap to unlock sermon archive
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="absolute inset-0 bg-black/30 group-hover:bg-black/15 flex items-center justify-center transition-colors">
-                        <div className="w-10 h-10 rounded-full bg-background/90 backdrop-blur-xs text-foreground flex items-center justify-center shadow-md group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-200">
-                          <Play className="w-4 h-4 fill-current ml-0.5" />
-                        </div>
-                      </div>
-                    )}
-                    
-                    <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-background/85 backdrop-blur-md text-[10px] font-semibold text-foreground border border-border z-15">
-                      {sermon.duration}
-                    </span>
-
-                    {overridePlayingVideo?.id === sermon.id ? (
-                      <span className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary text-[10px] font-bold text-primary-foreground shadow-xs animate-pulse z-15">
-                        ▶ NOW PLAYING ON TOP
-                      </span>
-                    ) : isDownloaded ? (
-                      <span className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/90 text-[10px] font-bold text-white shadow-xs z-15">
-                        <Check className="w-3 h-3" />
-                        Downloaded
-                      </span>
-                    ) : null}
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] font-bold text-primary uppercase tracking-wider">
-                      {sermon.series}
-                    </span>
-                    <h4 className="text-xs sm:text-sm font-semibold text-foreground line-clamp-2 mt-1">
-                      {sermon.title}
-                    </h4>
-                    <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
-                      {sermon.description}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="px-4 py-2.5 bg-secondary/30 border-t border-border flex items-center justify-between">
-                  <button
-                    onClick={() => {
-                      if (!isPremiumActive) {
-                        setShowBadgeUpgradeModal(true);
-                        return;
-                      }
-                      setActiveSermon(sermon);
-                      setOverridePlayingVideo({
-                        id: sermon.id,
-                        title: sermon.title,
-                        youtube_id: sermon.youtube_id,
-                        video_url: sermon.video_url,
-                        audio_url: sermon.audio_url,
-                        thumbnail_url: sermon.thumbnail_url,
-                        speaker: sermon.speaker,
-                        series: sermon.series
-                      });
-                      if (videoPlayerRef.current) {
-                        videoPlayerRef.current.scrollIntoView({ behavior: 'smooth' });
-                      }
-                    }}
-                    className={cn(
-                      "px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 text-xs font-semibold",
-                      !isPremiumActive
-                        ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-400/30"
-                        : overridePlayingVideo?.id === sermon.id
-                          ? "bg-primary text-primary-foreground shadow-xs"
-                          : "bg-secondary hover:bg-secondary/80 text-foreground border border-border"
-                    )}
-                  >
-                    {!isPremiumActive ? (
-                      <>
-                        <Lock className="w-3.5 h-3.5 text-amber-500" />
-                        <span>Unlock Pro</span>
-                      </>
-                    ) : overridePlayingVideo?.id === sermon.id ? (
-                      <>
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>Playing On Top</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>Watch on Top</span>
-                      </>
-                    )}
-                  </button>
-
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      id={`btn-download-sermon-${sermon.id}`}
-                      onClick={() => {
-                        if (!isPremiumActive) {
-                          setShowBadgeUpgradeModal(true);
-                          return;
-                        }
-                        handleToggleDownload(sermon.id);
-                      }}
-                      className={cn(
-                        'p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center',
-                        isDownloaded 
-                          ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30' 
-                          : 'bg-secondary hover:bg-secondary/80 text-foreground border border-border'
-                      )}
-                      title={!isPremiumActive ? "Buy Pro to download" : isDownloaded ? "Remove from offline storage" : "Save for offline listening"}
-                    >
-                      {isDownloaded ? <Check className="w-4 h-4" /> : <Download className="w-4 h-4" />}
-                    </button>
-                    
-                    <button
-                      onClick={() => handleShareWhatsApp(sermon.title, sermon.description)}
-                      className="p-2 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground border border-border transition-all cursor-pointer flex items-center justify-center"
-                      title="Share message to WhatsApp"
-                    >
-                      <Send className="w-4 h-4 -rotate-45 text-emerald-500" />
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-            );
-          })}
-        </div>
-
+        <button
+          onClick={() => onNavigateTab('sermons')}
+          className="px-4 py-2.5 rounded-xl bg-primary hover:brightness-105 text-primary-foreground font-bold text-xs shadow-xs transition-all active:scale-95 shrink-0 cursor-pointer flex items-center gap-1.5"
+          title="Open Sermons Tab"
+        >
+          <Play className="w-4 h-4 fill-current" />
+          <span>Go to Sermons</span>
+        </button>
       </div>
+
 
       {/* 7. 1-on-1 Pastoral Consultation Banner */}
       <div className="bg-card border border-border p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">

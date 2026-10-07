@@ -409,6 +409,14 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
     setFollowingCount(StorageService.getUserFollowingCount(found.id));
     setFollowersUsers(StorageService.getFollowersUsers(found.id));
 
+    // Sync latest persistent follows from Supabase
+    StorageService.syncFollowsForUser(found.id).then(() => {
+      setFollowersCount(StorageService.getUserFollowersCount(found.id));
+      setFollowingCount(StorageService.getUserFollowingCount(found.id));
+      setFollowersUsers(StorageService.getFollowersUsers(found.id));
+      setIsFollowing(StorageService.isFollowingUser(currentUser.id, found.id));
+    }).catch(() => {});
+
     // User Posts
     const allTestimonies = StorageService.getTestimonies();
     const matches = allTestimonies.filter((t) =>
@@ -467,6 +475,16 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
 
   useEffect(() => {
     if (!profileUser || !showFollowsListModal) return;
+    StorageService.syncFollowsForUser(profileUser.id).then(() => {
+      if (showFollowsListModal === 'followers') {
+        const list = StorageService.getFollowersUsers(profileUser.id);
+        setFollowsUsersList(list);
+      } else {
+        const list = StorageService.getFollowingUsers(profileUser.id);
+        setFollowsUsersList(list);
+      }
+    }).catch(() => {});
+
     if (showFollowsListModal === 'followers') {
       const list = StorageService.getFollowersUsers(profileUser.id);
       setFollowsUsersList(list);

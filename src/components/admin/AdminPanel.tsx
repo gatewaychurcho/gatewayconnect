@@ -52,9 +52,11 @@ import {
   Headphones,
   Film,
   Camera,
-  Image as ImageIcon
+  Image as ImageIcon,
+  BarChart3
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { VideoAnalyticsDashboard } from './VideoAnalyticsDashboard';
 import { 
   User, 
   UserRole, 
@@ -134,6 +136,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   const [showAdminStreamPreview, setShowAdminStreamPreview] = useState<boolean>(false);
   const [isUploadingMp4, setIsUploadingMp4] = useState<boolean>(false);
   const [mp4UploadFeedback, setMp4UploadFeedback] = useState<string | null>(null);
+  const [showVideoAnalytics, setShowVideoAnalytics] = useState<boolean>(false);
   const congregationMp4InputRef = useRef<HTMLInputElement>(null);
 
   // Avatars and Thumbnails Library Management States
@@ -185,11 +188,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       setLiveSermonStatus(StorageService.getLiveSermonStatus());
       setAdminStreamUrl(StorageService.getLiveStreamUrl());
       setChurchPages(StorageService.getPages());
+      setTestimonies(StorageService.getTestimonies());
     };
+
+    // Auto-hydrate live registered accounts from Supabase PostgreSQL on mount
+    StorageService.syncUsersWithRemote().then(() => {
+      setUsers(StorageService.getAllUsers());
+    }).catch(() => {});
 
     window.addEventListener('gcz_user_profile_updated', refreshAdminData);
     window.addEventListener('gcz_user_registered', refreshAdminData);
     window.addEventListener('gcz_users_synced', refreshAdminData);
+    window.addEventListener('gcz_user_deleted', refreshAdminData);
     window.addEventListener('gcz_banned_users_updated', refreshAdminData);
     window.addEventListener('gcz_donations_updated', refreshAdminData);
     window.addEventListener('gcz_donation_updated', refreshAdminData);
@@ -203,11 +213,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     window.addEventListener('gcz_stream_url_updated', refreshAdminData);
     window.addEventListener('gcz_override_video_updated', refreshAdminData);
     window.addEventListener('gcz_church_pages_updated', refreshAdminData);
+    window.addEventListener('gcz_testimony_deleted', refreshAdminData);
+    window.addEventListener('gcz_testimony_updated', refreshAdminData);
+    window.addEventListener('gcz_testimony_created', refreshAdminData);
 
     return () => {
       window.removeEventListener('gcz_user_profile_updated', refreshAdminData);
       window.removeEventListener('gcz_user_registered', refreshAdminData);
       window.removeEventListener('gcz_users_synced', refreshAdminData);
+      window.removeEventListener('gcz_user_deleted', refreshAdminData);
       window.removeEventListener('gcz_banned_users_updated', refreshAdminData);
       window.removeEventListener('gcz_donations_updated', refreshAdminData);
       window.removeEventListener('gcz_donation_updated', refreshAdminData);
@@ -221,6 +235,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       window.removeEventListener('gcz_stream_url_updated', refreshAdminData);
       window.removeEventListener('gcz_override_video_updated', refreshAdminData);
       window.removeEventListener('gcz_church_pages_updated', refreshAdminData);
+      window.removeEventListener('gcz_testimony_deleted', refreshAdminData);
+      window.removeEventListener('gcz_testimony_updated', refreshAdminData);
+      window.removeEventListener('gcz_testimony_created', refreshAdminData);
     };
   }, []);
 
@@ -362,6 +379,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
         setTestimonies(StorageService.getTestimonies());
         setModerationMessage('Post permanently removed by Moderator.');
         onRefreshAppState();
+      }
+    });
+  };
+
+  const handlePurgeOldPosts = () => {
+    setAdminConfirmModal({
+      title: 'Purge Posts Older Than 6 Days',
+      message: 'Permanently delete all community posts older than 6 days from Web, Android, Supabase database, and storage buckets? This removes all records and media files with zero orphaned files left.',
+      confirmLabel: 'Purge Old Posts',
+      onConfirm: () => {
+        const res = StorageService.purgeOldPosts(6);
+        setTestimonies(StorageService.getTestimonies());
+        setModerationMessage(`Successfully purged ${res.deletedCount} posts older than 6 days permanently.`);
+        onRefreshAppState();
+        confetti({ particleCount: 40, spread: 60 });
       }
     });
   };
@@ -3434,14 +3466,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
           {activeSection === 'content_moderation' && (
             <div className="space-y-4">
               <div className="bg-card border border-white/10 rounded-2xl overflow-hidden shadow-sm">
-                <div className="p-3.5 bg-card border-b border-white/10 flex items-center justify-between">
+                <div className="p-3.5 bg-card border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                   <div className="flex items-center gap-2">
                     <Trash2 className="w-4 h-4 text-emerald-400" />
                     <span className="text-xs font-bold text-white">Community Post Content Moderation ({testimonies.length})</span>
                   </div>
-                  <span className="text-[10px] text-white/50">
-                    Direct deletion removes post immediately from the global community feed
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowVideoAnalytics(true)}
+                      className="px-3 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                      title="Open YouTube Studio Video Analytics"
+                    >
+                      <BarChart3 className="w-3.5 h-3.5" />
+                      <span>Video Analytics</span>
+                    </button>
+                    <button
+                      onClick={handlePurgeOldPosts}
+                      className="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                      title="Purge all community posts older than 6 days from platform & storage"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Purge Posts &gt; 6 Days</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="divide-y divide-white/5">
@@ -4119,6 +4166,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
           </div>
         </div>
       )}
+
+      {/* Video Analytics Dashboard Modal */}
+      <VideoAnalyticsDashboard
+        isOpen={showVideoAnalytics}
+        onClose={() => setShowVideoAnalytics(false)}
+      />
 
     </div>
   );

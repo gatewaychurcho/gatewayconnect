@@ -394,6 +394,9 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   const [postFile, setPostFile] = useState<File | null>(null);
   const [storyFile, setStoryFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
+  const isSubmittingPostRef = useRef<boolean>(false);
+  const lastSubmittedPostRef = useRef<string>('');
+  const lastSubmitTimeRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Prayer submission modal
@@ -453,6 +456,28 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     return () => clearInterval(timer);
   }, []);
 
+  // Sync users with remote Supabase on mount and listen for real-time user updates
+  useEffect(() => {
+    const refreshUsers = () => {
+      setAllRegisteredUsers(StorageService.getAllUsers());
+    };
+    StorageService.syncUsersWithRemote()
+      .catch(() => {})
+      .finally(() => {
+        refreshUsers();
+      });
+    window.addEventListener('gcz_users_synced', refreshUsers);
+    window.addEventListener('gcz_user_profile_updated', refreshUsers);
+    window.addEventListener('gcz_user_registered', refreshUsers);
+    window.addEventListener('gcz_user_deleted', refreshUsers);
+    return () => {
+      window.removeEventListener('gcz_users_synced', refreshUsers);
+      window.removeEventListener('gcz_user_profile_updated', refreshUsers);
+      window.removeEventListener('gcz_user_registered', refreshUsers);
+      window.removeEventListener('gcz_user_deleted', refreshUsers);
+    };
+  }, []);
+
   // Group filter
   const [selectedGroupCategory, setSelectedGroupCategory] = useState<string>('All');
 
@@ -500,56 +525,72 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isUploading || isSubmittingPostRef.current) return;
     if (!postContent.trim()) return;
 
-    setIsUploading(true);
-    let finalImageUrl = postImageUrl;
-    let finalVideoUrl = postVideoUrl;
-
-    if (postFile) {
-      const uploadedUrl = await StorageBucketService.uploadFileToMediaBucket(postFile);
-      if (uploadedUrl) {
-        if (mediaType === 'video') finalVideoUrl = uploadedUrl;
-        else finalImageUrl = uploadedUrl;
-      }
-    }
-
     const currUser = StorageService.getCurrentUser() || currentUser;
-    const postingPage = selectedPostingPageId !== 'personal' 
-      ? StorageService.getPages().find(p => p.id === selectedPostingPageId)
-      : null;
+    const postSubmissionKey = `${currUser.id}_${postContent.trim()}`;
+    if (lastSubmittedPostRef.current === postSubmissionKey && Date.now() - lastSubmitTimeRef.current < 15000) {
+      console.warn('Preventing duplicate post submission within 15 seconds');
+      setShowCreatePostModal(false);
+      return;
+    }
+    lastSubmittedPostRef.current = postSubmissionKey;
+    lastSubmitTimeRef.current = Date.now();
 
-    // New posts start with 0 likes and 0 comments until liked/commented by real users
-    StorageService.submitTestimony({
-      user_id: currUser.id,
-      user_name: postingPage ? postingPage.name : (currUser.full_name || 'Covenant Member'),
-      user_handle: postingPage ? postingPage.handle : (currUser.handle || '@member'),
-      user_avatar: postingPage ? postingPage.avatar_url : (currUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg'),
-      page_id: postingPage ? postingPage.id : undefined,
-      page_name: postingPage ? postingPage.name : undefined,
-      page_handle: postingPage ? postingPage.handle : undefined,
-      page_avatar: postingPage ? postingPage.avatar_url : undefined,
-      category: postCategory,
-      title: postTitle.trim(),
-      content: postContent.trim(),
-      scripture_tag: postScriptureTag.trim(),
-      image_url: finalImageUrl,
-      video_url: finalVideoUrl
-    });
+    isSubmittingPostRef.current = true;
+    setIsUploading(true);
 
-    setTestimonyList(StorageService.getTestimonies());
-    
-    setShowCreatePostModal(false);
-    setPostTitle('');
-    setPostContent('');
-    setPostCategory('Praise & Testimony');
-    setPostScriptureTag('');
-    setPostImageUrl('');
-    setPostVideoUrl('');
-    setLocalImagePreview(null);
-    setPostFile(null);
-    setIsUploading(false);
-    confetti({ particleCount: 35, spread: 60 });
+    try {
+      let finalImageUrl = postImageUrl;
+      let finalVideoUrl = postVideoUrl;
+
+      if (postFile) {
+        const uploadedUrl = await StorageBucketService.uploadFileToMediaBucket(postFile);
+        if (uploadedUrl) {
+          if (mediaType === 'video') finalVideoUrl = uploadedUrl;
+          else finalImageUrl = uploadedUrl;
+        }
+      }
+
+      const postingPage = selectedPostingPageId !== 'personal' 
+        ? StorageService.getPages().find(p => p.id === selectedPostingPageId)
+        : null;
+
+      // New posts start with 0 likes and 0 comments until liked/commented by real users
+      StorageService.submitTestimony({
+        user_id: currUser.id,
+        user_name: postingPage ? postingPage.name : (currUser.full_name || 'Covenant Member'),
+        user_handle: postingPage ? postingPage.handle : (currUser.handle || '@member'),
+        user_avatar: postingPage ? postingPage.avatar_url : (currUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg'),
+        page_id: postingPage ? postingPage.id : undefined,
+        page_name: postingPage ? postingPage.name : undefined,
+        page_handle: postingPage ? postingPage.handle : undefined,
+        page_avatar: postingPage ? postingPage.avatar_url : undefined,
+        category: postCategory,
+        title: postTitle.trim(),
+        content: postContent.trim(),
+        scripture_tag: postScriptureTag.trim(),
+        image_url: finalImageUrl,
+        video_url: finalVideoUrl
+      });
+
+      setTestimonyList(StorageService.getTestimonies());
+      
+      setShowCreatePostModal(false);
+      setPostTitle('');
+      setPostContent('');
+      setPostCategory('Praise & Testimony');
+      setPostScriptureTag('');
+      setPostImageUrl('');
+      setPostVideoUrl('');
+      setLocalImagePreview(null);
+      setPostFile(null);
+      confetti({ particleCount: 35, spread: 60 });
+    } finally {
+      setIsUploading(false);
+      isSubmittingPostRef.current = false;
+    }
   };
 
 
@@ -1446,7 +1487,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     />
                     <div className="flex items-center justify-center gap-1 w-full">
                       <p className="text-xs font-semibold text-foreground truncate">{page.name}</p>
-                      <VerifiedBadge type="official" size="xs" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                     </div>
                     <p className="text-[10px] text-muted-foreground truncate w-full mb-2">{page.handle}</p>
                     <button
@@ -1468,7 +1509,11 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
               {allRegisteredUsers.filter(u => u.id !== currentUser.id && u.role !== 'guest').slice(0, 10).map(u => {
                 const isFollowing = followingUsers[u.id];
-                const hasVerifiedBadge = u.verified_badge || (u.role === 'apostle' || u.role === 'super_admin' || u.role === 'pastor' || (u as any).verified ? 'official' : undefined);
+                const grantedBadge: 'gold' | 'silver' | 'blue' | 'none' = 
+                  (u.badge_type && u.badge_type !== 'none') ? u.badge_type :
+                  (u.verified_badge && u.verified_badge !== 'none') ? u.verified_badge :
+                  (u.id === 'usr_apostle_joe' || u.role === 'super_admin' || u.role === 'developer') ? 'gold' :
+                  (u.is_verified ? (u.badge_type || 'blue') : 'none');
                 return (
                   <div
                     key={u.id}
@@ -1481,7 +1526,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     />
                     <div className="flex items-center justify-center gap-1 w-full">
                       <p className="text-xs font-semibold text-foreground truncate">{u.full_name}</p>
-                      {hasVerifiedBadge && <VerifiedBadge type={hasVerifiedBadge as any} size="xs" />}
+                      {grantedBadge !== 'none' && <VerifiedBadge type={grantedBadge} size="xs" />}
                     </div>
                     <p className="text-[10px] text-muted-foreground truncate w-full mb-2">{u.handle}</p>
                     <button
@@ -1508,7 +1553,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 post.user_name.toLowerCase().includes('apostle');
               
               const isLikedByMe = post.liked_user_ids?.includes(currentUser.id) || post.user_liked;
-              const likesCount = post.likes_count || (post.liked_user_ids ? post.liked_user_ids.length : 0);
+              const likesCount = Math.max(post.likes_count || 0, post.liked_user_ids ? post.liked_user_ids.length : 0);
               const isSaved = savedPosts[post.id];
               const comments = post.comments || [];
               const hasComments = comments.length > 0;
@@ -1560,9 +1605,17 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                               Page
                             </span>
                           )}
-                          {(post.verified_by_church || isApostlePost) && !post.page_id && (
-                            <VerifiedBadge type="gold" size="xs" />
-                          )}
+                          {(() => {
+                            if (post.page_id) return null;
+                            const postAuthorUser = allRegisteredUsers.find(u => u.id === post.user_id || (post.user_handle && u.handle === post.user_handle));
+                            const grantedBadge: 'gold' | 'silver' | 'blue' | 'none' = 
+                              (postAuthorUser?.badge_type && postAuthorUser.badge_type !== 'none') ? postAuthorUser.badge_type :
+                              (postAuthorUser?.verified_badge && postAuthorUser.verified_badge !== 'none') ? postAuthorUser.verified_badge :
+                              (post.user_id === 'usr_apostle_joe' || isApostlePost || postAuthorUser?.role === 'super_admin' || postAuthorUser?.role === 'developer') ? 'gold' :
+                              (postAuthorUser?.is_verified ? (postAuthorUser.badge_type || 'blue') : 'none');
+                            if (!grantedBadge || grantedBadge === 'none') return null;
+                            return <VerifiedBadge type={grantedBadge} size="xs" />;
+                          })()}
                         </div>
                         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                           <span className="font-medium">
@@ -2948,10 +3001,13 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                  disabled={isUploading}
+                  className={`px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold flex items-center gap-1.5 shadow-sm transition-opacity ${
+                    isUploading ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Publish to Feed</span>
+                  <Send className={`w-3.5 h-3.5 ${isUploading ? 'animate-pulse' : ''}`} />
+                  <span>{isUploading ? 'Publishing...' : 'Publish to Feed'}</span>
                 </button>
               </div>
             </form>
@@ -3332,7 +3388,15 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                         <div>
                           <div className="flex items-center gap-1">
                             <span className="text-xs font-bold text-foreground">{user.full_name}</span>
-                            {user.verified_badge && <VerifiedBadge type={user.verified_badge} size="xs" />}
+                            {(() => {
+                              const grantedBadge: 'gold' | 'silver' | 'blue' | 'none' = 
+                                (user.badge_type && user.badge_type !== 'none') ? user.badge_type :
+                                (user.verified_badge && user.verified_badge !== 'none') ? user.verified_badge :
+                                (user.id === 'usr_apostle_joe' || user.role === 'super_admin' || user.role === 'developer') ? 'gold' :
+                                (user.is_verified ? (user.badge_type || 'blue') : 'none');
+                              if (!grantedBadge || grantedBadge === 'none') return null;
+                              return <VerifiedBadge type={grantedBadge} size="xs" />;
+                            })()}
                           </div>
                           <p className="text-[11px] text-muted-foreground">{user.handle}</p>
                         </div>

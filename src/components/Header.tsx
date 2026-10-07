@@ -91,6 +91,11 @@ export const Header: React.FC<HeaderProps> = ({
         return true;
       }).length;
       setUnreadNotifsCount(count);
+      try {
+        if (typeof window !== 'undefined' && (window as any).AndroidBridge?.updateBadgeCount) {
+          (window as any).AndroidBridge.updateBadgeCount(count);
+        }
+      } catch {}
     };
 
     updateSettingsAndCount();

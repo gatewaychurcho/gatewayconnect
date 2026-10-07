@@ -1,4 +1,4 @@
-export type TabType = 'home' | 'bible' | 'community' | 'store' | 'me';
+export type TabType = 'home' | 'sermons' | 'bible' | 'community' | 'store' | 'me';
 export type UserRole = 'guest' | 'member' | 'moderator' | 'admin' | 'super_admin' | 'developer' | 'pastor' | 'elder' | 'youth';
 export type BadgeType = 'gold' | 'silver' | 'blue' | 'none';
 
