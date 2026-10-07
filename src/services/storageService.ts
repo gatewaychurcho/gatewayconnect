@@ -67,6 +67,7 @@ import {
 } from '../data/mockData';
 import { SupabaseSyncService } from './supabaseSyncService';
 import { StorageBucketService } from './StorageBucketService';
+import { DEFAULT_SERMON_CATEGORIES, INITIAL_EXTENDED_SERMONS } from '../data/sermonCatalog';
 import { CONFIG } from '../../config';
 import { LocalMediaStore } from './localMediaStore';
 
@@ -146,11 +147,14 @@ const KEYS = {
   OVERRIDE_PLAYING_VIDEO: 'gcz_override_playing_video_v1',
   SAVED_POSTS: 'gcz_saved_posts_v1',
   BROADCAST_LIKES_TABLE: 'gcz_broadcast_likes_v1',
+  MEDIA_LIKES_TABLE: 'gcz_media_likes_table_v2',
   BROADCAST_REACTIONS_TABLE: 'gcz_broadcast_reactions_v1',
   CHURCH_PAGES: 'gcz_church_pages_v1',
   PAGE_POSTS: 'gcz_page_posts_v1',
   ADMIN_AVATAR_LIBRARY: 'gcz_admin_avatar_library_v1',
-  ADMIN_THUMBNAIL_LIBRARY: 'gcz_admin_thumbnail_library_v1'
+  ADMIN_THUMBNAIL_LIBRARY: 'gcz_admin_thumbnail_library_v1',
+  SERMON_CATEGORIES: 'gcz_sermon_categories_v1',
+  SERMON_ANALYTICS: 'gcz_sermon_analytics_v1'
 };
 
 export const DEFAULT_ADMIN_AVATARS: MediaLibraryItem[] = [
@@ -696,9 +700,15 @@ export class StorageService {
     setLocal(KEYS.LOW_DATA_MODE, val);
   }
 
-  // Sermons
+  // Sermons Library (Supports 200+ Videos)
   static getSermons(): Sermon[] {
-    const list = getLocal<Sermon[]>(KEYS.SERMONS, MOCK_SERMONS);
+    let list = getLocal<Sermon[]>(KEYS.SERMONS, INITIAL_EXTENDED_SERMONS);
+    if (!list || list.length < 20) {
+      const existingIds = new Set((list || []).map(s => s.id));
+      const additions = INITIAL_EXTENDED_SERMONS.filter(s => !existingIds.has(s.id));
+      list = [...(list || []), ...additions];
+      setLocal(KEYS.SERMONS, list);
+    }
     // Inject any cached IndexedDB object URLs if present
     return list.map(s => {
       const cached = LocalMediaStore.getCachedMediaUrl(s.id);
@@ -711,29 +721,154 @@ export class StorageService {
   }
 
   static addSermon(sermon: Sermon): void {
-    const sermons = getLocal<Sermon[]>(KEYS.SERMONS, MOCK_SERMONS);
+    const sermons = this.getSermons();
     const filtered = sermons.filter(s => s.id !== sermon.id);
     filtered.unshift(sermon);
     setLocal(KEYS.SERMONS, filtered);
-    window.dispatchEvent(new CustomEvent('gcz_sermon_added', { detail: sermon }));
-  }
-
-  static updateSermon(sermon: Sermon): void {
-    const sermons = getLocal<Sermon[]>(KEYS.SERMONS, MOCK_SERMONS);
-    const idx = sermons.findIndex(s => s.id === sermon.id);
-    if (idx !== -1) {
-      sermons[idx] = sermon;
-      setLocal(KEYS.SERMONS, sermons);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_sermon_added', { detail: sermon }));
       window.dispatchEvent(new CustomEvent('gcz_sermon_updated', { detail: sermon }));
     }
   }
 
+  static updateSermon(sermon: Sermon): void {
+    const sermons = this.getSermons();
+    const idx = sermons.findIndex(s => s.id === sermon.id);
+    if (idx !== -1) {
+      sermons[idx] = sermon;
+      setLocal(KEYS.SERMONS, sermons);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_sermon_updated', { detail: sermon }));
+      }
+    }
+  }
+
   static deleteSermon(sermonId: string): void {
-    const sermons = getLocal<Sermon[]>(KEYS.SERMONS, MOCK_SERMONS).filter(s => s.id !== sermonId);
+    const sermons = this.getSermons().filter(s => s.id !== sermonId);
     setLocal(KEYS.SERMONS, sermons);
     LocalMediaStore.deleteSermonMedia(sermonId).catch(() => {});
-    window.dispatchEvent(new CustomEvent('gcz_sermon_deleted', { detail: sermonId }));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_sermon_deleted', { detail: sermonId }));
+      window.dispatchEvent(new CustomEvent('gcz_sermon_updated', { detail: sermonId }));
+    }
   }
+
+  // Sermon Categories Management (Admin / Dev)
+  static getSermonCategories(): string[] {
+    const list = getLocal<string[]>(KEYS.SERMON_CATEGORIES, DEFAULT_SERMON_CATEGORIES);
+    if (!list || list.length === 0) {
+      setLocal(KEYS.SERMON_CATEGORIES, DEFAULT_SERMON_CATEGORIES);
+      return DEFAULT_SERMON_CATEGORIES;
+    }
+    return list;
+  }
+
+  static addSermonCategory(categoryName: string): boolean {
+    const clean = categoryName.trim();
+    if (!clean) return false;
+    const current = this.getSermonCategories();
+    if (current.some(c => c.toLowerCase() === clean.toLowerCase())) return false;
+    const updated = [...current, clean];
+    setLocal(KEYS.SERMON_CATEGORIES, updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_sermon_categories_updated', { detail: updated }));
+    }
+    return true;
+  }
+
+  static deleteSermonCategory(categoryName: string): boolean {
+    const current = this.getSermonCategories();
+    const updated = current.filter(c => c.toLowerCase() !== categoryName.toLowerCase());
+    setLocal(KEYS.SERMON_CATEGORIES, updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_sermon_categories_updated', { detail: updated }));
+    }
+    return true;
+  }
+
+  // YouTube Studio Video Analytics for Sermons
+  static recordSermonView(sermonId: string, isTopPlayer: boolean = false): void {
+    if (!sermonId) return;
+    try {
+      const analytics = getLocal<Record<string, { views: number; top_player_views: number; last_viewed: string }>>(
+        KEYS.SERMON_ANALYTICS,
+        {}
+      );
+      if (!analytics[sermonId]) {
+        analytics[sermonId] = { views: 0, top_player_views: 0, last_viewed: new Date().toISOString() };
+      }
+      analytics[sermonId].views += 1;
+      if (isTopPlayer) {
+        analytics[sermonId].top_player_views += 1;
+      }
+      analytics[sermonId].last_viewed = new Date().toISOString();
+      setLocal(KEYS.SERMON_ANALYTICS, analytics);
+
+      const allSermons = this.getSermons();
+      const target = allSermons.find(s => s.id === sermonId);
+      if (target) {
+        target.view_count = (target.view_count || 0) + 1;
+        setLocal(KEYS.SERMONS, allSermons);
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_sermon_view_recorded', {
+          detail: { sermonId, isTopPlayer, views: target?.view_count || analytics[sermonId].views }
+        }));
+      }
+
+      SupabaseSyncService.syncSermonView(sermonId, isTopPlayer).catch(() => {});
+    } catch {}
+  }
+
+  static getSermonAnalytics(): {
+    totalViews: number;
+    totalTopPlayerViews: number;
+    totalLikes: number;
+    mostViewedSermons: (Sermon & { calculatedViews: number; topPlayerViews: number })[];
+    mostLikedSermons: (Sermon & { calculatedLikes: number })[];
+    viewsMap: Record<string, { views: number; top_player_views: number }>;
+  } {
+    const sermons = this.getSermons();
+    const analytics = getLocal<Record<string, { views: number; top_player_views: number; last_viewed: string }>>(
+      KEYS.SERMON_ANALYTICS,
+      {}
+    );
+
+    let totalViews = 0;
+    let totalTopPlayerViews = 0;
+    let totalLikes = 0;
+
+    const enriched = sermons.map(s => {
+      const stats = analytics[s.id] || { views: 0, top_player_views: 0 };
+      const calculatedViews = Math.max(s.view_count || 0, stats.views);
+      totalViews += calculatedViews;
+      totalTopPlayerViews += stats.top_player_views;
+      const likesList = this.getMediaLikes(s.id);
+      const calculatedLikes = likesList.length;
+      totalLikes += calculatedLikes;
+
+      return {
+        ...s,
+        calculatedViews,
+        topPlayerViews: stats.top_player_views,
+        calculatedLikes
+      };
+    });
+
+    const mostViewedSermons = [...enriched].sort((a, b) => b.calculatedViews - a.calculatedViews);
+    const mostLikedSermons = [...enriched].sort((a, b) => (b.calculatedLikes || 0) - (a.calculatedLikes || 0));
+
+    return {
+      totalViews,
+      totalTopPlayerViews,
+      totalLikes,
+      mostViewedSermons,
+      mostLikedSermons,
+      viewsMap: analytics
+    };
+  }
+
 
   static async resolveSermonMedia(sermon: Sermon): Promise<{ video_url?: string; audio_url?: string }> {
     let video_url = sermon.video_url;
@@ -971,19 +1106,361 @@ export class StorageService {
   static getFollowingUsers(userId: string): User[] {
     const followingIds = this.getFollowingList(userId);
     const allUsers = this.getAllUsers();
-    return allUsers.filter(u => followingIds.includes(u.id) || (u.role === 'super_admin' && followingIds.includes('usr_apostle_joe')));
+    return followingIds.map(fid => {
+      const existing = allUsers.find(u => u.id === fid || (u.role === 'super_admin' && fid === 'usr_apostle_joe'));
+      if (existing) return existing;
+      return {
+        id: fid,
+        full_name: fid === 'usr_apostle_joe' ? 'Apostle Joe Daniels' :
+                   fid === 'usr_prophetess_melinda' ? 'Prophetess Melinda' :
+                   fid === 'usr_pastor_easter' ? 'Pastor Easter' :
+                   fid === 'usr_developer' ? 'Platform Developer' :
+                   fid.startsWith('usr_') ? fid.replace('usr_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Believer',
+        handle: `@${fid.replace('usr_', '')}`,
+        phone: '0780000000',
+        role: (fid === 'usr_apostle_joe' || fid === 'usr_developer') ? 'super_admin' : 'member',
+        member_id: `GCZ-${fid.slice(-4)}`,
+        is_verified: true,
+        badge_type: (fid === 'usr_apostle_joe' || fid === 'usr_developer') ? 'gold' : 'silver',
+        bio: 'Believer walking in covenant faith & supernatural grace at Gateway International Church.',
+        location: 'Harare, Zimbabwe',
+        created_at: new Date().toISOString(),
+        avatar_url: fid === 'usr_apostle_joe' ? '/assets/apostle_joe_daniels_main.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+        followers_count: 0,
+        following_count: 0
+      } as User;
+    });
   }
 
   static getFollowersUsers(userId: string): User[] {
     const followerIds = this.getFollowersList(userId);
     const allUsers = this.getAllUsers();
-    return allUsers.filter(u => followerIds.includes(u.id));
+    return followerIds.map(fid => {
+      const existing = allUsers.find(u => u.id === fid);
+      if (existing) return existing;
+      return {
+        id: fid,
+        full_name: fid === 'usr_apostle_joe' ? 'Apostle Joe Daniels' :
+                   fid === 'usr_prophetess_melinda' ? 'Prophetess Melinda' :
+                   fid === 'usr_pastor_easter' ? 'Pastor Easter' :
+                   fid === 'usr_developer' ? 'Platform Developer' :
+                   fid.startsWith('usr_') ? fid.replace('usr_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Believer',
+        handle: `@${fid.replace('usr_', '')}`,
+        phone: '0780000000',
+        role: (fid === 'usr_apostle_joe' || fid === 'usr_developer') ? 'super_admin' : 'member',
+        member_id: `GCZ-${fid.slice(-4)}`,
+        is_verified: true,
+        badge_type: (fid === 'usr_apostle_joe' || fid === 'usr_developer') ? 'gold' : 'silver',
+        bio: 'Believer walking in covenant faith & supernatural grace at Gateway International Church.',
+        location: 'Harare, Zimbabwe',
+        created_at: new Date().toISOString(),
+        avatar_url: fid === 'usr_apostle_joe' ? '/assets/apostle_joe_daniels_main.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+        followers_count: 0,
+        following_count: 0
+      } as User;
+    });
+  }
+
+  static recalculateAllUserFollowCounts(records?: { follower_id: string; following_id: string }[]): void {
+    const follows = records || this.getUserFollowsRecords();
+    const allUsers = this.getAllUsers();
+    let usersModified = false;
+    allUsers.forEach(u => {
+      const followers = follows.filter(r => r.following_id === u.id).length;
+      const following = follows.filter(r => r.follower_id === u.id).length;
+      if (u.followers_count !== followers || u.following_count !== following) {
+        u.followers_count = followers;
+        u.following_count = following;
+        usersModified = true;
+      }
+    });
+    if (usersModified) {
+      setLocal(KEYS.ALL_USERS, allUsers);
+      const cur = this.getCurrentUser();
+      if (cur) {
+        const myFollowers = follows.filter(r => r.following_id === cur.id).length;
+        const myFollowing = follows.filter(r => r.follower_id === cur.id).length;
+        if (cur.followers_count !== myFollowers || cur.following_count !== myFollowing) {
+          this.setCurrentUser({ ...cur, followers_count: myFollowers, following_count: myFollowing });
+        }
+      }
+    }
+  }
+
+  static syncFollowsRecordFromRealtime(eventType: 'INSERT' | 'DELETE' | string, row: any): void {
+    if (!row) return;
+    const followerId = row.follower_id || row.followerId;
+    const followingId = row.following_id || row.targetUserId || row.followingId;
+    if (!followerId || !followingId) return;
+
+    const records = this.getUserFollowsRecords();
+    const idx = records.findIndex(r => r.follower_id === followerId && r.following_id === followingId);
+    if (eventType === 'DELETE') {
+      if (idx >= 0) records.splice(idx, 1);
+    } else {
+      if (idx === -1) {
+        records.push({
+          follower_id: followerId,
+          following_id: followingId,
+          created_at: row.created_at || new Date().toISOString()
+        });
+      }
+    }
+    setLocal(KEYS.USER_FOLLOWS_TABLE, records);
+    this.recalculateAllUserFollowCounts(records);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_follow_updated', {
+        detail: { followerId, targetUserId: followingId, isFollowing: eventType !== 'DELETE' }
+      }));
+      window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+    }
+  }
+
+  static async syncAllFollowsFromSupabase(): Promise<void> {
+    try {
+      const remoteFollows = await SupabaseSyncService.fetchAllFollows();
+      if (Array.isArray(remoteFollows) && remoteFollows.length > 0) {
+        const records = this.getUserFollowsRecords();
+        let modified = false;
+        for (const row of remoteFollows) {
+          if (!row.follower_id || !row.following_id) continue;
+          if (!records.some(r => r.follower_id === row.follower_id && r.following_id === row.following_id)) {
+            records.push({
+              follower_id: row.follower_id,
+              following_id: row.following_id,
+              created_at: row.created_at || new Date().toISOString()
+            });
+            modified = true;
+          }
+        }
+        if (modified) {
+          setLocal(KEYS.USER_FOLLOWS_TABLE, records);
+          this.recalculateAllUserFollowCounts(records);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('gcz_follow_updated'));
+            window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+          }
+        }
+      }
+    } catch {
+      // Ignore background network error
+    }
+  }
+
+  static async syncFollowsForUser(userId: string): Promise<void> {
+    if (!userId || userId === 'guest') return;
+    try {
+      const data = await SupabaseSyncService.fetchFollows(userId);
+      if (data) {
+        const records = this.getUserFollowsRecords();
+        let modified = false;
+        for (const targetId of data.following) {
+          if (!records.some(r => r.follower_id === userId && r.following_id === targetId)) {
+            records.push({ follower_id: userId, following_id: targetId, created_at: new Date().toISOString() });
+            modified = true;
+          }
+        }
+        for (const followerId of data.followers) {
+          if (!records.some(r => r.follower_id === followerId && r.following_id === userId)) {
+            records.push({ follower_id: followerId, following_id: userId, created_at: new Date().toISOString() });
+            modified = true;
+          }
+        }
+        if (modified) {
+          setLocal(KEYS.USER_FOLLOWS_TABLE, records);
+        }
+
+        const allUsers = this.getAllUsers();
+        const userObj = allUsers.find(u => u.id === userId);
+        if (userObj) {
+          userObj.followers_count = records.filter(r => r.following_id === userId).length;
+          userObj.following_count = records.filter(r => r.follower_id === userId).length;
+          setLocal(KEYS.ALL_USERS, allUsers);
+        }
+        const cur = this.getCurrentUser();
+        if (cur && cur.id === userId) {
+          this.setCurrentUser({
+            ...cur,
+            followers_count: records.filter(r => r.following_id === userId).length,
+            following_count: records.filter(r => r.follower_id === userId).length
+          });
+        }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('gcz_follow_updated', { detail: { userId } }));
+          window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+        }
+      }
+    } catch {
+      // Ignore background network error
+    }
+  }
+
+  static async hydrateFollowsFromSupabase(userId: string): Promise<void> {
+    return this.syncFollowsForUser(userId);
+  }
+
+  // MEDIA LIKES TABLE (Per-video / Per-sermon / Live broadcast persistent global likes)
+  static getMediaLikesRecords(): { media_id: string; user_id: string; created_at: string }[] {
+    return getLocal<{ media_id: string; user_id: string; created_at: string }[]>(KEYS.MEDIA_LIKES_TABLE, []);
+  }
+
+  static getMediaLikes(mediaId: string): string[] {
+    if (!mediaId) return [];
+    const records = this.getMediaLikesRecords();
+    const fromRecords = records.filter(r => r.media_id === mediaId).map(r => r.user_id);
+    if (mediaId === 'live_broadcast' || mediaId === 'broadcast_live') {
+      const bLikes = this.getBroadcastLikes();
+      return Array.from(new Set([...fromRecords, ...bLikes]));
+    }
+    return Array.from(new Set(fromRecords));
+  }
+
+  static getMediaLikerUsers(mediaId: string): User[] {
+    const ids = this.getMediaLikes(mediaId);
+    const allUsers = this.getAllUsers();
+    return ids.map(id => {
+      const found = allUsers.find(u => u.id === id);
+      if (found) return found;
+      return {
+        id,
+        full_name: id === 'usr_apostle_joe' ? 'Apostle Joe Daniels' :
+                   id.startsWith('usr_') ? id.replace('usr_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Believer',
+        handle: `@${id.replace('usr_', '')}`,
+        avatar_url: id === 'usr_apostle_joe' ? '/assets/apostle_joe_daniels_main.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+        role: 'member'
+      } as User;
+    });
+  }
+
+  static hasUserLikedMedia(mediaId: string, userId?: string): boolean {
+    const uid = userId || this.getCurrentUser()?.id;
+    if (!uid) return false;
+    const likes = this.getMediaLikes(mediaId);
+    return likes.includes(uid);
+  }
+
+  static toggleMediaLike(mediaId: string, userId?: string): { isLiked: boolean; count: number; likerIds: string[]; likerUsers: User[] } {
+    const uid = userId || this.getCurrentUser()?.id || 'guest';
+    const records = this.getMediaLikesRecords();
+    const idx = records.findIndex(r => r.media_id === mediaId && r.user_id === uid);
+    let isLiked = false;
+    if (idx >= 0) {
+      records.splice(idx, 1);
+      isLiked = false;
+    } else {
+      records.push({
+        media_id: mediaId,
+        user_id: uid,
+        created_at: new Date().toISOString()
+      });
+      isLiked = true;
+    }
+    setLocal(KEYS.MEDIA_LIKES_TABLE, records);
+
+    if (mediaId === 'live_broadcast' || mediaId === 'broadcast_live') {
+      const bLikes = this.getBroadcastLikes();
+      const bIdx = bLikes.indexOf(uid);
+      if (isLiked && bIdx === -1) bLikes.push(uid);
+      else if (!isLiked && bIdx >= 0) bLikes.splice(bIdx, 1);
+      setLocal(KEYS.BROADCAST_LIKES_TABLE, bLikes);
+    }
+
+    const likerIds = this.getMediaLikes(mediaId);
+    const likerUsers = this.getMediaLikerUsers(mediaId);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_media_likes_updated', {
+        detail: { mediaId, isLiked, likerIds, likerUsers, count: likerIds.length }
+      }));
+      if (mediaId === 'live_broadcast' || mediaId === 'broadcast_live') {
+        window.dispatchEvent(new CustomEvent('gcz_broadcast_likes_updated', {
+          detail: { isLiked, count: likerIds.length, likerUsers }
+        }));
+      }
+    }
+
+    SupabaseSyncService.broadcastMediaLike(mediaId, uid, isLiked);
+    liveSyncService.broadcastEvent({
+      type: 'stream_like',
+      payload: { mediaId, userId: uid, isLiked }
+    });
+
+    SupabaseSyncService.syncMediaLike(mediaId, uid, isLiked).catch(() => {});
+
+    return { isLiked, count: likerIds.length, likerIds, likerUsers };
+  }
+
+  static applyRemoteMediaLike(mediaId: string, userId: string, isLiked: boolean): void {
+    if (!mediaId || !userId) return;
+    const records = this.getMediaLikesRecords();
+    const idx = records.findIndex(r => r.media_id === mediaId && r.user_id === userId);
+    if (isLiked) {
+      if (idx === -1) {
+        records.push({ media_id: mediaId, user_id: userId, created_at: new Date().toISOString() });
+      }
+    } else {
+      if (idx >= 0) records.splice(idx, 1);
+    }
+    setLocal(KEYS.MEDIA_LIKES_TABLE, records);
+
+    if (mediaId === 'live_broadcast' || mediaId === 'broadcast_live') {
+      const bLikes = this.getBroadcastLikes();
+      const bIdx = bLikes.indexOf(userId);
+      if (isLiked && bIdx === -1) bLikes.push(userId);
+      else if (!isLiked && bIdx >= 0) bLikes.splice(bIdx, 1);
+      setLocal(KEYS.BROADCAST_LIKES_TABLE, bLikes);
+    }
+
+    const likerIds = this.getMediaLikes(mediaId);
+    const likerUsers = this.getMediaLikerUsers(mediaId);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_media_likes_updated', {
+        detail: { mediaId, isLiked, likerIds, likerUsers, count: likerIds.length }
+      }));
+      if (mediaId === 'live_broadcast' || mediaId === 'broadcast_live') {
+        window.dispatchEvent(new CustomEvent('gcz_broadcast_likes_updated', {
+          detail: { isLiked, count: likerIds.length, likerUsers }
+        }));
+      }
+    }
+  }
+
+  static async syncMediaLikesFromSupabase(mediaId: string): Promise<void> {
+    if (!mediaId) return;
+    try {
+      const likerIds = await SupabaseSyncService.fetchMediaLikes(mediaId);
+      if (Array.isArray(likerIds) && likerIds.length > 0) {
+        const records = this.getMediaLikesRecords().filter(r => r.media_id !== mediaId);
+        likerIds.forEach(uid => {
+          records.push({ media_id: mediaId, user_id: uid, created_at: new Date().toISOString() });
+        });
+        setLocal(KEYS.MEDIA_LIKES_TABLE, records);
+
+        if (mediaId === 'live_broadcast' || mediaId === 'broadcast_live') {
+          setLocal(KEYS.BROADCAST_LIKES_TABLE, likerIds);
+        }
+
+        const likerUsers = this.getMediaLikerUsers(mediaId);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('gcz_media_likes_updated', {
+            detail: { mediaId, likerIds, likerUsers, count: likerIds.length }
+          }));
+          if (mediaId === 'live_broadcast' || mediaId === 'broadcast_live') {
+            window.dispatchEvent(new CustomEvent('gcz_broadcast_likes_updated', {
+              detail: { isLiked: this.hasUserLikedMedia(mediaId), count: likerIds.length, likerUsers }
+            }));
+          }
+        }
+      }
+    } catch {
+      // Ignore background network error
+    }
   }
 
   // BROADCAST LIKES & LIKERS MANAGEMENT (REAL USERS ONLY - ZERO FAKE DATA)
   static getBroadcastLikes(): string[] {
     const likes = getLocal<string[]>(KEYS.BROADCAST_LIKES_TABLE, []);
-    // Ensure any previously seeded fake defaults are cleared so if no one liked, count is 0
     if (Array.isArray(likes) && likes.length === 2 && likes.includes('usr_pastor_tendai') && likes.includes('usr_pastor_grace')) {
       setLocal(KEYS.BROADCAST_LIKES_TABLE, []);
       return [];
@@ -994,7 +1471,18 @@ export class StorageService {
   static getBroadcastLikerUsers(): User[] {
     const ids = this.getBroadcastLikes();
     const allUsers = this.getAllUsers();
-    return allUsers.filter(u => ids.includes(u.id));
+    return ids.map(id => {
+      const found = allUsers.find(u => u.id === id);
+      if (found) return found;
+      return {
+        id,
+        full_name: id === 'usr_apostle_joe' ? 'Apostle Joe Daniels' :
+                   id.startsWith('usr_') ? id.replace('usr_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Believer',
+        handle: `@${id.replace('usr_', '')}`,
+        avatar_url: id === 'usr_apostle_joe' ? '/assets/apostle_joe_daniels_main.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+        role: 'member'
+      } as User;
+    });
   }
 
   static hasUserLikedBroadcast(userId?: string): boolean {
@@ -1005,43 +1493,12 @@ export class StorageService {
   }
 
   static toggleBroadcastLike(userId?: string): { isLiked: boolean; count: number; likerUsers: User[] } {
-    const uid = userId || this.getCurrentUser()?.id || 'guest';
-    const likes = this.getBroadcastLikes();
-    const idx = likes.indexOf(uid);
-    let isLiked = false;
-    if (idx >= 0) {
-      likes.splice(idx, 1);
-      isLiked = false;
-    } else {
-      likes.push(uid);
-      isLiked = true;
-    }
-    setLocal(KEYS.BROADCAST_LIKES_TABLE, likes);
-    const allUsers = this.getAllUsers();
-    const likerUsers = allUsers.filter(u => likes.includes(u.id));
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('gcz_broadcast_likes_updated', {
-        detail: { isLiked, count: likes.length, likerUsers }
-      }));
-    }
-    return { isLiked, count: likes.length, likerUsers };
+    const res = this.toggleMediaLike('live_broadcast', userId);
+    return { isLiked: res.isLiked, count: res.count, likerUsers: res.likerUsers };
   }
 
   static incrementBroadcastLike(userId?: string): { isLiked: boolean; count: number; likerUsers: User[] } {
-    const uid = userId || this.getCurrentUser()?.id || 'guest';
-    const likes = this.getBroadcastLikes();
-    if (!likes.includes(uid)) {
-      likes.push(uid);
-      setLocal(KEYS.BROADCAST_LIKES_TABLE, likes);
-    }
-    const allUsers = this.getAllUsers();
-    const likerUsers = allUsers.filter(u => likes.includes(u.id));
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('gcz_broadcast_likes_updated', {
-        detail: { isLiked: true, count: likes.length, likerUsers }
-      }));
-    }
-    return { isLiked: true, count: likes.length, likerUsers };
+    return this.toggleBroadcastLike(userId);
   }
 
   // REAL BROADCAST REACTIONS (EMOJIS) - STARTS AT ZERO, INCREMENTS ONLY ON REAL USER ACTION
@@ -1072,39 +1529,6 @@ export class StorageService {
       }));
     }
     return reactions;
-  }
-
-  static async hydrateFollowsFromSupabase(userId: string): Promise<void> {
-    if (!userId || userId === 'guest') return;
-    try {
-      const data = await SupabaseSyncService.fetchFollows(userId);
-      if (data && (data.following.length > 0 || data.followers.length > 0)) {
-        const records = this.getUserFollowsRecords();
-        let modified = false;
-        for (const targetId of data.following) {
-          if (!records.some(r => r.follower_id === userId && r.following_id === targetId)) {
-            records.push({ follower_id: userId, following_id: targetId, created_at: new Date().toISOString() });
-            modified = true;
-          }
-        }
-        for (const followerId of data.followers) {
-          if (!records.some(r => r.follower_id === followerId && r.following_id === userId)) {
-            records.push({ follower_id: followerId, following_id: userId, created_at: new Date().toISOString() });
-            modified = true;
-          }
-        }
-        if (modified) {
-          setLocal(KEYS.USER_FOLLOWS_TABLE, records);
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('gcz_follow_updated', {
-              detail: { userId }
-            }));
-          }
-        }
-      }
-    } catch {
-      // Ignore background network error
-    }
   }
 
   // Instagram Saved / Bookmarked Posts
@@ -1699,7 +2123,7 @@ export class StorageService {
       ...booking,
       id: `bk_${Date.now()}`,
       status: 'confirmed',
-      zoom_link: `https://zoom.us/j/${randomMeetingId}?pwd=GATEWAY_APOSTLE_JOE`,
+      zoom_link: `https://wa.me/263771445642?text=${encodeURIComponent(`*1-on-1 Pastoral Consultation Request*\n👤 Name: ${booking.user_name}\n📱 Phone: ${booking.user_phone}\n🗓 Date: ${booking.date} @ ${booking.time_slot}\n🕊 Service: ${booking.service_type}`)}`,
       created_at: new Date().toISOString()
     };
     bookings.unshift(newBooking);
@@ -2019,7 +2443,9 @@ export class StorageService {
       const likesForThisPost = postLikes.filter(l => l.post_id === t.id).map(l => l.user_id);
       const combined = Array.from(new Set([...(t.liked_user_ids || []), ...likesForThisPost]));
       t.liked_user_ids = combined;
-      t.likes_count = combined.length;
+      // Preserve authentic engagement count from server/database if higher than local liker array length
+      const rawCount = typeof t.likes_count === 'number' ? t.likes_count : 0;
+      t.likes_count = Math.max(rawCount, combined.length);
       t.user_liked = combined.includes(curUid);
       t.comments_count = (t.comments || []).length;
       if (t.comments) {
@@ -2046,6 +2472,21 @@ export class StorageService {
 
   static submitTestimony(testimony: Omit<Testimony, 'id' | 'date' | 'likes_count' | 'verified_by_church' | 'liked_user_ids' | 'user_liked' | 'comments' | 'comments_count'>): Testimony {
     const list = this.getTestimonies();
+
+    // Prevent duplicate post creation from rapid taps, retries or unstable networks
+    const nowMs = Date.now();
+    const cleanContent = (testimony.content || '').trim().toLowerCase();
+    const cleanTitle = (testimony.title || '').trim().toLowerCase();
+    const duplicate = list.find(p => 
+      p.user_id === testimony.user_id &&
+      (p.content || '').trim().toLowerCase() === cleanContent &&
+      (nowMs - new Date(p.created_at || 0).getTime() < 30000)
+    );
+    if (duplicate) {
+      console.warn('Duplicate post prevented in StorageService.submitTestimony:', duplicate.id);
+      return duplicate;
+    }
+
     const newTest: Testimony = {
       ...testimony,
       id: `test_${Date.now()}`,
@@ -2066,15 +2507,43 @@ export class StorageService {
     // Remote database sync
     SupabaseSyncService.syncPost(newTest).catch(() => {});
 
-    // Notify tagged users if any mentioned in post
+    // Notify tagged users if any mentioned in post (@all, @followers role-guarded)
     try {
-      const fullText = `${newTest.title || ''} ${newTest.content || ''}`;
-      const mentions = fullText.match(/@([a-zA-Z0-9_]+)/g);
       const allUsers = this.getAllUsers();
-      const taggedIds = new Set<string>([]);
+      const author = allUsers.find(u => u.id === newTest.user_id) || this.getCurrentUser();
+      const isAdminOrDev = Boolean(
+        author && (
+          author.role === 'super_admin' || 
+          author.role === 'admin' || 
+          author.role === 'pastor' || 
+          author.role === 'developer' || 
+          author.id === 'usr_apostle_joe' || 
+          author.id === 'usr_developer' ||
+          (author.phone && arePhoneNumbersEqual(author.phone, '0780699988'))
+        )
+      );
+
+      const fullText = `${newTest.title || ''} ${newTest.content || ''}`;
+      const hasAllMention = /@all\b/i.test(fullText);
+      const hasFollowersMention = /@followers\b/i.test(fullText);
+      const taggedIds = new Set<string>();
+
+      if (hasAllMention && isAdminOrDev) {
+        allUsers.forEach(u => {
+          if (u.id !== newTest.user_id && u.role !== 'guest') taggedIds.add(u.id);
+        });
+      } else if (hasFollowersMention && (isAdminOrDev || true)) {
+        const followers = this.getUserFollowsRecords().filter(r => r.following_id === newTest.user_id);
+        followers.forEach(r => {
+          if (r.follower_id !== newTest.user_id) taggedIds.add(r.follower_id);
+        });
+      }
+
+      const mentions = fullText.match(/@([a-zA-Z0-9_]+)/g);
       if (mentions) {
         for (const m of mentions) {
           const clean = m.replace('@', '').toLowerCase();
+          if (clean === 'all' || clean === 'followers') continue;
           const found = allUsers.find(u => 
             (u.handle && u.handle.toLowerCase().replace('@', '') === clean) ||
             (u.full_name && u.full_name.toLowerCase().replace(/\s+/g, '_') === clean)
@@ -2084,15 +2553,18 @@ export class StorageService {
           }
         }
       }
+
       taggedIds.forEach(targetId => {
         this.addAppNotification({
           type: 'chat',
           actor_id: newTest.user_id || 'usr_church',
           actor_name: newTest.user_name || 'A believer',
           actor_avatar: newTest.user_avatar,
-          title: `${newTest.user_name} tagged you in a post`,
+          title: hasAllMention && isAdminOrDev ? `Church Broadcast: ${newTest.user_name}` : `${newTest.user_name} tagged you in a post`,
           message: (newTest.title || newTest.content || '').slice(0, 100),
-          recipient_id: targetId
+          recipient_id: targetId,
+          target_type: 'testimony',
+          target_id: newTest.id
         });
       });
     } catch {}
@@ -2114,19 +2586,21 @@ export class StorageService {
 
     if (alreadyLiked) {
       postLikes.splice(existingIndex, 1);
+      target.likes_count = Math.max(0, (target.likes_count || 1) - 1);
+      target.user_liked = false;
     } else {
       postLikes.push({
         post_id: id,
         user_id: effectiveUserId,
         created_at: new Date().toISOString()
       });
+      target.likes_count = Math.max(1, (target.likes_count || 0) + 1);
+      target.user_liked = true;
     }
     setLocal(KEYS.POST_LIKES_TABLE, postLikes);
 
     const postLikers = postLikes.filter(l => l.post_id === id).map(l => l.user_id);
     target.liked_user_ids = postLikers;
-    target.likes_count = postLikers.length;
-    target.user_liked = !alreadyLiked;
 
     setLocal(KEYS.TESTIMONIES, list);
     if (typeof window !== 'undefined') {
@@ -2352,6 +2826,68 @@ export class StorageService {
     SupabaseSyncService.deletePost(id).catch(() => {});
   }
 
+  /**
+   * Permanently deletes ALL posts older than maxAgeDays (default 6 days).
+   * Removes from local storage, marks in permanent deletion set, cleans up Supabase storage media,
+   * and removes database records from Supabase tables.
+   */
+  static purgeOldPosts(maxAgeDays: number = 6): { deletedCount: number; deletedIds: string[] } {
+    const cutoff = Date.now() - (maxAgeDays * 24 * 60 * 60 * 1000);
+    const allPosts = getLocal<Testimony[]>(KEYS.TESTIMONIES, MOCK_TESTIMONIES);
+    const toDelete: Testimony[] = [];
+    const remaining: Testimony[] = [];
+    const deletedPostIds = new Set<string>(getLocal<string[]>('gcz_deleted_post_ids_v1', []));
+
+    for (const post of allPosts) {
+      if (!post || !post.id) continue;
+      let postTime = 0;
+      if (post.created_at) {
+        const parsed = new Date(post.created_at).getTime();
+        if (!isNaN(parsed)) postTime = parsed;
+      }
+      if (!postTime && post.date) {
+        const parsed = new Date(post.date).getTime();
+        if (!isNaN(parsed)) postTime = parsed;
+      }
+      // If post timestamp could not be determined and date label denotes old post
+      if (!postTime && /day|week|month|year|2025|2024|jan|feb|mar|apr|may|jun|jul|aug|sep/i.test(post.date || '')) {
+        postTime = Date.now() - (7 * 24 * 60 * 60 * 1000);
+      }
+
+      if (postTime > 0 && postTime < cutoff) {
+        toDelete.push(post);
+        deletedPostIds.add(post.id);
+      } else {
+        remaining.push(post);
+      }
+    }
+
+    if (toDelete.length > 0) {
+      setLocal('gcz_deleted_post_ids_v1', Array.from(deletedPostIds));
+      setLocal(KEYS.TESTIMONIES, remaining);
+
+      const saved = getLocal<string[]>(KEYS.SAVED_POSTS, []);
+      const updatedSaved = saved.filter(sid => !deletedPostIds.has(sid));
+      setLocal(KEYS.SAVED_POSTS, updatedSaved);
+
+      toDelete.forEach(p => {
+        if (p.image_url) StorageBucketService.deleteMediaByUrl(p.image_url).catch(() => {});
+        if (p.video_url) StorageBucketService.deleteMediaByUrl(p.video_url).catch(() => {});
+        if ((p as any).media_url) StorageBucketService.deleteMediaByUrl((p as any).media_url).catch(() => {});
+        SupabaseSyncService.deletePost(p.id).catch(() => {});
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_testimony_updated'));
+      }
+    }
+
+    // Trigger Supabase PostgreSQL & Storage purge
+    SupabaseSyncService.purgeOldPostsFromRemote(cutoff).catch(() => {});
+
+    return { deletedCount: toDelete.length, deletedIds: toDelete.map(p => p.id) };
+  }
+
   // Premium Plans Management (Configurable by Admin)
   static getPremiumPlans(): PremiumPlan[] {
     return getLocal<PremiumPlan[]>(KEYS.PREMIUM_PLANS, DEFAULT_PREMIUM_PLANS);
@@ -2412,6 +2948,19 @@ export class StorageService {
     };
   }
 
+  static canAccessSermonLibrary(user?: User | null): boolean {
+    const u = user || this.getCurrentUser();
+    if (!u) return false;
+    // Administrative & ministerial roles always have access
+    if (['super_admin', 'developer', 'pastor', 'elder', 'admin'].includes(u.role)) return true;
+    // Blue, Silver, or Gold badge holder
+    if (u.badge_type === 'gold' || u.badge_type === 'silver' || u.badge_type === 'blue') return true;
+    if (u.verified_badge === 'gold' || u.verified_badge === 'silver' || u.verified_badge === 'blue') return true;
+    // Verified status (default blue badge) or active premium covenant partner
+    if (u.is_verified || this.isUserPremiumActive(u)) return true;
+    return false;
+  }
+
   static purchaseBadge(badge: BadgeType, months: number = 1): User | null {
     const expiry = new Date();
     expiry.setMonth(expiry.getMonth() + months);
@@ -2436,7 +2985,7 @@ export class StorageService {
     delete memoryStore[KEYS.CURRENT_USER];
   }
 
-  // Auto-follow Super Admin and Developer on login or registration (Developer is exempt from forced auto-follow)
+  // Auto-follow Developer, Apostle Joe Daniels, and Prophetess Melinda on login or registration
   static autoFollowSuperAdminAndDeveloper(userId: string): void {
     if (!userId || userId === 'guest') return;
 
@@ -2449,33 +2998,33 @@ export class StorageService {
       return;
     }
 
-    // Identify all super admins and lead developer accounts
-    const leaders = allUsers.filter(u => 
-      u.id !== userId && (
-        u.role === 'super_admin' || 
-        u.role === 'developer' || 
-        u.id === 'usr_apostle_joe' || 
-        u.id === 'usr_prophetess_melinda' || 
-        u.id === 'usr_pastor_easter' || 
-        u.id === 'usr_developer' || 
-        u.phone === '0780699988'
-      )
-    );
+    // Required foundational leaders: Developer, Apostle Joe Daniels, and Prophetess Melinda
+    const targetLeaderIds = new Set<string>(['usr_developer', 'usr_apostle_joe', 'usr_prophetess_melinda']);
+
+    // Also include any other super admins or leaders from user base
+    allUsers.forEach(u => {
+      if (u.id !== userId && (u.role === 'super_admin' || u.role === 'developer' || u.id === 'usr_pastor_easter')) {
+        targetLeaderIds.add(u.id);
+      }
+    });
+
+    // Don't auto-follow self
+    targetLeaderIds.delete(userId);
 
     const records = this.getUserFollowsRecords();
     const followingKey = `following_list_${userId}`;
     const currentFollowing = getLocal<string[]>(followingKey, []);
     let changed = false;
 
-    leaders.forEach(leader => {
+    targetLeaderIds.forEach(leaderId => {
       const alreadyInRecords = records.some(
-        r => r.follower_id === userId && (r.following_id === leader.id || (leader.role === 'super_admin' && r.following_id === 'usr_apostle_joe'))
+        r => r.follower_id === userId && r.following_id === leaderId
       );
 
       if (!alreadyInRecords) {
         records.push({
           follower_id: userId,
-          following_id: leader.id,
+          following_id: leaderId,
           created_at: new Date().toISOString()
         });
         changed = true;
@@ -2488,17 +3037,17 @@ export class StorageService {
           actor_avatar: newUser.avatar_url,
           title: 'New Disciple / Follower',
           message: `${newUser.full_name} (@${newUser.handle?.replace('@', '') || newUser.phone}) joined Gateway Connect and is now following you.`,
-          recipient_id: leader.id,
+          recipient_id: leaderId,
           link_tab: 'profile',
           meta_id: newUser.id
         });
 
         // Sync to Supabase in background
-        SupabaseSyncService.syncFollowState(userId, leader.id, true).catch(() => {});
+        SupabaseSyncService.syncFollowState(userId, leaderId, true).catch(() => {});
       }
 
-      if (!currentFollowing.includes(leader.id)) {
-        currentFollowing.push(leader.id);
+      if (!currentFollowing.includes(leaderId)) {
+        currentFollowing.push(leaderId);
         changed = true;
       }
     });
@@ -2508,11 +3057,10 @@ export class StorageService {
       setLocal(followingKey, currentFollowing);
 
       // Recalculate followers count for all affected leaders
-      leaders.forEach(leader => {
-        const exactFollowers = records.filter(
-          r => r.following_id === leader.id || (leader.role === 'super_admin' && r.following_id === 'usr_apostle_joe')
-        ).length;
-        leader.followers_count = exactFollowers;
+      allUsers.forEach(u => {
+        if (targetLeaderIds.has(u.id)) {
+          u.followers_count = records.filter(r => r.following_id === u.id).length;
+        }
       });
 
       // Recalculate following count for new user
@@ -2533,7 +3081,6 @@ export class StorageService {
         window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
         window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
       }
-    }
   }
 
   static formatPhoneWithCountryCode(rawPhone: string, code = '+263'): string {
@@ -4021,6 +4568,8 @@ export class StorageService {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_new_notification', { detail: newNotif }));
       window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
+
+      // In-app banner and background alerts are managed selectively by FloatingNotificationToast
     }
   }
 
@@ -4112,9 +4661,45 @@ export class StorageService {
     if (target.role === 'super_admin' || target.role === 'developer' || target.id === 'usr_developer' || target.id === 'usr_apostle_joe') {
       return { success: false, error: 'Administrative and Developer accounts are system protected and cannot be deleted.' };
     }
-    allUsers = allUsers.filter(u => u.id !== target.id);
+
+    // 1. Add to persistent deleted user blacklist
+    try {
+      const delList = getLocal<string[]>('gcz_deleted_user_ids_v1', []);
+      if (!delList.includes(target.id)) delList.push(target.id);
+      if (target.phone && !delList.includes(target.phone)) delList.push(target.phone);
+      setLocal('gcz_deleted_user_ids_v1', delList);
+    } catch {}
+
+    // 2. Remove from local users table
+    allUsers = allUsers.filter(u => u.id !== target.id && (!target.phone || !arePhoneNumbersEqual(u.phone, target.phone)));
     setLocal(KEYS.ALL_USERS, allUsers);
+
+    // 3. Purge user's local testimonies & comments
+    try {
+      const testimonies = this.getTestimonies().filter(t => t.user_id !== target.id);
+      setLocal(KEYS.TESTIMONIES, testimonies);
+    } catch {}
+
+    // 4. Purge user's follows
+    try {
+      const follows = this.getUserFollowsRecords().filter(r => r.follower_id !== target.id && r.following_id !== target.id);
+      setLocal(KEYS.USER_FOLLOWS_TABLE, follows);
+    } catch {}
+
+    // 5. Permanent Supabase deletion & Realtime broadcast
+    SupabaseSyncService.deleteAccount(target.id, target.phone).catch(() => {});
+
+    // 6. If currently logged in as target, log out immediately
+    const currentUser = this.getCurrentUser();
+    if (currentUser && (currentUser.id === target.id || arePhoneNumbersEqual(currentUser.phone, target.phone))) {
+      this.logout();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_current_user_deleted', { detail: { userId: target.id } }));
+      }
+    }
+
     if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_user_deleted', { detail: { userId: target.id } }));
       window.dispatchEvent(new CustomEvent('gcz_users_synced', { detail: allUsers }));
       window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
     }
@@ -5853,12 +6438,25 @@ export class StorageService {
         window.dispatchEvent(new CustomEvent('gcz_stream_viewers_updated', { detail: viewers }));
         window.dispatchEvent(new CustomEvent('gcz_stream_attendance_updated', { detail: this.getStreamAttendanceHistory() }));
       }
-    } else if (type === 'stream_chat' || type === 'stream_reaction') {
+    } else if (type === 'stream_reaction') {
+      const p = payload as any;
+      if (p?.emoji) {
+        this.recordBroadcastReaction(p.emoji);
+      }
+    } else if (type === 'media_like' || type === 'stream_like') {
+      const p = payload as any;
+      if (p?.mediaId && p?.userId) {
+        this.applyRemoteMediaLike(p.mediaId, p.userId, Boolean(p.isLiked));
+      }
+    } else if (type === 'stream_chat') {
       // Ephemeral stream events are handled via window listeners in HomeTab and LiveSermonModal
+    } else if (type === 'follow') {
+      const p = payload as any;
+      const isFollowing = p?.isFollowing !== undefined ? Boolean(p?.isFollowing) : Boolean(p?.is_following !== false);
+      this.syncFollowsRecordFromRealtime(isFollowing ? 'INSERT' : 'DELETE', p);
+    }
     } else {
-      const eventName = type === 'follow'
-        ? 'gcz_follow_updated'
-        : type === 'story'
+      const eventName = type === 'story'
           ? 'gcz_story_updated'
           : type === 'group'
             ? 'gcz_groups_updated'
