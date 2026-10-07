@@ -240,6 +240,9 @@ export class SupabaseSyncService {
         metadata: { post_id: postId, reaction: reactionType, timestamp: new Date().toISOString() }
       });
       return !error;
+    } catch {
+      return false;
+    }
   }
 
   /**
