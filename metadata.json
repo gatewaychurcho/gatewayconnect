@@ -1,6 +1,6 @@
 {
-  "name": "Gateway Connect",
-  "description": "Gateway Church Connect With Apostle Joe Daniels and Fellow Church Leaders and members",
+  "name": "Remix gateway connect",
+  "description": "Imported from GitHub: gatewaychurcho/gatewayconnect",
   "requestFramePermissions": [
     "camera",
     "microphone"
