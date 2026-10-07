@@ -41,8 +41,8 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
     {
       id: 'silver' as const,
       name: 'Kingdom Partner',
-      price: '$10 / month',
-      amount: 10,
+      price: '$4.99 / month',
+      amount: 4.99,
       badge: 'Silver Verified',
       badgeType: 'silver' as const,
       perks: [
@@ -55,8 +55,8 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
     {
       id: 'pillar' as const,
       name: 'Kingdom Pillar',
-      price: '$25 / month',
-      amount: 25,
+      price: '$9.99 / month',
+      amount: 9.99,
       badge: 'Blue Verified',
       badgeType: 'blue' as const,
       perks: [
@@ -70,8 +70,8 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
     {
       id: 'ambassador' as const,
       name: 'Global Ambassador',
-      price: '$100 / month',
-      amount: 100,
+      price: '$29.99 / month',
+      amount: 29.99,
       badge: 'Gold Verified',
       badgeType: 'gold' as const,
       perks: [

@@ -474,3 +474,30 @@ body { background: var(--gcz-v2-bg) !important; color: var(--gcz-v2-text); }
 .gcz-dev-console > header { background: #0b131d !important; border-bottom: 1px solid rgba(125,211,252,.16) !important; }
 .gcz-dev-console .rounded-2xl, .gcz-dev-console .rounded-xl { border-radius: 15px !important; }
 
+
+/* --- BUTTERY SMOOTH MOBILE WEBVIEW & 60/120FPS GPU BOOST --- */
+* {
+  -webkit-tap-highlight-color: transparent !important;
+}
+html, body {
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior-y: none !important;
+}
+@media (max-width: 1024px) {
+  * {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  .backdrop-blur,
+  .backdrop-blur-xs,
+  .backdrop-blur-sm,
+  .backdrop-blur-md,
+  .backdrop-blur-lg,
+  .backdrop-blur-xl,
+  .backdrop-blur-2xl,
+  .backdrop-blur-3xl {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background-color: rgba(10, 15, 29, 0.96) !important;
+  }
+}

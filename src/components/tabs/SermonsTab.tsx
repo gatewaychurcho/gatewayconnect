@@ -37,6 +37,7 @@ import {
 import { Sermon, User } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { StorageBucketService } from '../../services/StorageBucketService';
+import { PaynowService } from '../../services/paynowService';
 import { VideoAnalyticsDashboard } from '../admin/VideoAnalyticsDashboard';
 import { cn } from '../../lib/utils';
 import confetti from 'canvas-confetti';
@@ -81,6 +82,14 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
   // User Profile & Strict Blue/Gold Access Control
   const [userProfile, setUserProfile] = useState<User | null>(() => currentUser || StorageService.getCurrentUser());
   const hasLibraryAccess = Boolean(StorageService.canAccessSermonLibrary(userProfile));
+
+  // Paid Verification & EcoCash/Card Payment state
+  const [selectedTierBadge, setSelectedTierBadge] = useState<'blue' | 'gold'>('blue');
+  const [payMethod, setPayMethod] = useState<'EcoCash' | 'Card'>('EcoCash');
+  const [payPhone, setPayPhone] = useState<string>(() => (currentUser?.phone || ''));
+  const [isPayProcessing, setIsPayProcessing] = useState<boolean>(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  const [pollStatusMsg, setPollStatusMsg] = useState<string>('');
 
   // Download / Offline state
   const [offlineIds, setOfflineIds] = useState<string[]>(() => StorageService.getOfflineSermonsList());
@@ -249,17 +258,64 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
     }
   };
 
-  // Instant Verification Upgrade Handler
-  const handleUpgradeTier = (badge: 'blue' | 'gold') => {
-    const updated = StorageService.purchaseBadge(badge, 1);
-    if (updated) {
-      setUserProfile(updated);
-      setShowAccessDeniedModal(false);
-      confetti({ particleCount: 50, spread: 70 });
-      if (restrictedSermon) {
-        setActivePlayingSermon(restrictedSermon);
-        StorageService.recordSermonView(restrictedSermon.id, false);
+  // Verified Real Payment Upgrade Handler (EcoCash + In-App / Card via Paynow)
+  const handleExecutePayment = async () => {
+    if (isPayProcessing) return;
+    setIsPayProcessing(true);
+    setPayError(null);
+    setPollStatusMsg('Connecting to Paynow Zimbabwe gateway...');
+    const amount = selectedTierBadge === 'gold' ? 29.99 : 9.99;
+    const tierName = selectedTierBadge === 'gold' ? 'Gold VIP' : 'Blue Partner';
+    const finalPhone = payPhone || userProfile?.phone || currentUser?.phone || '';
+
+    try {
+      const payment = await PaynowService.initiateTransaction({
+        reference: `GCZ-BADGE-${Date.now().toString().slice(-8)}`,
+        amount: amount,
+        additionalInfo: `${tierName} Verified Badge ($${amount}/mo)`,
+        phone: finalPhone,
+        paymentMethod: payMethod
+      });
+
+      if (!payment || !payment.success || !payment.pollUrl) {
+        setIsPayProcessing(false);
+        setPayError(payment?.error || 'Payment could not be started. Badge was not activated. No fee charged.');
+        return;
       }
+
+      if (payment.browserUrl) {
+        window.open(payment.browserUrl, '_blank', 'noopener,noreferrer');
+      }
+
+      setPollStatusMsg(
+        payMethod === 'EcoCash'
+          ? `EcoCash prompt sent to ${finalPhone || 'mobile'}. Please enter your PIN...`
+          : 'Waiting for payment confirmation...'
+      );
+
+      const result = await PaynowService.waitForPayment(payment.pollUrl);
+
+      if (!result || !result.isPaid) {
+        setIsPayProcessing(false);
+        setPayError(`Payment was not completed (Status: ${result?.status || 'Unpaid'}). Verification badge was not granted.`);
+        return;
+      }
+
+      // STRICT: Only grant on verified successful payment
+      const updated = StorageService.purchaseBadge(selectedTierBadge, 1);
+      setIsPayProcessing(false);
+      if (updated) {
+        setUserProfile(updated);
+        setShowAccessDeniedModal(false);
+        confetti({ particleCount: 60, spread: 80 });
+        if (restrictedSermon) {
+          setActivePlayingSermon(restrictedSermon);
+          StorageService.recordSermonView(restrictedSermon.id, false);
+        }
+      }
+    } catch (err: any) {
+      setIsPayProcessing(false);
+      setPayError(err?.message || 'Payment verification failed. Badge was not activated.');
     }
   };
 
@@ -679,7 +735,7 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                       {!hasLibraryAccess && sermon.requires_verification !== false ? (
                         <>
                           <Lock className="w-3 h-3" />
-                          <span>Unlock</span>
+                          <span>Blue/Gold</span>
                         </>
                       ) : (
                         <>
@@ -768,7 +824,7 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                     {!hasLibraryAccess && sermon.requires_verification !== false && (
                       <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[8px] font-bold text-primary border border-primary/40 shadow-xs flex items-center gap-0.5">
                         <Lock className="w-2 h-2" />
-                        <span>Lock</span>
+                        <span>Paid</span>
                       </span>
                     )}
                   </div>
@@ -803,7 +859,7 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                     {!hasLibraryAccess && sermon.requires_verification !== false ? (
                       <>
                         <Lock className="w-3.5 h-3.5" />
-                        <span>Unlock</span>
+                        <span>Blue/Gold</span>
                       </>
                     ) : (
                       <>
@@ -1028,51 +1084,138 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
               </div>
             </div>
 
-            {/* Verification Tiers */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+            {/* Verification Tiers Selection */}
+            <div className="grid grid-cols-2 gap-2 text-left">
               {/* Blue Verification */}
-              <div className="p-3.5 rounded-2xl border border-blue-500/40 bg-blue-500/10 flex flex-col justify-between text-left space-y-2">
-                <div>
+              <div 
+                onClick={() => !isPayProcessing && setSelectedTierBadge('blue')}
+                className={cn(
+                  "p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between",
+                  selectedTierBadge === 'blue' 
+                    ? "border-blue-500 bg-blue-500/20 ring-2 ring-blue-500/40 shadow-sm" 
+                    : "border-blue-500/30 bg-blue-500/5 hover:border-blue-500/50"
+                )}
+              >
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-blue-400 font-bold text-xs">
                     <ShieldCheck className="w-4 h-4" />
                     <span>Blue Partner</span>
                   </div>
-                  <div className="text-lg font-black text-foreground mt-1">$9.99<span className="text-[10px] font-normal text-muted-foreground">/mo</span></div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Full HD library access, downloads, verified badge.</p>
+                  {selectedTierBadge === 'blue' && (
+                    <span className="w-4 h-4 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold">✓</span>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleUpgradeTier('blue')}
-                  className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-xs cursor-pointer active:scale-95 transition-all"
-                >
-                  Unlock with Blue
-                </button>
+                <div className="text-base font-black text-foreground mt-1">$9.99<span className="text-[10px] font-normal text-muted-foreground">/mo</span></div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">200+ HD sermons, blue badge, downloads.</p>
               </div>
 
               {/* Gold Verification */}
-              <div className="p-3.5 rounded-2xl border border-amber-500/40 bg-amber-500/10 flex flex-col justify-between text-left space-y-2">
-                <div>
+              <div 
+                onClick={() => !isPayProcessing && setSelectedTierBadge('gold')}
+                className={cn(
+                  "p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between",
+                  selectedTierBadge === 'gold' 
+                    ? "border-amber-500 bg-amber-500/20 ring-2 ring-amber-500/40 shadow-sm" 
+                    : "border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50"
+                )}
+              >
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs">
                     <Crown className="w-4 h-4" />
                     <span>Gold VIP</span>
                   </div>
-                  <div className="text-lg font-black text-foreground mt-1">$29.99<span className="text-[10px] font-normal text-muted-foreground">/mo</span></div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Everything in Blue + pastoral prayer priority.</p>
+                  {selectedTierBadge === 'gold' && (
+                    <span className="w-4 h-4 rounded-full bg-amber-500 text-black flex items-center justify-center text-[10px] font-bold">✓</span>
+                  )}
                 </div>
+                <div className="text-base font-black text-foreground mt-1">$29.99<span className="text-[10px] font-normal text-muted-foreground">/mo</span></div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Everything in Blue + gold VIP badge & prayer line.</p>
+              </div>
+            </div>
+
+            {/* Payment Method Selector */}
+            <div className="space-y-1.5 text-left">
+              <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Payment Method:</label>
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => handleUpgradeTier('gold')}
-                  className="w-full py-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 text-black font-black text-xs shadow-xs cursor-pointer active:scale-95 transition-all"
+                  onClick={() => !isPayProcessing && setPayMethod('EcoCash')}
+                  className={cn(
+                    "py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer",
+                    payMethod === 'EcoCash' ? "border-emerald-500 bg-emerald-500/20 text-emerald-300" : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground"
+                  )}
                 >
-                  Unlock with Gold
+                  📱 EcoCash Express
+                </button>
+                <button
+                  type="button"
+                  onClick={() => !isPayProcessing && setPayMethod('Card')}
+                  className={cn(
+                    "py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer",
+                    payMethod === 'Card' ? "border-primary bg-primary/20 text-primary" : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  💳 Card / In-App
                 </button>
               </div>
             </div>
 
+            {/* Mobile Phone Input */}
+            <div className="space-y-1 text-left">
+              <label className="text-[11px] font-semibold text-muted-foreground flex items-center justify-between">
+                <span>{payMethod === 'EcoCash' ? 'EcoCash Phone Number:' : 'Mobile Number for Receipt:'}</span>
+                <span className="text-[10px] text-muted-foreground/70 font-mono">e.g. 0772123456</span>
+              </label>
+              <input
+                type="tel"
+                value={payPhone}
+                disabled={isPayProcessing}
+                onChange={(ev) => setPayPhone(ev.target.value)}
+                placeholder="0772123456"
+                className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+              />
+            </div>
+
+            {/* Error Message */}
+            {payError && (
+              <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs text-left font-medium">
+                {payError}
+              </div>
+            )}
+
+            {/* Processing Spinner */}
+            {isPayProcessing && (
+              <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/30 text-primary text-xs flex items-center justify-center gap-2">
+                <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <span className="font-semibold">{pollStatusMsg || 'Processing payment...'}</span>
+              </div>
+            )}
+
+            {/* Action CTA Button */}
             <button
               type="button"
+              disabled={isPayProcessing}
+              onClick={handleExecutePayment}
+              className={cn(
+                "w-full py-2.5 rounded-xl font-bold text-xs shadow-md transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-2",
+                isPayProcessing
+                  ? "opacity-60 cursor-not-allowed bg-secondary text-muted-foreground"
+                  : selectedTierBadge === 'gold'
+                    ? "bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 text-black"
+                    : "bg-blue-600 hover:bg-blue-500 text-white"
+              )}
+            >
+              {isPayProcessing 
+                ? 'Authorizing Payment...' 
+                : `Pay $${selectedTierBadge === 'gold' ? '29.99' : '9.99'}/mo via ${payMethod}`
+              }
+            </button>
+
+            <button
+              type="button"
+              disabled={isPayProcessing}
               onClick={() => setShowAccessDeniedModal(false)}
-              className="text-xs text-muted-foreground hover:text-foreground font-semibold py-1 cursor-pointer"
+              className="text-xs text-muted-foreground hover:text-foreground font-semibold py-1 cursor-pointer block mx-auto"
             >
               Browse Catalog Only (No Playback)
             </button>
