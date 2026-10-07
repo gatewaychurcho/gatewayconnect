@@ -361,9 +361,9 @@ export const ChurchPageViewModal: React.FC<ChurchPageViewModalProps> = ({
       isFullscreen ? 'p-0' : 'p-0 sm:p-3 md:p-5'
     }`}>
       {/* Hidden file inputs for photo uploads */}
-      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-      <input ref={coverFileInputRef} type="file" accept="image/*" onChange={handleCoverPhotoChange} className="hidden" />
-      <input ref={avatarFileInputRef} type="file" accept="image/*" onChange={handleAvatarPhotoChange} className="hidden" />
+      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} style={{ opacity: 0, position: 'absolute', pointerEvents: 'none', width: '1px', height: '1px', zIndex: -1 }} />
+      <input ref={coverFileInputRef} type="file" accept="image/*" onChange={handleCoverPhotoChange} style={{ opacity: 0, position: 'absolute', pointerEvents: 'none', width: '1px', height: '1px', zIndex: -1 }} />
+      <input ref={avatarFileInputRef} type="file" accept="image/*" onChange={handleAvatarPhotoChange} style={{ opacity: 0, position: 'absolute', pointerEvents: 'none', width: '1px', height: '1px', zIndex: -1 }} />
 
       {/* Main Container */}
       <div className={`bg-card border border-border overflow-y-auto relative flex flex-col transition-all duration-300 shadow-2xl ${
@@ -479,11 +479,10 @@ export const ChurchPageViewModal: React.FC<ChurchPageViewModalProps> = ({
                 <button
                   type="button"
                   onClick={() => avatarFileInputRef.current?.click()}
-                  className="absolute inset-0 bg-black/50 hover:bg-black/70 flex flex-col items-center justify-center text-white transition-opacity opacity-0 group-hover/avatar:opacity-100 cursor-pointer"
+                  className="absolute bottom-1 right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg border-2 border-card cursor-pointer hover:scale-105 active:scale-95 transition-all z-20"
                   title="Change Page Profile Picture"
                 >
-                  <Camera className="w-5 h-5 mb-0.5" />
-                  <span className="text-[9px] font-bold">Edit</span>
+                  <Camera className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
@@ -1060,6 +1059,26 @@ export const ChurchPageViewModal: React.FC<ChurchPageViewModalProps> = ({
             </div>
 
             <form onSubmit={handleSavePageDetails} className="space-y-3 text-xs">
+              {/* Cover & Avatar Photo Choosers from Device Storage */}
+              <div className="grid grid-cols-2 gap-2 pt-1 pb-1">
+                <button
+                  type="button"
+                  onClick={() => coverFileInputRef.current?.click()}
+                  className="p-2.5 rounded-xl bg-secondary hover:bg-secondary/80 border border-border text-foreground font-semibold flex items-center justify-center gap-1.5 cursor-pointer text-xs transition-colors"
+                >
+                  <Camera className="w-3.5 h-3.5 text-primary" />
+                  <span>Choose Cover Photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => avatarFileInputRef.current?.click()}
+                  className="p-2.5 rounded-xl bg-secondary hover:bg-secondary/80 border border-border text-foreground font-semibold flex items-center justify-center gap-1.5 cursor-pointer text-xs transition-colors"
+                >
+                  <Camera className="w-3.5 h-3.5 text-primary" />
+                  <span>Choose Profile Photo</span>
+                </button>
+              </div>
+
               <div>
                 <label className="font-semibold text-foreground block mb-1">Page Name *</label>
                 <input

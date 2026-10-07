@@ -185,11 +185,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       setLiveSermonStatus(StorageService.getLiveSermonStatus());
       setAdminStreamUrl(StorageService.getLiveStreamUrl());
       setChurchPages(StorageService.getPages());
+      setTestimonies(StorageService.getTestimonies());
     };
+
+    // Auto-hydrate live registered accounts from Supabase PostgreSQL on mount
+    StorageService.syncUsersWithRemote().then(() => {
+      setUsers(StorageService.getAllUsers());
+    }).catch(() => {});
 
     window.addEventListener('gcz_user_profile_updated', refreshAdminData);
     window.addEventListener('gcz_user_registered', refreshAdminData);
     window.addEventListener('gcz_users_synced', refreshAdminData);
+    window.addEventListener('gcz_user_deleted', refreshAdminData);
     window.addEventListener('gcz_banned_users_updated', refreshAdminData);
     window.addEventListener('gcz_donations_updated', refreshAdminData);
     window.addEventListener('gcz_donation_updated', refreshAdminData);
@@ -203,11 +210,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     window.addEventListener('gcz_stream_url_updated', refreshAdminData);
     window.addEventListener('gcz_override_video_updated', refreshAdminData);
     window.addEventListener('gcz_church_pages_updated', refreshAdminData);
+    window.addEventListener('gcz_testimony_deleted', refreshAdminData);
+    window.addEventListener('gcz_testimony_updated', refreshAdminData);
+    window.addEventListener('gcz_testimony_created', refreshAdminData);
 
     return () => {
       window.removeEventListener('gcz_user_profile_updated', refreshAdminData);
       window.removeEventListener('gcz_user_registered', refreshAdminData);
       window.removeEventListener('gcz_users_synced', refreshAdminData);
+      window.removeEventListener('gcz_user_deleted', refreshAdminData);
       window.removeEventListener('gcz_banned_users_updated', refreshAdminData);
       window.removeEventListener('gcz_donations_updated', refreshAdminData);
       window.removeEventListener('gcz_donation_updated', refreshAdminData);
@@ -221,6 +232,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       window.removeEventListener('gcz_stream_url_updated', refreshAdminData);
       window.removeEventListener('gcz_override_video_updated', refreshAdminData);
       window.removeEventListener('gcz_church_pages_updated', refreshAdminData);
+      window.removeEventListener('gcz_testimony_deleted', refreshAdminData);
+      window.removeEventListener('gcz_testimony_updated', refreshAdminData);
+      window.removeEventListener('gcz_testimony_created', refreshAdminData);
     };
   }, []);
 

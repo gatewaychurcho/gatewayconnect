@@ -42,7 +42,7 @@ import {
   Crown
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { CommunityGroup, PrayerRequest, ChurchEvent, Testimony, User, CommunityStory, ChurchPage, BadgeType } from '../../types';
+import { CommunityGroup, PrayerRequest, ChurchEvent, Testimony, User, CommunityStory, ChurchPage } from '../../types';
 import { StorageService, arePhoneNumbersEqual } from '../../services/storageService';
 import { StorageBucketService } from '../../services/StorageBucketService';
 import { SupabaseSyncService } from '../../services/supabaseSyncService';
@@ -394,6 +394,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   const [postFile, setPostFile] = useState<File | null>(null);
   const [storyFile, setStoryFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
+  const isSubmittingPostRef = useRef<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Prayer submission modal
@@ -453,6 +454,28 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     return () => clearInterval(timer);
   }, []);
 
+  // Sync users with remote Supabase on mount and listen for real-time user updates
+  useEffect(() => {
+    const refreshUsers = () => {
+      setAllRegisteredUsers(StorageService.getAllUsers());
+    };
+    StorageService.syncUsersWithRemote()
+      .catch(() => {})
+      .finally(() => {
+        refreshUsers();
+      });
+    window.addEventListener('gcz_users_synced', refreshUsers);
+    window.addEventListener('gcz_user_profile_updated', refreshUsers);
+    window.addEventListener('gcz_user_registered', refreshUsers);
+    window.addEventListener('gcz_user_deleted', refreshUsers);
+    return () => {
+      window.removeEventListener('gcz_users_synced', refreshUsers);
+      window.removeEventListener('gcz_user_profile_updated', refreshUsers);
+      window.removeEventListener('gcz_user_registered', refreshUsers);
+      window.removeEventListener('gcz_user_deleted', refreshUsers);
+    };
+  }, []);
+
   // Group filter
   const [selectedGroupCategory, setSelectedGroupCategory] = useState<string>('All');
 
@@ -500,56 +523,63 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isUploading || isSubmittingPostRef.current) return;
     if (!postContent.trim()) return;
 
+    isSubmittingPostRef.current = true;
     setIsUploading(true);
-    let finalImageUrl = postImageUrl;
-    let finalVideoUrl = postVideoUrl;
 
-    if (postFile) {
-      const uploadedUrl = await StorageBucketService.uploadFileToMediaBucket(postFile);
-      if (uploadedUrl) {
-        if (mediaType === 'video') finalVideoUrl = uploadedUrl;
-        else finalImageUrl = uploadedUrl;
+    try {
+      let finalImageUrl = postImageUrl;
+      let finalVideoUrl = postVideoUrl;
+
+      if (postFile) {
+        const uploadedUrl = await StorageBucketService.uploadFileToMediaBucket(postFile);
+        if (uploadedUrl) {
+          if (mediaType === 'video') finalVideoUrl = uploadedUrl;
+          else finalImageUrl = uploadedUrl;
+        }
       }
+
+      const currUser = StorageService.getCurrentUser() || currentUser;
+      const postingPage = selectedPostingPageId !== 'personal' 
+        ? StorageService.getPages().find(p => p.id === selectedPostingPageId)
+        : null;
+
+      // New posts start with 0 likes and 0 comments until liked/commented by real users
+      StorageService.submitTestimony({
+        user_id: currUser.id,
+        user_name: postingPage ? postingPage.name : (currUser.full_name || 'Covenant Member'),
+        user_handle: postingPage ? postingPage.handle : (currUser.handle || '@member'),
+        user_avatar: postingPage ? postingPage.avatar_url : (currUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg'),
+        page_id: postingPage ? postingPage.id : undefined,
+        page_name: postingPage ? postingPage.name : undefined,
+        page_handle: postingPage ? postingPage.handle : undefined,
+        page_avatar: postingPage ? postingPage.avatar_url : undefined,
+        category: postCategory,
+        title: postTitle.trim(),
+        content: postContent.trim(),
+        scripture_tag: postScriptureTag.trim(),
+        image_url: finalImageUrl,
+        video_url: finalVideoUrl
+      });
+
+      setTestimonyList(StorageService.getTestimonies());
+      
+      setShowCreatePostModal(false);
+      setPostTitle('');
+      setPostContent('');
+      setPostCategory('Praise & Testimony');
+      setPostScriptureTag('');
+      setPostImageUrl('');
+      setPostVideoUrl('');
+      setLocalImagePreview(null);
+      setPostFile(null);
+      confetti({ particleCount: 35, spread: 60 });
+    } finally {
+      setIsUploading(false);
+      isSubmittingPostRef.current = false;
     }
-
-    const currUser = StorageService.getCurrentUser() || currentUser;
-    const postingPage = selectedPostingPageId !== 'personal' 
-      ? StorageService.getPages().find(p => p.id === selectedPostingPageId)
-      : null;
-
-    // New posts start with 0 likes and 0 comments until liked/commented by real users
-    StorageService.submitTestimony({
-      user_id: currUser.id,
-      user_name: postingPage ? postingPage.name : (currUser.full_name || 'Covenant Member'),
-      user_handle: postingPage ? postingPage.handle : (currUser.handle || '@member'),
-      user_avatar: postingPage ? postingPage.avatar_url : (currUser.avatar_url || '/assets/apostle_joe_daniels_main.jpg'),
-      page_id: postingPage ? postingPage.id : undefined,
-      page_name: postingPage ? postingPage.name : undefined,
-      page_handle: postingPage ? postingPage.handle : undefined,
-      page_avatar: postingPage ? postingPage.avatar_url : undefined,
-      category: postCategory,
-      title: postTitle.trim(),
-      content: postContent.trim(),
-      scripture_tag: postScriptureTag.trim(),
-      image_url: finalImageUrl,
-      video_url: finalVideoUrl
-    });
-
-    setTestimonyList(StorageService.getTestimonies());
-    
-    setShowCreatePostModal(false);
-    setPostTitle('');
-    setPostContent('');
-    setPostCategory('Praise & Testimony');
-    setPostScriptureTag('');
-    setPostImageUrl('');
-    setPostVideoUrl('');
-    setLocalImagePreview(null);
-    setPostFile(null);
-    setIsUploading(false);
-    confetti({ particleCount: 35, spread: 60 });
   };
 
 
@@ -1446,7 +1476,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     />
                     <div className="flex items-center justify-center gap-1 w-full">
                       <p className="text-xs font-semibold text-foreground truncate">{page.name}</p>
-                      <VerifiedBadge type="blue" size="xs" />
+                      <VerifiedBadge type="official" size="xs" />
                     </div>
                     <p className="text-[10px] text-muted-foreground truncate w-full mb-2">{page.handle}</p>
                     <button
@@ -1468,7 +1498,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
               {allRegisteredUsers.filter(u => u.id !== currentUser.id && u.role !== 'guest').slice(0, 10).map(u => {
                 const isFollowing = followingUsers[u.id];
-                const hasVerifiedBadge: BadgeType | undefined = u.verified_badge || ((u.role as string) === 'apostle' || u.role === 'super_admin' ? 'gold' : u.role === 'pastor' || (u as any).verified ? 'blue' : undefined);
+                const hasVerifiedBadge = u.verified_badge || (u.role === 'apostle' || u.role === 'super_admin' || u.role === 'pastor' || (u as any).verified ? 'official' : undefined);
                 return (
                   <div
                     key={u.id}
@@ -1481,7 +1511,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     />
                     <div className="flex items-center justify-center gap-1 w-full">
                       <p className="text-xs font-semibold text-foreground truncate">{u.full_name}</p>
-                      {hasVerifiedBadge && <VerifiedBadge type={hasVerifiedBadge} size="xs" />}
+                      {hasVerifiedBadge && <VerifiedBadge type={hasVerifiedBadge as any} size="xs" />}
                     </div>
                     <p className="text-[10px] text-muted-foreground truncate w-full mb-2">{u.handle}</p>
                     <button
@@ -2948,10 +2978,13 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                  disabled={isUploading}
+                  className={`px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold flex items-center gap-1.5 shadow-sm transition-opacity ${
+                    isUploading ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Publish to Feed</span>
+                  <Send className={`w-3.5 h-3.5 ${isUploading ? 'animate-pulse' : ''}`} />
+                  <span>{isUploading ? 'Publishing...' : 'Publish to Feed'}</span>
                 </button>
               </div>
             </form>

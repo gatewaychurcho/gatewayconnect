@@ -137,7 +137,7 @@ interface DevConsoleProps {
 export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterExport, onSwitchUser }) => {
   const [activeTab, setActiveTab] = useState<'telemetry' | 'pages' | 'streamers' | 'bans' | 'appeals' | 'passwords' | 'godmode' | 'schema' | 'logs' | 'endpoints' | 'accounts'>('telemetry');
   const [devPages, setDevPages] = useState<ChurchPage[]>(() => StorageService.getPages());
-  const [devGroups, setDevGroups] = useState<ChatGroup[]>(() => StorageService.getChatGroups());
+  const [devGroups, setDevGroups] = useState<ChatGroup[]>(() => StorageService.getGroups());
   const [devPageSearch, setDevPageSearch] = useState<string>('');
   const [showPaynowModal, setShowPaynowModal] = useState(false);
   const [isPingingSupabase, setIsPingingSupabase] = useState(false);
@@ -431,6 +431,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
     window.addEventListener('gcz_user_profile_updated', refreshAll);
     window.addEventListener('gcz_user_registered', refreshAll);
     window.addEventListener('gcz_users_synced', refreshAll);
+    window.addEventListener('gcz_user_deleted', refreshAll);
     window.addEventListener('gcz_banned_users_updated', refreshAll);
     window.addEventListener('gcz_stream_viewers_updated', refreshAll);
     window.addEventListener('gcz_stream_attendance_updated', refreshAll);
@@ -466,6 +467,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
       window.removeEventListener('gcz_user_profile_updated', refreshAll);
       window.removeEventListener('gcz_user_registered', refreshAll);
       window.removeEventListener('gcz_users_synced', refreshAll);
+      window.removeEventListener('gcz_user_deleted', refreshAll);
       window.removeEventListener('gcz_banned_users_updated', refreshAll);
       window.removeEventListener('gcz_stream_viewers_updated', refreshAll);
       window.removeEventListener('gcz_stream_attendance_updated', refreshAll);
@@ -494,6 +496,9 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   }, [logs, autoScrollLogs]);
 
   useEffect(() => {
+    StorageService.syncUsersWithRemote().then(() => {
+      setUsersList(StorageService.getAllUsers());
+    }).catch(() => {});
     setUsersList(StorageService.getAllUsers());
     setBannedUsersMap(StorageService.getBannedUsers());
     setPasswordRequests(StorageService.getPasswordResetRequests());
@@ -501,7 +506,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
     setActiveStreamers(StorageService.getStreamViewers());
     setStreamAttendees(StorageService.getStreamAttendanceHistory());
     setDevPages(StorageService.getPages());
-    setDevGroups(StorageService.getChatGroups());
+    setDevGroups(StorageService.getGroups());
   }, [activeTab]);
 
   const handleToggleVerificationBadge = (user: User) => {
@@ -1465,7 +1470,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                               </span>
                             </div>
                             <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] text-slate-300">
-                              {group.member_ids?.length || 0} members
+                              {group.members_count || (group.members || []).length || 0} members
                             </span>
                           </div>
                           {group.description && (
@@ -1480,7 +1485,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                             onClick={() => {
                               if (window.confirm(`[DEVELOPER ACTION] Permanently dissolve Chat Group "${group.name}" (${group.id})?`)) {
                                 StorageService.deleteGroup(group.id);
-                                setDevGroups(StorageService.getChatGroups());
+                                setDevGroups(StorageService.getGroups());
                                 setLogs(prev => [
                                   `[${new Date().toLocaleTimeString()}] [DEV_GROUP_DISSOLVED] Dissolved group "${group.name}" (${group.id})`,
                                   ...prev

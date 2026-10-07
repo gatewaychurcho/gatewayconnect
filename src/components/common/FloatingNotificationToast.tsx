@@ -77,6 +77,11 @@ export const FloatingNotificationToast: React.FC<FloatingNotificationToastProps>
     setCurrentNotif(notif);
     setIsVisible(true);
     StorageService.playNotificationChime();
+    try {
+      if (typeof window !== 'undefined' && (window as any).AndroidBridge?.vibrate) {
+        (window as any).AndroidBridge.vibrate(25);
+      }
+    } catch {}
 
     // Auto-dismiss after 8 seconds
     timerRef.current = setTimeout(() => {

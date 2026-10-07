@@ -25,6 +25,7 @@ import {
 import { User as UserType, SUPPORTED_CITIES, SupportedCity, COUNTRY_CODES } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { getSupabase } from '../../services/supabaseClient';
+import { SupabaseSyncService } from '../../services/supabaseSyncService';
 import confetti from 'canvas-confetti';
 
 interface LoginScreenProps {
@@ -168,8 +169,44 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             return;
           }
         } catch {
-          // Fall through to local storage login
+          // Fall through to database users table check
         }
+
+        // 1b. Direct Supabase 'users' table lookup fallback (for phone/fallback registrations & rate limit avoidance)
+        try {
+          const query = isEmail
+            ? supabase.from('users').select('*').eq('email', identifier)
+            : supabase.from('users').select('*').or(`phone.eq.${identifier},phone.eq.${fullPhone}`);
+          const { data: dbUsers } = await query;
+          if (dbUsers && dbUsers.length > 0) {
+            const dbUser = dbUsers[0];
+            if (!dbUser.password_hash || dbUser.password_hash === pwd || dbUser.password === pwd) {
+              const mappedUser: UserType = {
+                id: dbUser.id,
+                phone: dbUser.phone || fullPhone || '0780000000',
+                email: isEmail ? identifier : dbUser.email,
+                full_name: dbUser.full_name || 'Member',
+                handle: dbUser.handle || `@${(dbUser.full_name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+                role: dbUser.role || 'member',
+                location: dbUser.location || 'Harare',
+                member_id: dbUser.member_id || dbUser.id.substring(0, 8),
+                avatar_url: dbUser.avatar_url || '',
+                created_at: dbUser.created_at || new Date().toISOString(),
+                is_premium: Boolean(dbUser.is_premium),
+                badge_type: dbUser.badge_type || 'none',
+                is_verified: Boolean(dbUser.is_verified),
+                onboarding_completed: dbUser.onboarding_completed !== undefined ? dbUser.onboarding_completed : Boolean(dbUser.avatar_url)
+              };
+
+              StorageService.saveUser(mappedUser);
+              StorageService.autoFollowSuperAdminAndDeveloper(mappedUser.id);
+              StorageService.setCurrentUser(mappedUser);
+              confetti({ particleCount: 35, spread: 60 });
+              onLoginSuccess(mappedUser, false);
+              return;
+            }
+          }
+        } catch {}
       }
 
       // 2. Local Storage Authentication Fallback
@@ -226,6 +263,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
       const supabase = getSupabase();
       if (supabase) {
+        let authUser: any = null;
+        let isRateLimited = false;
+
         try {
           const { data, error } = await supabase.auth.signUp({
             email: syntheticEmail,
@@ -245,66 +285,62 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           });
 
           if (error) {
-            setErrorMessage(error.message);
-            setIsLoading(false);
-            return;
+            const errLower = (error.message || '').toLowerCase();
+            if (errLower.includes('rate limit') || errLower.includes('email rate') || (error as any).status === 429) {
+              isRateLimited = true;
+            } else if (!signupContactType.includes('phone') && !error.message.includes('rate')) {
+              setErrorMessage(error.message);
+              setIsLoading(false);
+              return;
+            } else {
+              isRateLimited = true;
+            }
+          } else if (data?.user) {
+            authUser = data.user;
           }
-
-          if (data.user) {
-            const memberId = 'G' + Math.floor(100000 + Math.random() * 900000).toString();
-            const handle = `@${signupFullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-            const newUser: UserType = {
-              id: data.user.id,
-              phone: fullPhone,
-              email: emailVal,
-              full_name: signupFullName.trim(),
-              handle,
-              role: 'member',
-              location: signupCity,
-              member_id: memberId,
-              avatar_url: '', // Unset so onboarding forces photo choice
-              onboarding_completed: false, // Forces multi-step onboarding wizard
-              created_at: data.user.created_at,
-              is_premium: false,
-              badge_type: 'none',
-              is_verified: false,
-              date_of_birth: signupDateOfBirth,
-              gender: signupGender,
-              saved_verses: [],
-              offline_sermon_ids: [],
-              followers_count: 0,
-              following_count: 0
-            };
-
-            try {
-              await supabase.from('users').upsert({
-                id: data.user.id,
-                phone: fullPhone,
-                email: emailVal,
-                full_name: signupFullName.trim(),
-                handle,
-                role: 'member',
-                location: signupCity,
-                member_id: memberId,
-                date_of_birth: signupDateOfBirth,
-                gender: signupGender,
-                avatar_url: '',
-                onboarding_completed: false,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              }, { onConflict: 'id' });
-            } catch {}
-
-            StorageService.saveUser(newUser);
-            StorageService.autoFollowSuperAdminAndDeveloper(newUser.id);
-            StorageService.setCurrentUser(newUser);
-            confetti({ particleCount: 40, spread: 70 });
-            onLoginSuccess(newUser, true);
-            return;
-          }
-        } catch {
-          // Fall through to local signup
+        } catch (e: any) {
+          isRateLimited = true;
         }
+
+        const userId = authUser?.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `usr_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
+        const memberId = 'G' + Math.floor(100000 + Math.random() * 900000).toString();
+        const handle = `@${signupFullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+        const newUser: UserType = {
+          id: userId,
+          phone: fullPhone,
+          email: emailVal,
+          password: signupPassword.trim(),
+          full_name: signupFullName.trim(),
+          handle,
+          role: 'member',
+          location: signupCity,
+          member_id: memberId,
+          avatar_url: '', // Unset so onboarding forces photo choice
+          onboarding_completed: false, // Forces multi-step onboarding wizard
+          created_at: authUser?.created_at || new Date().toISOString(),
+          is_premium: false,
+          badge_type: 'none',
+          is_verified: false,
+          date_of_birth: signupDateOfBirth,
+          gender: signupGender,
+          saved_verses: [],
+          offline_sermon_ids: [],
+          followers_count: 0,
+          following_count: 0
+        };
+
+        try {
+          await SupabaseSyncService.syncUser(newUser);
+        } catch (dbErr) {
+          console.warn('Fallback users table upsert notice:', dbErr);
+        }
+
+        StorageService.saveUser(newUser);
+        StorageService.autoFollowSuperAdminAndDeveloper(newUser.id);
+        StorageService.setCurrentUser(newUser);
+        confetti({ particleCount: 40, spread: 70 });
+        onLoginSuccess(newUser, true);
+        return;
       }
 
       // Local storage signup

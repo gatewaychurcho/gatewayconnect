@@ -1699,7 +1699,7 @@ export class StorageService {
       ...booking,
       id: `bk_${Date.now()}`,
       status: 'confirmed',
-      zoom_link: `https://zoom.us/j/${randomMeetingId}?pwd=GATEWAY_APOSTLE_JOE`,
+      zoom_link: `https://wa.me/263771445642?text=${encodeURIComponent(`*1-on-1 Pastoral Consultation Request*\n👤 Name: ${booking.user_name}\n📱 Phone: ${booking.user_phone}\n🗓 Date: ${booking.date} @ ${booking.time_slot}\n🕊 Service: ${booking.service_type}`)}`,
       created_at: new Date().toISOString()
     };
     bookings.unshift(newBooking);
@@ -2046,6 +2046,19 @@ export class StorageService {
 
   static submitTestimony(testimony: Omit<Testimony, 'id' | 'date' | 'likes_count' | 'verified_by_church' | 'liked_user_ids' | 'user_liked' | 'comments' | 'comments_count'>): Testimony {
     const list = this.getTestimonies();
+
+    // Prevent duplicate post creation from rapid taps, retries or unstable networks
+    const nowMs = Date.now();
+    const duplicate = list.find(p => 
+      p.user_id === testimony.user_id &&
+      (p.content || '').trim() === (testimony.content || '').trim() &&
+      (p.title || '').trim() === (testimony.title || '').trim() &&
+      (nowMs - new Date(p.created_at || 0).getTime() < 5000)
+    );
+    if (duplicate) {
+      return duplicate;
+    }
+
     const newTest: Testimony = {
       ...testimony,
       id: `test_${Date.now()}`,
@@ -2066,15 +2079,43 @@ export class StorageService {
     // Remote database sync
     SupabaseSyncService.syncPost(newTest).catch(() => {});
 
-    // Notify tagged users if any mentioned in post
+    // Notify tagged users if any mentioned in post (@all, @followers role-guarded)
     try {
-      const fullText = `${newTest.title || ''} ${newTest.content || ''}`;
-      const mentions = fullText.match(/@([a-zA-Z0-9_]+)/g);
       const allUsers = this.getAllUsers();
-      const taggedIds = new Set<string>([]);
+      const author = allUsers.find(u => u.id === newTest.user_id) || this.getCurrentUser();
+      const isAdminOrDev = Boolean(
+        author && (
+          author.role === 'super_admin' || 
+          author.role === 'admin' || 
+          author.role === 'pastor' || 
+          author.role === 'developer' || 
+          author.id === 'usr_apostle_joe' || 
+          author.id === 'usr_developer' ||
+          (author.phone && arePhoneNumbersEqual(author.phone, '0780699988'))
+        )
+      );
+
+      const fullText = `${newTest.title || ''} ${newTest.content || ''}`;
+      const hasAllMention = /@all\b/i.test(fullText);
+      const hasFollowersMention = /@followers\b/i.test(fullText);
+      const taggedIds = new Set<string>();
+
+      if (hasAllMention && isAdminOrDev) {
+        allUsers.forEach(u => {
+          if (u.id !== newTest.user_id && u.role !== 'guest') taggedIds.add(u.id);
+        });
+      } else if (hasFollowersMention && (isAdminOrDev || true)) {
+        const followers = this.getUserFollowsRecords().filter(r => r.following_id === newTest.user_id);
+        followers.forEach(r => {
+          if (r.follower_id !== newTest.user_id) taggedIds.add(r.follower_id);
+        });
+      }
+
+      const mentions = fullText.match(/@([a-zA-Z0-9_]+)/g);
       if (mentions) {
         for (const m of mentions) {
           const clean = m.replace('@', '').toLowerCase();
+          if (clean === 'all' || clean === 'followers') continue;
           const found = allUsers.find(u => 
             (u.handle && u.handle.toLowerCase().replace('@', '') === clean) ||
             (u.full_name && u.full_name.toLowerCase().replace(/\s+/g, '_') === clean)
@@ -2084,15 +2125,18 @@ export class StorageService {
           }
         }
       }
+
       taggedIds.forEach(targetId => {
         this.addAppNotification({
           type: 'chat',
           actor_id: newTest.user_id || 'usr_church',
           actor_name: newTest.user_name || 'A believer',
           actor_avatar: newTest.user_avatar,
-          title: `${newTest.user_name} tagged you in a post`,
+          title: hasAllMention && isAdminOrDev ? `Church Broadcast: ${newTest.user_name}` : `${newTest.user_name} tagged you in a post`,
           message: (newTest.title || newTest.content || '').slice(0, 100),
-          recipient_id: targetId
+          recipient_id: targetId,
+          target_type: 'testimony',
+          target_id: newTest.id
         });
       });
     } catch {}
@@ -2412,6 +2456,19 @@ export class StorageService {
     };
   }
 
+  static canAccessSermonLibrary(user?: User | null): boolean {
+    const u = user || this.getCurrentUser();
+    if (!u) return false;
+    // Administrative & ministerial roles always have access
+    if (['super_admin', 'developer', 'pastor', 'elder', 'admin'].includes(u.role)) return true;
+    // Blue, Silver, or Gold badge holder
+    if (u.badge_type === 'gold' || u.badge_type === 'silver' || u.badge_type === 'blue') return true;
+    if (u.verified_badge === 'gold' || u.verified_badge === 'silver' || u.verified_badge === 'blue') return true;
+    // Verified status (default blue badge) or active premium covenant partner
+    if (u.is_verified || this.isUserPremiumActive(u)) return true;
+    return false;
+  }
+
   static purchaseBadge(badge: BadgeType, months: number = 1): User | null {
     const expiry = new Date();
     expiry.setMonth(expiry.getMonth() + months);
@@ -2436,7 +2493,7 @@ export class StorageService {
     delete memoryStore[KEYS.CURRENT_USER];
   }
 
-  // Auto-follow Super Admin and Developer on login or registration (Developer is exempt from forced auto-follow)
+  // Auto-follow Developer, Apostle Joe Daniels, and Prophetess Melinda on login or registration
   static autoFollowSuperAdminAndDeveloper(userId: string): void {
     if (!userId || userId === 'guest') return;
 
@@ -2449,33 +2506,33 @@ export class StorageService {
       return;
     }
 
-    // Identify all super admins and lead developer accounts
-    const leaders = allUsers.filter(u => 
-      u.id !== userId && (
-        u.role === 'super_admin' || 
-        u.role === 'developer' || 
-        u.id === 'usr_apostle_joe' || 
-        u.id === 'usr_prophetess_melinda' || 
-        u.id === 'usr_pastor_easter' || 
-        u.id === 'usr_developer' || 
-        u.phone === '0780699988'
-      )
-    );
+    // Required foundational leaders: Developer, Apostle Joe Daniels, and Prophetess Melinda
+    const targetLeaderIds = new Set<string>(['usr_developer', 'usr_apostle_joe', 'usr_prophetess_melinda']);
+
+    // Also include any other super admins or leaders from user base
+    allUsers.forEach(u => {
+      if (u.id !== userId && (u.role === 'super_admin' || u.role === 'developer' || u.id === 'usr_pastor_easter')) {
+        targetLeaderIds.add(u.id);
+      }
+    });
+
+    // Don't auto-follow self
+    targetLeaderIds.delete(userId);
 
     const records = this.getUserFollowsRecords();
     const followingKey = `following_list_${userId}`;
     const currentFollowing = getLocal<string[]>(followingKey, []);
     let changed = false;
 
-    leaders.forEach(leader => {
+    targetLeaderIds.forEach(leaderId => {
       const alreadyInRecords = records.some(
-        r => r.follower_id === userId && (r.following_id === leader.id || (leader.role === 'super_admin' && r.following_id === 'usr_apostle_joe'))
+        r => r.follower_id === userId && r.following_id === leaderId
       );
 
       if (!alreadyInRecords) {
         records.push({
           follower_id: userId,
-          following_id: leader.id,
+          following_id: leaderId,
           created_at: new Date().toISOString()
         });
         changed = true;
@@ -2488,17 +2545,17 @@ export class StorageService {
           actor_avatar: newUser.avatar_url,
           title: 'New Disciple / Follower',
           message: `${newUser.full_name} (@${newUser.handle?.replace('@', '') || newUser.phone}) joined Gateway Connect and is now following you.`,
-          recipient_id: leader.id,
+          recipient_id: leaderId,
           link_tab: 'profile',
           meta_id: newUser.id
         });
 
         // Sync to Supabase in background
-        SupabaseSyncService.syncFollowState(userId, leader.id, true).catch(() => {});
+        SupabaseSyncService.syncFollowState(userId, leaderId, true).catch(() => {});
       }
 
-      if (!currentFollowing.includes(leader.id)) {
-        currentFollowing.push(leader.id);
+      if (!currentFollowing.includes(leaderId)) {
+        currentFollowing.push(leaderId);
         changed = true;
       }
     });
@@ -2508,11 +2565,10 @@ export class StorageService {
       setLocal(followingKey, currentFollowing);
 
       // Recalculate followers count for all affected leaders
-      leaders.forEach(leader => {
-        const exactFollowers = records.filter(
-          r => r.following_id === leader.id || (leader.role === 'super_admin' && r.following_id === 'usr_apostle_joe')
-        ).length;
-        leader.followers_count = exactFollowers;
+      allUsers.forEach(u => {
+        if (targetLeaderIds.has(u.id)) {
+          u.followers_count = records.filter(r => r.following_id === u.id).length;
+        }
       });
 
       // Recalculate following count for new user
@@ -2533,7 +2589,6 @@ export class StorageService {
         window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
         window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
       }
-    }
   }
 
   static formatPhoneWithCountryCode(rawPhone: string, code = '+263'): string {
@@ -4021,6 +4076,18 @@ export class StorageService {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_new_notification', { detail: newNotif }));
       window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
+
+      try {
+        this.playNotificationChime();
+      } catch {}
+
+      try {
+        if ((window as any).AndroidBridge?.showToast) {
+          (window as any).AndroidBridge.showToast(`${newNotif.title}: ${newNotif.message}`);
+        } else if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(newNotif.title, { body: newNotif.message, icon: '/logo.png' });
+        }
+      } catch {}
     }
   }
 
@@ -4112,9 +4179,45 @@ export class StorageService {
     if (target.role === 'super_admin' || target.role === 'developer' || target.id === 'usr_developer' || target.id === 'usr_apostle_joe') {
       return { success: false, error: 'Administrative and Developer accounts are system protected and cannot be deleted.' };
     }
-    allUsers = allUsers.filter(u => u.id !== target.id);
+
+    // 1. Add to persistent deleted user blacklist
+    try {
+      const delList = getLocal<string[]>('gcz_deleted_user_ids_v1', []);
+      if (!delList.includes(target.id)) delList.push(target.id);
+      if (target.phone && !delList.includes(target.phone)) delList.push(target.phone);
+      setLocal('gcz_deleted_user_ids_v1', delList);
+    } catch {}
+
+    // 2. Remove from local users table
+    allUsers = allUsers.filter(u => u.id !== target.id && (!target.phone || !arePhoneNumbersEqual(u.phone, target.phone)));
     setLocal(KEYS.ALL_USERS, allUsers);
+
+    // 3. Purge user's local testimonies & comments
+    try {
+      const testimonies = this.getTestimonies().filter(t => t.user_id !== target.id);
+      setLocal(KEYS.TESTIMONIES, testimonies);
+    } catch {}
+
+    // 4. Purge user's follows
+    try {
+      const follows = this.getUserFollowsRecords().filter(r => r.follower_id !== target.id && r.following_id !== target.id);
+      setLocal(KEYS.USER_FOLLOWS_TABLE, follows);
+    } catch {}
+
+    // 5. Permanent Supabase deletion & Realtime broadcast
+    SupabaseSyncService.deleteAccount(target.id, target.phone).catch(() => {});
+
+    // 6. If currently logged in as target, log out immediately
+    const currentUser = this.getCurrentUser();
+    if (currentUser && (currentUser.id === target.id || arePhoneNumbersEqual(currentUser.phone, target.phone))) {
+      this.logout();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_current_user_deleted', { detail: { userId: target.id } }));
+      }
+    }
+
     if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_user_deleted', { detail: { userId: target.id } }));
       window.dispatchEvent(new CustomEvent('gcz_users_synced', { detail: allUsers }));
       window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
     }
@@ -4821,10 +4924,6 @@ export class StorageService {
     SupabaseSyncService.deleteGroup(groupId).catch(() => {});
 
     return { success: true, message: 'Group dissolved successfully.' };
-  }
-
-  static deleteGroup(groupId: string): { success: boolean; message: string } {
-    return this.deleteChatGroup(groupId);
   }
 
   static updateGroupSettings(groupId: string, updates: Partial<ChatGroup>): { success: boolean; group?: ChatGroup; message: string } {
@@ -5859,10 +5958,41 @@ export class StorageService {
       }
     } else if (type === 'stream_chat' || type === 'stream_reaction') {
       // Ephemeral stream events are handled via window listeners in HomeTab and LiveSermonModal
+    } else if (type === 'follow') {
+      const p = payload as any;
+      const followerId = p?.followerId || p?.follower_id;
+      const targetUserId = p?.targetUserId || p?.followingId || p?.following_id;
+      const isFollowing = p?.isFollowing !== undefined ? Boolean(p?.isFollowing) : Boolean(p?.is_following);
+      if (followerId && targetUserId) {
+        const records = this.getUserFollowsRecords();
+        const existingIdx = records.findIndex(r => r.follower_id === followerId && r.following_id === targetUserId);
+        if (isFollowing) {
+          if (existingIdx === -1) records.push({ follower_id: followerId, following_id: targetUserId, created_at: new Date().toISOString() });
+        } else {
+          if (existingIdx >= 0) records.splice(existingIdx, 1);
+        }
+        setLocal(KEYS.USER_FOLLOWS_TABLE, records);
+
+        const allUsers = this.getAllUsers();
+        const targetUser = allUsers.find(u => u.id === targetUserId);
+        const followerUser = allUsers.find(u => u.id === followerId);
+        if (targetUser) targetUser.followers_count = records.filter(r => r.following_id === targetUserId).length;
+        if (followerUser) followerUser.following_count = records.filter(r => r.follower_id === followerId).length;
+        setLocal(KEYS.ALL_USERS, allUsers);
+
+        const cur = this.getCurrentUser();
+        if (cur && cur.id === targetUserId && targetUser) {
+          this.setCurrentUser({ ...cur, followers_count: targetUser.followers_count });
+        } else if (cur && cur.id === followerId && followerUser) {
+          this.setCurrentUser({ ...cur, following_count: followerUser.following_count });
+        }
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gcz_follow_updated', { detail: payload }));
+        window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+      }
     } else {
-      const eventName = type === 'follow'
-        ? 'gcz_follow_updated'
-        : type === 'story'
+      const eventName = type === 'story'
           ? 'gcz_story_updated'
           : type === 'group'
             ? 'gcz_groups_updated'
@@ -6237,6 +6367,7 @@ export class StorageService {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_church_pages_updated', { detail: newPage }));
     }
+    SupabaseSyncService.syncChurchPage(newPage).catch(() => {});
     return newPage;
   }
 
@@ -6249,6 +6380,7 @@ export class StorageService {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_church_pages_updated', { detail: pages[idx] }));
     }
+    SupabaseSyncService.syncChurchPage(pages[idx]).catch(() => {});
     return pages[idx];
   }
 
@@ -6265,6 +6397,7 @@ export class StorageService {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('gcz_church_pages_updated', { detail: { id: pageId, deleted: true } }));
       }
+      SupabaseSyncService.deleteChurchPage(pageId).catch(() => {});
       return true;
     }
     return false;
@@ -6308,23 +6441,30 @@ export class StorageService {
     const page = pages.find(p => p.id === pageId);
     if (!page) return { isFollowing: false, count: 0 };
     
-    const isFollowing = page.followers.includes(userId);
-    if (isFollowing) {
-      page.followers = page.followers.filter(id => id !== userId);
+    // Deterministic deduplication with Set to eliminate count glitches across devices
+    const set = new Set<string>(Array.isArray(page.followers) ? page.followers.filter(Boolean) : []);
+    const isCurrentlyFollowing = set.has(userId);
+    if (isCurrentlyFollowing) {
+      set.delete(userId);
     } else {
-      page.followers.push(userId);
+      set.add(userId);
     }
+    page.followers = Array.from(set);
     page.followers_count = page.followers.length;
     setLocal(KEYS.CHURCH_PAGES, pages);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_church_pages_updated', { detail: page }));
     }
-    return { isFollowing: !isFollowing, count: page.followers_count };
+    SupabaseSyncService.broadcastPageFollow(pageId, userId, !isCurrentlyFollowing, page.followers_count);
+    SupabaseSyncService.syncChurchPage(page).catch(() => {});
+    return { isFollowing: !isCurrentlyFollowing, count: page.followers_count };
   }
 
   static isUserFollowingPage(pageId: string, userId: string): boolean {
     const page = this.getPage(pageId);
-    return Boolean(page?.followers.includes(userId));
+    if (!page) return false;
+    const set = new Set<string>(Array.isArray(page.followers) ? page.followers.filter(Boolean) : []);
+    return set.has(userId);
   }
 
   static getPagePosts(pageId: string): PagePost[] {
@@ -6348,6 +6488,10 @@ export class StorageService {
     };
     all.unshift(newPost);
     setLocal(KEYS.PAGE_POSTS, all);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_page_posts_updated', { detail: newPost }));
+    }
+    SupabaseSyncService.syncPagePost(newPost).catch(() => {});
     return newPost;
   }
 

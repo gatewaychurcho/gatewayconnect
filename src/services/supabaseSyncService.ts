@@ -1,5 +1,5 @@
 import { getSupabase } from './supabaseClient';
-import { Donation, PrayerRequest, ServiceBooking, Sermon, Devotional, Testimony, PostComment, CommunityStory, CartItem, MessageReaction, GroupMediaItem, NotificationSettings, Receipt, User, ChatGroupMessage, DirectMessage, ChatGroup, LiveStreamViewer, AppNotification } from '../types';
+import { Donation, PrayerRequest, ServiceBooking, Sermon, Devotional, Testimony, PostComment, CommunityStory, CartItem, MessageReaction, GroupMediaItem, NotificationSettings, Receipt, User, ChatGroupMessage, DirectMessage, ChatGroup, LiveStreamViewer, AppNotification, ChurchPage, PagePost } from '../types';
 
 // Reads a JSON array from localStorage, tolerating blocked storage / bad data.
 function readLocalArray(key: string): any[] {
@@ -517,6 +517,40 @@ export class SupabaseSyncService {
       // Ignored
     }
 
+    // --- Church Pages --------------------------------------------------------
+    try {
+      const { data: churchPages, error: cpErr } = await supabase
+        .from('church_pages')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (!cpErr && churchPages && churchPages.length > 0) {
+        const localPages = readLocalArray('gcz_church_pages');
+        const pageMap = new Map<string, any>(localPages.filter((p: any) => p && p.id).map((p: any) => [p.id, p]));
+        for (const cp of churchPages) {
+          const existing = pageMap.get(cp.id);
+          const followersArr = Array.isArray(cp.followers) ? cp.followers : (existing?.followers || []);
+          pageMap.set(cp.id, {
+            ...existing,
+            ...cp,
+            followers: followersArr,
+            followers_count: Array.isArray(followersArr) ? followersArr.length : (cp.followers_count || 0),
+            admin_ids: Array.isArray(cp.admin_ids) ? cp.admin_ids : (existing?.admin_ids || [cp.creator_id]),
+            rules: Array.isArray(cp.rules) ? cp.rules : (existing?.rules || []),
+            agreed_user_ids: Array.isArray(cp.agreed_user_ids) ? cp.agreed_user_ids : (existing?.agreed_user_ids || [])
+          });
+        }
+        const merged = Array.from(pageMap.values());
+        localStorage.setItem('gcz_church_pages', JSON.stringify(merged));
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('gcz_church_pages_updated'));
+        }
+      }
+    } catch {
+      // Ignored for offline tolerance
+    }
+
     return { prayersCount, sermonsCount, postsCount, commentsCount };
   }
 
@@ -828,30 +862,6 @@ export class SupabaseSyncService {
     }
   }
 
-  /**
-   * Deletes group from Supabase and broadcasts group_dissolved event
-   */
-  static async deleteGroup(groupId: string): Promise<boolean> {
-    const supabase = getSupabase();
-    const channel = this.getSocialChannel();
-    if (channel) {
-      channel.send({
-        type: 'broadcast',
-        event: 'group_dissolved',
-        payload: { groupId }
-      });
-    }
-    if (!supabase || !groupId) return false;
-    try {
-      await supabase.from('chat_groups').delete().eq('id', groupId);
-      await supabase.from('group_members').delete().eq('group_id', groupId);
-      await supabase.from('chat_group_messages').delete().eq('group_id', groupId);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
   private static socialChannelInstance: any = null;
   private static socialSubscribers = new Set<{
     onNewGroupMessage?: (msg: ChatGroupMessage) => void;
@@ -882,19 +892,73 @@ export class SupabaseSyncService {
         // 1. Unified Broadcast listeners (Instant real-time dispatch across all devices)
         channel
           .on('broadcast', { event: 'new_group_message' }, ({ payload }: any) => {
-            if (!payload) return;
+            if (!payload || !payload.group_id) return;
+            try {
+              if (typeof localStorage !== 'undefined') {
+                const groupMsgs = JSON.parse(localStorage.getItem('gcz_chat_group_messages') || '{}');
+                if (!groupMsgs[payload.group_id]) groupMsgs[payload.group_id] = [];
+                const exists = groupMsgs[payload.group_id].some((m: any) => m.id === payload.id);
+                if (!exists) {
+                  groupMsgs[payload.group_id].push(payload);
+                  localStorage.setItem('gcz_chat_group_messages', JSON.stringify(groupMsgs));
+                }
+              }
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_group_messages_updated', { detail: { groupId: payload.group_id, message: payload } }));
+              try {
+                (window as any).gcz_handle_incoming_group_message?.(payload);
+              } catch {}
+            }
             this.socialSubscribers.forEach(cb => cb.onNewGroupMessage?.(payload));
           })
           .on('broadcast', { event: 'new_direct_message' }, ({ payload }: any) => {
-            if (!payload) return;
+            if (!payload || !payload.id) return;
+            try {
+              if (typeof localStorage !== 'undefined') {
+                const dms = readLocalArray('gcz_direct_messages');
+                const exists = dms.some((m: any) => m.id === payload.id);
+                if (!exists) {
+                  dms.push(payload);
+                  localStorage.setItem('gcz_direct_messages', JSON.stringify(dms));
+                }
+              }
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_direct_messages_updated', { detail: payload }));
+              try {
+                (window as any).gcz_handle_incoming_direct_message?.(payload);
+              } catch {}
+            }
             this.socialSubscribers.forEach(cb => cb.onNewDirectMessage?.(payload));
           })
           .on('broadcast', { event: 'delete_group_message' }, ({ payload }: any) => {
             if (!payload) return;
+            try {
+              if (typeof localStorage !== 'undefined' && payload.groupId && payload.messageId) {
+                const groupMsgs = JSON.parse(localStorage.getItem('gcz_chat_group_messages') || '{}');
+                if (groupMsgs[payload.groupId]) {
+                  groupMsgs[payload.groupId] = groupMsgs[payload.groupId].filter((m: any) => m.id !== payload.messageId);
+                  localStorage.setItem('gcz_chat_group_messages', JSON.stringify(groupMsgs));
+                }
+              }
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_group_messages_updated', { detail: payload }));
+            }
             this.socialSubscribers.forEach(cb => cb.onDeleteGroupMessage?.(payload));
           })
           .on('broadcast', { event: 'delete_direct_message' }, ({ payload }: any) => {
             if (!payload) return;
+            try {
+              if (typeof localStorage !== 'undefined' && payload.messageId) {
+                const dms = readLocalArray('gcz_direct_messages').filter((m: any) => m.id !== payload.messageId);
+                localStorage.setItem('gcz_direct_messages', JSON.stringify(dms));
+              }
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_direct_messages_updated', { detail: payload }));
+            }
             this.socialSubscribers.forEach(cb => cb.onDeleteDirectMessage?.(payload));
           })
           .on('broadcast', { event: 'delete_post' }, ({ payload }: any) => {
@@ -911,7 +975,28 @@ export class SupabaseSyncService {
             this.socialSubscribers.forEach(cb => cb.onDeletePost?.({ id: postId, deleted: true }));
           })
           .on('broadcast', { event: 'user_profile_updated' }, ({ payload }: any) => {
-            if (!payload) return;
+            if (!payload || !payload.id) return;
+            try {
+              if (typeof localStorage !== 'undefined') {
+                const allUsers = readLocalArray('gcz_all_users');
+                const idx = allUsers.findIndex((u: any) => u.id === payload.id || (u.phone && payload.phone && u.phone === payload.phone));
+                if (idx >= 0) {
+                  allUsers[idx] = { ...allUsers[idx], ...payload };
+                  localStorage.setItem('gcz_all_users', JSON.stringify(allUsers));
+                }
+                const curRaw = localStorage.getItem('gcz_current_user');
+                if (curRaw) {
+                  const cur = JSON.parse(curRaw);
+                  if (cur.id === payload.id || (cur.phone && payload.phone && cur.phone === payload.phone)) {
+                    localStorage.setItem('gcz_current_user', JSON.stringify({ ...cur, ...payload }));
+                  }
+                }
+              }
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: payload }));
+              window.dispatchEvent(new CustomEvent('gcz_users_synced'));
+            }
             this.socialSubscribers.forEach(cb => cb.onUserProfileUpdated?.(payload));
           })
           .on('broadcast', { event: 'group_member_changed' }, ({ payload }: any) => {
@@ -925,7 +1010,81 @@ export class SupabaseSyncService {
           })
           .on('broadcast', { event: 'follow_updated' }, ({ payload }: any) => {
             if (!payload) return;
+            const followerId = payload.followerId || payload.follower_id;
+            const targetUserId = payload.targetUserId || payload.followingId || payload.following_id;
+            const isFollowing = payload.isFollowing !== undefined ? Boolean(payload.isFollowing) : Boolean(payload.is_following);
+            if (followerId && targetUserId) {
+              try {
+                if (typeof localStorage !== 'undefined') {
+                  const records = readLocalArray('gcz_user_follows_v1');
+                  const idx = records.findIndex((r: any) => r.follower_id === followerId && r.following_id === targetUserId);
+                  if (isFollowing) {
+                    if (idx === -1) records.push({ follower_id: followerId, following_id: targetUserId, created_at: new Date().toISOString() });
+                  } else {
+                    if (idx >= 0) records.splice(idx, 1);
+                  }
+                  localStorage.setItem('gcz_user_follows_v1', JSON.stringify(records));
+
+                  const allUsers = readLocalArray('gcz_all_users');
+                  const targetUser = allUsers.find((u: any) => u.id === targetUserId);
+                  const followerUser = allUsers.find((u: any) => u.id === followerId);
+                  if (targetUser) targetUser.followers_count = records.filter((r: any) => r.following_id === targetUserId).length;
+                  if (followerUser) followerUser.following_count = records.filter((r: any) => r.follower_id === followerId).length;
+                  localStorage.setItem('gcz_all_users', JSON.stringify(allUsers));
+
+                  const curRaw = localStorage.getItem('gcz_current_user');
+                  if (curRaw) {
+                    const cur = JSON.parse(curRaw);
+                    if (cur.id === targetUserId && targetUser) {
+                      cur.followers_count = targetUser.followers_count;
+                      localStorage.setItem('gcz_current_user', JSON.stringify(cur));
+                    } else if (cur.id === followerId && followerUser) {
+                      cur.following_count = followerUser.following_count;
+                      localStorage.setItem('gcz_current_user', JSON.stringify(cur));
+                    }
+                  }
+                }
+              } catch {}
+            }
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_follow_updated', { detail: payload }));
+              window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+            }
             this.socialSubscribers.forEach(cb => cb.onFollowUpdated?.(payload));
+          })
+          .on('broadcast', { event: 'account_deleted' }, ({ payload }: any) => {
+            if (!payload) return;
+            const delUserId = payload.userId || payload.id;
+            const delPhone = payload.userPhone || payload.phone;
+            if (!delUserId && !delPhone) return;
+            try {
+              if (typeof localStorage !== 'undefined') {
+                const delIds = readLocalArray('gcz_deleted_user_ids_v1');
+                if (delUserId && !delIds.includes(delUserId)) delIds.push(delUserId);
+                if (delPhone && !delIds.includes(delPhone)) delIds.push(delPhone);
+                localStorage.setItem('gcz_deleted_user_ids_v1', JSON.stringify(delIds));
+
+                const allUsers = readLocalArray('gcz_all_users').filter((u: any) => u.id !== delUserId && (!delPhone || u.phone !== delPhone));
+                localStorage.setItem('gcz_all_users', JSON.stringify(allUsers));
+
+                const curRaw = localStorage.getItem('gcz_current_user');
+                if (curRaw) {
+                  const cur = JSON.parse(curRaw);
+                  if (cur.id === delUserId || (delPhone && cur.phone === delPhone)) {
+                    localStorage.removeItem('gcz_current_user');
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new CustomEvent('gcz_current_user_deleted', { detail: { userId: delUserId } }));
+                      window.location.reload();
+                    }
+                  }
+                }
+              }
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_user_deleted', { detail: { userId: delUserId } }));
+              window.dispatchEvent(new CustomEvent('gcz_users_synced'));
+              window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+            }
           })
           .on('broadcast', { event: 'streamer_joined' }, ({ payload }: any) => {
             if (!payload) return;
@@ -938,11 +1097,104 @@ export class SupabaseSyncService {
           })
           .on('broadcast', { event: 'new_notification' }, ({ payload }: any) => {
             if (!payload) return;
+            try {
+              if (typeof localStorage !== 'undefined' && payload.id) {
+                const notifs = readLocalArray('gcz_app_notifications');
+                if (!notifs.some((n: any) => n.id === payload.id)) {
+                  notifs.unshift(payload);
+                  localStorage.setItem('gcz_app_notifications', JSON.stringify(notifs));
+                }
+              }
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_new_notification', { detail: payload }));
+              window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
+            }
             this.socialSubscribers.forEach(cb => cb.onNotificationCreated?.(payload));
           })
           .on('broadcast', { event: 'ban_status_updated' }, ({ payload }: any) => {
             if (!payload) return;
             this.socialSubscribers.forEach(cb => cb.onBanStatusUpdated?.(payload));
+          })
+          .on('broadcast', { event: 'church_page_created' }, ({ payload }: any) => {
+            const page = payload?.page;
+            if (!page || !page.id) return;
+            if (typeof window !== 'undefined') {
+              try {
+                const pages = JSON.parse(localStorage.getItem('gcz_church_pages') || '[]');
+                const idx = pages.findIndex((p: any) => p.id === page.id);
+                if (idx === -1) {
+                  pages.unshift(page);
+                  localStorage.setItem('gcz_church_pages', JSON.stringify(pages));
+                }
+              } catch {}
+              window.dispatchEvent(new CustomEvent('gcz_church_pages_updated', { detail: page }));
+            }
+          })
+          .on('broadcast', { event: 'church_page_updated' }, ({ payload }: any) => {
+            const page = payload?.page;
+            if (!page || !page.id) return;
+            if (typeof window !== 'undefined') {
+              try {
+                const pages = JSON.parse(localStorage.getItem('gcz_church_pages') || '[]');
+                const idx = pages.findIndex((p: any) => p.id === page.id);
+                if (idx !== -1) {
+                  pages[idx] = { ...pages[idx], ...page };
+                } else {
+                  pages.unshift(page);
+                }
+                localStorage.setItem('gcz_church_pages', JSON.stringify(pages));
+              } catch {}
+              window.dispatchEvent(new CustomEvent('gcz_church_pages_updated', { detail: page }));
+            }
+          })
+          .on('broadcast', { event: 'church_page_deleted' }, ({ payload }: any) => {
+            const pageId = payload?.id;
+            if (!pageId) return;
+            if (typeof window !== 'undefined') {
+              try {
+                const pages = JSON.parse(localStorage.getItem('gcz_church_pages') || '[]');
+                const filtered = pages.filter((p: any) => p.id !== pageId);
+                localStorage.setItem('gcz_church_pages', JSON.stringify(filtered));
+                const posts = JSON.parse(localStorage.getItem('gcz_page_posts') || '[]');
+                const filteredPosts = posts.filter((p: any) => p.page_id !== pageId);
+                localStorage.setItem('gcz_page_posts', JSON.stringify(filteredPosts));
+              } catch {}
+              window.dispatchEvent(new CustomEvent('gcz_church_pages_updated', { detail: { id: pageId, deleted: true } }));
+            }
+          })
+          .on('broadcast', { event: 'church_page_follow_updated' }, ({ payload }: any) => {
+            const { pageId, userId, isFollowing, count } = payload || {};
+            if (!pageId || !userId) return;
+            if (typeof window !== 'undefined') {
+              try {
+                const pages = JSON.parse(localStorage.getItem('gcz_church_pages') || '[]');
+                const p = pages.find((pg: any) => pg.id === pageId);
+                if (p) {
+                  const set = new Set(Array.isArray(p.followers) ? p.followers : []);
+                  if (isFollowing) set.add(userId);
+                  else set.delete(userId);
+                  p.followers = Array.from(set);
+                  p.followers_count = count !== undefined ? count : p.followers.length;
+                  localStorage.setItem('gcz_church_pages', JSON.stringify(pages));
+                }
+              } catch {}
+              window.dispatchEvent(new CustomEvent('gcz_church_pages_updated', { detail: payload }));
+            }
+          })
+          .on('broadcast', { event: 'church_page_post_created' }, ({ payload }: any) => {
+            const post = payload?.post;
+            if (!post || !post.id) return;
+            if (typeof window !== 'undefined') {
+              try {
+                const posts = JSON.parse(localStorage.getItem('gcz_page_posts') || '[]');
+                if (!posts.some((p: any) => p.id === post.id)) {
+                  posts.unshift(post);
+                  localStorage.setItem('gcz_page_posts', JSON.stringify(posts));
+                }
+              } catch {}
+              window.dispatchEvent(new CustomEvent('gcz_page_posts_updated', { detail: post }));
+            }
           })
 
           // 2. Database triggers (PostgreSQL Realtime replication)
@@ -1135,25 +1387,28 @@ export class SupabaseSyncService {
 
       if (error || !data) return [];
 
-      return data.map((row: any) => ({
-        id: row.id,
-        phone: row.phone,
-        password: row.password_hash || 'juice2026',
-        full_name: row.full_name || 'Church Member',
-        handle: row.referral_code?.startsWith('@') ? row.referral_code : `@${(row.full_name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-        role: row.role || 'member',
-        badge_type: (row.role === 'super_admin' || row.role === 'developer') ? 'gold' : 'none',
-        avatar_url: row.avatar_url || null,
-        cell_group: row.cell_group || 'Harare Assembly',
-        is_verified: row.is_verified || false,
-        member_id: row.member_id || `GCZ-MEM-${Math.floor(1000 + Math.random() * 9000)}`,
-        location: row.location || 'Harare',
-        city_location: row.city_location || 'Harare',
-        created_at: row.created_at || new Date().toISOString(),
-        followers_count: row.followers_count || 0,
-        following_count: row.following_count || 0,
-        saved_verses: row.saved_verses || ['John 1:1', 'Isaiah 40:31']
-      }));
+      const deletedIds = new Set(readLocalArray('gcz_deleted_user_ids_v1'));
+      return data
+        .filter((row: any) => !deletedIds.has(row.id) && (!row.phone || !deletedIds.has(row.phone)))
+        .map((row: any) => ({
+          id: row.id,
+          phone: row.phone,
+          password: row.password_hash || 'juice2026',
+          full_name: row.full_name || 'Church Member',
+          handle: row.referral_code?.startsWith('@') ? row.referral_code : `@${(row.full_name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+          role: row.role || 'member',
+          badge_type: (row.role === 'super_admin' || row.role === 'developer') ? 'gold' : 'none',
+          avatar_url: row.avatar_url || null,
+          cell_group: row.cell_group || 'Harare Assembly',
+          is_verified: row.is_verified || false,
+          member_id: row.member_id || `GCZ-MEM-${Math.floor(1000 + Math.random() * 9000)}`,
+          location: row.location || 'Harare',
+          city_location: row.city_location || 'Harare',
+          created_at: row.created_at || new Date().toISOString(),
+          followers_count: row.followers_count || 0,
+          following_count: row.following_count || 0,
+          saved_verses: row.saved_verses || ['John 1:1', 'Isaiah 40:31']
+        }));
     } catch {
       return [];
     }
@@ -1310,6 +1565,46 @@ export class SupabaseSyncService {
       Promise.resolve(supabase.from('posts').delete().eq('id', postId)).catch(() => {});
       Promise.resolve(supabase.from('testimonies').delete().eq('id', postId)).catch(() => {});
       Promise.resolve(supabase.from('post_comments').delete().eq('post_id', postId)).catch(() => {});
+    }
+    return true;
+  }
+
+  /**
+   * Permanently purges user account and cascading data from Supabase PostgreSQL and broadcasts platform-wide
+   */
+  static async deleteAccount(userId: string, userPhone?: string): Promise<boolean> {
+    if (!userId && !userPhone) return false;
+    try {
+      const delList = readLocalArray('gcz_deleted_user_ids_v1');
+      if (userId && !delList.includes(userId)) delList.push(userId);
+      if (userPhone && !delList.includes(userPhone)) delList.push(userPhone);
+      localStorage.setItem('gcz_deleted_user_ids_v1', JSON.stringify(delList));
+    } catch {}
+
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'account_deleted',
+        payload: { userId, userPhone, deleted: true }
+      });
+    }
+
+    const supabase = getSupabase();
+    if (supabase) {
+      if (userId) {
+        Promise.resolve(supabase.from('users').delete().eq('id', userId)).catch(() => {});
+        Promise.resolve(supabase.from('posts').delete().eq('user_id', userId)).catch(() => {});
+        Promise.resolve(supabase.from('testimonies').delete().eq('user_id', userId)).catch(() => {});
+        Promise.resolve(supabase.from('post_comments').delete().eq('user_id', userId)).catch(() => {});
+        Promise.resolve(supabase.from('messages').delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)).catch(() => {});
+        Promise.resolve(supabase.from('user_follows').delete().or(`follower_id.eq.${userId},following_id.eq.${userId}`)).catch(() => {});
+        Promise.resolve(supabase.from('notifications').delete().or(`recipient_id.eq.${userId},actor_id.eq.${userId}`)).catch(() => {});
+        Promise.resolve(supabase.from('church_pages').delete().eq('creator_id', userId)).catch(() => {});
+      }
+      if (userPhone) {
+        Promise.resolve(supabase.from('users').delete().eq('phone', userPhone)).catch(() => {});
+      }
     }
     return true;
   }
@@ -1712,6 +2007,170 @@ export class SupabaseSyncService {
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Syncs a ChurchPage to Supabase PostgreSQL and broadcasts in real-time
+   */
+  static async syncChurchPage(page: ChurchPage): Promise<{ success: boolean; error?: string }> {
+    const supabase = getSupabase();
+    this.broadcastChurchPageUpdated(page);
+
+    if (!supabase) return { success: true };
+    try {
+      const { error } = await supabase.from('church_pages').upsert({
+        id: page.id,
+        name: page.name,
+        handle: page.handle,
+        category: page.category,
+        bio: page.bio || '',
+        avatar_url: page.avatar_url || '',
+        cover_url: page.cover_url || '',
+        creator_id: page.creator_id,
+        creator_name: page.creator_name || '',
+        admin_ids: page.admin_ids || [page.creator_id],
+        website_url: page.website_url || null,
+        phone_number: page.phone_number || null,
+        whatsapp_link: page.whatsapp_link || null,
+        contact_email: page.contact_email || null,
+        location: page.location || null,
+        followers_count: Array.isArray(page.followers) ? page.followers.length : (page.followers_count || 0),
+        followers: page.followers || [],
+        verified: Boolean(page.verified),
+        pinned_announcement: page.pinned_announcement || null,
+        rules: page.rules || [],
+        agreed_user_ids: page.agreed_user_ids || [],
+        created_at: page.created_at || new Date().toISOString()
+      }, { onConflict: 'id' });
+
+      if (error) {
+        console.warn('Supabase church_page sync note:', error.message);
+      }
+      return { success: !error, error: error?.message };
+    } catch (err: any) {
+      console.warn('Supabase church_page sync error:', err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Deletes a ChurchPage from Supabase PostgreSQL and broadcasts deletion
+   */
+  static async deleteChurchPage(pageId: string): Promise<{ success: boolean; error?: string }> {
+    const supabase = getSupabase();
+    this.broadcastChurchPageDeleted(pageId);
+
+    if (!supabase) return { success: true };
+    try {
+      const { error } = await supabase.from('church_pages').delete().eq('id', pageId);
+      if (error) {
+        console.warn('Supabase church_page delete note:', error.message);
+      }
+      return { success: !error, error: error?.message };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Broadcasts church page creation
+   */
+  static broadcastChurchPageCreated(page: ChurchPage): void {
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'church_page_created',
+        payload: { page }
+      }).catch(() => {});
+    }
+  }
+
+  /**
+   * Broadcasts church page update
+   */
+  static broadcastChurchPageUpdated(page: ChurchPage): void {
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'church_page_updated',
+        payload: { page }
+      }).catch(() => {});
+    }
+  }
+
+  /**
+   * Broadcasts church page deletion
+   */
+  static broadcastChurchPageDeleted(pageId: string): void {
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'church_page_deleted',
+        payload: { id: pageId }
+      }).catch(() => {});
+    }
+  }
+
+  /**
+   * Broadcasts church page follower update
+   */
+  static broadcastPageFollow(pageId: string, userId: string, isFollowing: boolean, count: number): void {
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'church_page_follow_updated',
+        payload: { pageId, userId, isFollowing, count }
+      }).catch(() => {});
+    }
+  }
+
+  /**
+   * Syncs page post to Supabase
+   */
+  static async syncPagePost(post: PagePost): Promise<{ success: boolean; error?: string }> {
+    const supabase = getSupabase();
+    this.broadcastPagePostCreated(post);
+
+    if (!supabase) return { success: true };
+    try {
+      const { error } = await supabase.from('page_posts').upsert({
+        id: post.id,
+        page_id: post.page_id,
+        author_id: post.author_id,
+        author_name: post.author_name,
+        author_avatar: post.author_avatar || null,
+        content: post.content,
+        image_url: post.image_url || null,
+        likes: post.likes || [],
+        comments_count: post.comments_count || 0,
+        created_at: post.created_at || new Date().toISOString()
+      }, { onConflict: 'id' });
+
+      if (error) {
+        console.warn('Supabase page_posts sync note:', error.message);
+      }
+      return { success: !error, error: error?.message };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Broadcasts page post creation
+   */
+  static broadcastPagePostCreated(post: PagePost): void {
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'church_page_post_created',
+        payload: { post }
+      }).catch(() => {});
     }
   }
 }
