@@ -2500,5 +2500,20 @@ export class SupabaseSyncService {
       }).catch(() => {});
     }
   }
+
+  /**
+   * Deletes a chat group from Supabase
+   */
+  static async deleteGroup(groupId: string): Promise<boolean> {
+    const supabase = getSupabase();
+    if (!supabase) return false;
+    try {
+      await supabase.from('chat_groups').delete().eq('id', groupId);
+      await supabase.from('community_groups').delete().eq('id', groupId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 

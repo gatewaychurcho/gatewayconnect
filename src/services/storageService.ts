@@ -5350,6 +5350,10 @@ export class StorageService {
     return { success: true, newCode, message: 'Invite link reset successfully. Previous link is now invalid.', group: grp };
   }
 
+  static deleteGroup(groupId: string): { success: boolean; message: string } {
+    return this.deleteChatGroup(groupId);
+  }
+
   static deleteChatGroup(groupId: string): { success: boolean; message: string } {
     // Add to dissolved groups registry
     const dissolved = getLocal<string[]>(KEYS.DISSOLVED_GROUPS, []);
