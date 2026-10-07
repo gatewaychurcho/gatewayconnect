@@ -52,6 +52,22 @@ export function subscribeToRealtime(
     }
   );
 
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'testimonies' },
+    (payload) => {
+      handlers.posts?.(payload);
+    }
+  );
+
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'post_likes' },
+    (payload) => {
+      handlers.posts?.(payload);
+    }
+  );
+
   // 4. Post Comments
   channel.on(
     'postgres_changes',
@@ -96,6 +112,15 @@ export function subscribeToRealtime(
     { event: '*', schema: 'public', table: 'users' },
     (payload) => {
       handlers.users?.(payload);
+    }
+  );
+
+  // 7c. User Follows Realtime Synchronization
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'user_follows' },
+    (payload) => {
+      handlers.onBroadcastEvent?.({ type: 'follow', payload: payload.new || payload.old });
     }
   );
 
