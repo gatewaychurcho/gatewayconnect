@@ -61,7 +61,7 @@ import { testSupabaseConnection } from '../../services/supabaseClient';
 import { downloadCsvForExcel } from '../../utils/exportUtils';
 import { SUPABASE_SCHEMA_SQL } from '../../data/flutterExportData';
 import { PaynowConfigModal } from '../modals/PaynowConfigModal';
-import { User, UnbanAppeal, PasswordResetRequest, StreamAttendanceRecord, LiveStreamViewer, SUPPORTED_CITIES, ChurchPage, ChatGroup } from '../../types';
+import { User, UnbanAppeal, PasswordResetRequest, StreamAttendanceRecord, LiveStreamViewer, SUPPORTED_CITIES, ChurchPage, ChatGroup, CommunityGroup } from '../../types';
 import type { UserRole } from '../../types';
 import { AdminCyberBackground } from '../admin/AdminCyberBackground';
 import { CONFIG } from '../../../config';
@@ -137,7 +137,7 @@ interface DevConsoleProps {
 export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterExport, onSwitchUser }) => {
   const [activeTab, setActiveTab] = useState<'telemetry' | 'pages' | 'streamers' | 'bans' | 'appeals' | 'passwords' | 'godmode' | 'schema' | 'logs' | 'endpoints' | 'accounts'>('telemetry');
   const [devPages, setDevPages] = useState<ChurchPage[]>(() => StorageService.getPages());
-  const [devGroups, setDevGroups] = useState<ChatGroup[]>(() => StorageService.getGroups());
+  const [devGroups, setDevGroups] = useState<CommunityGroup[]>(() => StorageService.getGroups());
   const [devPageSearch, setDevPageSearch] = useState<string>('');
   const [showPaynowModal, setShowPaynowModal] = useState(false);
   const [isPingingSupabase, setIsPingingSupabase] = useState(false);
@@ -1470,7 +1470,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                               </span>
                             </div>
                             <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] text-slate-300">
-                              {group.members_count || (group.members || []).length || 0} members
+                              {group.member_count || (group as any).members_count || ((group as any).members || []).length || 0} members
                             </span>
                           </div>
                           {group.description && (
