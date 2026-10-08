@@ -115,6 +115,38 @@ export function subscribeToRealtime(
     }
   );
 
+  // 7b-2. Profile Pictures instant syncing everywhere (Android, Web, Admin, Dev)
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'profile_pictures' },
+    (payload) => {
+      handlers.users?.(payload);
+    }
+  );
+
+  // 7b-3. Broadcast user_profile_updated event across all platforms
+  channel.on('broadcast', { event: 'user_profile_updated' }, (envelope: any) => {
+    if (envelope?.payload) {
+      handlers.users?.({ eventType: 'UPDATE', new: envelope.payload });
+    }
+  });
+
+  // 7b-4. Broadcast gallery updates
+  channel.on('broadcast', { event: 'gallery_updated' }, (envelope: any) => {
+    if (typeof window !== 'undefined' && envelope?.payload) {
+      window.dispatchEvent(new CustomEvent('gcz_gallery_updated', { detail: envelope.payload }));
+      window.dispatchEvent(new CustomEvent('gcz_media_library_updated', { detail: envelope.payload }));
+    }
+  });
+
+  // 7b-5. Broadcast purge old posts (8+ days)
+  channel.on('broadcast', { event: 'purge_old_posts' }, (envelope: any) => {
+    if (typeof window !== 'undefined' && envelope?.payload) {
+      window.dispatchEvent(new CustomEvent('gcz_testimony_deleted', { detail: envelope.payload }));
+      window.dispatchEvent(new CustomEvent('gcz_testimony_updated', { detail: envelope.payload }));
+    }
+  });
+
   // 7c. User Follows Realtime Synchronization
   channel.on(
     'postgres_changes',
