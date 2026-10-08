@@ -1,5 +1,6 @@
 import { getSupabase } from './supabaseClient';
 import { StorageBucketService } from './StorageBucketService';
+import { StorageService } from './storageService';
 import { Donation, PrayerRequest, ServiceBooking, Sermon, Devotional, Testimony, PostComment, CommunityStory, CartItem, MessageReaction, GroupMediaItem, NotificationSettings, Receipt, User, ChatGroupMessage, DirectMessage, ChatGroup, LiveStreamViewer, AppNotification, ChurchPage, PagePost } from '../types';
 
 // Reads a JSON array from localStorage, tolerating blocked storage / bad data.
@@ -240,6 +241,9 @@ export class SupabaseSyncService {
         metadata: { post_id: postId, reaction: reactionType, timestamp: new Date().toISOString() }
       });
       return !error;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -2519,6 +2523,29 @@ export class SupabaseSyncService {
         event: 'church_page_post_created',
         payload: { post }
       }).catch(() => {});
+    }
+  }
+
+  /**
+   * Deletes a chat group and its community group entry from Supabase
+   */
+  static async deleteGroup(groupId: string): Promise<boolean> {
+    const supabase = getSupabase();
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'group_dissolved',
+        payload: { groupId }
+      }).catch(() => {});
+    }
+    if (!supabase) return true;
+    try {
+      await supabase.from('chat_groups').delete().eq('id', groupId);
+      await supabase.from('community_groups').delete().eq('id', groupId);
+      return true;
+    } catch {
+      return false;
     }
   }
 }

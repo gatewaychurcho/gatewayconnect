@@ -6,7 +6,8 @@
   position: fixed;
   inset: 0;
   z-index: 999999;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   align-items: center;

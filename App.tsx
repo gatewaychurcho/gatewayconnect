@@ -417,6 +417,10 @@ export default function App() {
     setShowAuthModal(false);
   };
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeTab]);
+
   // Website splash screen
   if (showSplash) {
     return <SplashScreen onComplete={() => setShowSplash(false)} />;
@@ -474,7 +478,7 @@ export default function App() {
   }
 
   return (
-    <div className="gcz-app-shell min-h-screen bg-[var(--gcz-bg-page)] text-[var(--gcz-text-main)] flex flex-col selection:bg-primary selection:text-white transition-colors duration-200 overflow-x-hidden w-full max-w-full">
+    <div className="gcz-app-shell min-h-screen bg-[var(--gcz-bg-page)] text-[var(--gcz-text-main)] flex flex-col selection:bg-primary selection:text-white transition-colors duration-200 w-full max-w-full">
       
       {/* 1. Main Header */}
       <Header
@@ -494,7 +498,7 @@ export default function App() {
       />
 
       {/* 2. Main Content Area */}
-      <main className="gcz-main flex-1 w-full max-w-5xl mx-auto px-2 sm:px-4 py-2 sm:py-3 pb-24 sm:pb-20 overflow-x-hidden">
+      <main className="gcz-main flex-1 w-full max-w-5xl mx-auto px-2 sm:px-4 py-2 sm:py-3 pb-24 sm:pb-20">
         {activeTab === 'home' && (
           <HomeTab
             sermons={sermons}

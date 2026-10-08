@@ -471,7 +471,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   };
 
   return (
-    <div className="min-h-screen min-h-[100dvh] bg-background text-foreground flex flex-col justify-center items-center p-3 sm:p-6 lg:p-10 overflow-y-auto py-8">
+    <div className="min-h-screen min-h-[100dvh] bg-background text-foreground flex flex-col justify-center items-center p-3 sm:p-6 lg:p-10 py-8">
       
       {/* Container with Modern Responsive Split Layout on Desktop & Compact Card on Mobile */}
       <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">

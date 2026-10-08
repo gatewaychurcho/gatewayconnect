@@ -242,7 +242,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ user, onComp
   };
 
   return (
-    <div className="min-h-screen min-h-[100dvh] bg-background text-foreground flex flex-col items-center justify-center p-3 sm:p-6 overflow-y-auto py-8">
+    <div className="min-h-screen min-h-[100dvh] bg-background text-foreground flex flex-col items-center justify-center p-3 sm:p-6 py-8">
       <div className="w-full max-w-xl bg-card border border-border rounded-2xl shadow-2xl p-5 sm:p-8 space-y-6 animate-in fade-in duration-300">
         
         {/* Ministry Brand Header */}

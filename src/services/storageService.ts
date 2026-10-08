@@ -67,6 +67,7 @@ import {
 } from '../data/mockData';
 import { SupabaseSyncService } from './supabaseSyncService';
 import { StorageBucketService } from './StorageBucketService';
+import { liveSyncService } from './liveSyncService';
 import { DEFAULT_SERMON_CATEGORIES, INITIAL_EXTENDED_SERMONS } from '../data/sermonCatalog';
 import { CONFIG } from '../../config';
 import { LocalMediaStore } from './localMediaStore';
@@ -1003,13 +1004,13 @@ export class StorageService {
 
       const supabase = getSupabase();
       if (supabase) {
-        supabase.from('user_activities').insert({
+        Promise.resolve(supabase.from('user_activities').insert({
           activity_type: event.type,
           target_id: event.targetId,
           user_id: event.userId || this.getCurrentUser()?.id || null,
           created_at: newEvt.iso,
           metadata: { ...event.metadata, duration: event.durationSeconds }
-        }).catch(() => {});
+        })).catch(() => {});
       }
     } catch {}
   }
@@ -3237,7 +3238,7 @@ export class StorageService {
     // Silver or unverified users can view the library catalog, but cannot play restricted videos.
     const badge = u.badge_type || u.verified_badge;
     if (badge === 'gold' || badge === 'blue') return true;
-    if (u.is_verified && (!badge || badge === 'blue')) return true;
+    if (u.is_verified && !badge) return true;
     return false;
   }
 
@@ -3361,6 +3362,7 @@ export class StorageService {
         window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
         window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
       }
+    }
   }
 
   static formatPhoneWithCountryCode(rawPhone: string, code = '+263'): string {
@@ -5628,6 +5630,10 @@ export class StorageService {
     return { success: true, newCode, message: 'Invite link reset successfully. Previous link is now invalid.', group: grp };
   }
 
+  static deleteGroup(groupId: string): { success: boolean; message: string } {
+    return this.deleteChatGroup(groupId);
+  }
+
   static deleteChatGroup(groupId: string): { success: boolean; message: string } {
     // Add to dissolved groups registry
     const dissolved = getLocal<string[]>(KEYS.DISSOLVED_GROUPS, []);
@@ -6734,7 +6740,6 @@ export class StorageService {
       const p = payload as any;
       const isFollowing = p?.isFollowing !== undefined ? Boolean(p?.isFollowing) : Boolean(p?.is_following !== false);
       this.syncFollowsRecordFromRealtime(isFollowing ? 'INSERT' : 'DELETE', p);
-    }
     } else {
       const eventName = type === 'story'
           ? 'gcz_story_updated'
