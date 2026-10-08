@@ -167,11 +167,8 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
     // 2. Filter by channel (@joedaniels-official or @JoeDanielsPodcastshow)
     if (selectedChannel !== 'all') {
       result = result.filter(s => {
-        if (selectedChannel === '@JoeDanielsPodcastshow') {
-          return s.channel === '@JoeDanielsPodcastshow' || s.series?.toLowerCase().includes('podcast') || s.title?.toLowerCase().includes('podcast');
-        } else {
-          return s.channel === '@joedaniels-official' || !s.channel || (!s.series?.toLowerCase().includes('podcast') && !s.title?.toLowerCase().includes('podcast'));
-        }
+        const chan = s.channel || (s.series?.toLowerCase().includes('podcast') || s.title?.toLowerCase().includes('podcast') ? '@JoeDanielsPodcastshow' : '@joedaniels-official');
+        return chan === selectedChannel;
       });
     }
 
@@ -550,7 +547,7 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
               : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
           )}
         >
-          All Channels ({sermons.length})
+          Official Channels ({sermons.length})
         </button>
         <button
           onClick={() => setSelectedChannel('@joedaniels-official')}

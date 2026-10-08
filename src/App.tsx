@@ -237,8 +237,9 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Initialize persistent social realtime broadcast channel
+    // Initialize persistent social realtime broadcast channel & purge posts 8+ days old
     try {
+      StorageService.purgeOldPosts(8);
       SupabaseSyncService.getSocialChannel();
     } catch {}
 
@@ -371,8 +372,25 @@ export default function App() {
           console.log('Realtime reaction:', payload);
           refreshAppData();
         },
-        users: (payload) => {
+        users: (payload: any) => {
           console.log('Realtime user account change:', payload);
+          const raw = payload?.new || payload;
+          if (raw) {
+            const userId = raw.id || raw.user_id;
+            const avatarUrl = raw.avatar_url;
+            if (userId && avatarUrl) {
+              StorageService.setPermanentCustomAvatar(userId, raw.phone || '', avatarUrl);
+            }
+            if (raw.id && (raw.full_name || raw.role || raw.avatar_url)) {
+              StorageService.applyRemoteUserUpdate(raw);
+            }
+            if (currentUser && (currentUser.id === userId || (currentUser.phone && raw.phone && currentUser.phone === raw.phone))) {
+              const freshUser = { ...currentUser, ...raw };
+              if (avatarUrl) freshUser.avatar_url = avatarUrl;
+              StorageService.setCurrentUser(freshUser);
+              setCurrentUser(freshUser);
+            }
+          }
           StorageService.syncUsersWithRemote()
             .catch(() => {})
             .finally(() => refreshAppData());

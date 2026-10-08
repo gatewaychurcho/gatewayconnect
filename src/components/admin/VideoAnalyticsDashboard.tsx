@@ -31,30 +31,32 @@ export const VideoAnalyticsDashboard: React.FC<VideoAnalyticsDashboardProps> = (
   onClose,
   onPlaySermon
 }) => {
-  const [analytics, setAnalytics] = useState(() => StorageService.getSermonAnalytics());
+  const [timeRange, setTimeRange] = useState<'7d' | '28d' | 'all'>('28d');
+  const [analytics, setAnalytics] = useState(() => StorageService.getSermonAnalytics('28d'));
   const [activeTab, setActiveTab] = useState<'most_viewed' | 'most_liked' | 'top_player'>('most_viewed');
   const [searchFilter, setSearchFilter] = useState('');
-  const [timeRange, setTimeRange] = useState<'7d' | '28d' | 'all'>('28d');
 
   // Refresh analytics on load and when live sermon view events arrive
   useEffect(() => {
     if (!isOpen) return;
 
     const refresh = () => {
-      setAnalytics(StorageService.getSermonAnalytics());
+      setAnalytics(StorageService.getSermonAnalytics(timeRange));
     };
 
     refresh();
     window.addEventListener('gcz_sermon_view_recorded', refresh);
     window.addEventListener('gcz_sermon_updated', refresh);
     window.addEventListener('gcz_media_liked', refresh);
+    window.addEventListener('gcz_analytics_event_recorded', refresh);
 
     return () => {
       window.removeEventListener('gcz_sermon_view_recorded', refresh);
       window.removeEventListener('gcz_sermon_updated', refresh);
       window.removeEventListener('gcz_media_liked', refresh);
+      window.removeEventListener('gcz_analytics_event_recorded', refresh);
     };
-  }, [isOpen]);
+  }, [isOpen, timeRange]);
 
   if (!isOpen) return null;
 
@@ -77,14 +79,11 @@ export const VideoAnalyticsDashboard: React.FC<VideoAnalyticsDashboardProps> = (
         : analytics.mostViewedSermons.filter(s => s.topPlayerViews > 0).sort((a, b) => b.topPlayerViews - a.topPlayerViews)
   );
 
-  // Time range multiplier for visualization
-  const multiplier = timeRange === '7d' ? 0.35 : timeRange === '28d' ? 0.8 : 1.0;
-  const displayTotalViews = Math.round(analytics.totalViews * multiplier);
-  const displayTopPlayerViews = Math.round(analytics.totalTopPlayerViews * multiplier);
-  const displayTotalLikes = Math.round(analytics.totalLikes * multiplier);
-
-  // Approximate watch time: average 22 minutes per view
-  const watchHours = Math.round((displayTotalViews * 22) / 60);
+  // Real genuine analytics directly computed from actual events and data
+  const displayTotalViews = analytics.totalViews;
+  const displayTopPlayerViews = analytics.totalTopPlayerViews;
+  const displayTotalLikes = analytics.totalLikes;
+  const watchHours = analytics.totalWatchTimeHours;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -172,7 +171,7 @@ export const VideoAnalyticsDashboard: React.FC<VideoAnalyticsDashboardProps> = (
                 </div>
                 <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-500 mt-0.5">
                   <ArrowUpRight className="w-3 h-3" />
-                  <span>+18.4% vs last period</span>
+                  <span>Real-time verified</span>
                 </div>
               </div>
             </div>
@@ -222,7 +221,7 @@ export const VideoAnalyticsDashboard: React.FC<VideoAnalyticsDashboardProps> = (
                   {displayTotalLikes.toLocaleString()}
                 </div>
                 <div className="flex items-center gap-1 text-[11px] font-bold text-rose-500 mt-0.5">
-                  <span>98.6% positive</span>
+                  <span>Verified interactions</span>
                 </div>
               </div>
             </div>
@@ -241,28 +240,34 @@ export const VideoAnalyticsDashboard: React.FC<VideoAnalyticsDashboardProps> = (
                 </p>
               </div>
               <span className="text-[11px] font-bold text-primary">
-                Peak: {(Math.round(displayTotalViews / 28) * 1.8).toFixed(0)} views/day
+                Peak: {Math.max(...(analytics.dailyVelocity?.map(d => d.count) || [0]), 0)} views/day
               </span>
             </div>
 
             {/* Bar chart visualization */}
             <div className="h-32 pt-4 flex items-end gap-1.5 sm:gap-2">
-              {[42, 58, 65, 80, 72, 91, 100, 85, 94, 110, 105, 125, 140, 132, 148, 160, 155, 172, 185, 190, 210, 195, 220, 240, 230, 255, 270, 290].map((val, idx) => {
-                const heightPercent = Math.min(100, Math.round((val / 290) * 100));
-                const isRecent = idx >= 24;
-                return (
-                  <div key={idx} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group">
-                    <div 
-                      className={cn(
-                        "w-full rounded-t-sm transition-all duration-300 group-hover:brightness-125 cursor-pointer",
-                        isRecent ? "bg-primary shadow-xs" : "bg-primary/40"
-                      )}
-                      style={{ height: `${heightPercent}%` }}
-                      title={`Day ${idx + 1}: ${Math.round(val * (displayTotalViews / 4000))} views`}
-                    />
-                  </div>
-                );
-              })}
+              {(() => {
+                const velocity = analytics.dailyVelocity && analytics.dailyVelocity.length > 0
+                  ? analytics.dailyVelocity
+                  : [{ label: 'Today', count: 0, date: new Date().toISOString() }];
+                const maxCount = Math.max(...velocity.map(v => v.count), 1);
+                return velocity.map((item, idx) => {
+                  const heightPercent = item.count === 0 ? 8 : Math.max(12, Math.min(100, Math.round((item.count / maxCount) * 100)));
+                  const isRecent = idx >= velocity.length - 2;
+                  return (
+                    <div key={idx} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group">
+                      <div 
+                        className={cn(
+                          "w-full rounded-t-sm transition-all duration-300 group-hover:brightness-125 cursor-pointer",
+                          isRecent ? "bg-primary shadow-xs" : "bg-primary/40"
+                        )}
+                        style={{ height: `${heightPercent}%` }}
+                        title={`${item.label}: ${item.count} views`}
+                      />
+                    </div>
+                  );
+                });
+              })()}
             </div>
             <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-border/40">
               <span>{timeRange === '7d' ? '7 days ago' : timeRange === '28d' ? '28 days ago' : 'Earlier'}</span>

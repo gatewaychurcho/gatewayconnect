@@ -240,9 +240,6 @@ export class SupabaseSyncService {
         metadata: { post_id: postId, reaction: reactionType, timestamp: new Date().toISOString() }
       });
       return !error;
-    } catch {
-      return false;
-    }
   }
 
   /**
@@ -504,6 +501,11 @@ export class SupabaseSyncService {
 
         for (const p of posts) {
           if (deletedIds.has(p.id)) continue;
+          const pCreated = p.created_at ? new Date(p.created_at).getTime() : 0;
+          if (pCreated > 0 && Date.now() - pCreated > 8 * 24 * 60 * 60 * 1000) {
+            deletedIds.add(p.id);
+            continue;
+          }
           if (byId.has(p.id)) {
             const existing = byId.get(p.id);
             if (p.likes_count !== undefined && p.likes_count > (existing.likes_count || 0)) {
@@ -1474,12 +1476,31 @@ export class SupabaseSyncService {
           })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, (payload: any) => {
             if (payload.new) {
+              try {
+                if (payload.new.avatar_url && payload.new.id) {
+                  StorageService.setPermanentCustomAvatar(payload.new.id, payload.new.phone || '', payload.new.avatar_url);
+                }
+                StorageService.applyRemoteUserUpdate(payload.new);
+              } catch {}
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: payload.new }));
+              }
               this.socialSubscribers.forEach(cb => cb.onUserProfileUpdated?.(payload.new));
             }
           })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'profile_pictures' }, (payload: any) => {
             if (payload.new) {
-              this.socialSubscribers.forEach(cb => cb.onUserProfileUpdated?.({ id: payload.new.user_id, avatar_url: payload.new.avatar_url }));
+              const uObj = { id: payload.new.user_id, avatar_url: payload.new.avatar_url };
+              try {
+                if (payload.new.user_id && payload.new.avatar_url) {
+                  StorageService.setPermanentCustomAvatar(payload.new.user_id, '', payload.new.avatar_url);
+                }
+                StorageService.applyRemoteUserUpdate({ id: payload.new.user_id, avatar_url: payload.new.avatar_url });
+              } catch {}
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: uObj }));
+              }
+              this.socialSubscribers.forEach(cb => cb.onUserProfileUpdated?.(uObj));
             }
           })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members' }, (payload: any) => {
@@ -2498,29 +2519,6 @@ export class SupabaseSyncService {
         event: 'church_page_post_created',
         payload: { post }
       }).catch(() => {});
-    }
-  }
-
-  /**
-   * Deletes a chat group and its community group entry from Supabase
-   */
-  static async deleteGroup(groupId: string): Promise<boolean> {
-    const supabase = getSupabase();
-    const channel = this.getSocialChannel();
-    if (channel) {
-      channel.send({
-        type: 'broadcast',
-        event: 'group_dissolved',
-        payload: { groupId }
-      }).catch(() => {});
-    }
-    if (!supabase) return true;
-    try {
-      await supabase.from('chat_groups').delete().eq('id', groupId);
-      await supabase.from('community_groups').delete().eq('id', groupId);
-      return true;
-    } catch {
-      return false;
     }
   }
 }
