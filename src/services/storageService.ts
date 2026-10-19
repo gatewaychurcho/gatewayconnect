@@ -70,6 +70,7 @@ import { StorageBucketService } from './StorageBucketService';
 import { DEFAULT_SERMON_CATEGORIES, INITIAL_EXTENDED_SERMONS } from '../data/sermonCatalog';
 import { CONFIG } from '../../config';
 import { LocalMediaStore } from './localMediaStore';
+import { liveSyncService } from './liveSyncService';
 
 export interface ResolvedFacebookInfo {
   success: boolean;
@@ -3361,6 +3362,7 @@ export class StorageService {
         window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
         window.dispatchEvent(new CustomEvent('gcz_notifications_updated'));
       }
+    }
   }
 
   static formatPhoneWithCountryCode(rawPhone: string, code = '+263'): string {
@@ -6734,7 +6736,6 @@ export class StorageService {
       const p = payload as any;
       const isFollowing = p?.isFollowing !== undefined ? Boolean(p?.isFollowing) : Boolean(p?.is_following !== false);
       this.syncFollowsRecordFromRealtime(isFollowing ? 'INSERT' : 'DELETE', p);
-    }
     } else {
       const eventName = type === 'story'
           ? 'gcz_story_updated'
