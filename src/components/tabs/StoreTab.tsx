@@ -64,11 +64,16 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
     const handleProductsUpdated = () => {
       setAvailableProducts(StorageService.getStoreAvailableProducts());
     };
+    const handleOpenGiving = () => {
+      setSubTab('give');
+    };
     window.addEventListener('gcz_products_updated', handleProductsUpdated);
     window.addEventListener('storage', handleProductsUpdated);
+    window.addEventListener('gcz_open_giving_subtab', handleOpenGiving);
     return () => {
       window.removeEventListener('gcz_products_updated', handleProductsUpdated);
       window.removeEventListener('storage', handleProductsUpdated);
+      window.removeEventListener('gcz_open_giving_subtab', handleOpenGiving);
     };
   }, []);
 

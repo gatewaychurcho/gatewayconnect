@@ -92,7 +92,7 @@ interface AdminPanelProps {
   onRefreshAppState: () => void;
 }
 
-type AdminSection = 'video_library_analytics' | 'content_moderation' | 'broadcast' | 'overview' | 'church_pages' | 'congregations' | 'stream_attendees' | 'inventory' | 'members' | 'prayers' | 'push' | 'finances' | 'vibes' | 'media_library';
+type AdminSection = 'video_library_analytics' | 'content_moderation' | 'broadcast' | 'overview' | 'church_pages' | 'congregations' | 'stream_attendees' | 'inventory' | 'members' | 'prayers' | 'push' | 'finances' | 'vibes' | 'media_library' | 'gallery_management';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppState }) => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
@@ -150,6 +150,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   const [mediaUploadSuccess, setMediaUploadSuccess] = useState<string | null>(null);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const thumbnailFileInputRef = useRef<HTMLInputElement>(null);
+  const [editingGalleryItem, setEditingGalleryItem] = useState<{
+    id: string;
+    type: 'avatar' | 'thumbnail';
+    name: string;
+    category?: string;
+    url: string;
+    is_default?: boolean;
+  } | null>(null);
+  const [editGalleryFile, setEditGalleryFile] = useState<File | null>(null);
+  const [isUpdatingGalleryItem, setIsUpdatingGalleryItem] = useState<boolean>(false);
+  const editGalleryFileInputRef = useRef<HTMLInputElement>(null);
 
   const [products, setProducts] = useState<Product[]>(StorageService.getProducts());
   const [donations, setDonations] = useState<Donation[]>(StorageService.getDonations());
@@ -190,6 +201,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       setAdminStreamUrl(StorageService.getLiveStreamUrl());
       setChurchPages(StorageService.getPages());
       setTestimonies(StorageService.getTestimonies());
+      setAdminAvatars(StorageService.getAdminAvatarLibrary());
+      setAdminThumbnails(StorageService.getAdminThumbnailLibrary());
     };
 
     // Auto-hydrate live registered accounts from Supabase PostgreSQL on mount
@@ -217,6 +230,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     window.addEventListener('gcz_testimony_deleted', refreshAdminData);
     window.addEventListener('gcz_testimony_updated', refreshAdminData);
     window.addEventListener('gcz_testimony_created', refreshAdminData);
+    window.addEventListener('gcz_gallery_updated', refreshAdminData);
+    window.addEventListener('gcz_avatars_updated', refreshAdminData);
+    window.addEventListener('gcz_post_images_updated', refreshAdminData);
+    window.addEventListener('gcz_media_library_updated', refreshAdminData);
 
     return () => {
       window.removeEventListener('gcz_user_profile_updated', refreshAdminData);
@@ -239,6 +256,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       window.removeEventListener('gcz_testimony_deleted', refreshAdminData);
       window.removeEventListener('gcz_testimony_updated', refreshAdminData);
       window.removeEventListener('gcz_testimony_created', refreshAdminData);
+      window.removeEventListener('gcz_gallery_updated', refreshAdminData);
+      window.removeEventListener('gcz_avatars_updated', refreshAdminData);
+      window.removeEventListener('gcz_post_images_updated', refreshAdminData);
+      window.removeEventListener('gcz_media_library_updated', refreshAdminData);
     };
   }, []);
 
@@ -530,6 +551,72 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     } catch (err: any) {
       setMediaUploadError(err.message || 'Failed to upload image to library');
     } finally {
+      setTimeout(() => {
+        setMediaUploadSuccess(null);
+        setMediaUploadError(null);
+      }, 4000);
+    }
+  };
+
+  const handleSaveGalleryEdit = async () => {
+    if (!editingGalleryItem) return;
+    setIsUpdatingGalleryItem(true);
+    try {
+      let finalUrl = editingGalleryItem.url;
+      let finalSize: string | undefined;
+
+      if (editGalleryFile) {
+        try {
+          const uploaded = await StorageBucketService.uploadFileToMediaBucket(
+            editGalleryFile,
+            editingGalleryItem.type === 'avatar' ? 'avatars' : 'media'
+          );
+          if (uploaded) finalUrl = uploaded;
+        } catch (e) {
+          console.warn('Bucket upload note:', e);
+        }
+        if (!finalUrl || finalUrl === editingGalleryItem.url) {
+          const reader = new FileReader();
+          finalUrl = await new Promise((res) => {
+            reader.onload = () => res(reader.result as string);
+            reader.readAsDataURL(editGalleryFile);
+          });
+        }
+        finalSize = `${(editGalleryFile.size / 1024).toFixed(0)} KB`;
+      }
+
+      if (editingGalleryItem.type === 'avatar') {
+        StorageService.updateAdminAvatar(editingGalleryItem.id, {
+          name: editingGalleryItem.name.trim() || 'Ministry Avatar',
+          url: finalUrl,
+          category: editingGalleryItem.category || 'Official',
+          ...(finalSize ? { size: finalSize } : {})
+        });
+        if (editingGalleryItem.is_default) {
+          StorageService.setAdminAvatarDefault(editingGalleryItem.id);
+        }
+        setAdminAvatars(StorageService.getAdminAvatarLibrary());
+      } else {
+        StorageService.updateAdminThumbnail(editingGalleryItem.id, {
+          name: editingGalleryItem.name.trim() || 'Post Image',
+          url: finalUrl,
+          category: editingGalleryItem.category || 'Official',
+          ...(finalSize ? { size: finalSize } : {})
+        });
+        if (editingGalleryItem.is_default) {
+          StorageService.setAdminThumbnailDefault(editingGalleryItem.id);
+        }
+        setAdminThumbnails(StorageService.getAdminThumbnailLibrary());
+      }
+
+      setMediaUploadSuccess(`✓ Updated "${editingGalleryItem.name}" successfully!`);
+      setEditingGalleryItem(null);
+      setEditGalleryFile(null);
+      confetti({ particleCount: 20, spread: 45 });
+    } catch (err: any) {
+      setMediaUploadError(err.message || 'Failed to update gallery item');
+    } finally {
+      setIsUpdatingGalleryItem(false);
       setTimeout(() => {
         setMediaUploadSuccess(null);
         setMediaUploadError(null);
@@ -1157,6 +1244,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                   { id: 'content_moderation', label: `🛡️ 1. Post Moderation (${testimonies.length} Posts)` },
                   { id: 'broadcast', label: '🔴 2. Live Stream & Broadcast' },
                   { id: 'video_library_analytics', label: `🎬 3. Video Library & Analytics (${sermons.length}+ HD)` },
+                  { id: 'gallery_management', label: `🖼️ → Gallery Management (${adminAvatars.length + adminThumbnails.length})` },
                   { id: 'overview', label: '📊 Dashboard KPI' },
                   { id: 'church_pages', label: `⛪ Church Pages (${churchPages.length} Active)` },
                   { id: 'congregations', label: `⛪ Congregations & Streaming (${congregationUnits.filter(c => c.is_congregation).length} Hubs)` },
@@ -1167,7 +1255,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                   { id: 'prayers', label: '🙏 Altar Petitions' },
                   { id: 'finances', label: '💰 Tithes & Seed Fund' },
                   { id: 'vibes', label: '🎵 Joe Vibes Submissions' },
-                  { id: 'media_library', label: `🎨 Avatars & Thumbnails Library (${adminAvatars.length + adminThumbnails.length})` },
                 ].map(opt => (
                   <option key={opt.id} value={opt.id} className="bg-card text-white">
                     {opt.label}
@@ -1182,6 +1269,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
           <div className="flex items-center gap-1.5 px-2 py-1.5 overflow-x-auto scrollbar-none bg-background">
             {[
               { id: 'content_moderation', label: 'Moderation', icon: Trash2 },
+              { id: 'gallery_management', label: '→ Gallery', icon: ImageIcon },
               { id: 'broadcast', label: 'Live Stream', icon: Radio },
               { id: 'video_library_analytics', label: 'Video Library', icon: Tv },
               { id: 'overview', label: 'Overview', icon: Activity },
@@ -1194,10 +1282,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
               { id: 'prayers', label: 'Prayers', icon: Heart },
               { id: 'finances', label: 'Finances', icon: DollarSign },
               { id: 'vibes', label: 'Vibes', icon: Music },
-              { id: 'media_library', label: 'Avatars & Art', icon: ImageIcon },
             ].map(pill => {
               const Icon = pill.icon;
-              const isActive = activeSection === pill.id;
+              const isActive = activeSection === pill.id || (pill.id === 'gallery_management' && activeSection === 'media_library');
               return (
                 <button
                   key={pill.id}
@@ -1225,9 +1312,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
             { id: 'content_moderation', label: 'Post Moderation', icon: Trash2, badge: `${testimonies.length}` },
             { id: 'broadcast', label: 'Live Stream & Pulpit', icon: Radio, badge: liveSermonStatus.isLive ? 'Live' : null },
             { id: 'video_library_analytics', label: 'Video Library & Analytics', icon: Tv, badge: `${sermons.length}+` },
+            { id: 'gallery_management', label: '→ Gallery Management', icon: ImageIcon, badge: `${adminAvatars.length + adminThumbnails.length}` },
           ].map(tab => {
             const Icon = tab.icon;
-            const isActive = activeSection === tab.id;
+            const isActive = activeSection === tab.id || (tab.id === 'gallery_management' && activeSection === 'media_library');
             return (
               <button
                 key={tab.id}
@@ -1258,11 +1346,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
           </div>
 
           {[
+            { id: 'gallery_management', label: '→ Gallery Management', icon: ImageIcon, badge: `${adminAvatars.length + adminThumbnails.length}` },
             { id: 'overview', label: 'Dashboard KPI', icon: Activity, badge: null },
             { id: 'church_pages', label: 'Pages & Groups', icon: Layers, badge: `${churchPages.length}` },
             { id: 'congregations', label: 'Congregations & Stream', icon: Tv, badge: `${congregationUnits.filter(c => c.is_congregation).length} Hubs` },
             { id: 'stream_attendees', label: 'Stream Attendees Log', icon: Users, badge: `${streamAttendees.length}` },
-            { id: 'media_library', label: 'Avatars & Thumbnails', icon: ImageIcon, badge: `${adminAvatars.length + adminThumbnails.length}` },
             { id: 'inventory', label: 'Store & Inventory', icon: Package, badge: products.length },
             { id: 'push', label: 'Push Broadcasts', icon: Bell, badge: notifications.length },
             { id: 'members', label: 'Members & Roles', icon: Users, badge: users.length },
@@ -1271,7 +1359,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
             { id: 'vibes', label: 'Joe Vibes Submissions', icon: Music, badge: joeVibes.length },
           ].map(tab => {
             const Icon = tab.icon;
-            const isActive = activeSection === tab.id;
+            const isActive = activeSection === tab.id || (tab.id === 'gallery_management' && activeSection === 'media_library');
             return (
               <button
                 key={tab.id}
@@ -3943,18 +4031,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
             </div>
           )}
 
-          {/* SECTION 9: AVATARS & THUMBNAILS LIBRARY */}
-          {activeSection === 'media_library' && (
+          {/* SECTION 9: GALLERY MANAGEMENT (AVATAR GALLERY + POST IMAGE GALLERY) */}
+          {(activeSection === 'gallery_management' || activeSection === 'media_library') && (
             <div className="space-y-4">
               <div className="bg-card border border-white/10 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
                   <div>
                     <h3 className="font-bold text-sm text-primary flex items-center gap-2">
                       <ImageIcon className="w-4 h-4" />
-                      <span>Official Avatars & Thumbnails Library</span>
+                      <span>→ Gallery Management (Avatar Gallery + Post Image Gallery)</span>
                     </h3>
                     <p className="text-xs text-white/70">
-                      Upload and manage authentic photo assets for member profile signups, community posts, and testimony thumbnails.
+                      Upload, update, and delete official avatars and post/testimony images with instant platform-wide sync.
                     </p>
                   </div>
 
@@ -3970,7 +4058,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                       }`}
                     >
                       <Users className="w-3.5 h-3.5" />
-                      <span>User Avatars ({adminAvatars.length})</span>
+                      <span>Avatar Gallery ({adminAvatars.length})</span>
                     </button>
                     <button
                       type="button"
@@ -3982,7 +4070,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                       }`}
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      <span>Post Thumbnails ({adminThumbnails.length})</span>
+                      <span>Post Image Gallery ({adminThumbnails.length})</span>
                     </button>
                   </div>
                 </div>
@@ -3993,7 +4081,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                     <div className="flex-1 space-y-2">
                       <div className="text-xs font-bold text-white flex items-center gap-1.5">
                         <UploadCloud className="w-4 h-4 text-primary" />
-                        <span>Upload New {mediaLibraryTab === 'avatars' ? 'Default Avatar' : 'Testimony Thumbnail'} from Local Device</span>
+                        <span>Upload New {mediaLibraryTab === 'avatars' ? 'Avatar to Avatar Gallery' : 'Image to Post Image Gallery'}</span>
                       </div>
                       <div className="flex flex-col sm:flex-row items-center gap-2">
                         <input
@@ -4038,7 +4126,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                         className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer active:scale-95"
                       >
                         <UploadCloud className="w-4 h-4" />
-                        <span>Choose Photo & Add</span>
+                        <span>Upload Photo & Add</span>
                       </button>
                     </div>
                   </div>
@@ -4063,8 +4151,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                   <div className="flex items-center justify-between text-xs text-white/60">
                     <span>
                       {mediaLibraryTab === 'avatars' 
-                        ? 'Available to all users during Sign Up and Profile Settings' 
-                        : 'Available to all users when creating Community Posts & Testimonies'}
+                        ? 'Avatar Gallery: Available to all users across platforms for profiles and accounts' 
+                        : 'Post Image Gallery: Available to all users for community testimonies & posts'}
                     </span>
                     <span className="font-mono font-bold text-primary">
                       {mediaLibraryTab === 'avatars' ? adminAvatars.length : adminThumbnails.length} Items Total
@@ -4106,7 +4194,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                             {item.name}
                           </h5>
                           <div className="flex items-center justify-between text-[10px] text-white/50">
-                            <span>{item.size || 'Preset'}</span>
+                            <span>{item.category || item.size || 'Preset'}</span>
                             <span className="truncate">{new Date(item.uploaded_at).toLocaleDateString()}</span>
                           </div>
                         </div>
@@ -4136,7 +4224,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                           <button
                             type="button"
                             onClick={() => {
-                              if (window.confirm(`Delete "${item.name}" from the media library?`)) {
+                              setEditingGalleryItem({
+                                id: item.id,
+                                type: mediaLibraryTab === 'avatars' ? 'avatar' : 'thumbnail',
+                                name: item.name,
+                                category: item.category || 'Official',
+                                url: item.url,
+                                is_default: item.is_default
+                              });
+                            }}
+                            className="p-1 rounded-lg text-white/70 hover:text-primary hover:bg-primary/10 border border-white/10 transition-colors cursor-pointer"
+                            title="Update / Edit"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Delete "${item.name}" from the gallery?`)) {
                                 if (mediaLibraryTab === 'avatars') {
                                   StorageService.deleteAdminAvatar(item.id);
                                   setAdminAvatars(StorageService.getAdminAvatarLibrary());
@@ -4162,6 +4268,132 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
 
         </main>
       </div>
+
+      {/* MODAL: UPDATE GALLERY ASSET (AVATAR OR POST IMAGE) */}
+      {editingGalleryItem && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-card border border-primary/40 rounded-2xl p-5 w-full max-w-md space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <h3 className="font-bold text-base text-primary flex items-center gap-2">
+                  <Edit3 className="w-4 h-4" />
+                  <span>Update {editingGalleryItem.type === 'avatar' ? 'Avatar Gallery Asset' : 'Post Image Gallery Asset'}</span>
+                </h3>
+                <p className="text-xs text-white/60">
+                  Update asset details, change image or toggle platform default.
+                </p>
+              </div>
+              <button 
+                onClick={() => { setEditingGalleryItem(null); setEditGalleryFile(null); }} 
+                className="text-white/60 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {/* Preview */}
+              <div className="flex justify-center p-3 bg-secondary/40 rounded-xl border border-white/10">
+                <img 
+                  src={editGalleryFile ? URL.createObjectURL(editGalleryFile) : editingGalleryItem.url} 
+                  alt={editingGalleryItem.name} 
+                  className={`object-cover ${editingGalleryItem.type === 'avatar' ? 'w-24 h-24 rounded-full border-2 border-primary' : 'w-full h-32 rounded-lg'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-white/80 mb-1">Asset Name / Title</label>
+                <input
+                  type="text"
+                  value={editingGalleryItem.name}
+                  onChange={(e) => setEditingGalleryItem({ ...editingGalleryItem, name: e.target.value })}
+                  className="w-full bg-background border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-primary"
+                  placeholder="Enter name or title"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-white/80 mb-1">Category</label>
+                <select
+                  value={editingGalleryItem.category || 'Official'}
+                  onChange={(e) => setEditingGalleryItem({ ...editingGalleryItem, category: e.target.value })}
+                  className="w-full bg-background border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-primary"
+                >
+                  <option value="Official">Official Ministry</option>
+                  <option value="Preaching">Preaching & Altar</option>
+                  <option value="Prophetic">Prophetic / Impartation</option>
+                  <option value="Discipleship">Discipleship & School</option>
+                  <option value="Youth">Youth Revival</option>
+                  <option value="Worship">Praise & Worship</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-white/80 mb-1">Replace Image File (Optional)</label>
+                <input
+                  ref={editGalleryFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) {
+                      setEditGalleryFile(e.target.files[0]);
+                    }
+                  }}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => editGalleryFileInputRef.current?.click()}
+                  className="w-full py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white font-medium flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <UploadCloud className="w-4 h-4 text-primary" />
+                  <span>{editGalleryFile ? `Selected: ${editGalleryFile.name}` : 'Choose New Photo File'}</span>
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-white/80 mb-1">Or Image Direct URL</label>
+                <input
+                  type="text"
+                  value={editingGalleryItem.url}
+                  onChange={(e) => setEditingGalleryItem({ ...editingGalleryItem, url: e.target.value })}
+                  className="w-full bg-background border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-primary"
+                  placeholder="https://..."
+                />
+              </div>
+
+              <label className="flex items-center gap-2 text-xs text-white cursor-pointer select-none pt-1">
+                <input
+                  type="checkbox"
+                  checked={Boolean(editingGalleryItem.is_default)}
+                  onChange={(e) => setEditingGalleryItem({ ...editingGalleryItem, is_default: e.target.checked })}
+                  className="w-4 h-4 accent-primary rounded"
+                />
+                <span className="font-semibold">Set as Platform Default {editingGalleryItem.type === 'avatar' ? 'Avatar' : 'Image'}</span>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => { setEditingGalleryItem(null); setEditGalleryFile(null); }}
+                className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs text-white cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isUpdatingGalleryItem}
+                onClick={handleSaveGalleryEdit}
+                className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs flex items-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
+              >
+                {isUpdatingGalleryItem ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                <span>Save Changes & Sync</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL: ADD PRODUCT TO INVENTORY */}
       {showAddProductModal && (

@@ -1197,25 +1197,6 @@ export const MOCK_TESTIMONIES: Testimony[] = [
     verified_by_church: true,
     comments_count: 0,
     comments: []
-  },
-  {
-    id: 'post_tatenda_marketplace',
-    user_id: 'usr_tatenda',
-    user_name: 'Tatenda Blessing Chirwa',
-    user_handle: '@tatenda_chirwa',
-    user_avatar: '/assets/apostle_joe_daniels_preach.jpg',
-    title: 'Supernatural Crop Yield in Famine Season',
-    category: 'Financial Breakthrough',
-    content: 'While other farmers in our district faced water scarcity, we sowed our seed into the Cathedral Foundation project. The Lord blessed our harvest with triple the projected yield! Sowing into the kingdom works.',
-    image_url: '/assets/apostle_joe_daniels_podcast.jpg',
-    scripture_tag: 'Genesis 26:12',
-    date: 'a month ago',
-    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    liked_user_ids: ['usr_pastor_tendai'],
-    likes_count: 1,
-    verified_by_church: false,
-    comments_count: 0,
-    comments: []
   }
 ];
 
