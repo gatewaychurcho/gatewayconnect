@@ -153,9 +153,9 @@ const KEYS = {
   CHURCH_PAGES: 'gcz_church_pages_v1',
   PAGE_POSTS: 'gcz_page_posts_v1',
   ADMIN_AVATAR_LIBRARY: 'gcz_admin_avatar_library_v1',
-  ADMIN_THUMBNAIL_LIBRARY: 'gcz_admin_thumbnail_library_v1',
   SERMON_CATEGORIES: 'gcz_sermon_categories_v1',
-  SERMON_ANALYTICS: 'gcz_sermon_analytics_v1'
+  SERMON_ANALYTICS: 'gcz_sermon_analytics_v1',
+  SHOW_HOME_TOP_VIDEO: 'gcz_show_home_top_video_v1'
 };
 
 export const DEFAULT_ADMIN_AVATARS: MediaLibraryItem[] = [
@@ -2653,11 +2653,6 @@ export class StorageService {
   // DEDICATED POST LIKES TABLE PERSISTENCE
   static getPostLikesRecords(): { post_id: string; user_id: string; created_at: string }[] {
     const defaultLikes: { post_id: string; user_id: string; created_at: string }[] = [];
-    MOCK_TESTIMONIES.forEach(t => {
-      (t.liked_user_ids || []).forEach(uid => {
-        defaultLikes.push({ post_id: t.id, user_id: uid, created_at: '2026-01-01T00:00:00Z' });
-      });
-    });
     const records = getLocal<{ post_id: string; user_id: string; created_at: string }[]>(KEYS.POST_LIKES_TABLE, defaultLikes);
     if (!records || records.length === 0) {
       setLocal(KEYS.POST_LIKES_TABLE, defaultLikes);
@@ -2668,22 +2663,40 @@ export class StorageService {
 
   // Testimonies & Posts
   static getTestimonies(): Testimony[] {
-    const rawList = getLocal<Testimony[]>(KEYS.TESTIMONIES, MOCK_TESTIMONIES);
+    const rawList = getLocal<Testimony[]>(KEYS.TESTIMONIES, []);
     
-    // Deduplicate by ID to ensure unique React keys and filter out permanently deleted posts
+    // Deduplicate by ID and permanently purge all demo / mock placeholder posts
+    const DEMO_POST_IDS = new Set([
+      'post_church_and_politics',
+      'post_kuroorwa_kutiza_nhamo',
+      'post_demonstrates_power',
+      'post_power_of_covenant',
+      'post_tinashe_testimony',
+      'post_campus_revival',
+      'post_debt_cleared',
+      'post_healing_miracle'
+    ]);
     const deletedPostIds = new Set(getLocal<string[]>('gcz_deleted_post_ids_v1', []));
     const seenIds = new Set<string>();
     const list: Testimony[] = [];
     let hadDuplicates = false;
     for (const t of rawList) {
-      if (t && t.id && !seenIds.has(t.id) && !deletedPostIds.has(t.id)) {
+      if (
+        t && 
+        t.id && 
+        !seenIds.has(t.id) && 
+        !deletedPostIds.has(t.id) && 
+        !DEMO_POST_IDS.has(t.id) && 
+        !t.id.startsWith('post_demo_') &&
+        !t.id.startsWith('demo_')
+      ) {
         seenIds.add(t.id);
         list.push(t);
       } else {
         hadDuplicates = true;
       }
     }
-    if (hadDuplicates) {
+    if (hadDuplicates || rawList.length !== list.length) {
       setLocal(KEYS.TESTIMONIES, list);
     }
 
@@ -2841,7 +2854,7 @@ export class StorageService {
   }
 
   static likeTestimony(id: string, userId?: string): { user_liked: boolean; likes_count: number } {
-    const list = getLocal<Testimony[]>(KEYS.TESTIMONIES, MOCK_TESTIMONIES);
+    const list = getLocal<Testimony[]>(KEYS.TESTIMONIES, []);
     const target = list.find(t => t.id === id);
     if (!target) return { user_liked: false, likes_count: 0 };
 
@@ -3101,7 +3114,7 @@ export class StorageService {
    */
   static purgeOldPosts(maxAgeDays: number = 8): { deletedCount: number; deletedIds: string[] } {
     const cutoff = Date.now() - (maxAgeDays * 24 * 60 * 60 * 1000);
-    const allPosts = getLocal<Testimony[]>(KEYS.TESTIMONIES, MOCK_TESTIMONIES);
+    const allPosts = getLocal<Testimony[]>(KEYS.TESTIMONIES, []);
     const toDelete: Testimony[] = [];
     const remaining: Testimony[] = [];
     const deletedPostIds = new Set<string>(getLocal<string[]>('gcz_deleted_post_ids_v1', []));
@@ -5048,9 +5061,32 @@ export class StorageService {
     }
   }
 
+  static getShowHomeTopVideo(): boolean {
+    return getLocal<boolean>(KEYS.SHOW_HOME_TOP_VIDEO, false);
+  }
+
+  static setShowHomeTopVideo(show: boolean): void {
+    setLocal(KEYS.SHOW_HOME_TOP_VIDEO, show);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_show_home_top_video_updated', { detail: show }));
+    }
+  }
+
   static isFacebookUrl(urlOrId?: string): boolean {
     if (!urlOrId) return false;
     const lower = urlOrId.toLowerCase();
+    // Strictly prevent YouTube URLs, MP4s, or local media from triggering Facebook player
+    if (
+      lower.includes('youtube.com') ||
+      lower.includes('youtu.be') ||
+      lower.includes('ytimg.com') ||
+      lower.includes('/api/storage') ||
+      lower.endsWith('.mp4') ||
+      lower.startsWith('blob:') ||
+      lower.startsWith('data:video')
+    ) {
+      return false;
+    }
     return (
       lower.includes('facebook.com') ||
       lower.includes('fb.watch') ||
@@ -5326,19 +5362,16 @@ export class StorageService {
       target = iframeSrcMatch[1].replace(/&amp;/g, '&');
     }
 
-    // 1. Facebook Link
-    if (this.isFacebookUrl(target)) {
-      const fb = this.extractFacebookEmbedUrl(target);
+    // 1. YouTube (URL or ID) - Checked FIRST with highest priority
+    const ytId = this.extractYoutubeId(target);
+    if (ytId) {
       return {
-        platform: 'facebook',
-        embedUrl: fb.embedUrl,
+        platform: 'youtube',
+        embedUrl: this.getYoutubeEmbedUrl(ytId),
         originalUrl: raw,
-        videoId: fb.videoId,
-        isFacebook: true,
-        isYoutube: false,
-        facebookDirectUrl: fb.directUrl,
-        hasNumericVideoId: fb.hasNumericVideoId,
-        isLivePageHub: fb.isLivePageHub
+        videoId: ytId,
+        isFacebook: false,
+        isYoutube: true
       };
     }
 
@@ -5360,16 +5393,19 @@ export class StorageService {
       };
     }
 
-    // 3. YouTube (URL or ID)
-    const ytId = this.extractYoutubeId(target);
-    if (ytId) {
+    // 3. Facebook Link (Only if strictly facebook and not youtube)
+    if (this.isFacebookUrl(target)) {
+      const fb = this.extractFacebookEmbedUrl(target);
       return {
-        platform: 'youtube',
-        embedUrl: this.getYoutubeEmbedUrl(ytId),
+        platform: 'facebook',
+        embedUrl: fb.embedUrl,
         originalUrl: raw,
-        videoId: ytId,
-        isFacebook: false,
-        isYoutube: true
+        videoId: fb.videoId,
+        isFacebook: true,
+        isYoutube: false,
+        facebookDirectUrl: fb.directUrl,
+        hasNumericVideoId: fb.hasNumericVideoId,
+        isLivePageHub: fb.isLivePageHub
       };
     }
 
@@ -7506,14 +7542,14 @@ export class StorageService {
   static resetAppToDefaults(): void {
     setLocal(KEYS.SERMONS, MOCK_SERMONS);
     setLocal(KEYS.DEVOTIONALS, MOCK_DEVOTIONALS);
-    setLocal(KEYS.TESTIMONIES, MOCK_TESTIMONIES);
+    setLocal(KEYS.TESTIMONIES, []);
     setLocal(KEYS.GROUPS, MOCK_COMMUNITY_GROUPS);
     setLocal(KEYS.PRAYERS, MOCK_PRAYER_REQUESTS);
     setLocal(KEYS.EVENTS, MOCK_EVENTS);
     setLocal(KEYS.PRODUCTS, MOCK_PRODUCTS);
-    setLocal(KEYS.DONATIONS, MOCK_DONATIONS);
-    setLocal(KEYS.BOOKINGS, MOCK_BOOKINGS);
-    setLocal(KEYS.ORDERS, MOCK_ORDERS);
+    setLocal(KEYS.DONATIONS, []);
+    setLocal(KEYS.BOOKINGS, []);
+    setLocal(KEYS.ORDERS, []);
     setLocal(KEYS.JOE_VIBES, MOCK_JOE_VIBES);
     setLocal(KEYS.PUSH_NOTIFICATIONS, MOCK_PUSH_NOTIFICATIONS);
     setLocal(KEYS.CHAT_GROUPS, INITIAL_CHAT_GROUPS);

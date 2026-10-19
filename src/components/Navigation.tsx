@@ -148,17 +148,15 @@ export const Navigation: React.FC<NavigationProps> = ({
         {/* Center Elevated Giving FAB (Hand + Coin Graphic) */}
         <button
           id="fab-giving-button"
-          onClick={() => {
-            onTabChange('store');
-            if (typeof window !== 'undefined') {
-              setTimeout(() => {
-                window.dispatchEvent(new CustomEvent('gcz_open_giving_subtab'));
-              }, 30);
-            }
-          }}
-          title="Give & Seed Offering"
-          aria-label="Give & Seed Offering"
-          className="relative -top-3.5 sm:-top-4 flex items-center justify-center w-12 h-12 sm:w-13 sm:h-13 rounded-full bg-gradient-to-tr from-[#0055FF] via-[#1E60FF] to-[#3B82F6] text-white shadow-[0_4px_20px_rgba(30,96,255,0.7)] ring-4 ring-[#1E60FF]/30 border-2 border-white/50 active:scale-90 hover:scale-105 transition-all cursor-pointer select-none shrink-0 group z-20"
+          onClick={() => onTabChange('giving')}
+          title="Giving, Offerings & Tithing"
+          aria-label="Giving, Offerings & Tithing"
+          className={cn(
+            "relative -top-3.5 sm:-top-4 flex items-center justify-center w-12 h-12 sm:w-13 sm:h-13 rounded-full text-white border-2 border-white/60 active:scale-90 hover:scale-105 transition-all cursor-pointer select-none shrink-0 group z-20",
+            activeTab === 'giving'
+              ? "bg-gradient-to-tr from-amber-500 via-amber-600 to-yellow-400 ring-4 ring-amber-400/50 shadow-[0_4px_25px_rgba(245,158,11,0.85)] scale-105"
+              : "bg-gradient-to-tr from-[#0055FF] via-[#1E60FF] to-[#3B82F6] ring-4 ring-[#1E60FF]/30 shadow-[0_4px_20px_rgba(30,96,255,0.7)]"
+          )}
         >
           <svg
             viewBox="0 0 24 24"

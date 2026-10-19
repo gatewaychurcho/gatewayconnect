@@ -26,6 +26,7 @@ import { User as UserType, SUPPORTED_CITIES, SupportedCity, COUNTRY_CODES } from
 import { StorageService } from '../../services/storageService';
 import { getSupabase } from '../../services/supabaseClient';
 import { SupabaseSyncService } from '../../services/supabaseSyncService';
+import { LegalModal } from '../modals/LegalModal';
 import confetti from 'canvas-confetti';
 
 interface LoginScreenProps {
@@ -65,6 +66,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [signupDateOfBirth, setSignupDateOfBirth] = useState<string>('');
   const [signupGender, setSignupGender] = useState<'male' | 'female'>('male');
   const [signupReferralCode, setSignupReferralCode] = useState<string>('');
+  const [agreedToTerms, setAgreedToTerms] = useState<boolean>(false);
+  const [showLegalModal, setShowLegalModal] = useState<'privacy' | 'terms' | null>(null);
 
   // UI & Loading States
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -249,6 +252,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
     if (!signupPassword || signupPassword.length < 6) {
       setErrorMessage('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (!agreedToTerms) {
+      setErrorMessage('Please read and agree to the Privacy Policy and Terms and Conditions to complete registration.');
       return;
     }
 
@@ -862,6 +870,36 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   <span>After sign-up, you will customize your profile avatar and fellowship pass.</span>
                 </div>
 
+                {/* Required Legal Agreement Checkbox */}
+                <label className="flex items-start gap-2.5 cursor-pointer text-xs select-none pt-1">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={agreedToTerms}
+                    onChange={(e) => setAgreedToTerms(e.target.checked)}
+                    className="mt-0.5 rounded border-border text-primary focus:ring-primary w-4 h-4 cursor-pointer accent-primary shrink-0"
+                  />
+                  <span className="leading-tight text-[11px] text-muted-foreground">
+                    I have read and agree to the{' '}
+                    <button
+                      type="button"
+                      onClick={() => setShowLegalModal('terms')}
+                      className="text-primary font-semibold underline hover:text-primary/80 cursor-pointer"
+                    >
+                      Terms and Conditions
+                    </button>{' '}
+                    and{' '}
+                    <button
+                      type="button"
+                      onClick={() => setShowLegalModal('privacy')}
+                      className="text-primary font-semibold underline hover:text-primary/80 cursor-pointer"
+                    >
+                      Privacy Policy
+                    </button>
+                    .
+                  </span>
+                </label>
+
                 {/* Submit Sign Up */}
                 <button
                   type="submit"
@@ -1077,6 +1115,25 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               </button>
             </div>
 
+            {/* Accessible Legal Links (Required for Compliance) */}
+            <div className="pt-2.5 pb-1 flex items-center justify-center gap-3 text-[11px] text-muted-foreground">
+              <button
+                type="button"
+                onClick={() => setShowLegalModal('privacy')}
+                className="hover:underline hover:text-foreground cursor-pointer transition-colors"
+              >
+                Privacy Policy
+              </button>
+              <span>•</span>
+              <button
+                type="button"
+                onClick={() => setShowLegalModal('terms')}
+                className="hover:underline hover:text-foreground cursor-pointer transition-colors"
+              >
+                Terms and Conditions
+              </button>
+            </div>
+
           </div>
         </div>
 
@@ -1159,6 +1216,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </div>
         </div>
       )}
+
+      {/* Legal Privacy and Terms Modal */}
+      <LegalModal
+        isOpen={showLegalModal !== null}
+        type={showLegalModal || 'privacy'}
+        onClose={() => setShowLegalModal(null)}
+      />
 
     </div>
   );

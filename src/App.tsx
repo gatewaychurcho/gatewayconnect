@@ -7,6 +7,7 @@ import { SermonsTab } from './components/tabs/SermonsTab';
 import { BibleTab } from './components/tabs/BibleTab';
 import { CommunityTab } from './components/tabs/CommunityTab';
 import { StoreTab } from './components/tabs/StoreTab';
+import { GivingTab } from './components/tabs/GivingTab';
 import { MeTab } from './components/tabs/MeTab';
 import { subscribeToRealtime } from './lib/realtime';
 import { getSupabase } from './services/supabaseClient';
@@ -587,6 +588,12 @@ export default function App() {
         {activeTab === 'store' && (
           <StoreTab
             products={products}
+            onDonationSuccess={refreshAppData}
+          />
+        )}
+
+        {activeTab === 'giving' && (
+          <GivingTab
             onDonationSuccess={refreshAppData}
           />
         )}

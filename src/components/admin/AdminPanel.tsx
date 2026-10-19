@@ -140,6 +140,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   const [showVideoAnalytics, setShowVideoAnalytics] = useState<boolean>(false);
   const congregationMp4InputRef = useRef<HTMLInputElement>(null);
 
+  // Home Feed Top Video Visibility Setting
+  const [adminShowHomeTopVideo, setAdminShowHomeTopVideo] = useState<boolean>(() => StorageService.getShowHomeTopVideo());
+
+  const handleToggleShowHomeTopVideo = () => {
+    const next = !adminShowHomeTopVideo;
+    setAdminShowHomeTopVideo(next);
+    StorageService.setShowHomeTopVideo(next);
+    onRefreshAppState();
+    confetti({ particleCount: 25, spread: 50 });
+  };
+
   // Avatars and Thumbnails Library Management States
   const [adminAvatars, setAdminAvatars] = useState(() => StorageService.getAdminAvatarLibrary());
   const [adminThumbnails, setAdminThumbnails] = useState(() => StorageService.getAdminThumbnailLibrary());
@@ -1723,6 +1734,44 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
           {/* SECTION 2: SERMON & LIVE BROADCAST */}
           {activeSection === 'broadcast' && (
             <div className="space-y-4">
+              
+              {/* HOME FEED TOP VIDEO DISPLAY TOGGLE (PERSISTED ADMIN CONTROL) */}
+              <div className="bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border border-primary/30 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Tv className="w-4 h-4 text-primary" />
+                      <h4 className="font-bold text-xs sm:text-sm text-white">
+                        Home Feed Top Video / Broadcast Player
+                      </h4>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        adminShowHomeTopVideo 
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                          : 'bg-white/10 text-white/60 border border-white/10'
+                      }`}>
+                        {adminShowHomeTopVideo ? '● VISIBLE ON HOME FEED' : '○ HIDDEN BY DEFAULT'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-white/70 leading-relaxed max-w-xl">
+                      Controls whether the live broadcast or top video player appears pinned at the top of the Home feed for all users. When hidden (default), users enjoy a clean Facebook-style feed without an auto-loading video.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleToggleShowHomeTopVideo}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer shrink-0 active:scale-95 ${
+                      adminShowHomeTopVideo
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400/30'
+                        : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'
+                    }`}
+                  >
+                    <span className={`w-2.5 h-2.5 rounded-full ${adminShowHomeTopVideo ? 'bg-white animate-pulse' : 'bg-white/40'}`} />
+                    <span>{adminShowHomeTopVideo ? 'Video Visible (Tap to Hide)' : 'Video Hidden (Tap to Enable)'}</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="bg-card border border-white/10 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
                   <div>

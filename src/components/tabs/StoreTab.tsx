@@ -45,7 +45,7 @@ interface StoreTabProps {
 }
 
 export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess }) => {
-  const [subTab, setSubTab] = useState<'store' | 'give' | 'booking'>('store');
+  const [subTab, setSubTab] = useState<'store' | 'booking'>('store');
   const [currency, setCurrency] = useState<'USD' | 'ZiG' | 'GBP' | 'ZAR'>('USD');
   const currentUser = StorageService.getCurrentUser();
   
@@ -64,16 +64,11 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
     const handleProductsUpdated = () => {
       setAvailableProducts(StorageService.getStoreAvailableProducts());
     };
-    const handleOpenGiving = () => {
-      setSubTab('give');
-    };
     window.addEventListener('gcz_products_updated', handleProductsUpdated);
     window.addEventListener('storage', handleProductsUpdated);
-    window.addEventListener('gcz_open_giving_subtab', handleOpenGiving);
     return () => {
       window.removeEventListener('gcz_products_updated', handleProductsUpdated);
       window.removeEventListener('storage', handleProductsUpdated);
-      window.removeEventListener('gcz_open_giving_subtab', handleOpenGiving);
     };
   }, []);
 
@@ -107,22 +102,6 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
     window.addEventListener('gcz_cart_updated', handleCartUpdated);
     return () => window.removeEventListener('gcz_cart_updated', handleCartUpdated);
   }, [currentUser?.id]);
-
-  // Giving Form State
-  const [giveFund, setGiveFund] = useState<DonationFund>('Tithe');
-  const [giveAmount, setGiveAmount] = useState<number>(50);
-  const [customAmount, setCustomAmount] = useState<string>('');
-  const [paymentGateway, setPaymentGateway] = useState<PaymentGateway>('EcoCash');
-  const [donorPhone, setDonorPhone] = useState<string>(StorageService.getCurrentUser()?.phone || '0772123456');
-  const [isAnonymousDonation, setIsAnonymousDonation] = useState<boolean>(false);
-  const [activeReceipt, setActiveReceipt] = useState<Donation | null>(null);
-  const [showMoorsModal, setShowMoorsModal] = useState<boolean>(false);
-  const [showPaynowConfigModal, setShowPaynowConfigModal] = useState<boolean>(false);
-  const [copiedUssdCode, setCopiedUssdCode] = useState<boolean>(false);
-  const [paynowRedirectUrl, setPaynowRedirectUrl] = useState<string | null>(null);
-  const [paynowInstruction, setPaynowInstruction] = useState<string | null>(null);
-
-  const PAYMENT_ACCOUNT_NUMBER = '0771445642';
 
   // 1-on-1 Booking Form State
   const [bookingService, setBookingService] = useState<ServiceBooking['service_type']>('Prophetic Mentorship');
@@ -201,98 +180,6 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
   const deliveryFeeUsd = deliveryMethod === 'courier' ? 3.00 : 0.00;
   const totalCartUsd = cartSubtotalUsd + deliveryFeeUsd;
   const totalCartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  const handleProcessDonation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const finalAmt = customAmount ? parseFloat(customAmount) : giveAmount;
-    if (!finalAmt || finalAmt <= 0) return;
-
-    // For mobile money (EcoCash / OneMoney), open the interactive USSD prompt modal directly
-    if (paymentGateway === 'EcoCash' || paymentGateway === 'OneMoney') {
-      setShowMoorsModal(true);
-      return;
-    }
-
-    const user = StorageService.getCurrentUser();
-    const impactMap: Record<DonationFund, string> = {
-      'Tithe': 'Ministry operations, broadcast satellites & pastoral sustenance',
-      'Firstfruits': 'Altar dedication and new territory advancement in 2026',
-      'Seed Faith': 'Harare Evangelistic Crusade & Souls outreach',
-      'Building Foundation': 'Cathedral Roofing Phase 2 Construction in Belvedere',
-      'Missions & Evangelism': 'Rural Mashonaland & Matabeleland church plants',
-      'Apostolic Honorarium': 'Direct apostolic blessing and prophetic mantle honoring',
-      'Altar Seed': 'Direct altar seed covenant offering & prophetic connection'
-    };
-
-    const refNumber = `GCZ-PAYNOW-${Date.now().toString().slice(-6)}`;
-    let paynowPollUrl: string | undefined;
-
-    // If payment gateway is Paynow, initiate with Paynow Zimbabwe
-    if (paymentGateway === 'Paynow') {
-      const paynowRes = await PaynowService.initiateTransaction({
-        reference: refNumber,
-        amount: finalAmt,
-        additionalInfo: `${giveFund} - Gateway Church Zimbabwe`,
-        phone: donorPhone,
-        paymentMethod: 'Paynow'
-      });
-
-      if (paynowRes.browserUrl && !paynowRes.isSimulated) {
-        window.open(paynowRes.browserUrl, '_blank');
-      }
-      if (!paynowRes.success) {
-        setPaynowInstruction(paynowRes.error || 'Paynow could not start this payment. No funds were recorded.');
-        return;
-      }
-      paynowPollUrl = paynowRes.pollUrl;
-      if (paynowRes.browserUrl) {
-        setPaynowRedirectUrl(paynowRes.browserUrl);
-      }
-      if (paynowRes.instructions) {
-        setPaynowInstruction(paynowRes.instructions);
-      }
-    } else if (!['EcoCash', 'OneMoney'].includes(paymentGateway)) {
-      setPaynowInstruction(`${paymentGateway} is not connected yet. Choose EcoCash, OneMoney, or Paynow so the payment can be verified securely.`);
-      return;
-    }
-
-    const donation = StorageService.recordDonation({
-      donor_id: user?.id || 'usr_guest',
-      donor_name: isAnonymousDonation ? 'Anonymous Covenant Partner' : (user?.full_name || 'Covenant Partner'),
-      amount: finalAmt,
-      currency: currency,
-      fund_type: giveFund,
-      payment_method: paymentGateway,
-      impact_tag: impactMap[giveFund] || 'Kingdom Advancement',
-      is_anonymous: isAnonymousDonation
-    }, paymentGateway === 'Paynow' ? 'pending' : 'completed');
-
-    setActiveReceipt(donation);
-    if (onDonationSuccess) {
-      onDonationSuccess(donation);
-    }
-
-    if (paymentGateway === 'Paynow' && paynowPollUrl) {
-      setPaynowInstruction('Payment started. Waiting for Paynow confirmation...');
-      const paymentResult = await PaynowService.waitForPayment(paynowPollUrl);
-      const finalDonation = StorageService.updateDonationStatus(
-        donation.id,
-        paymentResult.isPaid ? 'completed' : ['Cancelled', 'Failed'].includes(paymentResult.status) ? 'failed' : 'pending'
-      );
-      if (finalDonation) {
-        setActiveReceipt(finalDonation);
-        onDonationSuccess?.(finalDonation);
-      }
-      setPaynowInstruction(paymentResult.isPaid
-        ? 'Payment confirmed by Paynow.'
-        : `Payment status: ${paymentResult.status}. No paid receipt was issued.`);
-    }
-    confetti({
-      particleCount: 50,
-      spread: 80,
-      origin: { y: 0.6 }
-    });
-  };
 
   const handleProcessBooking = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -411,15 +298,6 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
               )}
             </button>
             <button
-              id="tab-sub-give"
-              onClick={() => setSubTab('give')}
-              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
-                subTab === 'give' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Give & Tithe
-            </button>
-            <button
               id="tab-sub-booking"
               onClick={() => setSubTab('booking')}
               className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
@@ -444,287 +322,7 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
         </div>
       </div>
 
-      {/* 2. SUB-TAB: GIVING & DONATIONS */}
-      {subTab === 'give' && (
-        <div className="space-y-4">
-          
-          {/* Streamlined Mobile Money & Online Giving Account Card */}
-          <div className="bg-card border border-border rounded-xl p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded-md bg-primary/15 text-primary text-[10px] font-bold uppercase">
-                  Mobile Giving
-                </span>
-                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  EcoCash *151# Push Active
-                </span>
-              </div>
-              
-              <div className="flex items-center gap-2 pt-1">
-                <span className="text-xs text-muted-foreground">Account Number:</span>
-                <span className="text-base font-mono font-black text-foreground tracking-wider">
-                  {PAYMENT_ACCOUNT_NUMBER}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(PAYMENT_ACCOUNT_NUMBER);
-                    setCopiedUssdCode(true);
-                    setTimeout(() => setCopiedUssdCode(false), 2000);
-                  }}
-                  className="px-2.5 py-1 bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-[11px] text-foreground flex items-center gap-1 transition-all"
-                  title="Copy Account Number"
-                >
-                  <Copy className="w-3 h-3 text-primary" />
-                  <span>{copiedUssdCode ? 'Copied!' : 'Copy'}</span>
-                </button>
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                Direct credit for Tithe, Firstfruits, Seed Faith & Building Fund.
-              </p>
-            </div>
-
-            <button
-              id="btn-open-moors-deposit"
-              onClick={() => setShowMoorsModal(true)}
-              className="px-4 py-2.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all shrink-0 active:scale-[0.98]"
-            >
-              <Zap className="w-3.5 h-3.5 fill-current" />
-              <span>Direct EcoCash Push</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-            
-            {/* Giving Form Card */}
-            <div className="md:col-span-7 bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-serif-church font-bold text-base text-foreground">
-                    Sow Your Seed
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    Account: <strong className="text-primary">{PAYMENT_ACCOUNT_NUMBER}</strong>
-                  </p>
-                </div>
-              </div>
-
-              <form onSubmit={handleProcessDonation} className="space-y-3.5">
-                {/* Fund Type Picker */}
-                <div>
-                  <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
-                    Select Giving Fund
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                    {(['Tithe', 'Firstfruits', 'Seed Faith', 'Building Foundation', 'Missions & Evangelism', 'Apostolic Honorarium', 'Altar Seed'] as DonationFund[]).map(fund => (
-                      <button
-                        type="button"
-                        key={fund}
-                        onClick={() => setGiveFund(fund)}
-                        className={`p-2 rounded-lg text-left border transition-all text-xs font-semibold ${
-                          giveFund === fund
-                            ? 'bg-primary text-primary-foreground border-primary font-bold shadow-sm'
-                            : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        {fund}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Amount Presets */}
-                <div>
-                  <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
-                    Amount ({currency})
-                  </label>
-                  <div className="grid grid-cols-4 gap-1.5 mb-2">
-                    {[20, 50, 100, 250].map(amt => (
-                      <button
-                        type="button"
-                        key={amt}
-                        onClick={() => {
-                          setGiveAmount(amt);
-                          setCustomAmount('');
-                        }}
-                        className={`py-2 rounded-lg border text-xs font-bold transition-all ${
-                          giveAmount === amt && !customAmount
-                            ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                            : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        {currency === 'USD' ? `$${amt}` : currency === 'ZiG' ? `${amt * 15} ZiG` : `${currency} ${amt}`}
-                      </button>
-                    ))}
-                  </div>
-
-                  <input
-                    type="number"
-                    value={customAmount}
-                    onChange={(e) => setCustomAmount(e.target.value)}
-                    placeholder={`Or enter custom amount in ${currency}...`}
-                    className="w-full bg-secondary border border-border rounded-lg p-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
-                  />
-                </div>
-
-                {/* Payment Gateway Picker */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-semibold text-foreground/80">
-                      Payment Method (Target: {PAYMENT_ACCOUNT_NUMBER})
-                    </label>
-                    {StorageService.getCurrentUser()?.role === 'developer' && (
-                      <button
-                        type="button"
-                        onClick={() => setShowPaynowConfigModal(true)}
-                        className="text-[10px] px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-300 hover:bg-purple-500/25 border border-purple-500/30 font-mono flex items-center gap-1 transition-colors"
-                      >
-                        <span>⚙️ Paynow Config (Dev)</span>
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {(['EcoCash', 'OneMoney', 'Paynow', 'Stripe', 'PayPal', 'Bank Transfer'] as PaymentGateway[]).map(gw => (
-                      <button
-                        type="button"
-                        key={gw}
-                        onClick={() => setPaymentGateway(gw)}
-                        className={`p-2 rounded-lg border text-xs font-bold flex flex-col items-center justify-center transition-all ${
-                          paymentGateway === gw
-                            ? 'bg-primary/15 border-primary text-primary shadow-sm'
-                            : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        <span>{gw === 'EcoCash' ? '📱 EcoCash' : gw === 'Paynow' ? '🇿🇼 Paynow' : gw === 'Stripe' ? '💳 Card / Stripe' : gw}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Paynow Quick Connect Banner (Developer Only) */}
-                  {StorageService.getCurrentUser()?.role === 'developer' && (paymentGateway === 'Paynow' || paymentGateway === 'EcoCash') && (
-                    <div className="mt-2 p-2.5 rounded-lg bg-secondary border border-border flex items-center justify-between text-[11px]">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-muted-foreground">
-                          {PaynowService.getConfig().isConfigured 
-                            ? `Paynow Active (ID: ${PaynowService.getConfig().integrationId})` 
-                            : 'Paynow Gateway Ready (Click to enter your ID & Auth Key)'}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowPaynowConfigModal(true)}
-                        className="text-primary font-bold hover:underline"
-                      >
-                        {PaynowService.getConfig().isConfigured ? 'Edit Keys' : 'Enter Credentials'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Phone / Mobile Prompt */}
-                {(paymentGateway === 'EcoCash' || paymentGateway === 'OneMoney' || paymentGateway === 'Paynow') && (
-                  <div className="bg-secondary/50 p-3 rounded-lg border border-border space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-foreground">
-                        {paymentGateway} Mobile Number for USSD Push (*151#)
-                      </span>
-                      <span className="text-[10px] text-muted-foreground font-mono">
-                        Target: {PAYMENT_ACCOUNT_NUMBER}
-                      </span>
-                    </div>
-                    <input
-                      type="tel"
-                      required
-                      value={donorPhone}
-                      onChange={(e) => setDonorPhone(e.target.value)}
-                      placeholder="e.g. 0772123456 or 0712345678"
-                      className="w-full bg-background border border-border rounded-lg p-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
-                    />
-                    <p className="text-[11px] text-muted-foreground">
-                      A secure pin prompt will be sent directly to your phone to authorize transfer to <strong className="text-primary">{PAYMENT_ACCOUNT_NUMBER}</strong>.
-                    </p>
-                  </div>
-                )}
-
-                {/* Anonymous Checkbox */}
-                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer pt-1">
-                  <input
-                    type="checkbox"
-                    checked={isAnonymousDonation}
-                    onChange={(e) => setIsAnonymousDonation(e.target.checked)}
-                    className="rounded border-border accent-primary"
-                  />
-                  <span>Keep Donation Anonymous on Kingdom Impact Tickers</span>
-                </label>
-
-                {paynowInstruction && (
-                  <div className="rounded-lg border border-primary/40 bg-primary/10 p-3 text-xs text-foreground space-y-2">
-                    <p>{paynowInstruction}</p>
-                    {paynowRedirectUrl && (
-                      <a href={paynowRedirectUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-bold underline text-primary">
-                        Open Paynow checkout
-                        <ArrowRight className="w-3 h-3" />
-                      </a>
-                    )}
-                  </div>
-                )}
-
-                {/* Submit CTA */}
-                <button
-                  id="btn-submit-giving"
-                  type="submit"
-                  className="w-full py-3 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm uppercase tracking-wider shadow-sm active:scale-[0.99] transition-all flex items-center justify-center gap-2"
-                >
-                  <Heart className="w-4 h-4 fill-current" />
-                  <span>Authorize Giving of {customAmount ? `${currency} ${customAmount}` : `${currency} ${giveAmount}`}</span>
-                </button>
-              </form>
-            </div>
-
-            {/* Ministry Impact & Privacy Assurance Column */}
-            <div className="md:col-span-5 space-y-4">
-              
-              {/* Impact Metrics Box */}
-              <div className="bg-card border border-border rounded-xl p-4 space-y-3 shadow-sm">
-                <h4 className="font-serif-church font-bold text-foreground text-sm">
-                  Where Your Seed Goes
-                </h4>
-                <div className="space-y-2 text-xs">
-                  <div className="bg-secondary/50 p-2.5 rounded-lg border border-border">
-                    <p className="font-bold text-foreground">📡 Gospel Broadcasts</p>
-                    <p className="text-muted-foreground text-[11px] mt-0.5">
-                      Funding low-data streaming & radio across Zimbabwe & Diaspora.
-                    </p>
-                  </div>
-                  <div className="bg-secondary/50 p-2.5 rounded-lg border border-border">
-                    <p className="font-bold text-foreground">🍲 Widows & Orphans Care</p>
-                    <p className="text-muted-foreground text-[11px] mt-0.5">
-                      Monthly grocery hampers distributed to vulnerable families.
-                    </p>
-                  </div>
-                  <div className="bg-secondary/50 p-2.5 rounded-lg border border-border">
-                    <p className="font-bold text-foreground">🏛️ Cathedral Building Fund</p>
-                    <p className="text-muted-foreground text-[11px] mt-0.5">
-                      Phase 2 cathedral development in Belvedere, Harare.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-2.5 bg-primary/10 border border-primary/25 rounded-lg text-xs text-foreground flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
-                  <span className="text-[11px]">Official giving receipts generated immediately upon completion.</span>
-                </div>
-              </div>
-
-            </div>
-
-          </div>
-        </div>
-      )}
-
+      
       {/* 3. SUB-TAB: BOOK 1-ON-1 PASTORAL SERVICE */}
       {subTab === 'booking' && (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
