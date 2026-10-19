@@ -96,9 +96,9 @@ export default function App() {
 
 
   useEffect(() => {
-    // Purge any community posts older than 6 days immediately
+    // Purge any community posts older than 8 days immediately
     try {
-      StorageService.purgeOldPosts(6);
+      StorageService.purgeOldPosts(8);
       const cur = StorageService.getCurrentUser();
       if (cur && cur.id && cur.id !== 'usr_guest') {
         StorageService.autoFollowSuperAdminAndDeveloper(cur.id);
@@ -435,10 +435,6 @@ export default function App() {
     setShowAuthModal(false);
   };
 
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [activeTab]);
-
   // Website splash screen
   if (showSplash) {
     return <SplashScreen onComplete={() => setShowSplash(false)} />;
@@ -496,7 +492,7 @@ export default function App() {
   }
 
   return (
-    <div className="gcz-app-shell min-h-screen bg-[var(--gcz-bg-page)] text-[var(--gcz-text-main)] flex flex-col selection:bg-primary selection:text-white transition-colors duration-200 w-full max-w-full">
+    <div className="gcz-app-shell min-h-screen bg-[var(--gcz-bg-page)] text-[var(--gcz-text-main)] flex flex-col selection:bg-primary selection:text-white transition-colors duration-200 overflow-x-clip w-full max-w-full">
       
       {/* 1. Main Header */}
       <Header
@@ -516,7 +512,7 @@ export default function App() {
       />
 
       {/* 2. Main Content Area */}
-      <main className="gcz-main flex-1 w-full max-w-5xl mx-auto px-2 sm:px-4 py-2 sm:py-3 pb-24 sm:pb-20">
+      <main className="gcz-main flex-1 w-full max-w-5xl mx-auto px-2 sm:px-4 py-2 sm:py-3 pb-24 sm:pb-20 overflow-x-clip">
         {activeTab === 'home' && (
           <HomeTab
             sermons={sermons}

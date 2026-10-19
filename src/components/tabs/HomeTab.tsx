@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, 
   Pause, 
@@ -47,7 +47,6 @@ import {
 import confetti from 'canvas-confetti';
 import { Sermon, Devotional, Testimony, User, CommunityStory } from '../../types';
 import { StorageService } from '../../services/storageService';
-import { SupabaseSyncService } from '../../services/supabaseSyncService';
 import { MOCK_PARTNER_TICKERS } from '../../data/mockData';
 import { VerifiedBadge } from '../common/VerifiedBadge';
 import { PaidBookingModal } from '../modals/PaidBookingModal';

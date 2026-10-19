@@ -611,7 +611,7 @@ export interface MediaLibraryItem {
   id: string;
   url: string;
   name: string;
-  category: 'avatar' | 'thumbnail' | string;
+  category: 'avatar' | 'thumbnail';
   is_default?: boolean;
   uploaded_at: string;
   size?: string;

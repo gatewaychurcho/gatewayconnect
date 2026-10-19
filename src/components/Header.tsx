@@ -14,7 +14,8 @@ import {
   Terminal,
   Sun,
   Moon,
-  LogOut
+  LogOut,
+  MoreVertical
 } from 'lucide-react';
 import { User, PushNotification, NotificationSettings } from '../types';
 import { StorageService } from '../services/storageService';
@@ -58,6 +59,7 @@ export const Header: React.FC<HeaderProps> = ({
   const isGuest = currentUser.role === 'guest';
 
   const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>(() => StorageService.getTheme());
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>(() =>
     StorageService.getNotificationSettings(currentUser?.id)
@@ -148,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Action Controls & User Identity */}
-      <div className="gcz-header-actions flex items-center gap-1 sm:gap-2 shrink-0">
+      <div className="gcz-header-actions relative flex items-center gap-1.5 sm:gap-2 shrink-0">
         
         {/* Direct Messages & Groups Button */}
         {!isGuest && onOpenDirectMessages && (
@@ -156,7 +158,7 @@ export const Header: React.FC<HeaderProps> = ({
             id="btn-direct-messages-header"
             onClick={onOpenDirectMessages}
             title="Chats & Groups"
-            className="relative p-1.5 sm:p-2 rounded-lg bg-secondary/50 border border-border hover:bg-secondary text-foreground/80 hover:text-foreground transition-all shadow-sm cursor-pointer shrink-0"
+            className="relative p-2 rounded-xl bg-secondary/50 border border-border hover:bg-secondary text-foreground/80 hover:text-foreground transition-all shadow-sm cursor-pointer shrink-0"
           >
             <Send className="w-4 h-4 text-primary" />
             {unreadDmsCount > 0 && notifSettings.directMessages && (
@@ -167,91 +169,20 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Notifications Bell Button (Only visible when unread notifications > 0) */}
-        {!isGuest && onOpenNotifications && unreadNotifsCount > 0 && (
+        {/* Notifications Bell Button */}
+        {!isGuest && onOpenNotifications && (
           <button
             id="btn-notifications-header"
             onClick={onOpenNotifications}
             title="Notifications & Live Alerts"
-            className="relative p-1.5 sm:p-2 rounded-lg bg-secondary/50 border border-border hover:bg-secondary text-foreground/80 hover:text-foreground transition-all shadow-sm cursor-pointer animate-in fade-in shrink-0"
+            className="relative p-2 rounded-xl bg-secondary/50 border border-border hover:bg-secondary text-foreground/80 hover:text-foreground transition-all shadow-sm cursor-pointer shrink-0"
           >
             <Bell className="w-4 h-4 text-primary" />
-            <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center shadow">
-              {unreadNotifsCount}
-            </span>
-          </button>
-        )}
-
-        {/* Low-Data / HD Stream Toggle */}
-        <button
-          id="btn-low-data-toggle"
-          onClick={onToggleLowData}
-          title={lowDataMode ? "Lite Low-Data Mode Active (Click for HD)" : "HD Stream Active (Click for Lite Mode)"}
-          aria-label={lowDataMode ? "Lite Low-Data Mode" : "HD Stream Mode"}
-          className={`p-1.5 sm:p-2 rounded-lg text-xs font-semibold transition-all border cursor-pointer shrink-0 ${
-            lowDataMode
-              ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30'
-              : 'bg-secondary/50 text-foreground/80 border-border hover:bg-secondary'
-          }`}
-        >
-          {lowDataMode ? (
-            <WifiOff className="w-4 h-4 text-emerald-500" />
-          ) : (
-            <Wifi className="w-4 h-4 text-primary" />
-          )}
-        </button>
-
-        {/* Dark / Light Theme Toggle */}
-        <button
-          id="btn-theme-toggle"
-          onClick={handleToggleTheme}
-          title={theme === 'dark' ? "Switch to Light Theme" : "Switch to Dark Theme"}
-          className="flex items-center justify-center p-1.5 sm:p-2 rounded-lg bg-secondary/50 border border-border hover:bg-secondary text-primary transition-all shadow-sm cursor-pointer shrink-0"
-          aria-label="Toggle Dark / Light Theme"
-        >
-          {theme === 'dark' ? (
-            <Sun className="w-4 h-4 text-primary" />
-          ) : (
-            <Moon className="w-4 h-4 text-primary" />
-          )}
-        </button>
-
-        {/* Developer Button */}
-        {isDeveloper && onOpenFlutterExport && (
-          <button
-            id="btn-flutter-export"
-            onClick={onOpenFlutterExport}
-            className="hidden md:flex items-center justify-center p-1.5 sm:p-2 rounded-lg bg-secondary/50 border border-border text-foreground hover:bg-secondary text-xs transition-all shadow-sm cursor-pointer shrink-0"
-            title="Database Schema & Specs"
-            aria-label="Database Schema & Specs"
-          >
-            <Database className="w-4 h-4 text-primary" />
-          </button>
-        )}
-
-        {/* Admin Link if Super Admin */}
-        {isSuperAdmin && onOpenAdminPanel && (
-          <button
-            id="btn-quick-admin"
-            onClick={onOpenAdminPanel}
-            className="flex items-center justify-center p-1.5 sm:p-2 rounded-lg bg-primary text-primary-foreground hover:brightness-105 shadow-sm transition-all cursor-pointer shrink-0"
-            title="Apostolic Command Panel"
-            aria-label="Apostolic Command Panel"
-          >
-            <ShieldCheck className="w-4 h-4" />
-          </button>
-        )}
-
-        {/* Dev Console */}
-        {isDeveloper && onOpenDevConsole && (
-          <button
-            id="btn-quick-dev"
-            onClick={onOpenDevConsole}
-            className="flex p-1.5 sm:p-2 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-400 transition-all items-center justify-center cursor-pointer shadow-sm shrink-0"
-            title="Developer Console"
-            aria-label="Developer Console"
-          >
-            <Terminal className="w-4 h-4 text-purple-400" />
+            {unreadNotifsCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center shadow">
+                {unreadNotifsCount}
+              </span>
+            )}
           </button>
         )}
 
@@ -262,7 +193,7 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={onOpenAuthModal}
             title="Guest Believer - Click to Log In"
             aria-label="Sign In / Log In"
-            className="flex items-center justify-center p-1.5 sm:p-2 rounded-lg bg-primary text-primary-foreground hover:brightness-105 shadow-sm transition-all cursor-pointer shrink-0"
+            className="flex items-center justify-center p-2 rounded-xl bg-primary text-primary-foreground hover:brightness-105 shadow-sm transition-all cursor-pointer shrink-0"
           >
             <LogIn className="w-4 h-4" />
           </button>
@@ -289,18 +220,122 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Quick Log Out Action */}
-        {!isGuest && onLogout && (
+        {/* 3-Dot Quick Options Dropdown Toggle Button */}
+        <div className="relative">
           <button
-            id="btn-header-quick-logout"
-            onClick={onLogout}
-            title="Log Out of Account"
-            aria-label="Log Out of Account"
-            className="p-1.5 sm:p-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 hover:border-rose-500/40 transition-all cursor-pointer shrink-0"
+            id="btn-header-quick-menu"
+            type="button"
+            onClick={() => setMenuOpen(!menuOpen)}
+            title="Quick Options & Tools"
+            className="relative p-2 rounded-xl bg-secondary/50 border border-border hover:bg-secondary text-foreground/80 hover:text-foreground transition-all shadow-sm cursor-pointer shrink-0"
           >
-            <LogOut className="w-4 h-4" />
+            <MoreVertical className="w-4 h-4 text-foreground/80" />
           </button>
-        )}
+
+          {menuOpen && (
+            <>
+              <div 
+                className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px]" 
+                onClick={() => setMenuOpen(false)} 
+              />
+              <div className="absolute right-0 top-12 z-50 w-56 rounded-2xl bg-[#0B0F19]/95 dark:bg-[#0B0F19]/95 border border-white/10 p-2 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150 space-y-1 text-left">
+                {/* Theme Toggle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleToggleTheme();
+                    setMenuOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-foreground/90 hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-sky-400" />}
+                    <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground uppercase font-mono">{theme}</span>
+                </button>
+
+                {/* Data Saver Mode Toggle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onToggleLowData();
+                    setMenuOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-foreground/90 hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    {lowDataMode ? <WifiOff className="w-4 h-4 text-emerald-400" /> : <Wifi className="w-4 h-4 text-primary" />}
+                    <span>Data Saver</span>
+                  </div>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${lowDataMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-muted-foreground'}`}>
+                    {lowDataMode ? 'Lite' : 'HD'}
+                  </span>
+                </button>
+
+                {/* Apostolic Command Panel (Admin) */}
+                {isSuperAdmin && onOpenAdminPanel && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenAdminPanel();
+                      setMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-primary hover:bg-primary/10 transition-colors cursor-pointer border border-primary/20"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-primary" />
+                    <span>Command Panel</span>
+                  </button>
+                )}
+
+                {/* Developer Console */}
+                {isDeveloper && onOpenDevConsole && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenDevConsole();
+                      setMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-purple-400 hover:bg-purple-500/10 transition-colors cursor-pointer border border-purple-500/20"
+                  >
+                    <Terminal className="w-4 h-4 text-purple-400" />
+                    <span>Developer Console</span>
+                  </button>
+                )}
+
+                {/* Database Specs / Flutter Export */}
+                {isDeveloper && onOpenFlutterExport && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenFlutterExport();
+                      setMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-foreground/80 hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    <Database className="w-4 h-4 text-primary" />
+                    <span>Database Specs</span>
+                  </button>
+                )}
+
+                {/* Sign Out Action */}
+                {!isGuest && onLogout && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onLogout();
+                      setMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer border-t border-white/5 pt-2"
+                  >
+                    <LogOut className="w-4 h-4 text-rose-400" />
+                    <span>Sign Out</span>
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
 
       </div>
     </header>
