@@ -589,7 +589,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
         StorageService.updateAdminAvatar(editingGalleryItem.id, {
           name: editingGalleryItem.name.trim() || 'Ministry Avatar',
           url: finalUrl,
-          category: editingGalleryItem.category || 'Official',
+          category: 'avatar',
           ...(finalSize ? { size: finalSize } : {})
         });
         if (editingGalleryItem.is_default) {
@@ -600,7 +600,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
         StorageService.updateAdminThumbnail(editingGalleryItem.id, {
           name: editingGalleryItem.name.trim() || 'Post Image',
           url: finalUrl,
-          category: editingGalleryItem.category || 'Official',
+          category: 'thumbnail',
           ...(finalSize ? { size: finalSize } : {})
         });
         if (editingGalleryItem.is_default) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Play, 
   Pause, 
@@ -54,6 +54,7 @@ import { UpgradeModal } from '../modals/UpgradeModal';
 import { FacebookStreamPlayer } from '../common/FacebookStreamPlayer';
 import { cn } from '../../lib/utils';
 import { liveSyncService } from '../../services/liveSyncService';
+import { SupabaseSyncService } from '../../services/supabaseSyncService';
 
 interface HomeTabProps {
   sermons: Sermon[];

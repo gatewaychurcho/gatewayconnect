@@ -39,6 +39,8 @@ export type LiveEventType =
   | 'pulpit'
   | 'stream_chat'
   | 'stream_reaction'
+  | 'stream_like'
+  | 'media_like'
   | 'user_created'
   | 'user_updated'
   | 'user_banned'
