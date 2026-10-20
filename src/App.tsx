@@ -331,6 +331,7 @@ export default function App() {
     window.addEventListener('gcz_notifications_updated', refreshLiveState);
     window.addEventListener('gcz_direct_messages_updated', refreshLiveState);
     window.addEventListener('gcz_group_messages_updated', refreshLiveState);
+    window.addEventListener('gcz_users_synced', refreshAppData);
     const handleUserDeleted = (e: any) => {
       const deletedId = e?.detail?.userId;
       if (!deletedId || currentUser?.id === deletedId) {
@@ -340,12 +341,22 @@ export default function App() {
       }
     };
 
+    // Periodic background sync across Web and Android WebView (every 25 seconds + on window focus)
+    const periodicSync = () => {
+      StorageService.syncUsersWithRemote().catch(() => {});
+      StorageService.syncPostsWithRemote().catch(() => {});
+    };
+    const syncInterval = setInterval(periodicSync, 25000);
+    window.addEventListener('focus', periodicSync);
+
     window.addEventListener('gcz_open_user_profile', handleOpenProfile);
     window.addEventListener('gcz_user_profile_updated', handleProfileUpdated);
     window.addEventListener('gcz_user_deleted', handleUserDeleted);
     return () => {
       unbind();
       liveSyncService.disconnect();
+      clearInterval(syncInterval);
+      window.removeEventListener('focus', periodicSync);
       window.removeEventListener('gcz_banned_users_updated', refreshLiveState);
       window.removeEventListener('gcz_current_user_banned', refreshLiveState);
       window.removeEventListener('gcz_testimony_updated', refreshLiveState);
@@ -356,6 +367,7 @@ export default function App() {
       window.removeEventListener('gcz_notifications_updated', refreshLiveState);
       window.removeEventListener('gcz_direct_messages_updated', refreshLiveState);
       window.removeEventListener('gcz_group_messages_updated', refreshLiveState);
+      window.removeEventListener('gcz_users_synced', refreshAppData);
       window.removeEventListener('gcz_open_user_profile', handleOpenProfile);
       window.removeEventListener('gcz_user_profile_updated', handleProfileUpdated);
       window.removeEventListener('gcz_user_deleted', handleUserDeleted);

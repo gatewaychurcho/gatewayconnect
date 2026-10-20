@@ -357,12 +357,25 @@ export class StorageService {
   }
 
   static getAllUsers(): User[] {
-    const saved = getLocal<User[]>(KEYS.ALL_USERS, INITIAL_USERS);
+    const FAKE_MOCK_USER_IDS = new Set([
+      'usr_rutendo_ndlovu', 'usr_simba_hove', 'usr_tariro_mutasa', 'usr_blessings_sibanda',
+      'usr_anesu_sithole', 'usr_privilege_makoni', 'usr_tapiwa_muzenda', 'usr_nokuthula_moyo',
+      'usr_rumbidzai_marufu', 'usr_munyaradzi_chigumba', 'usr_gamuchirai_kaseke', 'usr_takudzwa_dube',
+      'usr_fadzai_mashingaidze', 'usr_panashe_nyoni', 'usr_vimbai_zhou', 'usr_knowledge_matarise',
+      'usr_chengetai_shumba', 'usr_shalom_chimedza', 'usr_tendekai_mupfumi', 'usr_tsitsi_gava',
+      'usr_mthokozisi_nkomo', 'usr_praise_magaya'
+    ]);
+
+    let saved = getLocal<User[]>(KEYS.ALL_USERS, INITIAL_USERS);
+    // Purge any fake mock user accounts that may have been cached
+    const filteredSaved = saved.filter(u => u && u.id && !FAKE_MOCK_USER_IDS.has(u.id));
+    let changed = filteredSaved.length !== saved.length;
+    saved = filteredSaved;
+
     // Ensure all registered accounts exist in the storage pool & normalize developer credentials
     const existingIds = new Set(saved.map(u => u.id));
-    let changed = false;
     for (const initUser of INITIAL_USERS) {
-      if (!existingIds.has(initUser.id)) {
+      if (!existingIds.has(initUser.id) && !FAKE_MOCK_USER_IDS.has(initUser.id)) {
         saved.push(initUser);
         changed = true;
       }
@@ -381,7 +394,7 @@ export class StorageService {
     // Deduplicate any repeated user IDs across the storage array
     const uniqueUserMap = new Map<string, User>();
     for (const u of saved) {
-      if (u && u.id && !uniqueUserMap.has(u.id)) {
+      if (u && u.id && !uniqueUserMap.has(u.id) && !FAKE_MOCK_USER_IDS.has(u.id)) {
         uniqueUserMap.set(u.id, u);
       }
     }
@@ -421,16 +434,14 @@ export class StorageService {
       }
     });
 
-    // Synchronize real followers and following counts across all users (no fake numbers)
+    // Synchronize real followers and following counts across all users from actual follow records
     try {
       const followRecords = this.getUserFollowsRecords();
       saved.forEach(u => {
         const effectiveId = (u.id === 'usr_daniels' || u.id === 'usr_pastor_joe') ? 'usr_apostle_joe' : u.id;
         const realFollowersCount = followRecords.filter(r => r.following_id === effectiveId || r.following_id === u.id).length;
         const realFollowingCount = followRecords.filter(r => r.follower_id === effectiveId || r.follower_id === u.id).length;
-        u.followers_count = (u.id === 'usr_developer' || u.role === 'developer' || u.id === 'usr_apostle_joe')
-          ? Math.max(36, realFollowersCount)
-          : realFollowersCount;
+        u.followers_count = realFollowersCount;
         u.following_count = realFollowingCount;
       });
     } catch (e) {
@@ -621,11 +632,23 @@ export class StorageService {
       const localUsers = this.getAllUsers();
       const customAvatars = this.getPermanentCustomAvatars();
 
-      // 1. First sync with Cloudflare R2 users database (primary reliable document store)
+      // 1. Two-way sync: Push local authentic registered users to remote server so all devices share them
+      try {
+        if (typeof fetch !== 'undefined' && localUsers.length > 0) {
+          await fetch(getApiUrl('/api/db/sync?collection=users'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'merge_pool', data: localUsers })
+          });
+        }
+      } catch {}
+
+      // 2. Sync with Cloudflare R2 / Serverless users database (primary reliable document store)
       const r2Users = await this.fetchCloudflareR2Users();
       if (r2Users && r2Users.length > 0) {
         let changed = false;
         for (const ru of r2Users) {
+          if (!ru || !ru.id) continue;
           const localIdx = localUsers.findIndex(u => u.id === ru.id || arePhoneNumbersEqual(u.phone, ru.phone));
           if (localIdx >= 0) {
             const preservedAvatar = customAvatars[localUsers[localIdx].id] || customAvatars[localUsers[localIdx].phone] || ru.avatar_url || localUsers[localIdx].avatar_url;
@@ -637,8 +660,8 @@ export class StorageService {
               role: ru.role || localUsers[localIdx].role,
               is_verified: ru.is_verified !== undefined ? ru.is_verified : localUsers[localIdx].is_verified,
               badge_type: ru.badge_type || localUsers[localIdx].badge_type,
-              followers_count: Math.max(localUsers[localIdx].followers_count || 36, ru.followers_count || 0),
-              following_count: Math.max(localUsers[localIdx].following_count || 0, ru.following_count || 0)
+              followers_count: ru.followers_count !== undefined ? ru.followers_count : (localUsers[localIdx].followers_count || 0),
+              following_count: ru.following_count !== undefined ? ru.following_count : (localUsers[localIdx].following_count || 0)
             };
             if (ru.avatar_url) {
               this.setPermanentCustomAvatar(localUsers[localIdx].id, localUsers[localIdx].phone, ru.avatar_url);
@@ -667,17 +690,18 @@ export class StorageService {
         }
       }
 
-      // 2. Ensure developer account is synced to Supabase (if restored)
+      // 3. Ensure developer account is synced to Supabase (if restored)
       const devUser = localUsers.find(u => u.role === 'developer' || arePhoneNumbersEqual(u.phone, '0780699988'));
       if (devUser) {
         SupabaseSyncService.syncUser(devUser).catch(() => {});
       }
 
-      // 3. Pull remote users from Supabase (if restored, but never downgrade followers or overwrite recent profile photos)
+      // 4. Pull remote users from Supabase (if restored, preserving custom avatars & true counts)
       const remoteUsers = await SupabaseSyncService.pullUsersFromSupabase();
       if (!remoteUsers || remoteUsers.length === 0) return;
       let changed = false;
       for (const ru of remoteUsers) {
+        if (!ru || !ru.id) continue;
         const localIdx = localUsers.findIndex(u => u.id === ru.id || arePhoneNumbersEqual(u.phone, ru.phone));
         if (localIdx >= 0) {
           const preservedAvatar = customAvatars[localUsers[localIdx].id] || customAvatars[localUsers[localIdx].phone] || localUsers[localIdx].avatar_url || ru.avatar_url;
@@ -689,8 +713,8 @@ export class StorageService {
             role: localUsers[localIdx].role || ru.role,
             is_verified: localUsers[localIdx].is_verified !== undefined ? localUsers[localIdx].is_verified : ru.is_verified,
             badge_type: localUsers[localIdx].badge_type || ru.badge_type,
-            followers_count: Math.max(localUsers[localIdx].followers_count || 36, ru.followers_count || 0),
-            following_count: Math.max(localUsers[localIdx].following_count || 0, ru.following_count || 0)
+            followers_count: ru.followers_count !== undefined ? ru.followers_count : (localUsers[localIdx].followers_count || 0),
+            following_count: ru.following_count !== undefined ? ru.following_count : (localUsers[localIdx].following_count || 0)
           };
           changed = true;
         } else {
@@ -1374,7 +1398,16 @@ export class StorageService {
 
   // DEDICATED USER FOLLOWS TABLE PERSISTENCE
   static getUserFollowsRecords(): { follower_id: string; following_id: string; created_at: string }[] {
-    const ALL_CHURCH_MEMBER_IDS = [
+    const FAKE_MOCK_USER_IDS = new Set([
+      'usr_rutendo_ndlovu', 'usr_simba_hove', 'usr_tariro_mutasa', 'usr_blessings_sibanda',
+      'usr_anesu_sithole', 'usr_privilege_makoni', 'usr_tapiwa_muzenda', 'usr_nokuthula_moyo',
+      'usr_rumbidzai_marufu', 'usr_munyaradzi_chigumba', 'usr_gamuchirai_kaseke', 'usr_takudzwa_dube',
+      'usr_fadzai_mashingaidze', 'usr_panashe_nyoni', 'usr_vimbai_zhou', 'usr_knowledge_matarise',
+      'usr_chengetai_shumba', 'usr_shalom_chimedza', 'usr_tendekai_mupfumi', 'usr_tsitsi_gava',
+      'usr_mthokozisi_nkomo', 'usr_praise_magaya'
+    ]);
+
+    const AUTHENTIC_MEMBER_IDS = [
       'usr_apostle_joe',
       'usr_prophetess_melinda',
       'usr_pastor_easter',
@@ -1387,33 +1420,11 @@ export class StorageService {
       'usr_nyasha',
       'usr_farai',
       'usr_1789657530055',
-      'usr_rutendo_ndlovu',
-      'usr_simba_hove',
-      'usr_tariro_mutasa',
-      'usr_blessings_sibanda',
-      'usr_anesu_sithole',
-      'usr_privilege_makoni',
-      'usr_tapiwa_muzenda',
-      'usr_nokuthula_moyo',
-      'usr_rumbidzai_marufu',
-      'usr_munyaradzi_chigumba',
-      'usr_gamuchirai_kaseke',
-      'usr_takudzwa_dube',
-      'usr_fadzai_mashingaidze',
-      'usr_panashe_nyoni',
-      'usr_vimbai_zhou',
-      'usr_knowledge_matarise',
-      'usr_chengetai_shumba',
-      'usr_shalom_chimedza',
-      'usr_tendekai_mupfumi',
-      'usr_tsitsi_gava',
-      'usr_mthokozisi_nkomo',
-      'usr_praise_magaya',
       'usr_guest'
     ];
 
     const defaultFollows: { follower_id: string; following_id: string; created_at: string }[] = [];
-    for (const memId of ALL_CHURCH_MEMBER_IDS) {
+    for (const memId of AUTHENTIC_MEMBER_IDS) {
       defaultFollows.push({ follower_id: memId, following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' });
       defaultFollows.push({ follower_id: memId, following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' });
     }
@@ -1427,8 +1438,19 @@ export class StorageService {
     defaultFollows.push({ follower_id: 'usr_pastor_easter', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' });
 
     let records = getLocal<{ follower_id: string; following_id: string; created_at: string }[] | null>(KEYS.USER_FOLLOWS_TABLE, null);
+    let changed = false;
+    if (records) {
+      const cleanRecords = records.filter(r => r && !FAKE_MOCK_USER_IDS.has(r.follower_id) && !FAKE_MOCK_USER_IDS.has(r.following_id));
+      if (cleanRecords.length !== records.length) {
+        records = cleanRecords;
+        changed = true;
+      }
+    } else {
+      records = [...defaultFollows];
+      changed = true;
+    }
+
     const existingSet = new Set((records || []).map(r => `${r.follower_id}_${r.following_id}`));
-    let changed = !records;
     records = records ? [...records] : [];
 
     for (const df of defaultFollows) {
