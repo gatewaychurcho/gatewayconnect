@@ -36,8 +36,6 @@ import confetti from 'canvas-confetti';
 import { Product, CartItem, DonationFund, PaymentGateway, Donation, ServiceBooking } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { PaynowService } from '../../services/paynowService';
-import { MoorsDepositModal } from '../modals/MoorsDepositModal';
-import { PaynowConfigModal } from '../modals/PaynowConfigModal';
 
 interface StoreTabProps {
   products: Product[];
@@ -1282,27 +1280,6 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
           </div>
         </div>
       )}
-
-      {/* 7. Moors Betting App Style Instant Online Deposit Modal */}
-      <MoorsDepositModal
-        isOpen={showMoorsModal}
-        onClose={() => setShowMoorsModal(false)}
-        onDepositSuccess={(donation) => {
-          setShowMoorsModal(false);
-          setActiveReceipt(donation);
-          if (onDonationSuccess) {
-            onDonationSuccess(donation);
-          }
-        }}
-        defaultFund={giveFund}
-        initialAmount={customAmount ? parseFloat(customAmount) || 20 : giveAmount}
-      />
-
-      {/* 8. Paynow Zimbabwe Credentials Configuration Modal */}
-      <PaynowConfigModal
-        isOpen={showPaynowConfigModal}
-        onClose={() => setShowPaynowConfigModal(false)}
-      />
 
     </div>
   );
