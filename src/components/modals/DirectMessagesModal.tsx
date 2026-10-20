@@ -65,6 +65,7 @@ import { PaynowService } from '../../services/paynowService';
 import { LocalImagePicker } from '../common/LocalImagePicker';
 import { InstagramProfileModal } from './InstagramProfileModal';
 import { GroupInfoModal } from '../chat/GroupInfoModal';
+import { InDriveCallModal } from '../chat/InDriveCallModal';
 
 interface DirectMessagesModalProps {
   currentUser: User;
@@ -223,6 +224,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   const [newGroupPrice, setNewGroupPrice] = useState(150);
   const [newGroupDuration, setNewGroupDuration] = useState(3);
   const [newGroupPinnedNotice, setNewGroupPinnedNotice] = useState('');
+  const [inDriveCall, setInDriveCall] = useState<{ isOpen: boolean; partner: User; callType: 'audio' | 'video' } | null>(null);
   const groupAvatarInputRef = useRef<HTMLInputElement>(null);
 
   const handleGroupAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2372,15 +2374,17 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           className="flex items-center gap-2.5 text-left p-1 rounded-xl hover:bg-secondary/60 transition-colors cursor-pointer min-w-0"
                           title="View profile"
                         >
-                          <div className="relative w-10 h-10 rounded-full border border-border overflow-hidden bg-secondary flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                            {activeUser.avatar_url ? (
-                              <img src={activeUser.avatar_url} alt={activeUser.full_name} className="w-full h-full object-cover" />
-                            ) : (
-                              activeUser.full_name.slice(0, 2).toUpperCase()
-                            )}
-                            {(StorageService.getUserLastSeen(activeUser) === 'online' || activeUser.role === 'developer' || activeUser.phone === '0780699988') && (
-                              <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-card" title="Online" />
-                            )}
+                          <div className="relative p-[2px] rounded-full bg-gradient-to-tr from-amber-500 via-rose-500 to-primary shrink-0 shadow-xs">
+                            <div className="relative w-10 h-10 rounded-full border border-card overflow-hidden bg-secondary flex items-center justify-center text-xs font-bold text-primary">
+                              {activeUser.avatar_url ? (
+                                <img src={activeUser.avatar_url} alt={activeUser.full_name} className="w-full h-full object-cover" />
+                              ) : (
+                                activeUser.full_name.slice(0, 2).toUpperCase()
+                              )}
+                              {(StorageService.getUserLastSeen(activeUser) === 'online' || activeUser.role === 'developer' || activeUser.phone === '0780699988') && (
+                                <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-card" title="Online" />
+                              )}
+                            </div>
                           </div>
                           <div className="min-w-0">
                             <h3 className="font-semibold text-xs sm:text-sm text-foreground flex items-center gap-1.5 truncate">
@@ -2428,8 +2432,26 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         </button>
                       </div>
 
-                      {/* Right Action Menu: 3-dots dropdown & Close Button */}
-                      <div className="relative flex items-center gap-1 sm:gap-1.5">
+                      {/* Right Action Menu: InDrive VoIP Audio & Video Calling, 3-dots dropdown & Close Button */}
+                      <div className="relative flex items-center gap-1 sm:gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setInDriveCall({ isOpen: true, partner: activeUser, callType: 'audio' })}
+                          className="p-2 sm:p-2.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 active:scale-95 transition-all cursor-pointer shadow-xs"
+                          title="InDrive Audio Call"
+                        >
+                          <Phone className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setInDriveCall({ isOpen: true, partner: activeUser, callType: 'video' })}
+                          className="p-2 sm:p-2.5 rounded-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 active:scale-95 transition-all cursor-pointer shadow-xs"
+                          title="InDrive Video Call"
+                        >
+                          <Video className="w-4 h-4" />
+                        </button>
+
                         <button
                           onClick={() => setShowDirectTopMenu(prev => !prev)}
                           className="p-2 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
@@ -4601,6 +4623,23 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
             setViewUserProfile(null);
             setActiveTab('direct');
             setActiveUserId(targetId);
+          }}
+      {/* InDrive-Inspired Real-Time VoIP Audio & Video Calling Modal */}
+      {inDriveCall && inDriveCall.isOpen && (
+        <InDriveCallModal
+          currentUser={currentUser}
+          partnerUser={inDriveCall.partner}
+          callType={inDriveCall.callType}
+          onEndCall={(durationSec, type) => {
+            if (durationSec > 0) {
+              const m = Math.floor(durationSec / 60);
+              const s = durationSec % 60;
+              const durText = `${m}m ${s.toString().padStart(2, '0')}s`;
+              const callMsg = type === 'video' ? `📹 Video Call (${durText})` : `📞 Voice Call (${durText})`;
+              StorageService.sendDirectMessage(currentUser.id, inDriveCall.partner.id, callMsg);
+              loadDirectMessages(inDriveCall.partner.id);
+            }
+            setInDriveCall(null);
           }}
         />
       )}

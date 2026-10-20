@@ -558,8 +558,8 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
               : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
           )}
         >
-          <Youtube className="w-3.5 h-3.5 fill-current" />
-          <span>📺 @joedaniels-official</span>
+          <Youtube className="w-3.5 h-3.5 fill-current text-red-500" />
+          <span>@joedaniels-official</span>
         </button>
         <button
           onClick={() => setSelectedChannel('@JoeDanielsPodcastshow')}
@@ -570,9 +570,31 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
               : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
           )}
         >
-          <Radio className="w-3.5 h-3.5" />
-          <span>🎙️ @JoeDanielsPodcastshow</span>
+          <Radio className="w-3.5 h-3.5 text-amber-500" />
+          <span>@JoeDanielsPodcastshow</span>
         </button>
+        <div className="ml-auto flex items-center gap-1.5 pl-2 shrink-0">
+          <a
+            href="https://www.youtube.com/@joedaniels-official"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] text-muted-foreground hover:text-red-500 flex items-center gap-1 px-2 py-1 rounded bg-secondary/50 border border-border transition-colors"
+            title="Open @joedaniels-official on YouTube"
+          >
+            <Youtube className="w-3 h-3 text-red-500 fill-current" />
+            <span>YouTube ↗</span>
+          </a>
+          <a
+            href="https://www.youtube.com/@JoeDanielsPodcastshow"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] text-muted-foreground hover:text-amber-500 flex items-center gap-1 px-2 py-1 rounded bg-secondary/50 border border-border transition-colors"
+            title="Open @JoeDanielsPodcastshow on YouTube"
+          >
+            <Radio className="w-3 h-3 text-amber-500" />
+            <span>Podcast ↗</span>
+          </a>
+        </div>
       </div>
 
       {/* 3. Category Chips Bar */}

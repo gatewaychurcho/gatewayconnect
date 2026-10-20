@@ -245,9 +245,10 @@ export default function App() {
     } catch {}
 
     StorageService.syncUsersWithRemote().catch(() => {});
+    StorageService.syncPostsWithRemote().catch(() => {});
     StorageService.syncStoriesWithRemote().catch(() => {});
     StorageService.syncAllFollowsFromSupabase().catch(() => {});
-    // Hydrate community posts, comments and prayers from Supabase so a fresh
+    // Hydrate community posts, comments and prayers from Cloudflare R2 & Supabase so a fresh
     // install / new member sees everything the church has already shared.
     StorageService.syncPostsAndPrayersWithRemote()
       .catch(() => {})

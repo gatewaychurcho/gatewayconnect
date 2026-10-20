@@ -452,6 +452,7 @@ export class StorageService {
     }
 
     SupabaseSyncService.syncUser(user).catch(() => {});
+    this.syncUserToCloudflareR2(user).catch(() => {});
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: user }));
@@ -518,16 +519,149 @@ export class StorageService {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Cloudflare R2 Persistent Document & State Engine (Dual-Storage Architecture)
+  // ---------------------------------------------------------------------------
+  static async syncUserToCloudflareR2(user: User): Promise<void> {
+    try {
+      if (typeof fetch === 'undefined') return;
+      await fetch('/api/db/sync?collection=users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'upsert', data: user })
+      });
+    } catch {}
+  }
+
+  static async fetchCloudflareR2Users(): Promise<User[]> {
+    try {
+      if (typeof fetch === 'undefined') return [];
+      const res = await fetch('/api/db/sync?collection=users', { method: 'GET' });
+      if (!res.ok) return [];
+      const json = await res.json();
+      return Array.isArray(json.data) ? json.data : [];
+    } catch {
+      return [];
+    }
+  }
+
+  static async syncPostToCloudflareR2(post: Testimony): Promise<void> {
+    try {
+      if (typeof fetch === 'undefined') return;
+      await fetch('/api/db/sync?collection=posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'upsert', data: post })
+      });
+    } catch {}
+  }
+
+  static async syncDeletePostFromCloudflareR2(postId: string): Promise<void> {
+    try {
+      if (typeof fetch === 'undefined') return;
+      await fetch('/api/db/sync?collection=posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', id: postId })
+      });
+    } catch {}
+  }
+
+  static async fetchCloudflareR2Posts(): Promise<Testimony[]> {
+    try {
+      if (typeof fetch === 'undefined') return [];
+      const res = await fetch('/api/db/sync?collection=posts', { method: 'GET' });
+      if (!res.ok) return [];
+      const json = await res.json();
+      return Array.isArray(json.data) ? json.data : [];
+    } catch {
+      return [];
+    }
+  }
+
+  static async syncPostsWithRemote(): Promise<void> {
+    try {
+      const r2Posts = await this.fetchCloudflareR2Posts();
+      if (r2Posts && r2Posts.length > 0) {
+        const localPosts = this.getTestimonies();
+        const deletedIds = getLocal<string[]>('gcz_deleted_post_ids_v1', []);
+        let changed = false;
+
+        for (const rp of r2Posts) {
+          if (deletedIds.includes(rp.id)) continue;
+          const idx = localPosts.findIndex(p => p.id === rp.id);
+          if (idx >= 0) {
+            localPosts[idx] = { ...localPosts[idx], ...rp };
+            changed = true;
+          } else {
+            localPosts.unshift(rp);
+            changed = true;
+          }
+        }
+
+        if (changed) {
+          setLocal(KEYS.TESTIMONIES, localPosts);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('gcz_testimony_updated'));
+          }
+        }
+      }
+    } catch {}
+  }
+
   static async syncUsersWithRemote(): Promise<void> {
     try {
-      // 1. Ensure developer account is synced to Supabase
       const localUsers = this.getAllUsers();
+
+      // 1. First sync with Cloudflare R2 users database (primary reliable document store)
+      const r2Users = await this.fetchCloudflareR2Users();
+      if (r2Users && r2Users.length > 0) {
+        let changed = false;
+        for (const ru of r2Users) {
+          const localIdx = localUsers.findIndex(u => u.id === ru.id || arePhoneNumbersEqual(u.phone, ru.phone));
+          if (localIdx >= 0) {
+            localUsers[localIdx] = {
+              ...localUsers[localIdx],
+              avatar_url: ru.avatar_url || localUsers[localIdx].avatar_url,
+              full_name: ru.full_name || localUsers[localIdx].full_name,
+              handle: ru.handle || localUsers[localIdx].handle,
+              role: ru.role || localUsers[localIdx].role,
+              is_verified: ru.is_verified !== undefined ? ru.is_verified : localUsers[localIdx].is_verified,
+              badge_type: ru.badge_type || localUsers[localIdx].badge_type,
+              followers_count: ru.followers_count || localUsers[localIdx].followers_count,
+              following_count: ru.following_count || localUsers[localIdx].following_count
+            };
+            changed = true;
+          } else {
+            localUsers.push(ru);
+            changed = true;
+          }
+        }
+        if (changed) {
+          setLocal(KEYS.ALL_USERS, localUsers);
+          const cur = this.getCurrentUser();
+          if (cur) {
+            const match = r2Users.find(ru => ru.id === cur.id || arePhoneNumbersEqual(ru.phone, cur.phone));
+            if (match) {
+              const updatedCur = { ...cur, ...match };
+              if (match.avatar_url) updatedCur.avatar_url = match.avatar_url;
+              setLocal(KEYS.CURRENT_USER, updatedCur);
+            }
+          }
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('gcz_users_synced', { detail: localUsers }));
+            window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+          }
+        }
+      }
+
+      // 2. Ensure developer account is synced to Supabase (if restored)
       const devUser = localUsers.find(u => u.role === 'developer' || arePhoneNumbersEqual(u.phone, '0780699988'));
       if (devUser) {
         SupabaseSyncService.syncUser(devUser).catch(() => {});
       }
 
-      // 2. Pull remote users from Supabase
+      // 3. Pull remote users from Supabase (if restored)
       const remoteUsers = await SupabaseSyncService.pullUsersFromSupabase();
       if (!remoteUsers || remoteUsers.length === 0) return;
       let changed = false;
@@ -2787,6 +2921,7 @@ export class StorageService {
     }
     // Remote database sync
     SupabaseSyncService.syncPost(newTest).catch(() => {});
+    this.syncPostToCloudflareR2(newTest).catch(() => {});
 
     // Notify tagged users if any mentioned in post (@all, @followers role-guarded)
     try {
@@ -2889,6 +3024,7 @@ export class StorageService {
     }
     // Remote database reaction sync
     SupabaseSyncService.syncReaction(id, effectiveUserId, alreadyLiked ? 'unlike' : 'like').catch(() => {});
+    this.syncPostToCloudflareR2(target).catch(() => {});
     return { user_liked: target.user_liked, likes_count: target.likes_count };
   }
 
@@ -2981,6 +3117,7 @@ export class StorageService {
     }
     // Remote database comment sync
     SupabaseSyncService.syncComment(postId, newComment).catch(() => {});
+    this.syncPostToCloudflareR2(target).catch(() => {});
     return newComment;
   }
 
@@ -3103,8 +3240,9 @@ export class StorageService {
         }
       } catch {}
     }
-    // Delete from Supabase & broadcast over social channel
+    // Delete from Supabase & Cloudflare R2 & broadcast over social channel
     SupabaseSyncService.deletePost(id).catch(() => {});
+    this.syncDeletePostFromCloudflareR2(id).catch(() => {});
   }
 
   /**
@@ -3432,6 +3570,39 @@ export class StorageService {
     this.autoFollowSuperAdminAndDeveloper(found.id);
     this.setCurrentUser(found);
     return { success: true, user: found };
+  }
+
+  static async loginAsync(phoneOrIdentifier: string, password?: string): Promise<{ success: boolean; user?: User; error?: string }> {
+    // 1. First try local login
+    const localRes = this.login(phoneOrIdentifier, password);
+    if (localRes.success) return localRes;
+
+    // 2. If not found locally, query remote Cloudflare R2 verify_login endpoint
+    try {
+      if (typeof fetch !== 'undefined') {
+        const resp = await fetch('/api/db/sync?collection=users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'verify_login',
+            identifier: phoneOrIdentifier,
+            password: password || ''
+          })
+        });
+        const resJson = await resp.json();
+        if (resp.ok && resJson.success && resJson.user) {
+          const remoteUser = resJson.user as User;
+          this.saveUser(remoteUser);
+          this.setCurrentUser(remoteUser);
+          this.autoFollowSuperAdminAndDeveloper(remoteUser.id);
+          return { success: true, user: remoteUser };
+        } else if (resJson.error) {
+          return { success: false, error: resJson.error };
+        }
+      }
+    } catch {}
+
+    return localRes;
   }
 
   static signup(

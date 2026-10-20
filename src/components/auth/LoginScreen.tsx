@@ -212,8 +212,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         } catch {}
       }
 
-      // 2. Local Storage Authentication Fallback
-      const res = StorageService.login(identifier, pwd);
+      // 2. Cloudflare R2 & Local Storage Resilient Authentication
+      const res = await StorageService.loginAsync(identifier, pwd);
       if (res.success && res.user) {
         confetti({ particleCount: 35, spread: 60 });
         onLoginSuccess(res.user, false);

@@ -36,8 +36,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'GET') {
     const data = await getR2Json(r2Key, []);
+    let sanitizedData = data;
+    // Security: Never leak passwords or security credentials over public API
+    if (collectionParam === 'users' && Array.isArray(data)) {
+      sanitizedData = data.map((u: any) => {
+        if (!u || typeof u !== 'object') return u;
+        const { password, ...safeUser } = u;
+        return safeUser;
+      });
+    }
     res.statusCode = 200;
-    res.json({ success: true, collection: collectionParam, data });
+    res.json({ success: true, collection: collectionParam, data: sanitizedData });
     return;
   }
 
@@ -49,6 +58,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       let currentData = await getR2Json<any[]>(r2Key, []);
       if (!Array.isArray(currentData)) currentData = [];
+
+      // Secure remote login verification across devices
+      if (action === 'verify_login' && collectionParam === 'users') {
+        const identifier = String(body.identifier || '').trim().toLowerCase();
+        const pwd = String(body.password || '').trim();
+        const cleanIdent = identifier.startsWith('@') ? identifier.slice(1) : identifier;
+        
+        const matched = currentData.find(u => {
+          if (!u) return false;
+          const uPhone = String(u.phone || '').replace(/[^0-9]/g, '');
+          const qPhone = identifier.replace(/[^0-9]/g, '');
+          const phoneMatch = uPhone && qPhone && (uPhone.endsWith(qPhone) || qPhone.endsWith(uPhone));
+          const emailMatch = u.email && String(u.email).toLowerCase() === identifier;
+          const handleMatch = u.handle && (
+            String(u.handle).toLowerCase() === identifier ||
+            String(u.handle).toLowerCase() === `@${cleanIdent}` ||
+            String(u.handle).toLowerCase().replace('@', '') === cleanIdent
+          );
+          return phoneMatch || emailMatch || handleMatch;
+        });
+
+        if (!matched) {
+          res.statusCode = 404;
+          res.json({ success: false, error: 'No account found with this phone number or handle.' });
+          return;
+        }
+
+        // Check password if set on record
+        if (matched.password && matched.password !== pwd) {
+          res.statusCode = 401;
+          res.json({ success: false, error: 'Incorrect password. Please verify and try again.' });
+          return;
+        }
+
+        const { password, ...safeUser } = matched;
+        res.statusCode = 200;
+        res.json({ success: true, user: safeUser });
+        return;
+      }
 
       if (action === 'save') {
         // Replace entire collection

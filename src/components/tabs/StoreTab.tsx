@@ -743,77 +743,7 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
         </div>
       )}
 
-      {/* 5. Printable / Downloadable Official Receipt Modal */}
-      {activeReceipt && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-3">
-          <div className="bg-card border border-border rounded-xl max-w-md w-full p-6 space-y-4 shadow-xl text-center">
-            
-            <div className="w-12 h-12 rounded-xl bg-primary/15 text-primary flex items-center justify-center mx-auto border border-primary/30">
-              <Receipt className="w-6 h-6" />
-            </div>
 
-            <div>
-              <span className="text-[10px] font-bold tracking-widest text-primary uppercase">
-                OFFICIAL KINGDOM GIVING RECEIPT
-              </span>
-              <h3 className="font-serif-church text-lg font-bold text-foreground mt-0.5">
-                Gateway Church Zimbabwe
-              </h3>
-              <p className="text-xs text-muted-foreground">Apostle Joe Daniels Ministry</p>
-            </div>
-
-            <div className="bg-secondary/60 rounded-lg p-4 border border-border text-xs text-left space-y-2 font-mono">
-              <div className="flex justify-between border-b border-border pb-1.5">
-                <span className="text-muted-foreground">Receipt No:</span>
-                <span className="font-bold text-primary">{activeReceipt.receipt_number}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Partner:</span>
-                <span className="text-foreground">{activeReceipt.donor_name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Fund:</span>
-                <span className="text-foreground font-bold">{activeReceipt.fund_type}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Payment Via:</span>
-                <span className="text-foreground">{activeReceipt.payment_method}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Impact Allocation:</span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-bold text-[11px]">{activeReceipt.impact_tag}</span>
-              </div>
-              <div className="flex justify-between border-t border-border pt-1.5 text-sm">
-                <span className="text-foreground font-bold">Total Given:</span>
-                <span className="text-foreground font-black">{activeReceipt.currency} {activeReceipt.amount}</span>
-              </div>
-            </div>
-
-            <p className="text-[11px] text-muted-foreground italic">
-              "The Lord remember all thine offerings, and accept thy burnt sacrifice. Selah." — Psalm 20:3
-            </p>
-
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => setActiveReceipt(null)}
-                className="flex-1 py-2 rounded-lg bg-secondary text-foreground text-xs font-bold hover:bg-secondary/80 transition-colors"
-              >
-                Close
-              </button>
-              <button
-                onClick={() => {
-                  window.print();
-                }}
-                className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 flex items-center justify-center gap-1 transition-colors shadow-sm"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Save Receipt</span>
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
 
       {/* 6. Fixed Kingdom Store Cart & Checkout Modal */}
       {showCartModal && (
