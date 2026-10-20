@@ -16,6 +16,7 @@ import {
 import { User } from '../../types';
 import { liveSyncService, CallSignalPayload } from '../../services/liveSyncService';
 import { StorageService } from '../../services/storageService';
+import { agoraService } from '../../services/agoraService';
 
 export interface InDriveCallModalProps {
   currentUser: User;
@@ -195,6 +196,9 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
   useEffect(() => {
     if (isIncoming) {
       startRingtone('incoming');
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate([400, 200, 400, 200, 400]); } catch {}
+      }
       // If receiver doesn't answer in 35s, auto dismiss
       callTimeoutRef.current = setTimeout(() => {
         handleHangUp('missed');
@@ -248,6 +252,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
         stopRingtone();
         setCallStatus('connected');
         setupWebRTC(true);
+        void agoraService.joinVoiceCall(`indrive_call_${callId}`, currentUser.id);
       }
 
       // When SDP offer arrives (on receiver side)
@@ -341,6 +346,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
     stopRingtone();
     setCallStatus('connected');
     setupWebRTC(false);
+    void agoraService.joinVoiceCall(`indrive_call_${callId}`, currentUser.id);
 
     liveSyncService.sendCallSignal({
       callId,
@@ -361,6 +367,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
     if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
     stopRingtone();
     setCallStatus('declined');
+    void agoraService.leaveVoiceCall();
 
     // Save to persistent call logs
     try {
@@ -400,6 +407,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
     if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
     stopRingtone();
     setCallStatus('ended');
+    void agoraService.leaveVoiceCall();
 
     const dur = durationSeconds;
     const m = Math.floor(dur / 60);
@@ -445,14 +453,14 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
 
   // Toggle Microphone Mute
   const handleToggleMute = () => {
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+    agoraService.setMuted(nextMuted);
     if (localStreamRef.current) {
       const audioTrack = localStreamRef.current.getAudioTracks()[0];
       if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setIsMuted(!audioTrack.enabled);
+        audioTrack.enabled = !nextMuted;
       }
-    } else {
-      setIsMuted(!isMuted);
     }
   };
 
@@ -523,15 +531,15 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
           {/* User Profile Avatar with Instagram Gradient Ring */}
           <div className="relative p-1 rounded-full bg-gradient-to-tr from-emerald-500 via-primary to-amber-500 shadow-2xl">
             <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden bg-slate-900 border-2 border-slate-950 flex items-center justify-center">
-              {partnerUser.avatar_url ? (
+              {partnerUser?.avatar_url ? (
                 <img 
                   src={partnerUser.avatar_url} 
-                  alt={partnerUser.full_name} 
+                  alt={partnerUser?.full_name || 'Caller'} 
                   className="w-full h-full object-cover" 
                 />
               ) : (
                 <span className="text-3xl font-black text-white/80">
-                  {partnerUser.full_name.slice(0, 2).toUpperCase()}
+                  {(partnerUser?.full_name || 'GC').slice(0, 2).toUpperCase()}
                 </span>
               )}
             </div>
@@ -540,8 +548,8 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
 
         {/* Partner Name & Ministry Title */}
         <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center justify-center gap-2">
-          <span>{partnerUser.full_name}</span>
-          {partnerUser.role === 'super_admin' && (
+          <span>{partnerUser?.full_name || 'Church Believer'}</span>
+          {partnerUser?.role === 'super_admin' && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
               Apostle
             </span>

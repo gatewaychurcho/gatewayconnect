@@ -959,11 +959,24 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
                     className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                   >
                     <div className="flex -space-x-1.5 overflow-hidden">
-                      {followersUsers.slice(0, 2).map((u, i) => (
+                      {(followersUsers || []).slice(0, 2).map((u, i) => (
                         <img key={u.id || i} src={u.avatar_url || '/assets/apostle_joe_daniels_main.jpg'} className="inline-block w-4 h-4 rounded-full ring-1 ring-background object-cover" alt="" />
                       ))}
                     </div>
-                    <span>Followed by <strong className="text-foreground font-semibold">{(followersUsers[0].handle || followersUsers[0].full_name).replace('@', '')}</strong>, <strong className="text-foreground font-semibold">{(followersUsers[1].handle || followersUsers[1].full_name).replace('@', '')}</strong>, and {followersUsers.length - 2} other{followersUsers.length - 2 === 1 ? '' : 's'}</span>
+                    <span>
+                      Followed by{' '}
+                      <strong className="text-foreground font-semibold">
+                        {(followersUsers[0]?.handle || followersUsers[0]?.full_name || 'believer').replace('@', '')}
+                      </strong>
+                      {followersUsers.length > 1 && (
+                        <>
+                          , <strong className="text-foreground font-semibold">{(followersUsers[1]?.handle || followersUsers[1]?.full_name || 'believer').replace('@', '')}</strong>
+                        </>
+                      )}
+                      {followersUsers.length > 2 && (
+                        <> and {followersUsers.length - 2} other{followersUsers.length - 2 === 1 ? '' : 's'}</>
+                      )}
+                    </span>
                   </div>
                 )}
               </div>

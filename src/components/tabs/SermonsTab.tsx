@@ -32,7 +32,13 @@ import {
   Lock,
   Unlock,
   Crown,
-  ShieldAlert
+  ShieldAlert,
+  Clapperboard,
+  Music2,
+  Bookmark,
+  MessageSquare,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { Sermon, User } from '../../types';
 import { StorageService } from '../../services/storageService';
@@ -70,6 +76,13 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'newest' | 'most_viewed' | 'title' | 'duration'>('newest');
   const [selectedChannel, setSelectedChannel] = useState<'all' | '@joedaniels-official' | '@JoeDanielsPodcastshow'>('all');
+
+  // Reels vs Full Sermons media tab (Reels default)
+  const [mediaTab, setMediaTab] = useState<'reels' | 'sermons'>('reels');
+  const [activeReelIndex, setActiveReelIndex] = useState<number>(0);
+  const [reelLikes, setReelLikes] = useState<Record<string, number>>({});
+  const [userReelLiked, setUserReelLiked] = useState<Record<string, boolean>>({});
+  const [doubleTapReelId, setDoubleTapReelId] = useState<string | null>(null);
 
   // Modals state
   const [activePlayingSermon, setActivePlayingSermon] = useState<Sermon | null>(null);
@@ -123,6 +136,44 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
       Boolean(typeof StorageService?.isDeveloperMode === 'function' && StorageService.isDeveloperMode())
     )
   );
+
+  // Filtered Reels List
+  const reelsList = useMemo(() => {
+    const list = sermons.filter(s => 
+      s.duration === '1m' || 
+      s.duration === '2m' || 
+      s.series?.toLowerCase().includes('short') || 
+      s.series?.toLowerCase().includes('revelation') || 
+      s.series?.toLowerCase().includes('wisdom') ||
+      s.id.startsWith('sermon_')
+    );
+    return list.length > 0 ? list : sermons;
+  }, [sermons]);
+
+  const handleLikeReel = (reelId: string) => {
+    const isLiked = userReelLiked[reelId];
+    setUserReelLiked(prev => ({ ...prev, [reelId]: !isLiked }));
+    setReelLikes(prev => ({ ...prev, [reelId]: (prev[reelId] || 150) + (isLiked ? -1 : 1) }));
+    if (!isLiked) {
+      confetti({ particleCount: 25, spread: 50, origin: { y: 0.7 } });
+    }
+  };
+
+  const handleDoubleTapReel = (reelId: string) => {
+    if (!userReelLiked[reelId]) {
+      handleLikeReel(reelId);
+    }
+    setDoubleTapReelId(reelId);
+    setTimeout(() => setDoubleTapReelId(null), 900);
+  };
+
+  const handlePrevReel = () => {
+    setActiveReelIndex(prev => (prev > 0 ? prev - 1 : reelsList.length - 1));
+  };
+
+  const handleNextReel = () => {
+    setActiveReelIndex(prev => (prev < reelsList.length - 1 ? prev + 1 : 0));
+  };
 
   // Sync event listeners
   useEffect(() => {
@@ -476,13 +527,305 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
         </div>
       </div>
 
-      {/* 2. Search, Sort & View Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Search Input */}
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
+      {/* Media Type Switcher: Reels vs Full Sermons */}
+      <div className="flex items-center justify-center gap-2 p-1.5 bg-card/80 backdrop-blur-md rounded-2xl border border-border shadow-xs max-w-md mx-auto">
+        <button
+          onClick={() => setMediaTab('reels')}
+          className={cn(
+            "flex-1 py-2 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer",
+            mediaTab === 'reels'
+              ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-pink-500/20"
+              : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+          )}
+        >
+          <Clapperboard className="w-4 h-4" />
+          <span>Reels</span>
+          <span className="text-[10px] px-1.5 py-0.2 bg-white/20 text-white rounded-full font-black">
+            {reelsList.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setMediaTab('sermons')}
+          className={cn(
+            "flex-1 py-2 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer",
+            mediaTab === 'sermons'
+              ? "bg-primary text-primary-foreground shadow-xs"
+              : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+          )}
+        >
+          <Tv className="w-4 h-4" />
+          <span>Full Sermons</span>
+          <span className="text-[10px] px-1.5 py-0.2 bg-black/20 dark:bg-white/20 rounded-full font-black">
+            {sermons.length}
+          </span>
+        </button>
+      </div>
+
+      {mediaTab === 'reels' ? (
+        <div className="space-y-4">
+          {/* Active Reel Stage */}
+          {reelsList.length === 0 ? (
+            <div className="py-20 text-center text-muted-foreground">
+              <Clapperboard className="w-12 h-12 mx-auto mb-2 opacity-40" />
+              <p>No reels found.</p>
+            </div>
+          ) : (
+            (() => {
+              const currentReel = reelsList[activeReelIndex] || reelsList[0];
+              const isLiked = Boolean(userReelLiked[currentReel.id]);
+              const likesCount = (reelLikes[currentReel.id] ?? 245) + (isLiked ? 1 : 0);
+
+              return (
+                <div className="flex flex-col items-center">
+                  {/* Container with Reels Phone frame */}
+                  <div 
+                    onDoubleClick={() => handleDoubleTapReel(currentReel.id)}
+                    className="relative w-full max-w-[420px] aspect-[9/16] max-h-[78vh] rounded-3xl overflow-hidden bg-black shadow-2xl border border-border/40 select-none group"
+                  >
+                    {/* Double-tap Heart Animation */}
+                    {doubleTapReelId === currentReel.id && (
+                      <div className="absolute inset-0 flex items-center justify-center z-40 pointer-events-none animate-ping">
+                        <Heart className="w-24 h-24 fill-red-500 text-red-500 drop-shadow-2xl" />
+                      </div>
+                    )}
+
+                    {/* Reel Media Player (Video or YouTube) */}
+                    <div className="absolute inset-0 w-full h-full bg-black">
+                      {currentReel.video_url ? (
+                        <video
+                          key={currentReel.id}
+                          src={currentReel.video_url}
+                          autoPlay
+                          loop
+                          playsInline
+                          controls={false}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : currentReel.youtube_id ? (
+                        <iframe
+                          key={currentReel.id}
+                          src={`https://www.youtube.com/embed/${currentReel.youtube_id}?autoplay=1&mute=0&controls=0&loop=1&playlist=${currentReel.youtube_id}&modestbranding=1&rel=0&playsinline=1`}
+                          title={currentReel.title}
+                          className="w-full h-full object-cover pointer-events-auto border-0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      ) : (
+                        <div className="w-full h-full relative">
+                          <img
+                            src={currentReel.thumbnail_url || 'https://images.unsplash.com/photo-1519491050282-cf00c82424b4?auto=format&fit=crop&q=80&w=800'}
+                            alt={currentReel.title}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                            <Play className="w-16 h-16 text-white/80" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Subtle top & bottom gradients for readable UI */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/90 pointer-events-none z-10" />
+
+                    {/* Top Status Bar: Title & Reel Counter */}
+                    <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between text-white drop-shadow">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-sm tracking-wider flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
+                          <Clapperboard className="w-3.5 h-3.5 text-pink-500" />
+                          <span>Reels</span>
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-600/90 text-white animate-pulse">
+                          LIVE WORD
+                        </span>
+                      </div>
+                      <span className="text-xs font-mono font-bold bg-black/40 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10">
+                        {activeReelIndex + 1} / {reelsList.length}
+                      </span>
+                    </div>
+
+                    {/* Right Floating Actions Rail (Facebook / Instagram style) */}
+                    <div className="absolute right-3 bottom-24 z-20 flex flex-col items-center gap-5 text-white">
+                      {/* Apostle Profile Avatar */}
+                      <div className="relative group/avatar cursor-pointer">
+                        <div className="w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-amber-400 via-pink-500 to-purple-600">
+                          <img
+                            src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200"
+                            alt="Apostle Joe Daniels"
+                            className="w-full h-full rounded-full object-cover"
+                          />
+                        </div>
+                        <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-pink-500 text-white flex items-center justify-center text-[10px] font-black border border-white">
+                          +
+                        </div>
+                      </div>
+
+                      {/* Like Button */}
+                      <button
+                        onClick={() => handleLikeReel(currentReel.id)}
+                        className="flex flex-col items-center gap-1 cursor-pointer transition-transform active:scale-125"
+                        title="Like Reel"
+                      >
+                        <div className={cn(
+                          "w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-md transition-all shadow-lg",
+                          isLiked ? "bg-red-500/20 text-red-500" : "bg-black/40 text-white hover:bg-black/60"
+                        )}>
+                          <Heart className={cn("w-6 h-6", isLiked ? "fill-red-500 text-red-500" : "")} />
+                        </div>
+                        <span className="text-[11px] font-bold text-white drop-shadow">
+                          {likesCount}
+                        </span>
+                      </button>
+
+                      {/* Comment Button */}
+                      <button
+                        onClick={() => {
+                          confetti({ particleCount: 15, spread: 40 });
+                        }}
+                        className="flex flex-col items-center gap-1 cursor-pointer transition-transform active:scale-125"
+                        title="Comments"
+                      >
+                        <div className="w-11 h-11 rounded-full bg-black/40 text-white hover:bg-black/60 flex items-center justify-center backdrop-blur-md shadow-lg">
+                          <MessageSquare className="w-6 h-6" />
+                        </div>
+                        <span className="text-[11px] font-bold text-white drop-shadow">
+                          {48 + activeReelIndex * 7}
+                        </span>
+                      </button>
+
+                      {/* Share Button */}
+                      <button
+                        onClick={() => {
+                          if (navigator.clipboard) {
+                            navigator.clipboard.writeText(window.location.href);
+                          }
+                          confetti({ particleCount: 30, spread: 60 });
+                        }}
+                        className="flex flex-col items-center gap-1 cursor-pointer transition-transform active:scale-125"
+                        title="Share Reel"
+                      >
+                        <div className="w-11 h-11 rounded-full bg-black/40 text-white hover:bg-black/60 flex items-center justify-center backdrop-blur-md shadow-lg">
+                          <Share2 className="w-6 h-6" />
+                        </div>
+                        <span className="text-[11px] font-bold text-white drop-shadow">Share</span>
+                      </button>
+
+                      {/* Pin to Top Player Button */}
+                      <button
+                        onClick={() => handlePlaySermon(currentReel, true)}
+                        className="flex flex-col items-center gap-1 cursor-pointer transition-transform active:scale-125"
+                        title="Pin to Home Top Player"
+                      >
+                        <div className="w-11 h-11 rounded-full bg-black/40 text-white hover:bg-black/60 flex items-center justify-center backdrop-blur-md shadow-lg">
+                          <Tv className="w-5 h-5 text-amber-400" />
+                        </div>
+                        <span className="text-[10px] font-bold text-white drop-shadow">Pin</span>
+                      </button>
+
+                      {/* Spinning Vinyl Audio Disc */}
+                      <div className="w-10 h-10 rounded-full border-2 border-white/60 bg-gradient-to-tr from-purple-600 via-pink-600 to-amber-500 flex items-center justify-center shadow-lg animate-spin [animation-duration:5s]">
+                        <Music2 className="w-4 h-4 text-white" />
+                      </div>
+                    </div>
+
+                    {/* Bottom Info Overlay */}
+                    <div className="absolute left-4 right-16 bottom-4 z-20 space-y-2 text-white">
+                      {/* Creator Handle */}
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-sm text-white drop-shadow flex items-center gap-1">
+                          @apostle_joe_daniels
+                          <ShieldCheck className="w-4 h-4 fill-sky-500 text-white inline" />
+                        </span>
+                        <button
+                          onClick={() => confetti({ particleCount: 20, spread: 50 })}
+                          className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/20 hover:bg-white text-white hover:text-black border border-white/40 backdrop-blur-sm transition-all"
+                        >
+                          Follow
+                        </button>
+                      </div>
+
+                      {/* Title & Scripture / Tags */}
+                      <p className="text-xs sm:text-sm font-medium line-clamp-2 drop-shadow text-white/95">
+                        {currentReel.title}
+                      </p>
+
+                      <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-bold text-pink-300">
+                        <span>#ApostolicDominion</span>
+                        <span>#PropheticWord</span>
+                        <span>#GatewayConnect</span>
+                      </div>
+
+                      {/* Music Audio Ticker */}
+                      <div className="flex items-center gap-2 text-[11px] text-white/80 overflow-hidden font-medium">
+                        <Music2 className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">Apostle Joe Daniels • Supernatural Audio Voice</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Navigation & Controls: Prev Reel / Next Reel buttons */}
+                  <div className="flex items-center justify-center gap-4 mt-4">
+                    <button
+                      onClick={handlePrevReel}
+                      className="px-4 py-2 rounded-xl bg-card border border-border hover:bg-secondary text-foreground text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
+                      title="Previous Reel"
+                    >
+                      <ChevronUp className="w-4 h-4 text-primary" />
+                      <span>Previous</span>
+                    </button>
+
+                    <button
+                      onClick={handleNextReel}
+                      className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:brightness-110 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95 transition-all"
+                      title="Next Reel"
+                    >
+                      <span>Next Reel</span>
+                      <ChevronDown className="w-4 h-4 text-white" />
+                    </button>
+                  </div>
+
+                  {/* Reel Quick Thumbnails Strip */}
+                  <div className="w-full max-w-xl mt-4">
+                    <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar px-1">
+                      {reelsList.map((reel, idx) => (
+                        <button
+                          key={reel.id}
+                          onClick={() => setActiveReelIndex(idx)}
+                          className={cn(
+                            "relative shrink-0 w-16 h-24 rounded-xl overflow-hidden border-2 transition-all cursor-pointer group",
+                            idx === activeReelIndex
+                              ? "border-pink-500 scale-105 shadow-md shadow-pink-500/30"
+                              : "border-border/60 opacity-60 hover:opacity-100"
+                          )}
+                        >
+                          <img
+                            src={reel.thumbnail_url || 'https://images.unsplash.com/photo-1519491050282-cf00c82424b4?auto=format&fit=crop&q=80&w=200'}
+                            alt={reel.title}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-1">
+                            <span className="text-[9px] font-bold text-white truncate">
+                              {reel.duration || 'Short'}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()
+          )}
+        </div>
+      ) : (
+        <>
+          {/* 2. Search, Sort & View Controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Search Input */}
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search 200+ sermons by title, scripture, or topic..."
@@ -918,6 +1261,8 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
             );
           })}
         </div>
+      )}
+        </>
       )}
 
       {/* 5. Inline Video Player Modal */}

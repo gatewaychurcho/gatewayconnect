@@ -264,8 +264,19 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   const [newGroupIsPaid, setNewGroupIsPaid] = useState(false);
   const [newGroupPrice, setNewGroupPrice] = useState(150);
   const [newGroupDuration, setNewGroupDuration] = useState(3);
-  const [newGroupPinnedNotice, setNewGroupPinnedNotice] = useState('');
   const [inDriveCall, setInDriveCall] = useState<{ isOpen: boolean; partner: User } | null>(null);
+
+  const handleSimulateIncomingCall = (callerUser?: User) => {
+    const caller = callerUser || prioritizedContacts.find(u => u.id === 'usr_apostle_joe') || prioritizedContacts[0];
+    const callId = `call_test_${Date.now()}`;
+    window.dispatchEvent(new CustomEvent('gcz_trigger_incoming_call', {
+      detail: {
+        caller,
+        callId
+      }
+    }));
+  };
+
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -2206,7 +2217,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           {contact.avatar_url ? (
                             <img src={contact.avatar_url} alt={contact.full_name} className="w-full h-full object-cover" />
                           ) : (
-                            contact.full_name.slice(0, 2).toUpperCase()
+                            (contact.full_name || 'GC').slice(0, 2).toUpperCase()
                           )}
                         </div>
 
@@ -2227,7 +2238,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             )}
                           </div>
                           <p className="text-[11px] text-muted-foreground truncate font-mono">
-                            {contact.handle || `@${contact.full_name.toLowerCase().replace(/\s+/g, '_')}`} • {contact.location || 'Harare'}
+                            {contact.handle || `@${(contact.full_name || 'user').toLowerCase().replace(/\s+/g, '_')}`} • {contact.location || 'Harare'}
                           </p>
                         </div>
                       </button>
@@ -2262,7 +2273,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                 {thread.other_user.avatar_url ? (
                                   <img src={thread.other_user.avatar_url} alt={thread.other_user.full_name} className="w-full h-full object-cover" />
                                 ) : (
-                                  thread.other_user.full_name.slice(0, 2).toUpperCase()
+                                  (thread.other_user.full_name || 'GC').slice(0, 2).toUpperCase()
                                 )}
                               </div>
                               <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-background" />
@@ -2317,7 +2328,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       <div key={inv.id} className="bg-card border border-border rounded-xl p-3 space-y-2 text-xs shadow-sm">
                         <div className="flex items-start gap-2.5">
                           <div className="w-8 h-8 rounded-lg bg-primary text-primary-foreground font-bold text-xs flex items-center justify-center shrink-0 shadow-sm">
-                            {inv.group_name.slice(0, 1)}
+                            {(inv.group_name || 'G').slice(0, 1)}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-foreground text-xs truncate">{inv.group_name}</p>
@@ -2373,7 +2384,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           ) : isFs ? (
                             <GraduationCap className="w-6 h-6 text-primary" />
                           ) : (
-                            grp.name.slice(0, 2).toUpperCase()
+                            (grp.name || 'GP').slice(0, 2).toUpperCase()
                           )}
                         </div>
                         {grp.is_paid && (
@@ -2487,7 +2498,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           {contact.avatar_url ? (
                             <img src={contact.avatar_url} alt={contact.full_name} className="w-full h-full object-cover" />
                           ) : (
-                            contact.full_name.slice(0, 2).toUpperCase()
+                            (contact.full_name || 'GC').slice(0, 2).toUpperCase()
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -2515,19 +2526,30 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         <Clock className="w-3.5 h-3.5 text-primary" />
                         <span>Recent Voice Calls ({callLogs.length})</span>
                       </div>
-                      {callLogs.length > 0 && (
+                      <div className="flex items-center gap-2">
                         <button
-                          onClick={() => {
-                            if (window.confirm('Clear all voice call history?')) {
-                              StorageService.clearCallLogs(currentUser.id);
-                              setCallLogs([]);
-                            }
-                          }}
-                          className="text-[11px] text-muted-foreground hover:text-destructive transition-colors font-medium cursor-pointer"
+                          type="button"
+                          onClick={() => handleSimulateIncomingCall()}
+                          className="px-2 py-1 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 font-semibold text-[11px] flex items-center gap-1 transition-colors border border-emerald-500/20 shadow-xs cursor-pointer"
+                          title="Simulate incoming WhatsApp voice call"
                         >
-                          Clear Logs
+                          <PhoneIncoming className="w-3 h-3" />
+                          <span>Test Incoming Call</span>
                         </button>
-                      )}
+                        {callLogs.length > 0 && (
+                          <button
+                            onClick={() => {
+                              if (window.confirm('Clear all voice call history?')) {
+                                StorageService.clearCallLogs(currentUser.id);
+                                setCallLogs([]);
+                              }
+                            }}
+                            className="text-[11px] text-muted-foreground hover:text-destructive transition-colors font-medium cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {filteredCallLogs.length === 0 ? (
@@ -2551,7 +2573,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       filteredCallLogs.map((log) => {
                         const partnerUser = prioritizedContacts.find(u => u.id === log.partner_id) || {
                           id: log.partner_id,
-                          full_name: log.partner_name,
+                          full_name: log.partner_name || 'Church Believer',
                           avatar_url: log.partner_avatar,
                           role: (log.partner_role as any) || 'member'
                         } as User;
@@ -2564,9 +2586,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             {/* Partner Avatar */}
                             <div className="relative w-11 h-11 rounded-full border border-border overflow-hidden bg-secondary flex items-center justify-center text-primary font-bold text-xs shrink-0 shadow-xs">
                               {log.partner_avatar ? (
-                                <img src={log.partner_avatar} alt={log.partner_name} className="w-full h-full object-cover" />
+                                <img src={log.partner_avatar} alt={log.partner_name || 'Caller'} className="w-full h-full object-cover" />
                               ) : (
-                                log.partner_name.slice(0, 2).toUpperCase()
+                                (log.partner_name || 'GC').slice(0, 2).toUpperCase()
                               )}
                             </div>
 
@@ -2770,7 +2792,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               {activeUser.avatar_url ? (
                                 <img src={activeUser.avatar_url} alt={activeUser.full_name} className="w-full h-full object-cover" />
                               ) : (
-                                activeUser.full_name.slice(0, 2).toUpperCase()
+                                (activeUser.full_name || 'GC').slice(0, 2).toUpperCase()
                               )}
                               {(StorageService.getUserLastSeen(activeUser) === 'online' || activeUser.role === 'developer' || activeUser.phone === '0780699988') && (
                                 <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-card" title="Online" />
@@ -3420,7 +3442,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             {activeGroup.avatar_url ? (
                               <img src={activeGroup.avatar_url} alt={activeGroup.name} className="w-full h-full object-cover" />
                             ) : (
-                              activeGroup.name.slice(0, 2).toUpperCase()
+                              (activeGroup.name || 'GP').slice(0, 2).toUpperCase()
                             )}
                             {groupOnlineCount > 0 && (
                               <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-card" title={`${groupOnlineCount} members online`} />
@@ -3807,7 +3829,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                         {msg.sender_avatar ? (
                                           <img src={msg.sender_avatar} alt={msg.sender_name} className="w-full h-full object-cover" />
                                         ) : (
-                                          msg.sender_name.slice(0, 2).toUpperCase()
+                                          (msg.sender_name || 'GC').slice(0, 2).toUpperCase()
                                         )}
                                       </button>
                                     ) : (
@@ -4123,7 +4145,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                   >
                                     <div className="flex items-center gap-2 min-w-0">
                                       <div className="w-6 h-6 rounded-full bg-secondary border border-border flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
-                                        {member.full_name.slice(0, 2).toUpperCase()}
+                                        {(member.full_name || 'GC').slice(0, 2).toUpperCase()}
                                       </div>
                                       <span className="font-semibold text-foreground truncate">{member.full_name}</span>
                                       {member.role === 'super_admin' && (
@@ -4328,7 +4350,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             {pastor.avatar_url ? (
                               <img src={pastor.avatar_url} alt={pastor.full_name} className="w-full h-full object-cover" />
                             ) : (
-                              pastor.full_name.slice(0, 2).toUpperCase()
+                              (pastor.full_name || 'GC').slice(0, 2).toUpperCase()
                             )}
                           </div>
                           <div className="min-w-0">
@@ -4694,7 +4716,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           {contact.avatar_url ? (
                             <img src={contact.avatar_url} alt={contact.full_name} className="w-full h-full object-cover" />
                           ) : (
-                            contact.full_name.slice(0, 2).toUpperCase()
+                            (contact.full_name || 'GC').slice(0, 2).toUpperCase()
                           )}
                         </div>
                         <div className="min-w-0">
@@ -5082,7 +5104,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
             <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
               <div className="absolute inset-0 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
               <div className="w-14 h-14 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-xl shadow-xs">
-                {joiningGroup.name.slice(0, 1).toUpperCase()}
+                {(joiningGroup?.name || 'G').slice(0, 1).toUpperCase()}
               </div>
             </div>
             <div className="space-y-1.5">

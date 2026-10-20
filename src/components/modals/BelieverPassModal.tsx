@@ -220,7 +220,7 @@ export const BelieverPassModal: React.FC<BelieverPassModalProps> = ({
             <div className="flex items-center justify-between pt-1 border-t border-border/60 text-[9px] text-muted-foreground relative z-10">
               <div className="flex items-center gap-1.5 font-mono">
                 <QrCode className="w-4 h-4 text-primary" />
-                <span>AUTH-TOKEN: {user.id.slice(-8).toUpperCase()}</span>
+                <span>AUTH-TOKEN: {(user?.id || 'GATEWAY').slice(-8).toUpperCase()}</span>
               </div>
               <span className="text-primary font-serif-church font-bold">
                 Faith • Power • Acceleration

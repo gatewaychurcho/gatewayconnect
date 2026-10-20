@@ -30,7 +30,11 @@ import {
   Eye,
   Check,
   Tag,
-  RotateCw
+  RotateCw,
+  Search,
+  BookOpen,
+  Music,
+  Shield
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Product, CartItem, DonationFund, PaymentGateway, Donation, ServiceBooking } from '../../types';
@@ -53,6 +57,8 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
   const [cartToast, setCartToast] = useState<string | null>(null);
   const [selectedSizes, setSelectedSizes] = useState<Record<string, string>>({});
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'featured' | 'price-low' | 'price-high'>('featured');
   const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
 
   // Real-time Available Products (automatically hides out-of-stock items)
@@ -583,32 +589,81 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
 
               <div className="flex items-center gap-2 shrink-0">
                 <div className="px-3 py-1.5 rounded-lg bg-secondary border border-border text-right">
-                  <p className="text-[10px] text-muted-foreground font-medium uppercase">Collection Pricing</p>
-                  <p className="text-xs font-bold text-foreground">$34.99 USD <span className="text-muted-foreground font-normal">|</span> R699 ZAR</p>
+                  <p className="text-[10px] text-muted-foreground font-medium uppercase">Kingdom Hub Status</p>
+                  <p className="text-xs font-bold text-foreground">Harare Dispatch <span className="text-emerald-500 font-bold">• Active</span></p>
                 </div>
               </div>
             </div>
 
+            {/* Search & Sort Bar */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-3 mt-3 border-t border-border">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search books, apparel, anointed oils, teachings..."
+                  className="w-full bg-secondary/70 border border-border rounded-lg pl-9 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="bg-secondary/70 border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:border-primary font-medium shrink-0"
+              >
+                <option value="featured">Featured First</option>
+                <option value="price-low">Price: Low to High</option>
+                <option value="price-high">Price: High to Low</option>
+              </select>
+            </div>
+
             {/* Category Filter Pills */}
-            <div className="flex items-center gap-2 pt-3 mt-3 border-t border-border overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-2 pt-2.5 overflow-x-auto no-scrollbar">
               {[
-                { id: 'All', label: 'All Items' },
-                { id: 'Apparel', label: '👕 Kingdom Apparel (JD Collection)' },
-                { id: 'Books', label: '📖 Apostolic Books' },
-                { id: 'Media', label: '💿 Anointing Oil & Media' }
-              ].map(cat => (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
-                    selectedCategory === cat.id
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground border border-border'
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
+                { id: 'All', label: 'All Resources' },
+                { id: 'Books', label: '📖 Books & Literature' },
+                { id: 'Apparel', label: '👕 Ministry Apparel' },
+                { id: 'Audio', label: '🎧 Audio Teachings' },
+                { id: 'Sacred', label: '🕊️ Sacred & Communion' }
+              ].map(cat => {
+                const count = availableProducts.filter(p => {
+                  if (cat.id === 'All') return true;
+                  if (cat.id === 'Books') return p.category.includes('Book') || p.category.includes('Literature');
+                  if (cat.id === 'Apparel') return p.category.includes('Apparel');
+                  if (cat.id === 'Audio') return p.category.includes('Audio') || p.category.includes('Teaching');
+                  if (cat.id === 'Sacred') return p.category.includes('Sacred') || p.category.includes('Oil') || p.category.includes('Communion');
+                  return true;
+                }).length;
+
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                      selectedCategory === cat.id
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground border border-border'
+                    }`}
+                  >
+                    <span>{cat.label}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      selectedCategory === cat.id ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background/80 text-muted-foreground'
+                    }`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -616,15 +671,33 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {availableProducts
               .filter(p => {
-                if (selectedCategory === 'All') return true;
-                if (selectedCategory === 'Apparel') return p.category === 'Kingdom Apparel';
-                if (selectedCategory === 'Books') return p.category === 'Books';
-                if (selectedCategory === 'Media') return p.category === 'Anointing Oil & Media' || p.category === 'Conference Passes';
+                // Category filter
+                if (selectedCategory === 'Books' && !(p.category.includes('Book') || p.category.includes('Literature'))) return false;
+                if (selectedCategory === 'Apparel' && !p.category.includes('Apparel')) return false;
+                if (selectedCategory === 'Audio' && !(p.category.includes('Audio') || p.category.includes('Teaching'))) return false;
+                if (selectedCategory === 'Sacred' && !(p.category.includes('Sacred') || p.category.includes('Oil') || p.category.includes('Communion'))) return false;
+                
+                // Search query filter
+                if (searchQuery.trim()) {
+                  const q = searchQuery.toLowerCase();
+                  const matchName = p.name.toLowerCase().includes(q);
+                  const matchDesc = p.description?.toLowerCase().includes(q);
+                  const matchCat = p.category?.toLowerCase().includes(q);
+                  const matchAuthor = p.author_or_brand?.toLowerCase().includes(q);
+                  if (!matchName && !matchDesc && !matchCat && !matchAuthor) return false;
+                }
                 return true;
               })
+              .sort((a, b) => {
+                if (sortBy === 'price-low') return a.price_usd - b.price_usd;
+                if (sortBy === 'price-high') return b.price_usd - a.price_usd;
+                if (a.is_bestseller && !b.is_bestseller) return -1;
+                if (!a.is_bestseller && b.is_bestseller) return 1;
+                return 0;
+              })
               .map(prod => {
-                const isApparel = prod.category === 'Kingdom Apparel';
-                const currentSize = selectedSizes[prod.id] || (prod.available_sizes ? prod.available_sizes[1] || prod.available_sizes[0] : 'M');
+                const isApparel = prod.category.includes('Apparel');
+                const currentSize = selectedSizes[prod.id] || (prod.available_sizes ? prod.available_sizes[0] : 'Standard');
 
                 return (
                   <div

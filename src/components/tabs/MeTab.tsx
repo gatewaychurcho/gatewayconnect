@@ -768,7 +768,7 @@ export const MeTab: React.FC<MeTabProps> = ({
               className="flex items-center gap-2 pt-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer text-left"
             >
               <div className="flex -space-x-1.5">
-                {followersUsers.slice(0, 2).map((u, i) => (
+                {(followersUsers || []).slice(0, 2).map((u, i) => (
                   <img 
                     key={u.id || i} 
                     src={u.avatar_url || '/assets/apostle_joe_daniels_main.jpg'} 

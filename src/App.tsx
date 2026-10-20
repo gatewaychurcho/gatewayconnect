@@ -102,10 +102,19 @@ export default function App() {
     const handleIncomingCall = (e: any) => {
       const signal = e?.detail;
       if (!signal) return;
-      if (signal.action === 'offer' && signal.targetUserId === currentUser.id && signal.caller) {
+      const isTarget = signal.targetUserId === currentUser.id || 
+                       (currentUser.phone && signal.targetUserId === currentUser.phone) ||
+                       (currentUser.handle && signal.targetUserId === currentUser.handle) ||
+                       (currentUser.phone && typeof signal.targetUserId === 'string' && signal.targetUserId.replace(/[^0-9]/g, '') === currentUser.phone.replace(/[^0-9]/g, ''));
+
+      if ((signal.action === 'offer' || signal.action === 'incoming_call') && isTarget && signal.caller) {
         setIncomingCallState({
-          caller: signal.caller as User,
-          callId: signal.callId
+          caller: {
+            ...signal.caller,
+            full_name: signal.caller.full_name || 'Church Believer',
+            avatar_url: signal.caller.avatar_url || '/assets/apostle_joe_daniels_main.jpg'
+          } as User,
+          callId: signal.callId || `call_${Date.now()}`
         });
       }
       if ((signal.action === 'hangup' || signal.action === 'decline') && incomingCallState?.callId === signal.callId) {
@@ -113,9 +122,23 @@ export default function App() {
       }
     };
 
+    const handleDirectIncomingTrigger = (e: any) => {
+      const detail = e?.detail;
+      if (detail && detail.caller) {
+        setIncomingCallState({
+          caller: detail.caller,
+          callId: detail.callId || `call_${Date.now()}`
+        });
+      }
+    };
+
     window.addEventListener('gcz_call_signal', handleIncomingCall);
-    return () => window.removeEventListener('gcz_call_signal', handleIncomingCall);
-  }, [currentUser?.id, incomingCallState?.callId]);
+    window.addEventListener('gcz_trigger_incoming_call', handleDirectIncomingTrigger);
+    return () => {
+      window.removeEventListener('gcz_call_signal', handleIncomingCall);
+      window.removeEventListener('gcz_trigger_incoming_call', handleDirectIncomingTrigger);
+    };
+  }, [currentUser?.id, currentUser?.phone, currentUser?.handle, incomingCallState?.callId]);
 
   useEffect(() => {
     // Purge any community posts older than 8 days immediately

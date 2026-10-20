@@ -118,6 +118,20 @@ export class LiveSyncService {
       }
     }
 
+    // 1b. Cross-tab localStorage Event (Universal across all browser windows)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', (e) => {
+        if (e.key === 'gcz_active_call_signal' && e.newValue) {
+          try {
+            const data = JSON.parse(e.newValue);
+            if (data?.payload) {
+              this.handleLiveEvent({ type: 'call_signal', payload: data.payload });
+            }
+          } catch {}
+        }
+      });
+    }
+
     // 2. Bind automatic recovery listeners for network drops and tab refocusing
     this.bindNetworkRecoveryListeners();
 
@@ -504,6 +518,16 @@ export class LiveSyncService {
 
     // 3. Render WebSocket Hub (Internet-wide)
     this.sendWs({ type: 'event', payload: event });
+
+    // 4. LocalStorage Cross-Tab Fallback
+    if (event.type === 'call_signal' && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('gcz_active_call_signal', JSON.stringify({
+          payload: event.payload,
+          _t: Date.now()
+        }));
+      } catch {}
+    }
   }
 
   private handleLiveEvent(event: LiveEvent): void {

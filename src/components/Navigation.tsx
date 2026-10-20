@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Home, 
-  Tv,
+  Clapperboard,
   BookOpen, 
   Users, 
   ShoppingBag, 
@@ -34,8 +34,8 @@ export const Navigation: React.FC<NavigationProps> = ({
     },
     {
       id: 'sermons' as TabType,
-      label: 'Sermons',
-      icon: Tv,
+      label: 'Reels',
+      icon: Clapperboard,
       badge: undefined
     },
     {

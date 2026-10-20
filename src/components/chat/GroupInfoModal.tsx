@@ -448,7 +448,7 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
                     />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-primary/20 via-primary/10 to-card flex items-center justify-center font-black tracking-tight text-primary">
-                      {group.name.slice(0, 2).toUpperCase()}
+                      {(group?.name || 'GP').slice(0, 2).toUpperCase()}
                     </div>
                   )}
                 </div>
@@ -832,8 +832,8 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
                               {user.avatar_url ? (
                                 <img src={user.avatar_url} alt={user.full_name} className="w-full h-full object-cover" />
                               ) : (
-                                <div className={`w-full h-full bg-gradient-to-br ${getAvatarGradient(user.full_name)} text-white flex items-center justify-center font-bold text-xs`}>
-                                  {user.full_name.slice(0, 2).toUpperCase()}
+                                <div className={`w-full h-full bg-gradient-to-br ${getAvatarGradient(user.full_name || 'GC')} text-white flex items-center justify-center font-bold text-xs`}>
+                                  {(user.full_name || 'GC').slice(0, 2).toUpperCase()}
                                 </div>
                               )}
                             </div>

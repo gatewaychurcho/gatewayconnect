@@ -31,6 +31,7 @@ type LiveEvent = {
     | 'stream_viewer_joined' 
     | 'stream_viewer_left'
     | 'donation'
+    | 'call_signal'
     | 'media_library';
   payload: unknown;
 };
@@ -50,7 +51,7 @@ const knownEventTypes = new Set<LiveEvent['type']>([
   'follow', 'notification', 'story', 'group', 'reaction', 'stream', 'stream_status',
   'override_video', 'pulpit', 'stream_chat', 'stream_reaction', 'user_created',
   'user_updated', 'user_banned', 'unban_user', 'stream_viewer_joined', 'stream_viewer_left',
-  'donation', 'media_library'
+  'donation', 'call_signal', 'media_library'
 ]);
 
 const broadcast = (message: unknown, except?: WebSocket) => {
@@ -231,6 +232,101 @@ const server = createServer(async (request, response) => {
   }
 
   // ... your Paynow routes unchanged ...
+
+  if (requestUrl.pathname === '/api/agora/token') {
+    const channel = requestUrl.searchParams.get('channel') || 'gateway-live';
+    const uid = requestUrl.searchParams.get('uid') || '0';
+    const role = requestUrl.searchParams.get('role') === 'publisher' ? 1 : 2;
+    const appId = process.env.VITE_AGORA_APP_ID || 'fd0f715b597a4263a736f5ac20473f73';
+    const appCert = process.env.AGORA_APP_CERTIFICATE || 'c948a6d9956c4837ac9c33eb63b30e0e';
+    const currentTs = Math.floor(Date.now() / 1000);
+    const expireTs = currentTs + 86400;
+    const salt = Math.floor(Math.random() * 99999999) + 1;
+    const message = `${appId}${channel}${uid}${salt}${expireTs}${role}`;
+    const signature = crypto.createHmac('sha256', appCert).update(message).digest('hex');
+    const content = `006${appId}${signature}${salt}${expireTs}`;
+    const token = `006${Buffer.from(content).toString('base64')}`;
+    sendJson(response, 200, {
+      success: true,
+      appId,
+      channel,
+      uid,
+      role: role === 1 ? 'publisher' : 'subscriber',
+      token,
+      expiresIn: 86400
+    });
+    return;
+  }
+
+  if (requestUrl.pathname === '/api/db/sync') {
+    const collectionParam = (requestUrl.searchParams.get('collection') || 'posts').toLowerCase();
+    const dataDir = path.join(process.cwd(), 'data_sync');
+    if (!fs.existsSync(dataDir)) {
+      try { fs.mkdirSync(dataDir, { recursive: true }); } catch {}
+    }
+    const collectionFile = path.join(dataDir, `${collectionParam}.json`);
+
+    if (request.method === 'GET') {
+      try {
+        if (fs.existsSync(collectionFile)) {
+          const raw = fs.readFileSync(collectionFile, 'utf8');
+          const data = JSON.parse(raw);
+          sendJson(response, 200, { success: true, collection: collectionParam, data });
+          return;
+        }
+      } catch {}
+      sendJson(response, 200, { success: true, collection: collectionParam, data: [] });
+      return;
+    }
+
+    if (request.method === 'POST') {
+      try {
+        const body = await readJson(request);
+        const action = (body.action || 'save') as string;
+        const payload = body.data;
+
+        let currentData: any[] = [];
+        try {
+          if (fs.existsSync(collectionFile)) {
+            currentData = JSON.parse(fs.readFileSync(collectionFile, 'utf8'));
+            if (!Array.isArray(currentData)) currentData = [];
+          }
+        } catch {}
+
+        if (action === 'upsert' && payload) {
+          const p = payload as any;
+          const idx = currentData.findIndex(item => item && item.id === p.id);
+          if (idx >= 0) {
+            currentData[idx] = { ...currentData[idx], ...p };
+          } else {
+            currentData.unshift(p);
+          }
+        } else if (action === 'delete' && body.id) {
+          currentData = currentData.filter(item => item && item.id !== body.id);
+        } else if (action === 'batch' && Array.isArray(payload)) {
+          currentData = payload;
+        }
+
+        try {
+          fs.writeFileSync(collectionFile, JSON.stringify(currentData, null, 2), 'utf8');
+        } catch {}
+
+        broadcast({
+          type: 'event',
+          payload: {
+            type: collectionParam === 'users' ? 'user_updated' : collectionParam === 'posts' ? 'testimony' : 'media_library',
+            payload
+          }
+        });
+
+        sendJson(response, 200, { success: true, message: 'Saved successfully', count: currentData.length });
+        return;
+      } catch (err: any) {
+        sendJson(response, 500, { error: err.message || 'Sync failed' });
+        return;
+      }
+    }
+  }
 
   if (requestUrl.pathname === '/health') {
     sendJson(response, 200, { status: 'ok', service: 'gateway-connect-live', connected: clients.size });
