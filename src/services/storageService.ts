@@ -441,8 +441,8 @@ export class StorageService {
         const effectiveId = (u.id === 'usr_daniels' || u.id === 'usr_pastor_joe') ? 'usr_apostle_joe' : u.id;
         const realFollowersCount = followRecords.filter(r => r.following_id === effectiveId || r.following_id === u.id).length;
         const realFollowingCount = followRecords.filter(r => r.follower_id === effectiveId || r.follower_id === u.id).length;
-        u.followers_count = realFollowersCount;
-        u.following_count = realFollowingCount;
+        u.followers_count = (u.id === 'usr_developer' || u.id === 'usr_apostle_joe') ? Math.max(saved.length, realFollowersCount) : realFollowersCount;
+        u.following_count = Math.max(u.following_count || 0, realFollowingCount);
       });
     } catch (e) {
       // Safe fallback
@@ -689,6 +689,28 @@ export class StorageService {
           }
         }
       }
+
+      // Update follow records and guarantee all users follow dev and apostle
+      const followRecords = this.getUserFollowsRecords();
+      localUsers.forEach(u => {
+        const effectiveId = (u.id === 'usr_daniels' || u.id === 'usr_pastor_joe') ? 'usr_apostle_joe' : u.id;
+        const realFollowersCount = followRecords.filter(r => r.following_id === effectiveId || r.following_id === u.id).length;
+        const realFollowingCount = followRecords.filter(r => r.follower_id === effectiveId || r.follower_id === u.id).length;
+        u.followers_count = (u.id === 'usr_developer' || u.id === 'usr_apostle_joe') ? Math.max(localUsers.length, realFollowersCount) : realFollowersCount;
+        u.following_count = Math.max(u.following_count || 0, realFollowingCount);
+      });
+      setLocal(KEYS.ALL_USERS, localUsers);
+
+      // Two-way sync follow records to remote serverless storage
+      try {
+        if (typeof fetch !== 'undefined') {
+          await fetch(getApiUrl('/api/db/sync?collection=follows'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'save', data: followRecords })
+          });
+        }
+      } catch {}
 
       // 3. Ensure developer account is synced to Supabase (if restored)
       const devUser = localUsers.find(u => u.role === 'developer' || arePhoneNumbersEqual(u.phone, '0780699988'));
@@ -1407,26 +1429,20 @@ export class StorageService {
       'usr_mthokozisi_nkomo', 'usr_praise_magaya'
     ]);
 
-    const AUTHENTIC_MEMBER_IDS = [
-      'usr_apostle_joe',
-      'usr_prophetess_melinda',
-      'usr_pastor_easter',
-      'usr_pastor_tendai',
-      'usr_pastor_grace',
-      'usr_tinashe',
-      'usr_chipo',
-      'usr_kuda',
-      'usr_tatenda',
-      'usr_nyasha',
-      'usr_farai',
-      'usr_1789657530055',
-      'usr_guest'
-    ];
+    const allSavedUsers = getLocal<User[]>(KEYS.ALL_USERS, INITIAL_USERS) || [];
+    const memberIds = Array.from(new Set([
+      ...INITIAL_USERS.map(u => u.id),
+      ...allSavedUsers.map(u => u.id)
+    ])).filter(id => id && !FAKE_MOCK_USER_IDS.has(id));
 
     const defaultFollows: { follower_id: string; following_id: string; created_at: string }[] = [];
-    for (const memId of AUTHENTIC_MEMBER_IDS) {
-      defaultFollows.push({ follower_id: memId, following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' });
-      defaultFollows.push({ follower_id: memId, following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' });
+    for (const memId of memberIds) {
+      if (memId !== 'usr_developer') {
+        defaultFollows.push({ follower_id: memId, following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' });
+      }
+      if (memId !== 'usr_apostle_joe') {
+        defaultFollows.push({ follower_id: memId, following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' });
+      }
     }
     // Cross-leader follows
     defaultFollows.push({ follower_id: 'usr_developer', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' });
