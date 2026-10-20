@@ -4624,6 +4624,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
             setActiveTab('direct');
             setActiveUserId(targetId);
           }}
+        />
+      )}
+
       {/* InDrive-Inspired Real-Time VoIP Audio & Video Calling Modal */}
       {inDriveCall && inDriveCall.isOpen && (
         <InDriveCallModal
