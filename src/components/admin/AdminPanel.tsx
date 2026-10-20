@@ -214,6 +214,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       setTestimonies(StorageService.getTestimonies());
       setAdminAvatars(StorageService.getAdminAvatarLibrary());
       setAdminThumbnails(StorageService.getAdminThumbnailLibrary());
+      setProducts(StorageService.getProducts());
     };
 
     // Auto-hydrate live registered accounts from Supabase PostgreSQL on mount
@@ -245,6 +246,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     window.addEventListener('gcz_avatars_updated', refreshAdminData);
     window.addEventListener('gcz_post_images_updated', refreshAdminData);
     window.addEventListener('gcz_media_library_updated', refreshAdminData);
+    window.addEventListener('gcz_products_updated', refreshAdminData);
 
     return () => {
       window.removeEventListener('gcz_user_profile_updated', refreshAdminData);
@@ -271,6 +273,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       window.removeEventListener('gcz_avatars_updated', refreshAdminData);
       window.removeEventListener('gcz_post_images_updated', refreshAdminData);
       window.removeEventListener('gcz_media_library_updated', refreshAdminData);
+      window.removeEventListener('gcz_products_updated', refreshAdminData);
     };
   }, []);
 
@@ -319,6 +322,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   const [newProdPriceZig, setNewProdPriceZig] = useState<number>(220);
   const [newProdImage, setNewProdImage] = useState<string>('/assets/apostle_joe_daniels_main.jpg');
   const [newProdDesc, setNewProdDesc] = useState<string>('');
+
+  // Edit Product Modal Form
+  const [showEditProductModal, setShowEditProductModal] = useState<boolean>(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editProdName, setEditProdName] = useState<string>('');
+  const [editProdCategory, setEditProdCategory] = useState<Product['category']>('Books');
+  const [editProdPriceUsd, setEditProdPriceUsd] = useState<number>(15);
+  const [editProdPriceZig, setEditProdPriceZig] = useState<number>(220);
+  const [editProdStockQty, setEditProdStockQty] = useState<number>(15);
+  const [editProdInStock, setEditProdInStock] = useState<boolean>(true);
+  const [editProdImage, setEditProdImage] = useState<string>('');
+  const [editProdDesc, setEditProdDesc] = useState<string>('');
 
   // Prayer decree modal
   const [activePrayerDecree, setActivePrayerDecree] = useState<PrayerRequest | null>(null);
@@ -893,6 +908,53 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     setNewProdName('');
     setNewProdDesc('');
     confetti({ particleCount: 30, spread: 60 });
+  };
+
+  const handleOpenEditProduct = (prod: Product) => {
+    setEditingProduct(prod);
+    setEditProdName(prod.name);
+    setEditProdCategory(prod.category);
+    setEditProdPriceUsd(prod.price_usd);
+    setEditProdPriceZig(prod.price_zig);
+    setEditProdStockQty(prod.stock_quantity ?? 15);
+    setEditProdInStock(prod.in_stock !== false);
+    setEditProdImage(prod.image_url);
+    setEditProdDesc(prod.description || '');
+    setShowEditProductModal(true);
+    setActiveProductMenuId(null);
+  };
+
+  const handleSaveProductEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    StorageService.updateProduct(editingProduct.id, {
+      name: editProdName.trim() || editingProduct.name,
+      category: editProdCategory,
+      price_usd: Number(editProdPriceUsd) || 0,
+      price_zig: Number(editProdPriceZig) || 0,
+      stock_quantity: Number(editProdStockQty) || 0,
+      in_stock: editProdInStock,
+      image_url: editProdImage.trim() || editingProduct.image_url,
+      description: editProdDesc.trim() || editingProduct.description
+    });
+    setProducts(StorageService.getProducts());
+    setShowEditProductModal(false);
+    setEditingProduct(null);
+    setModerationMessage(`Successfully updated ${editProdName} in real-time`);
+    setTimeout(() => setModerationMessage(null), 3000);
+    confetti({ particleCount: 30, spread: 60 });
+  };
+
+  const handleDeleteProduct = (prod: Product) => {
+    setActiveProductMenuId(null);
+    const confirmed = window.confirm(`Permanently remove "${prod.name}" from the store catalog?`);
+    if (confirmed) {
+      StorageService.deleteProduct(prod.id);
+      setProducts(StorageService.getProducts());
+      setModerationMessage(`Removed ${prod.name} from store catalog`);
+      setTimeout(() => setModerationMessage(null), 3000);
+      confetti({ particleCount: 20, spread: 50 });
+    }
   };
 
   const handleApplyPrayerDecree = (e: React.FormEvent) => {
@@ -3159,13 +3221,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                               <button
                                 type="button"
                                 onClick={() => {
-                                  prod.in_stock = !prod.in_stock;
-                                  setProducts([...products]);
+                                  StorageService.updateProduct(prod.id, { in_stock: !prod.in_stock });
+                                  setProducts(StorageService.getProducts());
                                   confetti({ particleCount: 15 });
                                 }}
-                                className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold transition-all"
+                                className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold transition-all cursor-pointer"
                               >
-                                Toggle Stock
+                                {prod.in_stock ? 'Mark Out of Stock' : 'Mark In Stock'}
                               </button>
 
                               {/* 3-Dots Dropdown Menu for Item Options */}
@@ -3186,13 +3248,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                                     </div>
                                     <button
                                       type="button"
+                                      onClick={() => handleOpenEditProduct(prod)}
+                                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-white/90 hover:bg-white/10 flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                      <Edit3 className="w-3 h-3 text-primary" />
+                                      <span>Edit Item Details</span>
+                                    </button>
+                                    <button
+                                      type="button"
                                       onClick={() => {
-                                        prod.in_stock = !prod.in_stock;
-                                        setProducts([...products]);
+                                        StorageService.updateProduct(prod.id, { in_stock: !prod.in_stock });
+                                        setProducts(StorageService.getProducts());
                                         setActiveProductMenuId(null);
                                         confetti({ particleCount: 15 });
                                       }}
-                                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-white/90 hover:bg-white/10 flex items-center gap-1.5"
+                                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-white/90 hover:bg-white/10 flex items-center gap-1.5 cursor-pointer"
                                     >
                                       <Check className="w-3 h-3 text-emerald-400" />
                                       <span>{prod.in_stock ? 'Set Out of Stock' : 'Set In Stock'}</span>
@@ -3205,24 +3275,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                                         setModerationMessage(`Copied details for ${prod.name}`);
                                         setTimeout(() => setModerationMessage(null), 2500);
                                       }}
-                                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-white/90 hover:bg-white/10 flex items-center gap-1.5"
+                                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-white/90 hover:bg-white/10 flex items-center gap-1.5 cursor-pointer"
                                     >
                                       <Copy className="w-3 h-3 text-primary" />
                                       <span>Copy Pricing & Info</span>
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        setActiveProductMenuId(null);
-                                        const confirmed = window.confirm(`Remove ${prod.name} from store catalog?`);
-                                        if (confirmed) {
-                                          const next = products.filter(p => p.id !== prod.id);
-                                          setProducts(next);
-                                          setModerationMessage(`Removed ${prod.name} from inventory`);
-                                          setTimeout(() => setModerationMessage(null), 2500);
-                                        }
-                                      }}
-                                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:bg-rose-500/10 flex items-center gap-1.5 border-t border-white/10"
+                                      onClick={() => handleDeleteProduct(prod)}
+                                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:bg-rose-500/10 flex items-center gap-1.5 border-t border-white/10 cursor-pointer"
                                     >
                                       <Trash2 className="w-3 h-3 text-rose-400" />
                                       <span>Remove Item</span>
@@ -4531,6 +4592,142 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                   className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold"
                 >
                   Add to Store
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT PRODUCT */}
+      {showEditProductModal && editingProduct && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-card border border-primary/40 rounded-2xl p-5 w-full max-w-md space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base text-primary">Edit Store Resource</h3>
+              <button 
+                onClick={() => {
+                  setShowEditProductModal(false);
+                  setEditingProduct(null);
+                }} 
+                className="text-white/60 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProductEdit} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-white/80 mb-1">Product Title</label>
+                <input
+                  type="text"
+                  required
+                  value={editProdName}
+                  onChange={(e) => setEditProdName(e.target.value)}
+                  className="w-full bg-secondary border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-white/80 mb-1">Category</label>
+                  <select
+                    value={editProdCategory}
+                    onChange={(e) => setEditProdCategory(e.target.value as any)}
+                    className="w-full bg-secondary border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary"
+                  >
+                    <option value="Books">Books</option>
+                    <option value="Apparel">Apparel</option>
+                    <option value="Teachings">Teachings</option>
+                    <option value="Accessories">Accessories</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-white/80 mb-1">Stock Quantity</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editProdStockQty}
+                    onChange={(e) => setEditProdStockQty(Number(e.target.value))}
+                    className="w-full bg-secondary border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-white/80 mb-1">Price (USD $)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    required
+                    value={editProdPriceUsd}
+                    onChange={(e) => setEditProdPriceUsd(Number(e.target.value))}
+                    className="w-full bg-secondary border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-white/80 mb-1">Price (ZiG)</label>
+                  <input
+                    type="number"
+                    required
+                    value={editProdPriceZig}
+                    onChange={(e) => setEditProdPriceZig(Number(e.target.value))}
+                    className="w-full bg-secondary border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-white/80 mb-1">Image URL</label>
+                <input
+                  type="text"
+                  required
+                  value={editProdImage}
+                  onChange={(e) => setEditProdImage(e.target.value)}
+                  className="w-full bg-secondary border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-white/80 mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={editProdDesc}
+                  onChange={(e) => setEditProdDesc(e.target.value)}
+                  className="w-full bg-secondary border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary resize-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="chk-prod-instock"
+                  checked={editProdInStock}
+                  onChange={(e) => setEditProdInStock(e.target.checked)}
+                  className="w-4 h-4 rounded accent-primary cursor-pointer"
+                />
+                <label htmlFor="chk-prod-instock" className="text-xs text-white/90 font-medium cursor-pointer">
+                  Available in Store (In Stock)
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditProductModal(false);
+                    setEditingProduct(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-white/10 text-white text-xs font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold cursor-pointer hover:brightness-110"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>

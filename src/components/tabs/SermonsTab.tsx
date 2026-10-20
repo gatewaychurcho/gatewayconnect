@@ -534,13 +534,13 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
           className={cn(
             "flex-1 py-2 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer",
             mediaTab === 'reels'
-              ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-pink-500/20"
+              ? "bg-primary text-primary-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
           )}
         >
           <Clapperboard className="w-4 h-4" />
           <span>Reels</span>
-          <span className="text-[10px] px-1.5 py-0.2 bg-white/20 text-white rounded-full font-black">
+          <span className="text-[10px] px-1.5 py-0.2 bg-black/20 dark:bg-white/20 rounded-full font-black">
             {reelsList.length}
           </span>
         </button>
@@ -631,15 +631,15 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                     {/* Top Status Bar: Title & Reel Counter */}
                     <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between text-white drop-shadow">
                       <div className="flex items-center gap-2">
-                        <span className="font-black text-sm tracking-wider flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
-                          <Clapperboard className="w-3.5 h-3.5 text-pink-500" />
+                        <span className="font-semibold text-xs tracking-wider flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 text-white">
+                          <Clapperboard className="w-3.5 h-3.5 text-primary" />
                           <span>Reels</span>
                         </span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-600/90 text-white animate-pulse">
-                          LIVE WORD
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/90 text-primary-foreground">
+                          APOSTOLIC WORD
                         </span>
                       </div>
-                      <span className="text-xs font-mono font-bold bg-black/40 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10">
+                      <span className="text-xs font-mono font-bold bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/15">
                         {activeReelIndex + 1} / {reelsList.length}
                       </span>
                     </div>
@@ -648,15 +648,15 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                     <div className="absolute right-3 bottom-24 z-20 flex flex-col items-center gap-5 text-white">
                       {/* Apostle Profile Avatar */}
                       <div className="relative group/avatar cursor-pointer">
-                        <div className="w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-amber-400 via-pink-500 to-purple-600">
+                        <div className="w-11 h-11 rounded-full p-0.5 bg-card border-2 border-primary/80 shadow-md">
                           <img
-                            src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200"
+                            src="/assets/apostle_joe_daniels_main.jpg"
                             alt="Apostle Joe Daniels"
                             className="w-full h-full rounded-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200';
+                            }}
                           />
-                        </div>
-                        <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-pink-500 text-white flex items-center justify-center text-[10px] font-black border border-white">
-                          +
                         </div>
                       </div>
 
@@ -667,8 +667,8 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                         title="Like Reel"
                       >
                         <div className={cn(
-                          "w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-md transition-all shadow-lg",
-                          isLiked ? "bg-red-500/20 text-red-500" : "bg-black/40 text-white hover:bg-black/60"
+                          "w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-md transition-all shadow-lg border border-white/10",
+                          isLiked ? "bg-red-500/20 text-red-500 border-red-500/30" : "bg-black/50 text-white hover:bg-black/70"
                         )}>
                           <Heart className={cn("w-6 h-6", isLiked ? "fill-red-500 text-red-500" : "")} />
                         </div>
@@ -685,7 +685,7 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                         className="flex flex-col items-center gap-1 cursor-pointer transition-transform active:scale-125"
                         title="Comments"
                       >
-                        <div className="w-11 h-11 rounded-full bg-black/40 text-white hover:bg-black/60 flex items-center justify-center backdrop-blur-md shadow-lg">
+                        <div className="w-11 h-11 rounded-full bg-black/50 text-white hover:bg-black/70 flex items-center justify-center backdrop-blur-md shadow-lg border border-white/10">
                           <MessageSquare className="w-6 h-6" />
                         </div>
                         <span className="text-[11px] font-bold text-white drop-shadow">
@@ -704,7 +704,7 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                         className="flex flex-col items-center gap-1 cursor-pointer transition-transform active:scale-125"
                         title="Share Reel"
                       >
-                        <div className="w-11 h-11 rounded-full bg-black/40 text-white hover:bg-black/60 flex items-center justify-center backdrop-blur-md shadow-lg">
+                        <div className="w-11 h-11 rounded-full bg-black/50 text-white hover:bg-black/70 flex items-center justify-center backdrop-blur-md shadow-lg border border-white/10">
                           <Share2 className="w-6 h-6" />
                         </div>
                         <span className="text-[11px] font-bold text-white drop-shadow">Share</span>
@@ -716,15 +716,15 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                         className="flex flex-col items-center gap-1 cursor-pointer transition-transform active:scale-125"
                         title="Pin to Home Top Player"
                       >
-                        <div className="w-11 h-11 rounded-full bg-black/40 text-white hover:bg-black/60 flex items-center justify-center backdrop-blur-md shadow-lg">
-                          <Tv className="w-5 h-5 text-amber-400" />
+                        <div className="w-11 h-11 rounded-full bg-black/50 text-white hover:bg-black/70 flex items-center justify-center backdrop-blur-md shadow-lg border border-white/10">
+                          <Tv className="w-5 h-5 text-primary" />
                         </div>
                         <span className="text-[10px] font-bold text-white drop-shadow">Pin</span>
                       </button>
 
                       {/* Spinning Vinyl Audio Disc */}
-                      <div className="w-10 h-10 rounded-full border-2 border-white/60 bg-gradient-to-tr from-purple-600 via-pink-600 to-amber-500 flex items-center justify-center shadow-lg animate-spin [animation-duration:5s]">
-                        <Music2 className="w-4 h-4 text-white" />
+                      <div className="w-10 h-10 rounded-full border border-white/20 bg-neutral-900 text-primary flex items-center justify-center shadow-lg animate-spin [animation-duration:5s]">
+                        <Music2 className="w-4 h-4 text-primary" />
                       </div>
                     </div>
 
@@ -738,7 +738,7 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                         </span>
                         <button
                           onClick={() => confetti({ particleCount: 20, spread: 50 })}
-                          className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/20 hover:bg-white text-white hover:text-black border border-white/40 backdrop-blur-sm transition-all"
+                          className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/20 hover:bg-white text-white hover:text-black border border-white/30 backdrop-blur-sm transition-all"
                         >
                           Follow
                         </button>
@@ -749,7 +749,7 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                         {currentReel.title}
                       </p>
 
-                      <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-bold text-pink-300">
+                      <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-medium text-slate-300">
                         <span>#ApostolicDominion</span>
                         <span>#PropheticWord</span>
                         <span>#GatewayConnect</span>
@@ -757,7 +757,7 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
 
                       {/* Music Audio Ticker */}
                       <div className="flex items-center gap-2 text-[11px] text-white/80 overflow-hidden font-medium">
-                        <Music2 className="w-3.5 h-3.5 shrink-0" />
+                        <Music2 className="w-3.5 h-3.5 shrink-0 text-primary" />
                         <span className="truncate">Apostle Joe Daniels • Supernatural Audio Voice</span>
                       </div>
                     </div>
@@ -776,11 +776,11 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
 
                     <button
                       onClick={handleNextReel}
-                      className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:brightness-110 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95 transition-all"
+                      className="px-5 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 transition-all"
                       title="Next Reel"
                     >
                       <span>Next Reel</span>
-                      <ChevronDown className="w-4 h-4 text-white" />
+                      <ChevronDown className="w-4 h-4" />
                     </button>
                   </div>
 
@@ -794,7 +794,7 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                           className={cn(
                             "relative shrink-0 w-16 h-24 rounded-xl overflow-hidden border-2 transition-all cursor-pointer group",
                             idx === activeReelIndex
-                              ? "border-pink-500 scale-105 shadow-md shadow-pink-500/30"
+                              ? "border-primary scale-105 shadow-md shadow-primary/20"
                               : "border-border/60 opacity-60 hover:opacity-100"
                           )}
                         >

@@ -2359,12 +2359,17 @@ export class StorageService {
   }
 
   // Store & Products
+  static getDeletedProductIds(): string[] {
+    return getLocal<string[]>('gcz_deleted_product_ids_v1', []);
+  }
+
   static getProducts(): Product[] {
-    const rawList = getLocal<Product[]>(KEYS.PRODUCTS, MOCK_PRODUCTS);
+    const deletedIds = new Set(this.getDeletedProductIds());
+    const rawList = getLocal<Product[]>(KEYS.PRODUCTS, MOCK_PRODUCTS).filter(p => !deletedIds.has(p.id));
     const existingIds = new Set(rawList.map(p => p.id));
     let updated = false;
     for (const mockP of MOCK_PRODUCTS) {
-      if (!existingIds.has(mockP.id)) {
+      if (!existingIds.has(mockP.id) && !deletedIds.has(mockP.id)) {
         rawList.push(mockP);
         existingIds.add(mockP.id);
         updated = true;
@@ -2396,6 +2401,41 @@ export class StorageService {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_products_updated'));
     }
+    try {
+      liveSyncService.broadcastEvent({ type: 'media_library', payload: { action: 'product_added', product: prod } });
+    } catch {}
+  }
+
+  static updateProduct(productId: string, updates: Partial<Product>): Product | null {
+    const prods = this.getProducts();
+    const idx = prods.findIndex(p => p.id === productId);
+    if (idx === -1) return null;
+    prods[idx] = { ...prods[idx], ...updates };
+    setLocal(KEYS.PRODUCTS, prods);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_products_updated', { detail: prods[idx] }));
+    }
+    try {
+      liveSyncService.broadcastEvent({ type: 'media_library', payload: { action: 'product_updated', product: prods[idx] } });
+    } catch {}
+    return prods[idx];
+  }
+
+  static deleteProduct(productId: string): boolean {
+    const deletedIds = this.getDeletedProductIds();
+    if (!deletedIds.includes(productId)) {
+      deletedIds.push(productId);
+      setLocal('gcz_deleted_product_ids_v1', deletedIds);
+    }
+    const prods = this.getProducts().filter(p => p.id !== productId);
+    setLocal(KEYS.PRODUCTS, prods);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_products_updated', { detail: { deletedId: productId } }));
+    }
+    try {
+      liveSyncService.broadcastEvent({ type: 'media_library', payload: { action: 'product_deleted', productId } });
+    } catch {}
+    return true;
   }
 
   static updateProductStock(productId: string, stockDelta: number): void {

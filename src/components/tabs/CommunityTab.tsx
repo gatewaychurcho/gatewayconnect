@@ -1061,62 +1061,6 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
   return (
     <div className="space-y-4 pb-20 max-w-3xl mx-auto px-0 sm:px-2 pt-1 w-full max-w-full">
-      {/* Instagram Top Bar */}
-      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border px-3.5 py-2.5 flex items-center justify-between rounded-b-xl shadow-xs">
-        <div className="flex items-center gap-2">
-          <span className="font-serif italic font-black text-xl tracking-tight bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
-            Gateway Connect
-          </span>
-          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-pink-500/10 text-pink-500 border border-pink-500/20">
-            Community
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Create Post (+) button */}
-          <button
-            onClick={() => {
-              if (isGuest) {
-                onRequireAuth();
-                return;
-              }
-              setShowCreatePostModal(true);
-            }}
-            className="p-1.5 rounded-full hover:bg-secondary text-foreground transition-all cursor-pointer"
-            title="Create Post"
-          >
-            <Plus className="w-5 h-5" />
-          </button>
-
-          {/* Activity Heart */}
-          <button
-            onClick={() => {
-              showToast("All fellowship activities up to date");
-              confetti({ particleCount: 20, spread: 50 });
-            }}
-            className="p-1.5 rounded-full hover:bg-secondary text-foreground transition-all cursor-pointer relative"
-            title="Activity Notifications"
-          >
-            <Heart className="w-5 h-5" />
-            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 ring-2 ring-background"></span>
-          </button>
-
-          {/* Direct Messages / Paperplane */}
-          {onOpenDirectChat && (
-            <button
-              onClick={() => onOpenDirectChat('active_inbox')}
-              className="p-1.5 rounded-full hover:bg-secondary text-foreground transition-all cursor-pointer relative"
-              title="Open Direct Messages"
-            >
-              <Send className="w-5 h-5 -rotate-45" />
-              <span className="absolute -top-0.5 -right-0.5 px-1.5 py-0.2 rounded-full bg-red-600 text-[9px] font-black text-white">
-                3
-              </span>
-            </button>
-          )}
-        </div>
-      </div>
-      
       {/* 1. Header Banner & Sub-Tabs Switcher */}
       <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
