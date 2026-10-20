@@ -9,7 +9,9 @@ import {
   ShieldCheck, 
   Radio,
   Clock,
-  CheckCircle2
+  CheckCircle2,
+  ArrowLeft,
+  X
 } from 'lucide-react';
 import { User } from '../../types';
 import { liveSyncService, CallSignalPayload } from '../../services/liveSyncService';
@@ -360,6 +362,23 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
     stopRingtone();
     setCallStatus('declined');
 
+    // Save to persistent call logs
+    try {
+      StorageService.saveCallLog({
+        caller_id: isIncoming ? partnerUser.id : currentUser.id,
+        caller_name: isIncoming ? partnerUser.full_name : currentUser.full_name,
+        caller_avatar: isIncoming ? partnerUser.avatar_url : currentUser.avatar_url,
+        caller_handle: isIncoming ? partnerUser.handle : currentUser.handle,
+        receiver_id: isIncoming ? currentUser.id : partnerUser.id,
+        receiver_name: isIncoming ? currentUser.full_name : partnerUser.full_name,
+        receiver_avatar: isIncoming ? currentUser.avatar_url : partnerUser.avatar_url,
+        receiver_handle: isIncoming ? currentUser.handle : partnerUser.handle,
+        type: isIncoming ? 'missed' : 'outgoing',
+        duration_seconds: 0,
+        status: 'declined'
+      });
+    } catch {}
+
     liveSyncService.sendCallSignal({
       callId,
       action: 'decline',
@@ -382,6 +401,29 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
     stopRingtone();
     setCallStatus('ended');
 
+    const dur = durationSeconds;
+    const m = Math.floor(dur / 60);
+    const s = dur % 60;
+    const durText = `${m}m ${s.toString().padStart(2, '0')}s`;
+    const label = reason === 'missed' ? '📞 Missed Call' : dur > 0 ? `📞 Voice Call (${durText})` : '📞 Call Ended';
+
+    // Save to persistent call logs
+    try {
+      StorageService.saveCallLog({
+        caller_id: isIncoming ? partnerUser.id : currentUser.id,
+        caller_name: isIncoming ? partnerUser.full_name : currentUser.full_name,
+        caller_avatar: isIncoming ? partnerUser.avatar_url : currentUser.avatar_url,
+        caller_handle: isIncoming ? partnerUser.handle : currentUser.handle,
+        receiver_id: isIncoming ? currentUser.id : partnerUser.id,
+        receiver_name: isIncoming ? currentUser.full_name : partnerUser.full_name,
+        receiver_avatar: isIncoming ? currentUser.avatar_url : partnerUser.avatar_url,
+        receiver_handle: isIncoming ? currentUser.handle : partnerUser.handle,
+        type: isIncoming ? (dur > 0 ? 'incoming' : 'missed') : 'outgoing',
+        duration_seconds: dur,
+        status: dur > 0 ? 'completed' : (reason === 'missed' ? 'missed' : 'declined')
+      });
+    } catch {}
+
     liveSyncService.sendCallSignal({
       callId,
       action: 'hangup',
@@ -395,12 +437,6 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(t => t.stop());
     }
-
-    const dur = durationSeconds;
-    const m = Math.floor(dur / 60);
-    const s = dur % 60;
-    const durText = `${m}m ${s.toString().padStart(2, '0')}s`;
-    const label = reason === 'missed' ? '📞 Missed Call' : dur > 0 ? `📞 Voice Call (${durText})` : '📞 Call Ended';
 
     setTimeout(() => {
       onEndCall(dur, label);
@@ -445,8 +481,18 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
         <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl" />
       </div>
 
-      {/* Top Header Badge */}
+      {/* Top Header Badge & Back Button */}
       <div className="relative z-10 w-full max-w-sm flex items-center justify-between text-xs text-white/70">
+        <button
+          type="button"
+          onClick={() => handleHangUp('normal')}
+          className="p-1.5 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer flex items-center gap-1"
+          title="Back / Close"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          <span className="text-[11px] font-semibold hidden xs:inline">Back</span>
+        </button>
+
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
           <span className="font-semibold tracking-wide text-[11px] text-white/90">InDrive Voice Call</span>

@@ -280,7 +280,7 @@ export interface CartItem {
   selectedSize?: string;
 }
 
-export type DonationFund = 'Tithe' | 'Firstfruits' | 'Seed Faith' | 'Building Foundation' | 'Missions & Evangelism' | 'Apostolic Honorarium' | 'Altar Seed';
+export type DonationFund = 'Tithe' | 'Offering' | 'Firstfruits' | 'First Fruits' | 'Seed Faith' | 'Building Foundation' | 'Building Fund' | 'Missions & Evangelism' | 'Apostolic Honorarium' | 'Altar Seed' | 'Altar Covenant' | 'Pastor Appreciation' | string;
 export type PaymentGateway = 'EcoCash' | 'EcoCash Push' | 'Credit Card' | 'PayPal' | 'OneMoney' | 'Paynow' | 'Stripe' | 'Bank Transfer';
 
 export interface UnbanAppeal {
@@ -305,19 +305,23 @@ export interface PasswordResetRequest {
 export interface Donation {
   id: string;
   donor_id?: string;
-  donor_name: string;
+  user_id?: string;
+  donor_name?: string;
+  user_name?: string;
   amount: number;
   currency: 'USD' | 'ZiG' | 'ZAR' | 'GBP';
-  fund_type: DonationFund;
+  fund_type?: DonationFund;
+  fund?: string;
+  date?: string;
   category?: string;
   method?: string;
   phone?: string;
   notes?: string;
   payment_method: PaymentGateway;
   status: 'completed' | 'pending' | 'failed';
-  receipt_number: string;
+  receipt_number?: string;
   created_at: string;
-  impact_tag: string;
+  impact_tag?: string;
   is_anonymous: boolean;
 }
 
@@ -702,5 +706,20 @@ export interface PagePost {
   likes: string[]; // User IDs
   comments_count: number;
 }
+export type CallType = 'incoming' | 'outgoing' | 'missed';
 
-
+export interface CallLog {
+  id: string;
+  caller_id: string;
+  caller_name: string;
+  caller_avatar?: string;
+  caller_handle?: string;
+  receiver_id: string;
+  receiver_name: string;
+  receiver_avatar?: string;
+  receiver_handle?: string;
+  type: CallType;
+  duration_seconds: number;
+  status: 'completed' | 'missed' | 'declined' | 'busy';
+  created_at: string;
+}

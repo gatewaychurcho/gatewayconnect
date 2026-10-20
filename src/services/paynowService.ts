@@ -62,6 +62,24 @@ export class PaynowService {
   }
 
   /**
+   * Initiates payment from GivingTab or Store
+   */
+  static async initiatePayment(params: any): Promise<any> {
+    const res = await this.initiateTransaction({
+      reference: params.reference,
+      amount: params.amount,
+      additionalInfo: params.additionalInfo || 'Kingdom Giving',
+      authEmail: params.payerEmail || params.authEmail,
+      phone: params.payerPhone || params.phone,
+      paymentMethod: params.paymentMethod
+    });
+    return {
+      ...res,
+      redirectUrl: res.browserUrl
+    };
+  }
+
+  /**
    * Initiates a payment transaction via Paynow Zimbabwe
    */
   static async initiateTransaction(params: PaynowInitiateParams): Promise<PaynowInitiateResult> {

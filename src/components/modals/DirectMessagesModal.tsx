@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   X, 
   Send, 
@@ -53,10 +53,14 @@ import {
   XCircle,
   Camera,
   Key,
-  Smile
+  Smile,
+  PhoneCall,
+  PhoneIncoming,
+  PhoneOutgoing,
+  PhoneMissed
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { User, DirectMessage, DmThread, ChatGroup, ChatGroupMessage, GroupMembership, GroupInvite } from '../../types';
+import { User, DirectMessage, DmThread, ChatGroup, ChatGroupMessage, GroupMembership, GroupInvite, CallLog, CallType } from '../../types';
 import { StorageService, arePhoneNumbersEqual } from '../../services/storageService';
 import { getSupabase } from '../../services/supabaseClient';
 import { StorageBucketService } from '../../services/StorageBucketService';
@@ -99,6 +103,30 @@ const formatMessageDateDivider = (dateStr?: string): string => {
   } catch {
     return '';
   }
+};
+
+const formatCallTimestamp = (iso?: string): string => {
+  if (!iso) return 'Recently';
+  try {
+    const d = new Date(iso);
+    const now = new Date();
+    if (isNaN(d.getTime())) return 'Recently';
+    const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+    const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (diffDays === 0) return `Today, ${timeStr}`;
+    if (diffDays === 1) return `Yesterday, ${timeStr}`;
+    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${timeStr}`;
+  } catch {
+    return 'Recently';
+  }
+};
+
+const formatCallDuration = (sec?: number): string => {
+  if (!sec || sec <= 0) return '0s';
+  const mins = Math.floor(sec / 60);
+  const remainingSec = sec % 60;
+  if (mins === 0) return `${remainingSec}s`;
+  return `${mins}m ${remainingSec}s`;
 };
 
 const getBubbleRounding = (isMine: boolean, isFirstInGroup: boolean, isLastInGroup: boolean): string => {
@@ -151,8 +179,21 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Navigation tabs: 'direct' or 'groups'
-  const [activeTab, setActiveTab] = useState<'direct' | 'groups'>(initialGroupId ? 'groups' : 'direct');
+  // Navigation tabs: 'direct', 'groups', or 'calls' (WhatsApp Messenger Clone)
+  const [activeTab, setActiveTab] = useState<'direct' | 'groups' | 'calls'>(initialGroupId ? 'groups' : 'direct');
+  const [callLogs, setCallLogs] = useState<CallLog[]>(() => StorageService.getCallLogs(currentUser.id));
+
+  useEffect(() => {
+    const handleCallLogsUpdate = () => {
+      setCallLogs(StorageService.getCallLogs(currentUser.id));
+    };
+    window.addEventListener('gcz_call_logs_updated', handleCallLogsUpdate);
+    return () => window.removeEventListener('gcz_call_logs_updated', handleCallLogsUpdate);
+  }, [currentUser.id]);
+
+  const missedCallsCount = useMemo(() => {
+    return callLogs.filter(c => c.type === 'missed').length;
+  }, [callLogs]);
 
   // Direct messages state - Start empty unless initialRecipientId was passed
   const [threads, setThreads] = useState<DmThread[]>([]);
@@ -223,6 +264,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   const [newGroupIsPaid, setNewGroupIsPaid] = useState(false);
   const [newGroupPrice, setNewGroupPrice] = useState(150);
   const [newGroupDuration, setNewGroupDuration] = useState(3);
+  const [newGroupPinnedNotice, setNewGroupPinnedNotice] = useState('');
   const [inDriveCall, setInDriveCall] = useState<{ isOpen: boolean; partner: User } | null>(null);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -266,18 +308,17 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                 base64Audio,
                 'audio'
               );
-              loadDirectMessages(activeUserId);
+              refreshMessages();
+              refreshThreads();
             } else if (activeTab === 'groups' && activeGroupId) {
-              StorageService.sendChatGroupMessage(
-                activeGroupId,
-                currentUser.id,
-                currentUser.full_name,
-                'Voice note',
-                undefined,
-                base64Audio,
-                'audio'
-              );
-              loadGroupMessages(activeGroupId);
+              StorageService.sendChatGroupMessage(activeGroupId, {
+                sender_id: currentUser.id,
+                sender_name: currentUser.full_name,
+                text: 'Voice note',
+                media_url: base64Audio,
+                media_type: 'audio'
+              });
+              refreshGroupsData();
             }
           };
           reader.readAsDataURL(blob);
@@ -1796,6 +1837,11 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       return bP - aP;
     });
 
+  const filteredCallLogs = callLogs.filter(l => {
+    if (!searchQuery.trim()) return true;
+    return l.partner_name.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
   const isMobileChatActive = isMobile && ((activeTab === 'direct' && Boolean(activeUserId) && !showNewChatPicker) || (activeTab === 'groups' && Boolean(activeGroupId)));
 
   return (
@@ -1827,7 +1873,17 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
         {/* Top Header Bar & Mode Selector (Seamlessly hides on mobile when chatting to give full native chat screen) */}
         <div className={`h-14 bg-card border-b border-border/80 px-3 sm:px-4 ${isMobileChatActive ? 'hidden sm:flex' : 'flex'} items-center justify-between shrink-0`}>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Mobile Back / Close Button */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="sm:hidden p-1.5 -ml-1 text-muted-foreground hover:text-foreground active:scale-95 transition-all"
+              title="Back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+
             <div className="bg-secondary/70 p-1 rounded-xl border border-border/60 flex items-center gap-1">
               <button
                 id="tab-direct-messages"
@@ -1835,14 +1891,14 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   setActiveTab('direct');
                   setSearchQuery('');
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs sm:text-sm transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg font-semibold text-xs sm:text-sm transition-all ${
                   activeTab === 'direct'
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground hover:bg-card/50'
                 }`}
               >
                 <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span>Direct Chats</span>
+                <span>Chats</span>
                 {totalUnreadDms > 0 && (
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                     activeTab === 'direct' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-emerald-500 text-white'
@@ -1858,7 +1914,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   setActiveTab('groups');
                   setSearchQuery('');
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs sm:text-sm transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg font-semibold text-xs sm:text-sm transition-all ${
                   activeTab === 'groups'
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground hover:bg-card/50'
@@ -1883,6 +1939,38 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                 )}
                 {pendingInvites.length > 0 && (
                   <span className="w-2 h-2 rounded-full bg-destructive animate-ping" />
+                )}
+              </button>
+
+              <button
+                id="tab-calls"
+                onClick={() => {
+                  setActiveTab('calls');
+                  setSearchQuery('');
+                  setShowNewChatPicker(false);
+                }}
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg font-semibold text-xs sm:text-sm transition-all ${
+                  activeTab === 'calls'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-card/50'
+                }`}
+              >
+                <PhoneCall className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span>Calls</span>
+                {missedCallsCount > 0 ? (
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    activeTab === 'calls' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-rose-500 text-white'
+                  }`}>
+                    {missedCallsCount}
+                  </span>
+                ) : (
+                  callLogs.length > 0 && (
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      activeTab === 'calls' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-secondary text-foreground'
+                    }`}>
+                      {callLogs.length}
+                    </span>
+                  )
                 )}
               </button>
             </div>
@@ -1940,7 +2028,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   placeholder={
                     activeTab === 'direct'
                       ? (showNewChatPicker ? "Search all believers..." : "Search messages...")
-                      : "Search church groups..."
+                      : activeTab === 'groups'
+                        ? "Search church groups..."
+                        : (showNewChatPicker ? "Search believers to call..." : "Search call history...")
                   }
                   className="w-full bg-secondary/70 border border-border/70 rounded-xl pl-9 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 />
@@ -1959,7 +2049,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                 >
                   {showNewChatPicker ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                 </button>
-              ) : (
+              ) : activeTab === 'groups' ? (
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => setShowJoinByCodeModal(true)}
@@ -1979,6 +2069,19 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     </button>
                   )}
                 </div>
+              ) : (
+                <button
+                  id="btn-new-call-plus"
+                  onClick={() => setShowNewChatPicker(!showNewChatPicker)}
+                  title={showNewChatPicker ? "View Call History" : "New Voice Call"}
+                  className={`p-2 rounded-xl transition-all font-semibold flex items-center justify-center shrink-0 shadow-sm ${
+                    showNewChatPicker 
+                      ? 'bg-destructive/15 text-destructive border border-destructive/30 hover:bg-destructive/25' 
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                  }`}
+                >
+                  {showNewChatPicker ? <X className="w-4 h-4" /> : <PhoneCall className="w-4 h-4" />}
+                </button>
               )}
             </div>
 
@@ -2351,6 +2454,173 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               </div>
             )}
 
+            {/* CALLS VIEW (WhatsApp Messenger Style) */}
+            {activeTab === 'calls' && (
+              <div className="flex-1 overflow-y-auto divide-y divide-border min-w-0 w-full">
+                {showNewChatPicker ? (
+                  <div className="flex-1 overflow-y-auto divide-y divide-border">
+                    <div className="px-3 py-2 bg-secondary/80 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center justify-between border-b border-border">
+                      <div className="flex items-center gap-1.5">
+                        <PhoneCall className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>Select Believer to Call</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowNewChatPicker(false)}
+                        className="p-1 rounded-md hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                        title="Close Call Picker"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    {filteredContacts.map((contact) => (
+                      <button
+                        key={contact.id}
+                        onClick={() => {
+                          setInDriveCall({ isOpen: true, partner: contact });
+                          setShowNewChatPicker(false);
+                          setSearchQuery('');
+                        }}
+                        className="w-full p-3 flex items-center gap-3 transition-colors text-left hover:bg-secondary/60 group"
+                      >
+                        <div className="w-10 h-10 rounded-full border border-border overflow-hidden bg-secondary flex items-center justify-center text-primary font-bold text-xs shrink-0">
+                          {contact.avatar_url ? (
+                            <img src={contact.avatar_url} alt={contact.full_name} className="w-full h-full object-cover" />
+                          ) : (
+                            contact.full_name.slice(0, 2).toUpperCase()
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-xs text-foreground truncate">{contact.full_name}</span>
+                            {contact.role === 'super_admin' && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 font-bold border border-amber-500/20">Apostle</span>
+                            )}
+                            {contact.role === 'developer' && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-600 font-bold border border-purple-500/20">Lead Dev</span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground truncate">{contact.location || 'Gateway Church Harare'}</p>
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-emerald-500/10 group-hover:bg-emerald-500 text-emerald-600 group-hover:text-white flex items-center justify-center transition-colors shrink-0 shadow-xs">
+                          <Phone className="w-4 h-4" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <div className="px-3.5 py-2.5 bg-secondary/40 border-b border-border flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5 text-muted-foreground font-medium">
+                        <Clock className="w-3.5 h-3.5 text-primary" />
+                        <span>Recent Voice Calls ({callLogs.length})</span>
+                      </div>
+                      {callLogs.length > 0 && (
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Clear all voice call history?')) {
+                              StorageService.clearCallLogs(currentUser.id);
+                              setCallLogs([]);
+                            }
+                          }}
+                          className="text-[11px] text-muted-foreground hover:text-destructive transition-colors font-medium cursor-pointer"
+                        >
+                          Clear Logs
+                        </button>
+                      )}
+                    </div>
+
+                    {filteredCallLogs.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
+                        <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center text-muted-foreground mb-3">
+                          <PhoneCall className="w-7 h-7 text-muted-foreground/60" />
+                        </div>
+                        <p className="text-xs font-semibold text-foreground">No call records yet</p>
+                        <p className="text-[11px] text-muted-foreground max-w-xs mt-1">
+                          Tap the call button below to make a low-data VoIP voice call to any believer or ministry leader.
+                        </p>
+                        <button
+                          onClick={() => setShowNewChatPicker(true)}
+                          className="mt-4 px-3.5 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                        >
+                          <PhoneCall className="w-3.5 h-3.5" />
+                          <span>Start Voice Call</span>
+                        </button>
+                      </div>
+                    ) : (
+                      filteredCallLogs.map((log) => {
+                        const partnerUser = prioritizedContacts.find(u => u.id === log.partner_id) || {
+                          id: log.partner_id,
+                          full_name: log.partner_name,
+                          avatar_url: log.partner_avatar,
+                          role: (log.partner_role as any) || 'member'
+                        } as User;
+
+                        return (
+                          <div
+                            key={log.id}
+                            className="w-full p-3 sm:px-3.5 flex items-center gap-3 transition-colors hover:bg-secondary/40 group relative"
+                          >
+                            {/* Partner Avatar */}
+                            <div className="relative w-11 h-11 rounded-full border border-border overflow-hidden bg-secondary flex items-center justify-center text-primary font-bold text-xs shrink-0 shadow-xs">
+                              {log.partner_avatar ? (
+                                <img src={log.partner_avatar} alt={log.partner_name} className="w-full h-full object-cover" />
+                              ) : (
+                                log.partner_name.slice(0, 2).toUpperCase()
+                              )}
+                            </div>
+
+                            {/* Call Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <span className={`font-semibold text-xs truncate ${
+                                  log.type === 'missed' ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'
+                                }`}>
+                                  {log.partner_name}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground whitespace-nowrap ml-2">
+                                  {formatCallTimestamp(log.timestamp)}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 mt-0.5 text-[11px]">
+                                {log.type === 'missed' ? (
+                                  <span className="flex items-center gap-1 text-rose-500 font-medium">
+                                    <PhoneMissed className="w-3.5 h-3.5 shrink-0" />
+                                    <span>Missed call</span>
+                                  </span>
+                                ) : log.type === 'incoming' ? (
+                                  <span className="flex items-center gap-1 text-emerald-500 font-medium">
+                                    <PhoneIncoming className="w-3.5 h-3.5 shrink-0" />
+                                    <span>Incoming ({formatCallDuration(log.duration_sec)})</span>
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1 text-sky-500 font-medium">
+                                    <PhoneOutgoing className="w-3.5 h-3.5 shrink-0" />
+                                    <span>Outgoing ({formatCallDuration(log.duration_sec)})</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Direct 1-Tap Voice Call Button */}
+                            <button
+                              type="button"
+                              onClick={() => setInDriveCall({ isOpen: true, partner: partnerUser })}
+                              className="w-9 h-9 rounded-full bg-emerald-500/10 hover:bg-emerald-500 text-emerald-600 dark:text-emerald-400 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer active:scale-95 shrink-0 ml-1"
+                              title={`Call ${log.partner_name}`}
+                            >
+                              <Phone className="w-4 h-4" />
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Mobile Floating Action Buttons (FABs) - Sleek & Compact */}
             <div className="sm:hidden absolute bottom-3 right-3 z-20 flex items-center gap-1.5 pointer-events-auto">
               {activeTab === 'direct' ? (
@@ -2381,7 +2651,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     </button>
                   )}
                 </div>
-              ) : (
+              ) : activeTab === 'groups' ? (
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
@@ -2403,16 +2673,44 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     <span className="text-[10px] font-bold uppercase tracking-wider">New Group</span>
                   </button>
                 </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    id="fab-mobile-new-call"
+                    type="button"
+                    onClick={() => setShowNewChatPicker(prev => !prev)}
+                    className={`h-9 px-3 rounded-full font-semibold shadow-md active:scale-95 transition-all border cursor-pointer flex items-center gap-1.5 ${
+                      showNewChatPicker
+                        ? 'bg-destructive/90 hover:bg-destructive text-white border-destructive/40 shadow-destructive/20'
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500/30'
+                    }`}
+                    title={showNewChatPicker ? "Close Picker" : "Start Voice Call"}
+                  >
+                    {showNewChatPicker ? <X className="w-3.5 h-3.5" /> : <PhoneCall className="w-3.5 h-3.5" />}
+                    <span className="text-[10px] font-bold uppercase tracking-wider">{showNewChatPicker ? 'Close' : 'New Call'}</span>
+                  </button>
+                  {showNewChatPicker && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewChatPicker(false)}
+                      className="w-9 h-9 rounded-full bg-destructive text-white flex items-center justify-center shadow-md active:scale-95 transition-all border border-destructive/40 cursor-pointer"
+                      title="Close FAB"
+                      aria-label="Close"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
           </div>
 
           {/* ========================================================================= */}
-          {/* RIGHT COLUMN (Active Conversation Canvas for Direct OR Group) */}
+          {/* RIGHT COLUMN (Active Conversation Canvas for Direct OR Group OR Calls) */}
           {/* ========================================================================= */}
           <div className={`flex-1 flex flex-col bg-background min-w-0 max-w-full overflow-hidden ${
-            (activeTab === 'direct' ? !activeUserId : !activeGroupId) ? 'hidden sm:flex' : 'flex'
+            (activeTab === 'direct' ? !activeUserId : activeTab === 'groups' ? !activeGroupId : true) ? 'hidden sm:flex' : 'flex'
           }`}>
             
             {/* DIRECT CHAT ACTIVE CANVAS */}
@@ -2888,7 +3186,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                 <div className={`flex flex-wrap items-center gap-1 -mt-2 z-10 ${
                                   isMine ? 'justify-end pr-1' : 'justify-start pl-1'
                                 }`}>
-                                  {Array.from(new Set(msg.reactions.map((r) => r.emoji))).map((emoji) => {
+                                  {Array.from(new Set<string>(msg.reactions.map((r) => r.emoji))).map((emoji: string) => {
                                     const count = msg.reactions!.filter((r) => r.emoji === emoji).length;
                                     const reactedByMe = msg.reactions!.some((r) => r.emoji === emoji && r.user_id === currentUser.id);
                                     return (
@@ -3713,7 +4011,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                     <div className={`flex flex-wrap items-center gap-1 -mt-2 z-10 ${
                                       isMine ? 'justify-end pr-1' : 'justify-start pl-1'
                                     }`}>
-                                      {Array.from(new Set(msg.reactions.map((r) => r.emoji))).map((emoji) => {
+                                      {Array.from(new Set<string>(msg.reactions.map((r) => r.emoji))).map((emoji: string) => {
                                         const count = msg.reactions!.filter((r) => r.emoji === emoji).length;
                                         const reactedByMe = msg.reactions!.some((r) => r.emoji === emoji && r.user_id === currentUser.id);
                                         return (
@@ -3976,6 +4274,86 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   </div>
                 </div>
               )
+            )}
+
+            {/* CALLS ACTIVE CANVAS (WhatsApp Web Style Right Pane) */}
+            {activeTab === 'calls' && (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-background select-none max-w-xl mx-auto space-y-6">
+                <div className="relative">
+                  <div className="w-20 h-20 rounded-full bg-emerald-500/10 border-2 border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-lg">
+                    <PhoneCall className="w-9 h-9" />
+                  </div>
+                  <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md">
+                    <Shield className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 max-w-md">
+                  <h3 className="font-bold text-foreground text-lg sm:text-xl">
+                    Gateway VoIP Voice Calls
+                  </h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Make crystal-clear, low-data end-to-end encrypted voice calls to any believer, cell leader, or elder worldwide with instant call notifications.
+                  </p>
+                </div>
+
+                {/* Call Analytics Pill */}
+                <div className="grid grid-cols-3 gap-3 w-full max-w-sm pt-2">
+                  <div className="p-3 rounded-2xl bg-secondary/50 border border-border text-center">
+                    <p className="text-base font-extrabold text-foreground">{callLogs.length}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mt-0.5">Total</p>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-secondary/50 border border-border text-center">
+                    <p className="text-base font-extrabold text-rose-500">{missedCallsCount}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mt-0.5">Missed</p>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-secondary/50 border border-border text-center">
+                    <p className="text-base font-extrabold text-emerald-500">
+                      {Math.floor(callLogs.reduce((acc, c) => acc + (c.duration_sec || 0), 0) / 60)}m
+                    </p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mt-0.5">Duration</p>
+                  </div>
+                </div>
+
+                {/* Quick Call Ministers */}
+                <div className="w-full max-w-md space-y-2 pt-2 text-left">
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-1">
+                    Direct Pastoral Line
+                  </p>
+                  <div className="divide-y divide-border bg-card border border-border rounded-2xl overflow-hidden shadow-xs">
+                    {prioritizedContacts.slice(0, 3).map((pastor) => (
+                      <div key={pastor.id} className="p-3 flex items-center justify-between hover:bg-secondary/40 transition-colors">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-9 h-9 rounded-full bg-secondary border border-border overflow-hidden flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                            {pastor.avatar_url ? (
+                              <img src={pastor.avatar_url} alt={pastor.full_name} className="w-full h-full object-cover" />
+                            ) : (
+                              pastor.full_name.slice(0, 2).toUpperCase()
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-foreground truncate">{pastor.full_name}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">{pastor.location || 'Harare Headquarters'}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setInDriveCall({ isOpen: true, partner: pastor })}
+                          className="px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0"
+                        >
+                          <Phone className="w-3 h-3" />
+                          <span>Call</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-border flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <Lock className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>End-to-end encrypted audio using WebRTC peer connection</span>
+                </div>
+              </div>
             )}
 
           </div>
@@ -4748,7 +5126,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
           onEndCall={(durationSec, callResultText) => {
             if (callResultText) {
               StorageService.sendDirectMessage(currentUser.id, inDriveCall.partner.id, callResultText);
-              loadDirectMessages(inDriveCall.partner.id);
+              refreshMessages();
+              refreshThreads();
             }
             setInDriveCall(null);
           }}

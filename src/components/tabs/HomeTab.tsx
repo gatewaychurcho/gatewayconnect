@@ -45,6 +45,7 @@ import { UpgradeModal } from '../modals/UpgradeModal';
 import { FacebookStreamPlayer } from '../common/FacebookStreamPlayer';
 import { cn } from '../../lib/utils';
 import { SupabaseSyncService } from '../../services/supabaseSyncService';
+import { liveSyncService } from '../../services/liveSyncService';
 
 interface HomeTabProps {
   sermons: Sermon[];
@@ -69,8 +70,8 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   currentUser: initialUser,
   onRequireAuth = () => {},
   onOpenPremiumModal,
-  onNavigateToBible = () => {},
-  onNavigateTab = () => {},
+  onNavigateToBible = (_reference?: string) => {},
+  onNavigateTab = (_tab?: any) => {},
   onOpenLiveModal = () => {},
   onOpenDevConsole,
   onOpenAdminPanel,
@@ -113,6 +114,74 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const [showPaidBookingModal, setShowPaidBookingModal] = useState<boolean>(false);
   const [showBadgeUpgradeModal, setShowBadgeUpgradeModal] = useState<boolean>(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  // Facebook Live Stream & Interaction State (Facebook Live Clone)
+  const [liveComments, setLiveComments] = useState<Array<{ id: string; user_name: string; user_avatar?: string; text: string; created_at: string }>>([
+    {
+      id: 'lc_1',
+      user_name: 'Pastor Tendai Moyo',
+      user_avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&auto=format&fit=crop&q=80',
+      text: 'Amen! Grace and Apostolic Fire in the Sanctuary! 🔥✝️',
+      created_at: new Date(Date.now() - 180000).toISOString()
+    },
+    {
+      id: 'lc_2',
+      user_name: 'Chipo Ruvimbo Mandaza',
+      user_avatar: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200&auto=format&fit=crop&q=80',
+      text: 'Supernatural acceleration! Receiving every word from the UK diaspora fellowship. 🙌',
+      created_at: new Date(Date.now() - 120000).toISOString()
+    },
+    {
+      id: 'lc_3',
+      user_name: 'Tinashe Chikwava',
+      user_avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80',
+      text: 'Connecting from Bulawayo North Cell. God bless Apostle Joe Daniels!',
+      created_at: new Date(Date.now() - 60000).toISOString()
+    }
+  ]);
+  const [liveCommentInput, setLiveCommentInput] = useState<string>('');
+  const [liveReactionsCount, setLiveReactionsCount] = useState<number>(348);
+  const [userReaction, setUserReaction] = useState<string | null>(null);
+  const [showReactionPicker, setShowReactionPicker] = useState<boolean>(false);
+  const [showCommentsSection, setShowCommentsSection] = useState<boolean>(true);
+
+  const handleLiveReaction = (emoji: string) => {
+    setUserReaction(emoji);
+    setShowReactionPicker(false);
+    setLiveReactionsCount(prev => prev + 1);
+    confetti({ particleCount: 25, spread: 50, origin: { y: 0.8 } });
+    try {
+      liveSyncService.broadcastEvent({
+        type: 'stream_reaction',
+        payload: { emoji, user_name: activeUser?.full_name || 'A believer' }
+      });
+    } catch {}
+  };
+
+  const handleSendLiveComment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isGuest) {
+      onRequireAuth();
+      return;
+    }
+    const txt = liveCommentInput.trim();
+    if (!txt) return;
+    const newComment = {
+      id: `lc_${Date.now()}`,
+      user_name: activeUser?.full_name || 'Church Believer',
+      user_avatar: activeUser?.avatar_url,
+      text: txt,
+      created_at: new Date().toISOString()
+    };
+    setLiveComments(prev => [...prev, newComment]);
+    setLiveCommentInput('');
+    try {
+      liveSyncService.broadcastEvent({
+        type: 'stream_chat',
+        payload: newComment
+      });
+    } catch {}
+  };
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -327,108 +396,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* 1. PLAYING ON TOP VIDEO PLAYER (TRIGGERED VIA ADMIN OR 'ON TOP' BUTTON)  */}
-      {/* ========================================================================= */}
-      {(showHomeTopVideo || Boolean(overridePlayingVideo)) && (
-        <div id="home-top-playing-theater" className="bg-card border-2 border-primary/40 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 ring-2 ring-primary/20 space-y-0">
-          {/* Header Bar */}
-          <div className="bg-primary/10 border-b border-primary/20 px-3 sm:px-4 py-2.5 flex items-center justify-between text-xs gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shrink-0" />
-              <span className="font-bold text-primary uppercase text-[10px] sm:text-[11px] tracking-wider shrink-0">
-                {liveSermonStatus.isLive ? 'Live Sanctuary' : 'Playing On Top'}
-              </span>
-              <span className="text-muted-foreground shrink-0">•</span>
-              <span className="font-semibold text-foreground truncate text-xs sm:text-sm">
-                {topVideoTitle}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              {/* Sow Seed Shortcut Button */}
-              <button
-                type="button"
-                onClick={() => onNavigateTab('store')}
-                className="px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 hover:brightness-110 text-white font-bold text-[10px] sm:text-[11px] flex items-center gap-1 shadow-xs cursor-pointer active:scale-95 transition-all"
-                title="Sow Altar Seed / Kingdom Giving"
-              >
-                <Gift className="w-3 h-3" />
-                <span className="hidden xs:inline">Sow Seed</span>
-              </button>
-
-              {/* Library Shortcut */}
-              <button
-                type="button"
-                onClick={() => onNavigateTab('sermons')}
-                className="text-[11px] font-bold text-primary hover:underline flex items-center gap-0.5 cursor-pointer px-1.5 py-1"
-                title="Browse Full Sermon Library"
-              >
-                <span className="hidden sm:inline">Library</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-
-              {/* Close Top Player Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  StorageService.setOverridePlayingVideo(null);
-                  StorageService.setShowHomeTopVideo(false);
-                  setShowHomeTopVideo(false);
-                  setOverridePlayingVideo(null);
-                }}
-                className="p-1 rounded-full hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition-colors cursor-pointer ml-1"
-                title="Close Top Video"
-                aria-label="Close Top Video"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Video Player Display */}
-          <div className="relative aspect-video bg-black overflow-hidden shadow-inner">
-            {streamEmbedInfo.isFacebook ? (
-              <FacebookStreamPlayer
-                embedUrl={streamEmbedInfo.embedUrl || streamEmbedInfo.originalUrl}
-                directUrl={streamEmbedInfo.facebookDirectUrl || streamEmbedInfo.originalUrl}
-                title={topVideoTitle}
-                isLive={liveSermonStatus.isLive}
-              />
-            ) : (
-              <iframe
-                src={`https://www.youtube-nocookie.com/embed/${streamEmbedInfo.videoId || '-CibsaxijIk'}?autoplay=1&controls=1&modestbranding=1&rel=0&playsinline=1`}
-                title={topVideoTitle}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                className="w-full h-full border-0"
-              />
-            )}
-          </div>
-
-          {/* Under-Video Quick Info Bar */}
-          <div className="bg-secondary/40 px-3 sm:px-4 py-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-            <div className="flex items-center gap-2 truncate">
-              <span className="font-semibold text-foreground text-xs">
-                {overridePlayingVideo?.speaker || 'Apostle Joe Daniels'}
-              </span>
-              {overridePlayingVideo?.series && (
-                <>
-                  <span>•</span>
-                  <span className="truncate text-primary font-medium">{overridePlayingVideo.series}</span>
-                </>
-              )}
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[10px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-full border border-primary/20">
-                Apostolic Decree
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 2. TOP STORIES TRAY (FACEBOOK STYLE)                                      */}
+      {/* 1. TOP STORIES TRAY (FACEBOOK STYLE)                                      */}
       {/* ========================================================================= */}
       <div className="bg-card border border-border rounded-2xl p-3 sm:p-3.5 shadow-xs overflow-x-auto scrollbar-none">
         <div className="flex items-center gap-2.5 min-w-max">
@@ -582,6 +550,254 @@ export const HomeTab: React.FC<HomeTabProps> = ({
           </button>
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* 2. PLAYING ON TOP / LIVE VIDEO PLAYER (FACEBOOK LIVE CLONE ON FEED)       */}
+      {/* ========================================================================= */}
+      {(showHomeTopVideo || Boolean(overridePlayingVideo) || liveSermonStatus.isLive) && (
+        <div id="home-facebook-live-player" className="bg-card border border-border rounded-2xl overflow-hidden shadow-md animate-in fade-in slide-in-from-top-2 duration-300 space-y-0">
+          
+          {/* Facebook Live Post Header */}
+          <div className="p-3.5 sm:p-4 flex items-center justify-between border-b border-border/50">
+            <div className="flex items-center gap-3">
+              {/* Apostle Avatar with live ring */}
+              <div className="relative">
+                <div className={`w-10 h-10 rounded-full p-[2px] ${liveSermonStatus.isLive ? 'bg-gradient-to-tr from-rose-500 to-amber-500 animate-pulse' : 'bg-border'}`}>
+                  <img
+                    src="/assets/apostle_joe_daniels_main.jpg"
+                    alt="Apostle Joe Daniels"
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                </div>
+                {liveSermonStatus.isLive && (
+                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-rose-600 text-white font-black text-[8px] px-1.5 py-0.2 rounded-full uppercase tracking-wider shadow-xs">
+                    LIVE
+                  </span>
+                )}
+              </div>
+
+              {/* Author name & Live status */}
+              <div className="leading-snug">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-sm text-foreground hover:underline cursor-pointer">
+                    Apostle Joe Daniels
+                  </span>
+                  <VerifiedBadge type="gold" />
+                  <span className="text-xs text-muted-foreground">
+                    {liveSermonStatus.isLive ? 'was live now' : 'was live'}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                  {liveSermonStatus.isLive ? (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-[10px] uppercase">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-ping inline-block" />
+                      LIVE NOW • 👁 {liveSermonStatus.viewerCount || 1420}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-secondary text-muted-foreground font-semibold text-[10px] uppercase tracking-wider">
+                      WAS LIVE
+                    </span>
+                  )}
+                  <span>•</span>
+                  <span className="flex items-center gap-0.5">
+                    <Globe className="w-3 h-3 text-muted-foreground/70" />
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Close / Dismiss Video button */}
+            <button
+              type="button"
+              onClick={() => {
+                StorageService.setOverridePlayingVideo(null);
+                StorageService.setShowHomeTopVideo(false);
+                setShowHomeTopVideo(false);
+                setOverridePlayingVideo(null);
+              }}
+              className="p-1.5 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              title="Close Player"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Stream Title Text */}
+          <div className="px-3.5 sm:px-4 pt-2.5 pb-2">
+            <h3 className="font-semibold text-sm sm:text-base text-foreground leading-snug">
+              {topVideoTitle}
+            </h3>
+            {overridePlayingVideo?.series && (
+              <p className="text-xs text-primary font-medium mt-0.5">
+                {overridePlayingVideo.series}
+              </p>
+            )}
+          </div>
+
+          {/* Embedded Video Player */}
+          <div className="relative aspect-video bg-black overflow-hidden shadow-inner">
+            {streamEmbedInfo.isFacebook ? (
+              <FacebookStreamPlayer
+                embedUrl={streamEmbedInfo.embedUrl || streamEmbedInfo.originalUrl}
+                directUrl={streamEmbedInfo.facebookDirectUrl || streamEmbedInfo.originalUrl}
+                title={topVideoTitle}
+                isLive={liveSermonStatus.isLive}
+              />
+            ) : (
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${streamEmbedInfo.videoId || '-CibsaxijIk'}?autoplay=1&controls=1&modestbranding=1&rel=0&playsinline=1`}
+                title={topVideoTitle}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                className="w-full h-full border-0"
+              />
+            )}
+          </div>
+
+          {/* Facebook Live Reaction Counts Bar */}
+          <div className="px-3.5 sm:px-4 py-2 border-b border-border/40 flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex -space-x-1">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] flex items-center justify-center shadow-xs">👍</span>
+                <span className="w-5 h-5 rounded-full bg-rose-600 text-white text-[11px] flex items-center justify-center shadow-xs">❤️</span>
+                <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-[11px] flex items-center justify-center shadow-xs">🔥</span>
+              </span>
+              <span className="font-medium text-foreground/80">
+                {liveReactionsCount}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span>{liveComments.length} comments</span>
+              <span>•</span>
+              <span>84 shares</span>
+            </div>
+          </div>
+
+          {/* Facebook Live Action Buttons (Like / Comment / Share) */}
+          <div className="px-2 sm:px-4 py-1.5 flex items-center justify-around border-b border-border/40 relative">
+            {/* Facebook Reactions Floating Popup */}
+            {showReactionPicker && (
+              <div 
+                className="absolute -top-12 left-4 sm:left-6 z-30 bg-card border border-border shadow-2xl rounded-full px-2 py-1.5 flex items-center gap-2 animate-in zoom-in-95 duration-150 backdrop-blur-md"
+                onMouseLeave={() => setShowReactionPicker(false)}
+              >
+                {[
+                  { key: 'like', emoji: '👍', label: 'Like' },
+                  { key: 'love', emoji: '❤️', label: 'Love' },
+                  { key: 'care', emoji: '🤗', label: 'Care' },
+                  { key: 'haha', emoji: '😂', label: 'Haha' },
+                  { key: 'wow', emoji: '😮', label: 'Wow' },
+                  { key: 'sad', emoji: '😢', label: 'Sad' },
+                  { key: 'angry', emoji: '😡', label: 'Angry' },
+                ].map((reaction) => (
+                  <button
+                    key={reaction.key}
+                    type="button"
+                    onClick={() => handleLiveReaction(reaction.emoji)}
+                    className="text-2xl hover:scale-130 active:scale-95 transition-transform cursor-pointer p-0.5"
+                    title={reaction.label}
+                  >
+                    {reaction.emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => handleLiveReaction('👍')}
+              onMouseEnter={() => setShowReactionPicker(true)}
+              className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-semibold hover:bg-secondary transition-colors cursor-pointer ${
+                userReaction ? 'text-primary font-bold' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="text-base">{userReaction || '👍'}</span>
+              <span>{userReaction ? 'Reacted' : 'Like'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowCommentsSection(prev => !prev)}
+              className="flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>Comment</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({ title: topVideoTitle, url: window.location.href }).catch(() => {});
+                } else {
+                  navigator.clipboard.writeText(window.location.href);
+                  showToast('Live link copied to clipboard!');
+                }
+              }}
+              className="flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>Share</span>
+            </button>
+          </div>
+
+          {/* Real Facebook Live Comments Stream */}
+          {showCommentsSection && (
+            <div className="bg-secondary/20 p-3 sm:p-4 space-y-3">
+              {/* Comments list */}
+              <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1 scrollbar-thin">
+                {liveComments.map((c) => (
+                  <div key={c.id} className="flex items-start gap-2 text-xs">
+                    <img
+                      src={c.user_avatar || '/assets/apostle_joe_daniels_main.jpg'}
+                      alt={c.user_name}
+                      className="w-7 h-7 rounded-full object-cover shrink-0 mt-0.5"
+                    />
+                    <div className="bg-secondary/70 border border-border/40 rounded-2xl px-3 py-1.5 max-w-[85%]">
+                      <div className="font-bold text-foreground text-[11px]">
+                        {c.user_name}
+                      </div>
+                      <div className="text-foreground/90 text-xs mt-0.5 break-words">
+                        {c.text}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add live comment form */}
+              <form onSubmit={handleSendLiveComment} className="flex items-center gap-2 pt-1 border-t border-border/30">
+                <img
+                  src={activeUser?.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
+                  alt={activeUser?.full_name || 'Me'}
+                  className="w-7 h-7 rounded-full object-cover shrink-0"
+                />
+                <div className="flex-1 relative flex items-center">
+                  <input
+                    type="text"
+                    value={liveCommentInput}
+                    onChange={(e) => setLiveCommentInput(e.target.value)}
+                    placeholder={`Write a comment as ${userFirstName}...`}
+                    className="w-full pl-3 pr-9 py-1.5 text-xs rounded-full bg-secondary border border-border focus:outline-none focus:ring-1 focus:ring-primary text-foreground placeholder:text-muted-foreground"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!liveCommentInput.trim()}
+                    className="absolute right-1.5 p-1 rounded-full text-primary hover:bg-primary/10 disabled:opacity-40 transition-colors cursor-pointer"
+                    title="Send Comment"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 3. DAILY DEVOTIONAL BANNER WIDGET                                         */}

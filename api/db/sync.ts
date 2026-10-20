@@ -15,7 +15,7 @@ function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   });
 }
 
-const ALLOWED_COLLECTIONS = new Set(['posts', 'users', 'settings', 'donations', 'gallery', 'prayers', 'orders']);
+const ALLOWED_COLLECTIONS = new Set(['posts', 'users', 'settings', 'donations', 'gallery', 'prayers', 'orders', 'follows', 'calls']);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');

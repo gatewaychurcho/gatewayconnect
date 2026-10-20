@@ -44,7 +44,9 @@ import {
   ChurchPage,
   PagePost,
   PageCategory,
-  MediaLibraryItem
+  MediaLibraryItem,
+  CallLog,
+  CallType
 } from '../types';
 
 import { 
@@ -153,9 +155,11 @@ const KEYS = {
   CHURCH_PAGES: 'gcz_church_pages_v1',
   PAGE_POSTS: 'gcz_page_posts_v1',
   ADMIN_AVATAR_LIBRARY: 'gcz_admin_avatar_library_v1',
+  ADMIN_THUMBNAIL_LIBRARY: 'gcz_admin_thumbnail_library_v1',
   SERMON_CATEGORIES: 'gcz_sermon_categories_v1',
   SERMON_ANALYTICS: 'gcz_sermon_analytics_v1',
-  SHOW_HOME_TOP_VIDEO: 'gcz_show_home_top_video_v1'
+  SHOW_HOME_TOP_VIDEO: 'gcz_show_home_top_video_v1',
+  CALL_LOGS: 'gcz_call_logs_v1'
 };
 
 export const DEFAULT_ADMIN_AVATARS: MediaLibraryItem[] = [
@@ -886,6 +890,14 @@ export class StorageService {
     // Sync to Supabase in background
     SupabaseSyncService.syncUser(updated).catch(() => {});
 
+    // Sync to Cloudflare R2 permanent document store (dual-storage architecture)
+    this.syncUserToCloudflareR2(updated).catch(() => {});
+
+    // Broadcast across all connected devices and browsers via liveSyncService
+    try {
+      liveSyncService.broadcastEvent({ type: 'user_updated', payload: updated });
+    } catch {}
+
     // Dispatch global real-time event
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: updated }));
@@ -1371,6 +1383,36 @@ export class StorageService {
       { follower_id: 'usr_nyasha', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_farai', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_farai', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_1789657530055', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_1789657530055', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_rutendo_ndlovu', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_rutendo_ndlovu', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_simba_hove', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_simba_hove', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_tariro_mutasa', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_blessings_sibanda', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_blessings_sibanda', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_anesu_sithole', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_privilege_makoni', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_privilege_makoni', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_tapiwa_muzenda', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_tapiwa_muzenda', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_nokuthula_moyo', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_rumbidzai_marufu', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_munyaradzi_chigumba', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_gamuchirai_kaseke', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_gamuchirai_kaseke', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_takudzwa_dube', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_fadzai_mashingaidze', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_panashe_nyoni', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_vimbai_zhou', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_knowledge_matarise', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_chengetai_shumba', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_shalom_chimedza', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_tendekai_mupfumi', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_tsitsi_gava', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_mthokozisi_nkomo', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
+      { follower_id: 'usr_praise_magaya', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_apostle_joe', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_apostle_joe', following_id: 'usr_prophetess_melinda', created_at: '2026-01-01T00:00:00Z' },
       { follower_id: 'usr_prophetess_melinda', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
@@ -1379,8 +1421,15 @@ export class StorageService {
       { follower_id: 'usr_pastor_easter', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' }
     ];
     let records = getLocal<{ follower_id: string; following_id: string; created_at: string }[] | null>(KEYS.USER_FOLLOWS_TABLE, null);
-    if (!records) {
-      records = [...defaultFollows];
+    if (!records || records.length < 30) {
+      const existingSet = new Set((records || []).map(r => `${r.follower_id}_${r.following_id}`));
+      records = records ? [...records] : [];
+      for (const df of defaultFollows) {
+        if (!existingSet.has(`${df.follower_id}_${df.following_id}`)) {
+          records.push(df);
+          existingSet.add(`${df.follower_id}_${df.following_id}`);
+        }
+      }
       setLocal(KEYS.USER_FOLLOWS_TABLE, records);
     }
     return records;
@@ -2475,6 +2524,34 @@ export class StorageService {
     return this.recordDonation(formatted);
   }
 
+  static downloadReceipt(donation: any): void {
+    if (typeof window === 'undefined') return;
+    const ref = donation.receipt_number || donation.id || `GCZ-RC-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const text = `========================================
+GATEWAY CHURCH ZIMBABWE - OFFICIAL RECEIPT
+========================================
+Receipt Number : ${ref}
+Date           : ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+Donor          : ${donation.donor_name || donation.user_name || 'Ministry Partner'}
+Amount         : ${donation.currency || 'USD'} ${donation.amount}
+Fund Purpose   : ${donation.fund || donation.fund_type || 'Altar Seed'}
+Payment Gateway: ${donation.payment_method || 'Online Paynow'}
+Status         : Consecrated & Verified
+========================================
+"Bring the whole tithe into the storehouse, that there may be food in my house." - Malachi 3:10
+Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
+========================================`;
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Gateway-Receipt-${ref}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   static updateDonationStatus(donationId: string, status: Donation['status']): Donation | null {
     const donations = this.getDonations();
     const donation = donations.find(item => item.id === donationId);
@@ -3389,7 +3466,7 @@ export class StorageService {
     // Silver or unverified users can view the library catalog, but cannot play restricted videos.
     const badge = u.badge_type || u.verified_badge;
     if (badge === 'gold' || badge === 'blue') return true;
-    if (u.is_verified && (!badge || badge === 'blue')) return true;
+    if (u.is_verified && (!badge || (badge as string) === 'blue')) return true;
     return false;
   }
 
@@ -4801,6 +4878,105 @@ export class StorageService {
       const timeA = a?.last_message?.created_at ? new Date(a.last_message.created_at).getTime() : 0;
       return timeB - timeA;
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // VOIP VOICE CALL LOGS & IN-DRIVE CALL RECORDS
+  // ---------------------------------------------------------------------------
+  static getCallLogs(userId?: string): CallLog[] {
+    const raw = getLocal<CallLog[] | null>(KEYS.CALL_LOGS, null);
+    let list: CallLog[];
+    if (!raw) {
+      const cur = this.getCurrentUser();
+      list = [
+        {
+          id: 'call_seed_1',
+          caller_id: 'usr_apostle_joe',
+          caller_name: 'Apostle Joe Daniels',
+          caller_avatar: '/assets/apostle_joe_daniels_main.jpg',
+          caller_handle: '@apostle_joe_daniels',
+          receiver_id: cur?.id || 'usr_developer',
+          receiver_name: cur?.full_name || 'mr_juice7',
+          receiver_avatar: cur?.avatar_url,
+          type: 'incoming',
+          duration_seconds: 342,
+          status: 'completed',
+          created_at: new Date(Date.now() - 3600000 * 2).toISOString()
+        },
+        {
+          id: 'call_seed_2',
+          caller_id: cur?.id || 'usr_developer',
+          caller_name: cur?.full_name || 'mr_juice7',
+          caller_avatar: cur?.avatar_url,
+          receiver_id: 'usr_pastor_tendai',
+          receiver_name: 'Pastor Tendai Moyo',
+          receiver_avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&auto=format&fit=crop&q=80',
+          receiver_handle: '@pastor_tendai',
+          type: 'outgoing',
+          duration_seconds: 185,
+          status: 'completed',
+          created_at: new Date(Date.now() - 3600000 * 18).toISOString()
+        },
+        {
+          id: 'call_seed_3',
+          caller_id: 'usr_prophetess_melinda',
+          caller_name: 'Prophetess Melinda Daniels',
+          caller_avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
+          caller_handle: '@prophetess_melinda',
+          receiver_id: cur?.id || 'usr_developer',
+          receiver_name: cur?.full_name || 'mr_juice7',
+          receiver_avatar: cur?.avatar_url,
+          type: 'missed',
+          duration_seconds: 0,
+          status: 'missed',
+          created_at: new Date(Date.now() - 86400000).toISOString()
+        }
+      ];
+      setLocal(KEYS.CALL_LOGS, list);
+    } else {
+      list = raw;
+    }
+
+    if (!userId) return list;
+    return list.filter(c => c.caller_id === userId || c.receiver_id === userId);
+  }
+
+  static saveCallLog(logData: Omit<CallLog, 'id' | 'created_at'>): CallLog {
+    const list = this.getCallLogs();
+    const newLog: CallLog = {
+      ...logData,
+      id: `call_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      created_at: new Date().toISOString()
+    };
+    list.unshift(newLog);
+    if (list.length > 100) list.length = 100;
+    setLocal(KEYS.CALL_LOGS, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_call_logs_updated', { detail: newLog }));
+    }
+    return newLog;
+  }
+
+  static clearCallLogs(userId?: string): void {
+    if (!userId) {
+      setLocal(KEYS.CALL_LOGS, []);
+    } else {
+      const list = this.getCallLogs();
+      const remaining = list.filter(c => c.caller_id !== userId && c.receiver_id !== userId);
+      setLocal(KEYS.CALL_LOGS, remaining);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_call_logs_updated'));
+    }
+  }
+
+  static deleteCallLog(callId: string): void {
+    const list = this.getCallLogs();
+    const remaining = list.filter(c => c.id !== callId);
+    setLocal(KEYS.CALL_LOGS, remaining);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_call_logs_updated'));
+    }
   }
 
   // LIVE SERMON NOTIFICATION & STREAMING MANAGEMENT
@@ -6844,6 +7020,9 @@ export class StorageService {
     } else if (type === 'user_created' || type === 'user_updated') {
       const newUser = payload as User;
       if (newUser && newUser.id) {
+        if (newUser.avatar_url) {
+          this.setPermanentCustomAvatar(newUser.id, newUser.phone, newUser.avatar_url);
+        }
         const users = this.getAllUsers();
         const idx = users.findIndex(u => u.id === newUser.id || arePhoneNumbersEqual(u.phone, newUser.phone));
         if (idx >= 0) {
@@ -6858,6 +7037,22 @@ export class StorageService {
         }
         window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: newUser }));
         window.dispatchEvent(new CustomEvent('gcz_users_synced', { detail: users }));
+      }
+    } else if (type === 'follow') {
+      const f = payload as { followerId: string; targetUserId: string; isFollowing: boolean };
+      if (f && f.followerId && f.targetUserId) {
+        const records = this.getUserFollowsRecords();
+        const exIdx = records.findIndex(r => r.follower_id === f.followerId && r.following_id === f.targetUserId);
+        if (f.isFollowing && exIdx < 0) {
+          records.push({ follower_id: f.followerId, following_id: f.targetUserId, created_at: new Date().toISOString() });
+        } else if (!f.isFollowing && exIdx >= 0) {
+          records.splice(exIdx, 1);
+        }
+        setLocal(KEYS.USER_FOLLOWS_TABLE, records);
+        const allUsers = this.getAllUsers();
+        window.dispatchEvent(new CustomEvent('gcz_follow_updated', { detail: f }));
+        window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+        window.dispatchEvent(new CustomEvent('gcz_users_synced', { detail: allUsers }));
       }
     } else if (type === 'user_banned') {
       const banData = payload as { phone: string; reason?: string };
