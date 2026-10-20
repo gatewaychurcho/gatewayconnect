@@ -132,11 +132,13 @@ export const HomeTab: React.FC<HomeTabProps> = ({
 
     const handleTopVideoSetting = () => {
       setShowHomeTopVideo(StorageService.getShowHomeTopVideo());
+      setOverridePlayingVideo(StorageService.getOverridePlayingVideo());
     };
 
     const handleLiveStatus = () => {
       setLiveSermonStatus(StorageService.getLiveSermonStatus());
       setOverridePlayingVideo(StorageService.getOverridePlayingVideo());
+      setShowHomeTopVideo(StorageService.getShowHomeTopVideo());
     };
 
     const handleStoriesUpdate = () => {
@@ -300,7 +302,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   // Top Video Stream Embed Info (If Enabled)
   const currentStreamTarget = overridePlayingVideo?.youtube_id 
     ? `https://www.youtube.com/watch?v=${overridePlayingVideo.youtube_id}` 
-    : (liveSermonStatus.streamUrl || 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP');
+    : (overridePlayingVideo?.video_url || liveSermonStatus.streamUrl || StorageService.getLiveStreamUrl() || 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP');
   const streamEmbedInfo = StorageService.getStreamEmbedInfo(currentStreamTarget);
   const topVideoTitle = overridePlayingVideo?.title || liveSermonStatus.title || 'Gateway Cathedral Sunday Service';
 
@@ -325,7 +327,108 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* 1. TOP STORIES TRAY (FACEBOOK STYLE)                                      */}
+      {/* 1. PLAYING ON TOP VIDEO PLAYER (TRIGGERED VIA ADMIN OR 'ON TOP' BUTTON)  */}
+      {/* ========================================================================= */}
+      {(showHomeTopVideo || Boolean(overridePlayingVideo)) && (
+        <div id="home-top-playing-theater" className="bg-card border-2 border-primary/40 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 ring-2 ring-primary/20 space-y-0">
+          {/* Header Bar */}
+          <div className="bg-primary/10 border-b border-primary/20 px-3 sm:px-4 py-2.5 flex items-center justify-between text-xs gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shrink-0" />
+              <span className="font-bold text-primary uppercase text-[10px] sm:text-[11px] tracking-wider shrink-0">
+                {liveSermonStatus.isLive ? 'Live Sanctuary' : 'Playing On Top'}
+              </span>
+              <span className="text-muted-foreground shrink-0">•</span>
+              <span className="font-semibold text-foreground truncate text-xs sm:text-sm">
+                {topVideoTitle}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Sow Seed Shortcut Button */}
+              <button
+                type="button"
+                onClick={() => onNavigateTab('store')}
+                className="px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 hover:brightness-110 text-white font-bold text-[10px] sm:text-[11px] flex items-center gap-1 shadow-xs cursor-pointer active:scale-95 transition-all"
+                title="Sow Altar Seed / Kingdom Giving"
+              >
+                <Gift className="w-3 h-3" />
+                <span className="hidden xs:inline">Sow Seed</span>
+              </button>
+
+              {/* Library Shortcut */}
+              <button
+                type="button"
+                onClick={() => onNavigateTab('sermons')}
+                className="text-[11px] font-bold text-primary hover:underline flex items-center gap-0.5 cursor-pointer px-1.5 py-1"
+                title="Browse Full Sermon Library"
+              >
+                <span className="hidden sm:inline">Library</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Close Top Player Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  StorageService.setOverridePlayingVideo(null);
+                  StorageService.setShowHomeTopVideo(false);
+                  setShowHomeTopVideo(false);
+                  setOverridePlayingVideo(null);
+                }}
+                className="p-1 rounded-full hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition-colors cursor-pointer ml-1"
+                title="Close Top Video"
+                aria-label="Close Top Video"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Video Player Display */}
+          <div className="relative aspect-video bg-black overflow-hidden shadow-inner">
+            {streamEmbedInfo.isFacebook ? (
+              <FacebookStreamPlayer
+                embedUrl={streamEmbedInfo.embedUrl || streamEmbedInfo.originalUrl}
+                directUrl={streamEmbedInfo.facebookDirectUrl || streamEmbedInfo.originalUrl}
+                title={topVideoTitle}
+                isLive={liveSermonStatus.isLive}
+              />
+            ) : (
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${streamEmbedInfo.videoId || '-CibsaxijIk'}?autoplay=1&controls=1&modestbranding=1&rel=0&playsinline=1`}
+                title={topVideoTitle}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                className="w-full h-full border-0"
+              />
+            )}
+          </div>
+
+          {/* Under-Video Quick Info Bar */}
+          <div className="bg-secondary/40 px-3 sm:px-4 py-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 truncate">
+              <span className="font-semibold text-foreground text-xs">
+                {overridePlayingVideo?.speaker || 'Apostle Joe Daniels'}
+              </span>
+              {overridePlayingVideo?.series && (
+                <>
+                  <span>•</span>
+                  <span className="truncate text-primary font-medium">{overridePlayingVideo.series}</span>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[10px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-full border border-primary/20">
+                Apostolic Decree
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 2. TOP STORIES TRAY (FACEBOOK STYLE)                                      */}
       {/* ========================================================================= */}
       <div className="bg-card border border-border rounded-2xl p-3 sm:p-3.5 shadow-xs overflow-x-auto scrollbar-none">
         <div className="flex items-center gap-2.5 min-w-max">
@@ -481,51 +584,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. OPTIONAL PINNED TOP VIDEO PLAYER (ONLY VISIBLE IF ADMIN ENABLED)       */}
-      {/* ========================================================================= */}
-      {showHomeTopVideo && (
-        <div className="bg-card border border-primary/30 rounded-2xl overflow-hidden shadow-md animate-in fade-in space-y-0">
-          <div className="bg-primary/10 border-b border-primary/20 px-4 py-2.5 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
-              <span className="font-bold text-primary uppercase text-[11px] tracking-wider">
-                {liveSermonStatus.isLive ? 'Live Sanctuary Broadcast' : 'Featured Word'}
-              </span>
-              <span className="text-muted-foreground">•</span>
-              <span className="font-semibold text-foreground truncate max-w-xs">{topVideoTitle}</span>
-            </div>
-            <button
-              onClick={() => onNavigateTab('sermons')}
-              className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <span>Library</span>
-              <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-
-          <div className="relative aspect-video bg-black overflow-hidden">
-            {streamEmbedInfo.isFacebook ? (
-              <FacebookStreamPlayer
-                embedUrl={streamEmbedInfo.embedUrl || streamEmbedInfo.originalUrl}
-                directUrl={streamEmbedInfo.facebookDirectUrl || streamEmbedInfo.originalUrl}
-                title={topVideoTitle}
-                isLive={liveSermonStatus.isLive}
-              />
-            ) : (
-              <iframe
-                src={`https://www.youtube-nocookie.com/embed/${streamEmbedInfo.videoId || '-CibsaxijIk'}?autoplay=0&controls=1&modestbranding=1&rel=0&playsinline=1`}
-                title={topVideoTitle}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="w-full h-full border-0"
-              />
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 4. DAILY DEVOTIONAL BANNER WIDGET                                         */}
+      {/* 3. DAILY DEVOTIONAL BANNER WIDGET                                         */}
       {/* ========================================================================= */}
       <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-xs space-y-2.5 relative overflow-hidden">
         <div className="flex items-center justify-between">

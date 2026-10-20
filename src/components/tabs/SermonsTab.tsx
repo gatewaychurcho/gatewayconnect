@@ -235,21 +235,27 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
     StorageService.recordSermonView(sermon.id, isTopPlayer);
     
     if (isTopPlayer) {
+      const topVideoPayload = {
+        id: sermon.id,
+        title: sermon.title,
+        youtube_id: sermon.youtube_id,
+        video_url: sermon.video_url,
+        audio_url: sermon.audio_url,
+        thumbnail_url: sermon.thumbnail_url,
+        speaker: sermon.speaker,
+        series: sermon.series
+      };
+      StorageService.setOverridePlayingVideo(topVideoPayload);
+      StorageService.setShowHomeTopVideo(true);
       if (onSetOverridePlayingVideo) {
-        onSetOverridePlayingVideo({
-          id: sermon.id,
-          title: sermon.title,
-          youtube_id: sermon.youtube_id,
-          video_url: sermon.video_url,
-          audio_url: sermon.audio_url,
-          thumbnail_url: sermon.thumbnail_url,
-          speaker: sermon.speaker,
-          series: sermon.series
-        });
+        onSetOverridePlayingVideo(topVideoPayload);
       }
       if (onNavigateTab) {
         onNavigateTab('home');
       }
+      try {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch {}
     } else {
       setActivePlayingSermon(sermon);
     }

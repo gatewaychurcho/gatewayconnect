@@ -223,8 +223,74 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   const [newGroupIsPaid, setNewGroupIsPaid] = useState(false);
   const [newGroupPrice, setNewGroupPrice] = useState(150);
   const [newGroupDuration, setNewGroupDuration] = useState(3);
-  const [newGroupPinnedNotice, setNewGroupPinnedNotice] = useState('');
-  const [inDriveCall, setInDriveCall] = useState<{ isOpen: boolean; partner: User; callType: 'audio' | 'video' } | null>(null);
+  const [inDriveCall, setInDriveCall] = useState<{ isOpen: boolean; partner: User } | null>(null);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  const handleVoiceRecordToggle = async () => {
+    if (isRecordingVoice) {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      setIsRecordingVoice(false);
+    } else {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          alert('Microphone recording is not supported on this browser.');
+          return;
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunksRef.current = [];
+        const recorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = recorder;
+
+        recorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            audioChunksRef.current.push(e.data);
+          }
+        };
+
+        recorder.onstop = () => {
+          stream.getTracks().forEach((track) => track.stop());
+          const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64Audio = reader.result as string;
+            if (activeTab === 'direct' && activeUserId) {
+              StorageService.sendDirectMessage(
+                currentUser.id,
+                activeUserId,
+                'Voice note',
+                undefined,
+                base64Audio,
+                'audio'
+              );
+              loadDirectMessages(activeUserId);
+            } else if (activeTab === 'groups' && activeGroupId) {
+              StorageService.sendChatGroupMessage(
+                activeGroupId,
+                currentUser.id,
+                currentUser.full_name,
+                'Voice note',
+                undefined,
+                base64Audio,
+                'audio'
+              );
+              loadGroupMessages(activeGroupId);
+            }
+          };
+          reader.readAsDataURL(blob);
+        };
+
+        recorder.start();
+        setIsRecordingVoice(true);
+      } catch (err) {
+        console.warn('Microphone error:', err);
+        alert('Please allow microphone permissions to record a voice note.');
+      }
+    }
+  };
   const groupAvatarInputRef = useRef<HTMLInputElement>(null);
 
   const handleGroupAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2009,9 +2075,19 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
               <>
                 {showNewChatPicker ? (
                   <div className="flex-1 overflow-y-auto divide-y divide-border">
-                    <div className="px-3 py-2 bg-secondary/80 text-[11px] font-bold text-primary uppercase tracking-wider flex items-center gap-1.5 border-b border-border">
-                      <Users className="w-3.5 h-3.5" />
-                      <span>Start New Chat (Prioritized)</span>
+                    <div className="px-3 py-2 bg-secondary/80 text-[11px] font-bold text-primary uppercase tracking-wider flex items-center justify-between border-b border-border">
+                      <div className="flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5" />
+                        <span>Start New Chat (Prioritized)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowNewChatPicker(false)}
+                        className="p-1 rounded-md hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                        title="Close New Chat Picker"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                     {filteredContacts.map((contact) => (
                       <button
@@ -2278,16 +2354,33 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
             {/* Mobile Floating Action Buttons (FABs) - Sleek & Compact */}
             <div className="sm:hidden absolute bottom-3 right-3 z-20 flex items-center gap-1.5 pointer-events-auto">
               {activeTab === 'direct' ? (
-                <button
-                  id="fab-mobile-new-chat"
-                  type="button"
-                  onClick={() => setShowNewChatPicker(prev => !prev)}
-                  className="h-9 px-3 rounded-full bg-primary hover:brightness-105 text-primary-foreground font-semibold shadow-md active:scale-95 transition-all border border-primary/30 cursor-pointer flex items-center gap-1.5"
-                  title="Start New Direct Chat"
-                >
-                  <MessageSquarePlus className="w-3.5 h-3.5" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">New Chat</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    id="fab-mobile-new-chat"
+                    type="button"
+                    onClick={() => setShowNewChatPicker(prev => !prev)}
+                    className={`h-9 px-3 rounded-full font-semibold shadow-md active:scale-95 transition-all border cursor-pointer flex items-center gap-1.5 ${
+                      showNewChatPicker 
+                        ? 'bg-destructive/90 hover:bg-destructive text-white border-destructive/40 shadow-destructive/20' 
+                        : 'bg-primary hover:brightness-105 text-primary-foreground border-primary/30'
+                    }`}
+                    title={showNewChatPicker ? "Close New Chat Picker" : "Start New Direct Chat"}
+                  >
+                    {showNewChatPicker ? <X className="w-3.5 h-3.5" /> : <MessageSquarePlus className="w-3.5 h-3.5" />}
+                    <span className="text-[10px] font-bold uppercase tracking-wider">{showNewChatPicker ? 'Close' : 'New Chat'}</span>
+                  </button>
+                  {showNewChatPicker && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewChatPicker(false)}
+                      className="w-9 h-9 rounded-full bg-destructive text-white flex items-center justify-center shadow-md active:scale-95 transition-all border border-destructive/40 cursor-pointer"
+                      title="Close FAB"
+                      aria-label="Close"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               ) : (
                 <div className="flex items-center gap-1.5">
                   <button
@@ -2363,7 +2456,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
                         <button
                           onClick={handleBackOrClose}
-                          className="sm:hidden p-2 -ml-1 rounded-full hover:bg-secondary text-muted-foreground active:scale-95 transition-transform cursor-pointer"
+                          className="p-2 -ml-1 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
                           title="Back to conversations"
                         >
                           <ArrowLeft className="w-5 h-5" />
@@ -2432,24 +2525,15 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         </button>
                       </div>
 
-                      {/* Right Action Menu: InDrive VoIP Audio & Video Calling, 3-dots dropdown & Close Button */}
+                      {/* Right Action Menu: InDrive VoIP Voice Calling, 3-dots dropdown & Close Button */}
                       <div className="relative flex items-center gap-1 sm:gap-2">
                         <button
                           type="button"
-                          onClick={() => setInDriveCall({ isOpen: true, partner: activeUser, callType: 'audio' })}
+                          onClick={() => setInDriveCall({ isOpen: true, partner: activeUser })}
                           className="p-2 sm:p-2.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 active:scale-95 transition-all cursor-pointer shadow-xs"
-                          title="InDrive Audio Call"
+                          title="InDrive Voice Call"
                         >
                           <Phone className="w-4 h-4" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setInDriveCall({ isOpen: true, partner: activeUser, callType: 'video' })}
-                          className="p-2 sm:p-2.5 rounded-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 active:scale-95 transition-all cursor-pointer shadow-xs"
-                          title="InDrive Video Call"
-                        >
-                          <Video className="w-4 h-4" />
                         </button>
 
                         <button
@@ -2759,18 +2843,18 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                   isDeleted 
                                     ? 'bg-secondary/70 border border-border/80 text-muted-foreground italic'
                                     : isMine
-                                      ? 'bg-gradient-to-br from-amber-600 to-amber-700 text-white dark:bg-[#005c4b] dark:from-[#005c4b] dark:to-[#005c4b] dark:text-[#e9edef] border border-amber-500/30 dark:border-[#005c4b]/50 shadow-sm'
-                                      : 'bg-card dark:bg-[#202c33] border border-border/85 dark:border-white/5 text-foreground dark:text-[#e9edef] shadow-2xs'
+                                      ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#005c4b] dark:text-[#e9edef] border border-[#b8f5b1] dark:border-[#005c4b]/50 shadow-xs'
+                                      : 'bg-white text-[#111b21] dark:bg-[#202c33] border border-black/5 dark:border-white/5 dark:text-[#e9edef] shadow-xs'
                                 }`}
                               >
                                 {/* Quoted Reply preview inside message */}
                                 {msg.reply_to && !isDeleted && (
-                                  <div className={`mb-2 p-2 rounded-xl text-left text-[11px] leading-snug border-l-3 ${
+                                  <div className={`mb-2 p-2 rounded-xl text-left text-[11px] leading-snug border-l-4 ${
                                     isMine 
-                                      ? 'bg-black/20 border-white/80 text-white' 
-                                      : 'bg-secondary/80 border-primary text-foreground'
+                                      ? 'bg-[#c5f5bd] dark:bg-black/30 border-[#00a884] dark:border-[#25d366] text-[#111b21] dark:text-white' 
+                                      : 'bg-neutral-100 dark:bg-neutral-800/80 border-[#00a884] text-[#111b21] dark:text-foreground'
                                   }`}>
-                                    <div className={`font-semibold text-[10px] flex items-center gap-1 ${isMine ? 'text-white' : 'text-primary'}`}>
+                                    <div className="font-semibold text-[10px] flex items-center gap-1 text-[#00a884] dark:text-[#25d366]">
                                       <Reply className="w-3 h-3" />
                                       <span>{msg.reply_to.sender_name}</span>
                                     </div>
@@ -2786,14 +2870,14 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
                                 {/* Micro Timestamp & Delivery Receipt */}
                                 <div className={`flex items-center justify-end gap-1 text-[9.5px] sm:text-[10px] mt-1 select-none font-medium tracking-tight ${
-                                  isMine ? 'text-white/80 dark:text-[#8696a0]' : 'text-muted-foreground/80 dark:text-[#8696a0]'
+                                  isMine ? 'text-emerald-950/70 dark:text-[#8696a0]' : 'text-neutral-500 dark:text-[#8696a0]'
                                 }`}>
                                   <span>
                                     {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                   </span>
                                   {isMine && !isDeleted && (
                                     <span title={msg.is_read ? "Read" : "Delivered"} className="inline-flex items-center ml-0.5">
-                                      <CheckCheck className={`w-3.5 h-3.5 inline ${msg.is_read ? 'text-sky-300 dark:text-[#53bdeb]' : 'text-white/70 dark:text-[#8696a0]'}`} />
+                                      <CheckCheck className={`w-3.5 h-3.5 inline ${msg.is_read ? 'text-[#53bdeb]' : 'text-emerald-900/60 dark:text-[#8696a0]'}`} />
                                     </span>
                                   )}
                                 </div>
@@ -2875,13 +2959,13 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     </div>
                   )}
 
-                  {/* Message Input Box */}
+                  {/* WhatsApp-Style Message Input Box */}
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
                       handleSendMessage();
                     }}
-                    className="p-2 sm:p-2.5 bg-card border-t border-border flex items-center gap-1.5 sm:gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+                    className="p-2 sm:p-2.5 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-border flex items-center gap-1.5 sm:gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
                   >
                     <button
                       type="button"
@@ -2889,19 +2973,19 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       title="Quick Reactions"
                       className={`p-2 rounded-full border transition-colors shrink-0 cursor-pointer ${
                         showEmojiPicker 
-                          ? 'bg-primary/20 text-primary border-primary/30' 
-                          : 'bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground border-border'
+                          ? 'bg-[#00a884]/20 text-[#00a884] border-[#00a884]/40' 
+                          : 'bg-white dark:bg-[#2a3942] hover:bg-neutral-100 text-muted-foreground hover:text-foreground border-transparent'
                       }`}
                     >
-                      <Smile className="w-4 h-4" />
+                      <Smile className="w-5 h-5" />
                     </button>
                     <button
                       type="button"
                       onClick={() => mediaFileInputRef.current?.click()}
                       title="Attach photo, video, audio or document"
-                      className="p-2 rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-primary border border-border transition-colors shrink-0 cursor-pointer"
+                      className="p-2 rounded-full bg-white dark:bg-[#2a3942] hover:bg-neutral-100 dark:hover:bg-[#32444f] text-muted-foreground hover:text-[#00a884] transition-colors shrink-0 cursor-pointer shadow-xs"
                     >
-                      <Paperclip className="w-4 h-4" />
+                      <Paperclip className="w-5 h-5" />
                     </button>
                     <input
                       type="text"
@@ -2921,16 +3005,30 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         }
                       }}
                       placeholder={`Message ${activeUser.full_name}...`}
-                      className="flex-1 bg-secondary/80 border border-border rounded-full px-4 py-2 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1.5 focus:ring-primary shadow-2xs"
+                      className="flex-1 bg-white dark:bg-[#2a3942] border-0 rounded-2xl px-4 py-2.5 text-xs sm:text-sm text-[#111b21] dark:text-[#e9edef] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#00a884] shadow-xs"
                     />
-                    <button
-                      type="submit"
-                      disabled={!inputText.trim()}
-                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary hover:brightness-105 disabled:opacity-40 text-primary-foreground font-semibold flex items-center justify-center transition-all shadow-sm shrink-0 cursor-pointer active:scale-95"
-                      title="Send message"
-                    >
-                      <Send className="w-4 h-4 ml-0.5" />
-                    </button>
+                    {inputText.trim() ? (
+                      <button
+                        type="submit"
+                        className="w-10 h-10 rounded-full bg-[#00a884] hover:bg-[#02906f] active:scale-95 text-white flex items-center justify-center transition-all shadow-md shrink-0 cursor-pointer"
+                        title="Send message"
+                      >
+                        <Send className="w-4 h-4 ml-0.5" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleVoiceRecordToggle}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-md shrink-0 cursor-pointer active:scale-95 ${
+                          isRecordingVoice
+                            ? 'bg-rose-500 text-white animate-pulse'
+                            : 'bg-[#00a884] hover:bg-[#02906f] text-white'
+                        }`}
+                        title={isRecordingVoice ? "Recording voice note (tap to send)..." : "Hold or tap to record voice note"}
+                      >
+                        <Mic className="w-4 h-4" />
+                      </button>
+                    )}
                   </form>
                 </>
               ) : (
@@ -3007,7 +3105,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
                         <button
                           onClick={handleBackOrClose}
-                          className="sm:hidden p-2 -ml-1 rounded-full hover:bg-secondary text-muted-foreground active:scale-95 transition-transform cursor-pointer"
+                          className="p-2 -ml-1 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
                           title="Back to conversations"
                         >
                           <ArrowLeft className="w-5 h-5" />
@@ -3509,18 +3607,18 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                       isDeleted
                                         ? 'bg-secondary/70 border border-border/80 text-muted-foreground italic'
                                         : isMine
-                                          ? 'bg-gradient-to-br from-amber-600 to-amber-700 text-white dark:bg-[#005c4b] dark:from-[#005c4b] dark:to-[#005c4b] dark:text-[#e9edef] border border-amber-500/30 dark:border-[#005c4b]/50 shadow-sm'
-                                          : 'bg-card dark:bg-[#202c33] border border-border/85 dark:border-white/5 text-foreground dark:text-[#e9edef] shadow-2xs'
+                                          ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#005c4b] dark:text-[#e9edef] border border-[#b8f5b1] dark:border-[#005c4b]/50 shadow-xs'
+                                          : 'bg-white text-[#111b21] dark:bg-[#202c33] border border-black/5 dark:border-white/5 dark:text-[#e9edef] shadow-xs'
                                     }`}
                                   >
                                     {/* WhatsApp-style Quoted Reply Banner inside Message */}
                                     {msg.reply_to && !isDeleted && (
-                                      <div className={`mb-2 p-2 rounded-xl text-left text-[11px] leading-snug border-l-3 ${
+                                      <div className={`mb-2 p-2 rounded-xl text-left text-[11px] leading-snug border-l-4 ${
                                         isMine 
-                                          ? 'bg-black/20 border-white/80 text-white' 
-                                          : 'bg-secondary/80 border-primary text-foreground'
+                                          ? 'bg-[#c5f5bd] dark:bg-black/30 border-[#00a884] dark:border-[#25d366] text-[#111b21] dark:text-white' 
+                                          : 'bg-neutral-100 dark:bg-neutral-800/80 border-[#00a884] text-[#111b21] dark:text-foreground'
                                       }`}>
-                                        <div className={`font-semibold text-[10px] flex items-center gap-1 ${isMine ? 'text-white' : 'text-primary'}`}>
+                                        <div className="font-semibold text-[10px] flex items-center gap-1 text-[#00a884] dark:text-[#25d366]">
                                           <Reply className="w-3 h-3" />
                                           <span>{msg.reply_to.sender_name}</span>
                                         </div>
@@ -3588,7 +3686,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
                                     {/* Micro Timestamp & Delivery / Read Receipt */}
                                     <div className={`flex items-center justify-end gap-1 text-[9.5px] sm:text-[10px] mt-1 select-none font-medium tracking-tight ${
-                                      isMine ? 'text-white/80 dark:text-[#8696a0]' : 'text-muted-foreground/80 dark:text-[#8696a0]'
+                                      isMine ? 'text-emerald-950/70 dark:text-[#8696a0]' : 'text-neutral-500 dark:text-[#8696a0]'
                                     }`}>
                                       <span>
                                         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -3601,8 +3699,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                           <CheckCheck
                                             className={`w-3.5 h-3.5 inline ${
                                               (msg.read_by_user_ids && msg.read_by_user_ids.length > 1)
-                                                ? 'text-sky-300 dark:text-[#53bdeb]'
-                                                : 'text-white/70 dark:text-[#8696a0]'
+                                                ? 'text-[#53bdeb]'
+                                                : 'text-emerald-900/60 dark:text-[#8696a0]'
                                             }`}
                                           />
                                         </span>
@@ -3763,7 +3861,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               e.preventDefault();
                               handleSendGroupMessage();
                             }}
-                            className="p-2 sm:p-2.5 bg-card border-t border-border flex items-center gap-1.5 sm:gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+                            className="p-2 sm:p-2.5 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-border flex items-center gap-1.5 sm:gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
                           >
                             <button
                               type="button"
@@ -3771,11 +3869,11 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               title="Quick Reactions"
                               className={`p-2 rounded-full border transition-colors shrink-0 cursor-pointer ${
                                 showGroupEmojiPicker 
-                                  ? 'bg-primary/20 text-primary border-primary/30' 
-                                  : 'bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground border-border'
+                                  ? 'bg-[#00a884]/20 text-[#00a884] border-[#00a884]/40' 
+                                  : 'bg-white dark:bg-[#2a3942] hover:bg-neutral-100 text-muted-foreground hover:text-foreground border-transparent'
                               }`}
                             >
-                              <Smile className="w-4 h-4" />
+                              <Smile className="w-5 h-5" />
                             </button>
 
                             {/* Quick @ Tag button */}
@@ -3788,8 +3886,8 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               title="Tag a group member"
                               className={`p-2 rounded-full border text-xs transition-colors shrink-0 cursor-pointer ${
                                 mentionSuggestionsOpen
-                                  ? 'bg-primary text-primary-foreground border-primary'
-                                  : 'bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground border-border'
+                                  ? 'bg-[#00a884] text-white border-[#00a884]'
+                                  : 'bg-white dark:bg-[#2a3942] hover:bg-neutral-100 text-muted-foreground hover:text-foreground border-transparent'
                               }`}
                             >
                               <AtSign className="w-4 h-4" />
@@ -3800,9 +3898,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               type="button"
                               onClick={() => mediaFileInputRef.current?.click()}
                               title="Attach image, video, audio or document"
-                              className="p-2 rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-primary border border-border transition-colors shrink-0 cursor-pointer"
+                              className="p-2 rounded-full bg-white dark:bg-[#2a3942] hover:bg-neutral-100 dark:hover:bg-[#32444f] text-muted-foreground hover:text-[#00a884] transition-colors shrink-0 cursor-pointer shadow-xs"
                             >
-                              <Paperclip className="w-4 h-4" />
+                              <Paperclip className="w-5 h-5" />
                             </button>
 
                             <input
@@ -3811,16 +3909,31 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               value={groupInputText}
                               onChange={handleGroupInputChange}
                               placeholder={`Message ${activeGroup.name} (type @ to tag)...`}
-                              className="flex-1 min-w-0 max-w-full bg-secondary/80 border border-border rounded-full px-3 sm:px-4 py-2 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1.5 focus:ring-primary shadow-2xs"
+                              className="flex-1 min-w-0 max-w-full bg-white dark:bg-[#2a3942] border-0 rounded-2xl px-3 sm:px-4 py-2.5 text-xs sm:text-sm text-[#111b21] dark:text-[#e9edef] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#00a884] shadow-xs"
                             />
-                            <button
-                              type="submit"
-                              disabled={!groupInputText.trim()}
-                              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary hover:brightness-105 disabled:opacity-40 text-primary-foreground font-semibold flex items-center justify-center transition-all shadow-sm shrink-0 cursor-pointer active:scale-95"
-                              title="Send message"
-                            >
-                              <Send className="w-4 h-4 ml-0.5" />
-                            </button>
+
+                            {groupInputText.trim() ? (
+                              <button
+                                type="submit"
+                                className="w-10 h-10 rounded-full bg-[#00a884] hover:bg-[#02906f] active:scale-95 text-white flex items-center justify-center transition-all shadow-md shrink-0 cursor-pointer"
+                                title="Send message"
+                              >
+                                <Send className="w-4 h-4 ml-0.5" />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={handleVoiceRecordToggle}
+                                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-md shrink-0 cursor-pointer active:scale-95 ${
+                                  isRecordingVoice
+                                    ? 'bg-rose-500 text-white animate-pulse'
+                                    : 'bg-[#00a884] hover:bg-[#02906f] text-white'
+                                }`}
+                                title={isRecordingVoice ? "Recording voice note (tap to send)..." : "Hold or tap to record voice note"}
+                              >
+                                <Mic className="w-4 h-4" />
+                              </button>
+                            )}
                           </form>
                         </>
                       ) : (
@@ -4627,19 +4740,14 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
         />
       )}
 
-      {/* InDrive-Inspired Real-Time VoIP Audio & Video Calling Modal */}
+      {/* InDrive-Inspired Real-Time VoIP Audio Calling Modal */}
       {inDriveCall && inDriveCall.isOpen && (
         <InDriveCallModal
           currentUser={currentUser}
           partnerUser={inDriveCall.partner}
-          callType={inDriveCall.callType}
-          onEndCall={(durationSec, type) => {
-            if (durationSec > 0) {
-              const m = Math.floor(durationSec / 60);
-              const s = durationSec % 60;
-              const durText = `${m}m ${s.toString().padStart(2, '0')}s`;
-              const callMsg = type === 'video' ? `📹 Video Call (${durText})` : `📞 Voice Call (${durText})`;
-              StorageService.sendDirectMessage(currentUser.id, inDriveCall.partner.id, callMsg);
+          onEndCall={(durationSec, callResultText) => {
+            if (callResultText) {
+              StorageService.sendDirectMessage(currentUser.id, inDriveCall.partner.id, callResultText);
               loadDirectMessages(inDriveCall.partner.id);
             }
             setInDriveCall(null);

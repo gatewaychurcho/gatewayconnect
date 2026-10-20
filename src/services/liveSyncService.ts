@@ -48,7 +48,22 @@ export type LiveEventType =
   | 'stream_viewer_joined'
   | 'stream_viewer_left'
   | 'donation'
-  | 'media_library';
+  | 'media_library'
+  | 'call_signal';
+
+export type CallSignalPayload = {
+  callId: string;
+  action: 'offer' | 'ringing' | 'accept' | 'decline' | 'hangup' | 'busy';
+  caller: {
+    id: string;
+    full_name: string;
+    avatar_url?: string;
+    role?: string;
+  };
+  targetUserId: string;
+  channelName?: string;
+  timestamp?: number;
+};
 
 export type LiveEvent = { type: LiveEventType; payload: unknown };
 
@@ -495,11 +510,18 @@ export class LiveSyncService {
     this.applyingRemote = true;
     try {
       StorageService.applyLiveEvent(event.type, event.payload);
+      if (event.type === 'call_signal') {
+        window.dispatchEvent(new CustomEvent('gcz_call_signal', { detail: event.payload }));
+      }
       window.dispatchEvent(new CustomEvent('gcz_live_event_received', { detail: event }));
       window.dispatchEvent(new CustomEvent('gcz_live_state_updated'));
     } finally {
       this.applyingRemote = false;
     }
+  }
+
+  sendCallSignal(payload: CallSignalPayload): void {
+    this.broadcastEvent({ type: 'call_signal', payload });
   }
 
   bindLocalEvents(): () => void {
@@ -529,6 +551,7 @@ export class LiveSyncService {
       ['gcz_stream_viewer_left', 'stream_viewer_left'],
       ['gcz_post_comment_added', 'comment'],
       ['gcz_giving_completed', 'donation'],
+      ['gcz_call_signal_send', 'call_signal'],
     ];
 
     const handlers = eventNames.map(([name, type]) => {

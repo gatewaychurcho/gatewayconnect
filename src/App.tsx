@@ -23,6 +23,7 @@ import { FloatingNotificationToast } from './components/common/FloatingNotificat
 import { FloatingCommentReply } from './components/common/FloatingCommentReply';
 import { LiveSermonModal } from './components/modals/LiveSermonModal';
 import { InstagramProfileModal } from './components/modals/InstagramProfileModal';
+import { InDriveCallModal } from './components/chat/InDriveCallModal';
 import { StorageService } from './services/storageService';
 import { SupabaseSyncService } from './services/supabaseSyncService';
 import { liveSyncService } from './services/liveSyncService';
@@ -94,7 +95,27 @@ export default function App() {
   });
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [showOnboardingModal, setShowOnboardingModal] = useState<boolean>(false);
+  const [incomingCallState, setIncomingCallState] = useState<{ caller: User; callId: string } | null>(null);
 
+  useEffect(() => {
+    if (!currentUser) return;
+    const handleIncomingCall = (e: any) => {
+      const signal = e?.detail;
+      if (!signal) return;
+      if (signal.action === 'offer' && signal.targetUserId === currentUser.id && signal.caller) {
+        setIncomingCallState({
+          caller: signal.caller as User,
+          callId: signal.callId
+        });
+      }
+      if ((signal.action === 'hangup' || signal.action === 'decline') && incomingCallState?.callId === signal.callId) {
+        setIncomingCallState(null);
+      }
+    };
+
+    window.addEventListener('gcz_call_signal', handleIncomingCall);
+    return () => window.removeEventListener('gcz_call_signal', handleIncomingCall);
+  }, [currentUser?.id, incomingCallState?.callId]);
 
   useEffect(() => {
     // Purge any community posts older than 8 days immediately
@@ -831,6 +852,33 @@ export default function App() {
             onClose={() => setShowOnboardingModal(false)}
           />
         </div>
+      )}
+
+      {/* InDrive Real-Time Incoming Voice Call Modal (Global) */}
+      {incomingCallState && currentUser && (
+        <InDriveCallModal
+          currentUser={currentUser}
+          partnerUser={incomingCallState.caller}
+          isIncoming={true}
+          incomingCallId={incomingCallState.callId}
+          onEndCall={(durationSec, resultText) => {
+            if (resultText) {
+              StorageService.sendDirectMessage(
+                incomingCallState.caller.id,
+                currentUser.id,
+                resultText
+              );
+            }
+            setIncomingCallState(null);
+            refreshAppData();
+          }}
+          onAcceptIncoming={() => {
+            // Connected
+          }}
+          onDeclineIncoming={() => {
+            setIncomingCallState(null);
+          }}
+        />
       )}
 
     </div>

@@ -5210,12 +5210,14 @@ export class StorageService {
   static setOverridePlayingVideo(video: { id: string; title: string; youtube_id?: string; video_url?: string; audio_url?: string; thumbnail_url?: string; speaker?: string; series?: string } | null): void {
     if (video) {
       setLocal(KEYS.OVERRIDE_PLAYING_VIDEO, video);
+      this.setShowHomeTopVideo(true);
     } else {
       if (typeof window !== 'undefined' && window.localStorage) {
         try {
           window.localStorage.removeItem(KEYS.OVERRIDE_PLAYING_VIDEO);
         } catch {}
       }
+      this.setShowHomeTopVideo(false);
     }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_override_video_updated', { detail: video }));
@@ -5238,6 +5240,17 @@ export class StorageService {
 
   static setShowHomeTopVideo(show: boolean): void {
     setLocal(KEYS.SHOW_HOME_TOP_VIDEO, show);
+    if (show && !this.getOverridePlayingVideo()) {
+      const live = this.getLiveSermonStatus();
+      this.setOverridePlayingVideo({
+        id: 'featured_top_sermon',
+        title: live.title || 'Supernatural Acceleration & Divine Wisdom',
+        youtube_id: '-CibsaxijIk',
+        video_url: live.streamUrl || 'https://youtu.be/-CibsaxijIk',
+        speaker: 'Apostle Joe Daniels',
+        series: 'Apostolic Decree'
+      });
+    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_show_home_top_video_updated', { detail: show }));
     }
