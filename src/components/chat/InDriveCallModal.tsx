@@ -132,13 +132,10 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
       // Handle remote incoming audio stream
       pc.ontrack = (event) => {
         if (event.streams && event.streams[0]) {
-          if (!remoteAudioRef.current) {
-            const audioEl = new Audio();
-            audioEl.autoplay = true;
-            remoteAudioRef.current = audioEl;
+          if (remoteAudioRef.current) {
+            remoteAudioRef.current.srcObject = event.streams[0];
+            remoteAudioRef.current.play().catch(() => {});
           }
-          remoteAudioRef.current.srcObject = event.streams[0];
-          remoteAudioRef.current.play().catch(() => {});
         }
       };
 
@@ -256,9 +253,13 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
       }
 
       // When SDP offer arrives (on receiver side)
-      if ((signal.action as any) === 'offer_sdp' && signal.sdp && peerConnectionRef.current) {
-        peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp)).then(async () => {
+      if ((signal.action as any) === 'offer_sdp' && signal.sdp) {
+        const processOffer = async () => {
+          if (!peerConnectionRef.current) {
+            await setupWebRTC(false);
+          }
           if (peerConnectionRef.current) {
+            await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
             const answer = await peerConnectionRef.current.createAnswer();
             await peerConnectionRef.current.setLocalDescription(answer);
             liveSyncService.sendCallSignal({
@@ -269,7 +270,8 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
               sdp: answer
             } as any);
           }
-        }).catch(() => {});
+        };
+        processOffer().catch(() => {});
       }
 
       // When SDP answer arrives (on caller side)
@@ -483,6 +485,9 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
       className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-between p-6 sm:p-8 text-white select-none animate-in fade-in duration-200"
       onClick={(e) => e.stopPropagation()}
     >
+      {/* Hidden in-DOM audio element for mobile & web audio streams */}
+      <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
+
       {/* Background ambient lighting ripple */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse" />

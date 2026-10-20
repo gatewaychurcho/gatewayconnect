@@ -1423,7 +1423,7 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
             className="w-full max-w-md bg-card border border-primary/40 rounded-3xl shadow-2xl p-5 sm:p-6 space-y-4 text-center relative overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-primary/20 to-blue-500/20 border border-primary/40 text-primary mx-auto flex items-center justify-center shadow-lg">
+            <div className="w-14 h-14 rounded-2xl bg-primary/15 border border-primary/40 text-primary mx-auto flex items-center justify-center shadow-lg">
               <Crown className="w-8 h-8 text-primary animate-pulse" />
             </div>
 

@@ -1410,7 +1410,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                     }}
                     className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group"
                   >
-                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform">
+                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full p-[2px] bg-primary/40 border border-primary/60 group-hover:scale-105 transition-transform">
                       <div className="w-full h-full rounded-full p-[1.5px] bg-card">
                         <img
                           src={avatar}
@@ -2201,7 +2201,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
               <Users className="w-7 h-7" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-foreground font-serif-church font-bold text-lg">Fellowship Groups Are Protected</h3>
+              <h3 className="text-foreground font-bold text-lg">Fellowship Groups Are Protected</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Cell ministrations, location branches, and youth fellowships are private community spaces reserved for verified Gateway Cathedral members. Please log in or create an account to view and participate in church groups.
               </p>
@@ -3609,7 +3609,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   <Calendar className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm sm:text-base text-foreground font-serif-church">
+                  <h3 className="font-bold text-sm sm:text-base text-foreground">
                     {editingEvent ? 'Edit Church Event' : 'Schedule Church / Mentorship Event'}
                   </h3>
                   <p className="text-[11px] text-muted-foreground">Admin & Developer Governance</p>

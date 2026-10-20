@@ -593,7 +593,6 @@ export const StoreTab: React.FC<StoreTabProps> = ({ products, onDonationSuccess 
                   <p className="text-xs font-bold text-foreground">Harare Dispatch <span className="text-emerald-500 font-bold">• Active</span></p>
                 </div>
               </div>
-              </div>
             </div>
           </div>
 
