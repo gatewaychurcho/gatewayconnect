@@ -5,6 +5,8 @@
  * Project: joedaniels-chat
  */
 
+import { getApiUrl } from './apiConfig';
+
 export const AGORA_APP_ID = 'fd0f715b597a4263a736f5ac20473f73';
 export const AGORA_PRIMARY_CERTIFICATE = 'c948a6d9956c4837ac9c33eb63b30e0e';
 
@@ -49,7 +51,7 @@ class AgoraService {
    */
   async getRtcToken(channel: string, uid: string | number): Promise<string | null> {
     try {
-      const res = await fetch(`/api/agora/token?channel=${encodeURIComponent(channel)}&uid=${encodeURIComponent(uid)}&role=publisher`);
+      const res = await fetch(getApiUrl(`/api/agora/token?channel=${encodeURIComponent(channel)}&uid=${encodeURIComponent(uid)}&role=publisher`));
       if (res.ok) {
         const data = await res.json();
         return data.token || null;

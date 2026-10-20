@@ -2787,7 +2787,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           className="flex items-center gap-2.5 text-left p-1 rounded-xl hover:bg-secondary/60 transition-colors cursor-pointer min-w-0"
                           title="View profile"
                         >
-                          <div className="relative p-[2px] rounded-full bg-gradient-to-tr from-amber-500 via-rose-500 to-primary shrink-0 shadow-xs">
+                          <div className="relative p-[2px] rounded-full bg-primary/40 border border-primary/60 shrink-0 shadow-xs">
                             <div className="relative w-10 h-10 rounded-full border border-card overflow-hidden bg-secondary flex items-center justify-center text-xs font-bold text-primary">
                               {activeUser.avatar_url ? (
                                 <img src={activeUser.avatar_url} alt={activeUser.full_name} className="w-full h-full object-cover" />

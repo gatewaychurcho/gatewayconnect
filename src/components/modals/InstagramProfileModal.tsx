@@ -794,7 +794,7 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
                       handleOpenDirectPhotoChange();
                     }
                   }}
-                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 shadow-md cursor-pointer transition-transform hover:scale-105"
+                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-full p-[2px] bg-primary/40 border border-primary/60 shadow-md cursor-pointer transition-transform hover:scale-105"
                   title={isMe ? 'Tap to view story or update photo' : 'Tap to view story'}
                 >
                   <div className="w-full h-full rounded-full p-[1.5px] bg-background">
@@ -1104,7 +1104,7 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
                       onClick={() => setActiveStoryHighlight(h)}
                       className="flex flex-col items-center gap-1 shrink-0 cursor-pointer group"
                     >
-                      <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform shadow-xs">
+                      <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full p-[2px] bg-primary/40 border border-primary/60 group-hover:scale-105 transition-transform shadow-xs">
                         <div className="w-full h-full rounded-full overflow-hidden p-[1px] bg-background">
                           <img
                             src={h.img}
@@ -1713,7 +1713,7 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
 
               {activeStoryHighlight.snippetText && (
                 <div className="absolute bottom-4 left-3 right-3 sm:left-6 sm:right-6 p-3 sm:p-4 bg-black/75 backdrop-blur-md rounded-xl border border-white/20 text-center space-y-1 shadow-xl">
-                  <p className="font-serif-church text-xs sm:text-sm text-white italic leading-relaxed">
+                  <p className="text-xs sm:text-sm text-white italic leading-relaxed">
                     "{activeStoryHighlight.snippetText}"
                   </p>
                   {activeStoryHighlight.scriptureRef && (
@@ -1726,7 +1726,7 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
             </div>
 
             {/* Bottom Caption Bar */}
-            <div className="text-center py-2 shrink-0 text-white/90 font-serif-church text-sm bg-black/40 backdrop-blur-md rounded-xl p-2.5 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+            <div className="text-center py-2 shrink-0 text-white/90 text-sm bg-black/40 backdrop-blur-md rounded-xl p-2.5 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
               <div className="text-left">
                 <p className="font-bold text-xs sm:text-sm">{activeStoryHighlight.title}</p>
                 <p className="text-[10px] text-primary">Gateway International Church Harare</p>

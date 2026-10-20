@@ -438,7 +438,7 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
             
             {/* Instagram Profile Avatar with Story-Ring & Camera Change Badge */}
             <div className="relative mb-2 group/avatar">
-              <div className="p-1 rounded-full bg-gradient-to-tr from-amber-500 via-rose-500 to-amber-400 shadow-md">
+              <div className="p-1 rounded-full bg-primary/40 border border-primary/60 shadow-md">
                 <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-secondary border-2 border-card flex items-center justify-center text-2xl sm:text-3xl font-extrabold text-primary shadow-inner">
                   {group.avatar_url ? (
                     <img 

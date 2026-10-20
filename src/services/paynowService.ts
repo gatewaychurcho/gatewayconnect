@@ -1,5 +1,6 @@
 import { StorageService } from './storageService';
 import { PaynowConfig } from '../types';
+import { getApiUrl } from './apiConfig';
 
 export interface PaynowInitiateParams {
   reference: string;
@@ -214,7 +215,7 @@ export class PaynowService {
       // Try local proxy poll endpoint first to avoid CORS in browser
       let response: Response;
       try {
-        response = await fetch(`/api/paynow/poll?url=${encodeURIComponent(pollUrl)}`);
+        response = await fetch(getApiUrl(`/api/paynow/poll?url=${encodeURIComponent(pollUrl)}`));
         if (response.ok) {
           const data = await response.json();
           return data;

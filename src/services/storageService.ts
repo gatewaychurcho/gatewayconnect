@@ -73,6 +73,7 @@ import { DEFAULT_SERMON_CATEGORIES, INITIAL_EXTENDED_SERMONS } from '../data/ser
 import { CONFIG } from '../../config';
 import { LocalMediaStore } from './localMediaStore';
 import { liveSyncService } from './liveSyncService';
+import { getApiUrl } from './apiConfig';
 
 export interface ResolvedFacebookInfo {
   success: boolean;
@@ -427,7 +428,9 @@ export class StorageService {
         const effectiveId = (u.id === 'usr_daniels' || u.id === 'usr_pastor_joe') ? 'usr_apostle_joe' : u.id;
         const realFollowersCount = followRecords.filter(r => r.following_id === effectiveId || r.following_id === u.id).length;
         const realFollowingCount = followRecords.filter(r => r.follower_id === effectiveId || r.follower_id === u.id).length;
-        u.followers_count = realFollowersCount;
+        u.followers_count = (u.id === 'usr_developer' || u.role === 'developer' || u.id === 'usr_apostle_joe')
+          ? Math.max(36, realFollowersCount)
+          : realFollowersCount;
         u.following_count = realFollowingCount;
       });
     } catch (e) {
@@ -529,7 +532,7 @@ export class StorageService {
   static async syncUserToCloudflareR2(user: User): Promise<void> {
     try {
       if (typeof fetch === 'undefined') return;
-      await fetch('/api/db/sync?collection=users', {
+      await fetch(getApiUrl('/api/db/sync?collection=users'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'upsert', data: user })
@@ -540,7 +543,7 @@ export class StorageService {
   static async fetchCloudflareR2Users(): Promise<User[]> {
     try {
       if (typeof fetch === 'undefined') return [];
-      const res = await fetch('/api/db/sync?collection=users', { method: 'GET' });
+      const res = await fetch(getApiUrl('/api/db/sync?collection=users'), { method: 'GET' });
       if (!res.ok) return [];
       const json = await res.json();
       return Array.isArray(json.data) ? json.data : [];
@@ -552,7 +555,7 @@ export class StorageService {
   static async syncPostToCloudflareR2(post: Testimony): Promise<void> {
     try {
       if (typeof fetch === 'undefined') return;
-      await fetch('/api/db/sync?collection=posts', {
+      await fetch(getApiUrl('/api/db/sync?collection=posts'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'upsert', data: post })
@@ -563,7 +566,7 @@ export class StorageService {
   static async syncDeletePostFromCloudflareR2(postId: string): Promise<void> {
     try {
       if (typeof fetch === 'undefined') return;
-      await fetch('/api/db/sync?collection=posts', {
+      await fetch(getApiUrl('/api/db/sync?collection=posts'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete', id: postId })
@@ -574,7 +577,7 @@ export class StorageService {
   static async fetchCloudflareR2Posts(): Promise<Testimony[]> {
     try {
       if (typeof fetch === 'undefined') return [];
-      const res = await fetch('/api/db/sync?collection=posts', { method: 'GET' });
+      const res = await fetch(getApiUrl('/api/db/sync?collection=posts'), { method: 'GET' });
       if (!res.ok) return [];
       const json = await res.json();
       return Array.isArray(json.data) ? json.data : [];
@@ -616,6 +619,7 @@ export class StorageService {
   static async syncUsersWithRemote(): Promise<void> {
     try {
       const localUsers = this.getAllUsers();
+      const customAvatars = this.getPermanentCustomAvatars();
 
       // 1. First sync with Cloudflare R2 users database (primary reliable document store)
       const r2Users = await this.fetchCloudflareR2Users();
@@ -624,17 +628,21 @@ export class StorageService {
         for (const ru of r2Users) {
           const localIdx = localUsers.findIndex(u => u.id === ru.id || arePhoneNumbersEqual(u.phone, ru.phone));
           if (localIdx >= 0) {
+            const preservedAvatar = customAvatars[localUsers[localIdx].id] || customAvatars[localUsers[localIdx].phone] || ru.avatar_url || localUsers[localIdx].avatar_url;
             localUsers[localIdx] = {
               ...localUsers[localIdx],
-              avatar_url: ru.avatar_url || localUsers[localIdx].avatar_url,
+              avatar_url: preservedAvatar,
               full_name: ru.full_name || localUsers[localIdx].full_name,
               handle: ru.handle || localUsers[localIdx].handle,
               role: ru.role || localUsers[localIdx].role,
               is_verified: ru.is_verified !== undefined ? ru.is_verified : localUsers[localIdx].is_verified,
               badge_type: ru.badge_type || localUsers[localIdx].badge_type,
-              followers_count: ru.followers_count || localUsers[localIdx].followers_count,
-              following_count: ru.following_count || localUsers[localIdx].following_count
+              followers_count: Math.max(localUsers[localIdx].followers_count || 36, ru.followers_count || 0),
+              following_count: Math.max(localUsers[localIdx].following_count || 0, ru.following_count || 0)
             };
+            if (ru.avatar_url) {
+              this.setPermanentCustomAvatar(localUsers[localIdx].id, localUsers[localIdx].phone, ru.avatar_url);
+            }
             changed = true;
           } else {
             localUsers.push(ru);
@@ -665,23 +673,24 @@ export class StorageService {
         SupabaseSyncService.syncUser(devUser).catch(() => {});
       }
 
-      // 3. Pull remote users from Supabase (if restored)
+      // 3. Pull remote users from Supabase (if restored, but never downgrade followers or overwrite recent profile photos)
       const remoteUsers = await SupabaseSyncService.pullUsersFromSupabase();
       if (!remoteUsers || remoteUsers.length === 0) return;
       let changed = false;
       for (const ru of remoteUsers) {
         const localIdx = localUsers.findIndex(u => u.id === ru.id || arePhoneNumbersEqual(u.phone, ru.phone));
         if (localIdx >= 0) {
+          const preservedAvatar = customAvatars[localUsers[localIdx].id] || customAvatars[localUsers[localIdx].phone] || localUsers[localIdx].avatar_url || ru.avatar_url;
           localUsers[localIdx] = {
             ...localUsers[localIdx],
-            avatar_url: ru.avatar_url || localUsers[localIdx].avatar_url,
-            full_name: ru.full_name || localUsers[localIdx].full_name,
-            handle: ru.handle || localUsers[localIdx].handle,
-            role: ru.role || localUsers[localIdx].role,
-            is_verified: ru.is_verified !== undefined ? ru.is_verified : localUsers[localIdx].is_verified,
-            badge_type: ru.badge_type || localUsers[localIdx].badge_type,
-            followers_count: ru.followers_count || localUsers[localIdx].followers_count,
-            following_count: ru.following_count || localUsers[localIdx].following_count
+            avatar_url: preservedAvatar,
+            full_name: localUsers[localIdx].full_name || ru.full_name,
+            handle: localUsers[localIdx].handle || ru.handle,
+            role: localUsers[localIdx].role || ru.role,
+            is_verified: localUsers[localIdx].is_verified !== undefined ? localUsers[localIdx].is_verified : ru.is_verified,
+            badge_type: localUsers[localIdx].badge_type || ru.badge_type,
+            followers_count: Math.max(localUsers[localIdx].followers_count || 36, ru.followers_count || 0),
+            following_count: Math.max(localUsers[localIdx].following_count || 0, ru.following_count || 0)
           };
           changed = true;
         } else {
@@ -696,7 +705,7 @@ export class StorageService {
           const match = remoteUsers.find(ru => ru.id === cur.id || arePhoneNumbersEqual(ru.phone, cur.phone));
           if (match) {
             const updatedCur = { ...cur, ...match };
-            if (match.avatar_url) updatedCur.avatar_url = match.avatar_url;
+            if (match.avatar_url && !customAvatars[cur.id]) updatedCur.avatar_url = match.avatar_url;
             setLocal(KEYS.CURRENT_USER, updatedCur);
           }
         }
@@ -1365,71 +1374,72 @@ export class StorageService {
 
   // DEDICATED USER FOLLOWS TABLE PERSISTENCE
   static getUserFollowsRecords(): { follower_id: string; following_id: string; created_at: string }[] {
-    const defaultFollows = [
-      { follower_id: 'usr_tinashe', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_tinashe', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_developer', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_pastor_tendai', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_pastor_tendai', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_pastor_grace', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_pastor_grace', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_chipo', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_chipo', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_kuda', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_kuda', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_tatenda', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_tatenda', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_nyasha', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_nyasha', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_farai', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_farai', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_1789657530055', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_1789657530055', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_rutendo_ndlovu', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_rutendo_ndlovu', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_simba_hove', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_simba_hove', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_tariro_mutasa', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_blessings_sibanda', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_blessings_sibanda', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_anesu_sithole', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_privilege_makoni', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_privilege_makoni', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_tapiwa_muzenda', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_tapiwa_muzenda', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_nokuthula_moyo', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_rumbidzai_marufu', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_munyaradzi_chigumba', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_gamuchirai_kaseke', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_gamuchirai_kaseke', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_takudzwa_dube', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_fadzai_mashingaidze', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_panashe_nyoni', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_vimbai_zhou', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_knowledge_matarise', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_chengetai_shumba', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_shalom_chimedza', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_tendekai_mupfumi', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_tsitsi_gava', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_mthokozisi_nkomo', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_praise_magaya', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_apostle_joe', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_apostle_joe', following_id: 'usr_prophetess_melinda', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_prophetess_melinda', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_prophetess_melinda', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_pastor_easter', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' },
-      { follower_id: 'usr_pastor_easter', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' }
+    const ALL_CHURCH_MEMBER_IDS = [
+      'usr_apostle_joe',
+      'usr_prophetess_melinda',
+      'usr_pastor_easter',
+      'usr_pastor_tendai',
+      'usr_pastor_grace',
+      'usr_tinashe',
+      'usr_chipo',
+      'usr_kuda',
+      'usr_tatenda',
+      'usr_nyasha',
+      'usr_farai',
+      'usr_1789657530055',
+      'usr_rutendo_ndlovu',
+      'usr_simba_hove',
+      'usr_tariro_mutasa',
+      'usr_blessings_sibanda',
+      'usr_anesu_sithole',
+      'usr_privilege_makoni',
+      'usr_tapiwa_muzenda',
+      'usr_nokuthula_moyo',
+      'usr_rumbidzai_marufu',
+      'usr_munyaradzi_chigumba',
+      'usr_gamuchirai_kaseke',
+      'usr_takudzwa_dube',
+      'usr_fadzai_mashingaidze',
+      'usr_panashe_nyoni',
+      'usr_vimbai_zhou',
+      'usr_knowledge_matarise',
+      'usr_chengetai_shumba',
+      'usr_shalom_chimedza',
+      'usr_tendekai_mupfumi',
+      'usr_tsitsi_gava',
+      'usr_mthokozisi_nkomo',
+      'usr_praise_magaya',
+      'usr_guest'
     ];
+
+    const defaultFollows: { follower_id: string; following_id: string; created_at: string }[] = [];
+    for (const memId of ALL_CHURCH_MEMBER_IDS) {
+      defaultFollows.push({ follower_id: memId, following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' });
+      defaultFollows.push({ follower_id: memId, following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' });
+    }
+    // Cross-leader follows
+    defaultFollows.push({ follower_id: 'usr_developer', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' });
+    defaultFollows.push({ follower_id: 'usr_apostle_joe', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' });
+    defaultFollows.push({ follower_id: 'usr_apostle_joe', following_id: 'usr_prophetess_melinda', created_at: '2026-01-01T00:00:00Z' });
+    defaultFollows.push({ follower_id: 'usr_prophetess_melinda', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' });
+    defaultFollows.push({ follower_id: 'usr_prophetess_melinda', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' });
+    defaultFollows.push({ follower_id: 'usr_pastor_easter', following_id: 'usr_apostle_joe', created_at: '2026-01-01T00:00:00Z' });
+    defaultFollows.push({ follower_id: 'usr_pastor_easter', following_id: 'usr_developer', created_at: '2026-01-01T00:00:00Z' });
+
     let records = getLocal<{ follower_id: string; following_id: string; created_at: string }[] | null>(KEYS.USER_FOLLOWS_TABLE, null);
-    if (!records || records.length < 30) {
-      const existingSet = new Set((records || []).map(r => `${r.follower_id}_${r.following_id}`));
-      records = records ? [...records] : [];
-      for (const df of defaultFollows) {
-        if (!existingSet.has(`${df.follower_id}_${df.following_id}`)) {
-          records.push(df);
-          existingSet.add(`${df.follower_id}_${df.following_id}`);
-        }
+    const existingSet = new Set((records || []).map(r => `${r.follower_id}_${r.following_id}`));
+    let changed = !records;
+    records = records ? [...records] : [];
+
+    for (const df of defaultFollows) {
+      const key = `${df.follower_id}_${df.following_id}`;
+      if (!existingSet.has(key)) {
+        records.push(df);
+        existingSet.add(key);
+        changed = true;
       }
+    }
+    if (changed) {
       setLocal(KEYS.USER_FOLLOWS_TABLE, records);
     }
     return records;
@@ -3697,7 +3707,7 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     // 2. If not found locally, query remote Cloudflare R2 verify_login endpoint
     try {
       if (typeof fetch !== 'undefined') {
-        const resp = await fetch('/api/db/sync?collection=users', {
+        const resp = await fetch(getApiUrl('/api/db/sync?collection=users'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -5694,7 +5704,7 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     }
 
     try {
-      const resp = await fetch(`/api/facebook/resolve?url=${encodeURIComponent(trimmed)}`);
+      const resp = await fetch(getApiUrl(`/api/facebook/resolve?url=${encodeURIComponent(trimmed)}`));
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data: ResolvedFacebookInfo = await resp.json();
       if (data && data.success) {
