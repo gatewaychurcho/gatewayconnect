@@ -24,7 +24,7 @@ import { FloatingCommentReply } from './components/common/FloatingCommentReply';
 import { LiveSermonModal } from './components/modals/LiveSermonModal';
 import { InstagramProfileModal } from './components/modals/InstagramProfileModal';
 import { InDriveCallModal } from './components/chat/InDriveCallModal';
-import { StorageService } from './services/storageService';
+import { StorageService, arePhoneNumbersEqual } from './services/storageService';
 import { SupabaseSyncService } from './services/supabaseSyncService';
 import { liveSyncService } from './services/liveSyncService';
 import { 
@@ -107,7 +107,7 @@ export default function App() {
       const signal = e?.detail;
       if (!signal) return;
       const isTarget = signal.targetUserId === currentUser.id || 
-                       (currentUser.phone && signal.targetUserId === currentUser.phone) ||
+                       (currentUser.phone && arePhoneNumbersEqual(currentUser.phone, signal.targetUserId)) ||
                        (currentUser.handle && signal.targetUserId === currentUser.handle) ||
                        (currentUser.phone && typeof signal.targetUserId === 'string' && signal.targetUserId.replace(/[^0-9]/g, '') === currentUser.phone.replace(/[^0-9]/g, ''));
 
@@ -325,7 +325,12 @@ export default function App() {
         StorageService.receiveIncomingGroupMessage(incomingGroupMsg);
         refreshAppData();
       },
-      onUserProfileUpdated: () => {
+      onUserProfileUpdated: (updatedUser) => {
+        const cur = StorageService.getCurrentUser();
+        if (cur && updatedUser && (cur.id === updatedUser.id || (cur.phone && updatedUser.phone && arePhoneNumbersEqual(cur.phone, updatedUser.phone)))) {
+          const fresh = { ...cur, ...updatedUser };
+          setCurrentUser(fresh);
+        }
         refreshAppData();
       },
       onFollowUpdated: () => {

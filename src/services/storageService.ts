@@ -718,7 +718,8 @@ export class StorageService {
           if (!ru || !ru.id) continue;
           const localIdx = localUsers.findIndex(u => u.id === ru.id || arePhoneNumbersEqual(u.phone, ru.phone));
           if (localIdx >= 0) {
-            const preservedAvatar = customAvatars[localUsers[localIdx].id] || customAvatars[localUsers[localIdx].phone] || ru.avatar_url || localUsers[localIdx].avatar_url;
+            const hasCustom = customAvatars[localUsers[localIdx].id] || customAvatars[localUsers[localIdx].phone];
+            const preservedAvatar = hasCustom || localUsers[localIdx].avatar_url || ru.avatar_url;
             localUsers[localIdx] = {
               ...localUsers[localIdx],
               avatar_url: preservedAvatar,
@@ -730,7 +731,7 @@ export class StorageService {
               followers_count: ru.followers_count !== undefined ? ru.followers_count : (localUsers[localIdx].followers_count || 0),
               following_count: ru.following_count !== undefined ? ru.following_count : (localUsers[localIdx].following_count || 0)
             };
-            if (ru.avatar_url) {
+            if (!hasCustom && ru.avatar_url) {
               this.setPermanentCustomAvatar(localUsers[localIdx].id, localUsers[localIdx].phone, ru.avatar_url);
             }
             changed = true;
@@ -745,8 +746,8 @@ export class StorageService {
           if (cur) {
             const match = r2Users.find(ru => ru.id === cur.id || arePhoneNumbersEqual(ru.phone, cur.phone));
             if (match) {
-              const updatedCur = { ...cur, ...match };
-              if (match.avatar_url) updatedCur.avatar_url = match.avatar_url;
+              const customAvatar = customAvatars[cur.id] || customAvatars[cur.phone] || cur.avatar_url;
+              const updatedCur = { ...cur, ...match, avatar_url: customAvatar || match.avatar_url };
               setLocal(KEYS.CURRENT_USER, updatedCur);
             }
           }
@@ -962,12 +963,13 @@ export class StorageService {
     if (!curr) return null;
     if (updates.avatar_url) {
       this.setPermanentCustomAvatar(curr.id, curr.phone, updates.avatar_url);
+      SupabaseSyncService.syncProfilePicture(curr.id, updates.avatar_url).catch(() => {});
     }
     const updated: User = { ...curr, ...updates };
     this.setCurrentUser(updated);
     this.saveUser(updated);
 
-    // Sync to Supabase Postgres real-time
+    // 1. Sync to Supabase Postgres real-time
     const supabase = getSupabase();
     if (supabase) {
       const dbPayload = {
@@ -981,7 +983,22 @@ export class StorageService {
       supabase.from('users').update(dbPayload).eq('id', curr.id).then(({ error }) => {
         if (error) console.warn('Failed to sync profile update to Supabase:', error);
       });
+      if (curr.phone) {
+        supabase.from('users').update(dbPayload).eq('phone', curr.phone).catch(() => {});
+      }
     }
+    SupabaseSyncService.syncUserProfile(updated).catch(() => {});
+
+    // 2. Sync to Cloudflare R2 / Serverless document store immediately
+    try {
+      if (typeof fetch !== 'undefined') {
+        fetch(getApiUrl('/api/db/sync?collection=users'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'upsert', data: updated })
+        }).catch(() => {});
+      }
+    } catch {}
 
     // Update authored testimonies and comments across app in real time
     try {
@@ -5099,15 +5116,30 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     }
 
     if (!userId) return list;
-    return list.filter(c => c.caller_id === userId || c.receiver_id === userId);
+    const allUsers = this.getAllUsers();
+    const user = allUsers.find(u => u.id === userId || (u.phone && arePhoneNumbersEqual(u.phone, userId)));
+    const matchesUser = (id?: string) => {
+      if (!id) return false;
+      if (id === userId) return true;
+      if (user && (id === user.id || arePhoneNumbersEqual(id, user.phone))) return true;
+      return false;
+    };
+    return list.filter(c => matchesUser(c.caller_id) || matchesUser(c.receiver_id));
   }
 
   static saveCallLog(logData: Omit<CallLog, 'id' | 'created_at'>): CallLog {
     const list = this.getCallLogs();
-    const newLog: CallLog = {
+    const id = `call_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const created_at = new Date().toISOString();
+    const newLog: any = {
       ...logData,
-      id: `call_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      created_at: new Date().toISOString()
+      id,
+      created_at,
+      partner_id: logData.receiver_id,
+      partner_name: logData.receiver_name,
+      partner_avatar: logData.receiver_avatar,
+      duration_sec: logData.duration_seconds,
+      timestamp: created_at
     };
     list.unshift(newLog);
     if (list.length > 100) list.length = 100;
@@ -5115,7 +5147,7 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gcz_call_logs_updated', { detail: newLog }));
     }
-    return newLog;
+    return newLog as CallLog;
   }
 
   static clearCallLogs(userId?: string): void {

@@ -31,6 +31,19 @@ export interface InDriveCallModalProps {
   onDeclineIncoming?: () => void;
 }
 
+// Crystal-Clear Opus Audio SDP Optimizer (Eliminates distortion, muffled sound, robotic echo)
+const tuneOpusSdp = (sdp?: string): string => {
+  if (!sdp) return sdp || '';
+  let res = sdp;
+  if (res.includes('opus/48000')) {
+    res = res.replace(
+      /a=fmtp:111 ((?:(?!minptime).)*)/g,
+      'a=fmtp:111 minptime=10;useinbandfec=1;maxaveragebitrate=64000;stereo=0;sprop-stereo=0;cbr=1'
+    );
+  }
+  return res;
+};
+
 export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
   currentUser,
   partnerUser,
@@ -139,7 +152,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
       });
       peerConnectionRef.current = pc;
 
-      // Handle remote incoming audio stream
+      // Handle remote incoming audio stream with high fidelity playback
       pc.ontrack = (event) => {
         console.log('[WebRTC] Received remote track:', event.track.kind);
         const incomingStream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track]);
@@ -175,15 +188,18 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
         }
       };
 
-      // Get local microphone stream with professional acoustic echo cancellation & noise suppression
+      // Get local microphone stream with 48kHz mono speech constraints (avoids phase cancellation & flanging)
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         try {
           if (!localStreamRef.current) {
             const stream = await navigator.mediaDevices.getUserMedia({
               audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
+                echoCancellation: { ideal: true },
+                noiseSuppression: { ideal: true },
+                autoGainControl: { ideal: true },
+                sampleRate: { ideal: 48000 },
+                channelCount: { ideal: 1 },
+                latency: { ideal: 0.01 }
               },
               video: false
             });
@@ -202,7 +218,9 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
           offerToReceiveAudio: true,
           offerToReceiveVideo: false
         });
-        await pc.setLocalDescription(offer);
+        const tunedOfferSdp = tuneOpusSdp(offer.sdp);
+        const finalOffer = new RTCSessionDescription({ type: offer.type, sdp: tunedOfferSdp });
+        await pc.setLocalDescription(finalOffer);
         liveSyncService.sendCallSignal({
           callId,
           action: 'offer_sdp' as any,
@@ -212,7 +230,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
             avatar_url: currentUser.avatar_url
           },
           targetUserId: partnerUser.id,
-          sdp: offer
+          sdp: finalOffer
         } as any);
       }
     } catch (err) {
@@ -305,13 +323,15 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
             const answer = await pc.createAnswer({
               offerToReceiveAudio: true
             });
-            await pc.setLocalDescription(answer);
+            const tunedAnswerSdp = tuneOpusSdp(answer.sdp);
+            const finalAnswer = new RTCSessionDescription({ type: answer.type, sdp: tunedAnswerSdp });
+            await pc.setLocalDescription(finalAnswer);
             liveSyncService.sendCallSignal({
               callId,
               action: 'answer_sdp' as any,
               caller: { id: currentUser.id, full_name: currentUser.full_name },
               targetUserId: partnerUser.id,
-              sdp: answer
+              sdp: finalAnswer
             } as any);
           }
         };
@@ -541,119 +561,110 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // WhatsApp-style Minimized Floating Call Bar (PIP mode)
-  if (isMinimized) {
-    return (
-      <div 
-        className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-[95%] max-w-md bg-slate-900/95 backdrop-blur-2xl border border-emerald-500/40 shadow-2xl rounded-2xl p-2.5 sm:p-3 flex items-center justify-between text-white animate-in slide-in-from-top-4 duration-200 select-none cursor-pointer"
-        onClick={() => setIsMinimized(false)}
-      >
-        {/* Real in-DOM audio element for mobile & web audio streams - MUST REMAIN MOUNTED & DECODING */}
-        <audio 
-          ref={remoteAudioRef} 
-          autoPlay 
-          playsInline 
-          style={{ position: 'fixed', top: -9999, left: -9999, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }} 
-        />
-
-        {/* Left: Caller Avatar + Name + Pulse + Timer */}
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="relative">
-            <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-800 border-2 border-emerald-500/60 flex items-center justify-center shrink-0">
-              {partnerUser?.avatar_url ? (
-                <img src={partnerUser.avatar_url} alt={partnerUser?.full_name} className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-xs font-bold text-white/80">{(partnerUser?.full_name || 'GC').slice(0, 2).toUpperCase()}</span>
-              )}
-            </div>
-            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-slate-900 animate-pulse" />
-          </div>
-
-          <div className="min-w-0">
-            <div className="text-xs font-bold truncate text-white flex items-center gap-1.5">
-              <span className="truncate">{partnerUser?.full_name || 'Voice Call'}</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                {callStatus === 'connected' ? 'In Call' : callStatus === 'incoming' ? 'Incoming...' : 'Calling...'}
-              </span>
-            </div>
-            <div className="text-[11px] font-mono text-emerald-400 flex items-center gap-1 mt-0.5">
-              <Clock className="w-3 h-3" />
-              <span>{callStatus === 'connected' ? formatTimer(durationSeconds) : 'Connecting...'}</span>
-              <span className="text-[10px] text-white/50 ml-1">(Tap to expand)</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Quick Controls */}
-        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-          {callStatus === 'incoming' ? (
-            <>
-              <button
-                type="button"
-                onClick={handleDecline}
-                className="w-9 h-9 rounded-full bg-rose-600 hover:bg-rose-700 active:scale-95 text-white flex items-center justify-center shadow-lg transition-all cursor-pointer"
-                title="Decline"
-              >
-                <PhoneOff className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={handleAccept}
-                className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white flex items-center justify-center shadow-lg transition-all cursor-pointer animate-bounce"
-                title="Accept"
-              >
-                <Phone className="w-4 h-4" />
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={handleToggleMute}
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer ${
-                  isMuted ? 'bg-rose-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'
-                }`}
-                title={isMuted ? 'Unmute' : 'Mute'}
-              >
-                {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleHangUp('normal')}
-                className="w-9 h-9 rounded-full bg-rose-600 hover:bg-rose-700 active:scale-95 text-white flex items-center justify-center shadow-lg shadow-rose-600/40 transition-all cursor-pointer"
-                title="End Call"
-              >
-                <PhoneOff className="w-4 h-4" />
-              </button>
-            </>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setIsMinimized(false)}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all cursor-pointer ml-0.5"
-            title="Expand to Full Screen"
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+  // WhatsApp-style Persistent Audio & Rendering (PIP mode + Full Screen)
   return (
-    <div 
-      className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-between p-6 sm:p-8 text-white select-none animate-in fade-in duration-200"
-      onClick={(e) => e.stopPropagation()}
-    >
-      {/* Real in-DOM audio element for mobile & web audio streams - MUST REMAIN MOUNTED & DECODING */}
+    <>
+      {/* Real in-DOM audio element for mobile & web audio streams - PERSISTENT & NEVER UNMOUNTS */}
       <audio 
         ref={remoteAudioRef} 
         autoPlay 
         playsInline 
         style={{ position: 'fixed', top: -9999, left: -9999, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }} 
       />
+
+      {isMinimized ? (
+        <div 
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-[95%] max-w-md bg-slate-900/95 backdrop-blur-2xl border border-emerald-500/40 shadow-2xl rounded-2xl p-2.5 sm:p-3 flex items-center justify-between text-white animate-in slide-in-from-top-4 duration-200 select-none cursor-pointer"
+          onClick={() => setIsMinimized(false)}
+        >
+          {/* Left: Caller Avatar + Name + Pulse + Timer */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="relative">
+              <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-800 border-2 border-emerald-500/60 flex items-center justify-center shrink-0">
+                {partnerUser?.avatar_url ? (
+                  <img src={partnerUser.avatar_url} alt={partnerUser?.full_name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-xs font-bold text-white/80">{(partnerUser?.full_name || 'GC').slice(0, 2).toUpperCase()}</span>
+                )}
+              </div>
+              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-slate-900 animate-pulse" />
+            </div>
+
+            <div className="min-w-0">
+              <div className="text-xs font-bold truncate text-white flex items-center gap-1.5">
+                <span className="truncate">{partnerUser?.full_name || 'Voice Call'}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  {callStatus === 'connected' ? 'In Call' : callStatus === 'incoming' ? 'Incoming...' : 'Calling...'}
+                </span>
+              </div>
+              <div className="text-[11px] font-mono text-emerald-400 flex items-center gap-1 mt-0.5">
+                <Clock className="w-3 h-3" />
+                <span>{callStatus === 'connected' ? formatTimer(durationSeconds) : 'Connecting...'}</span>
+                <span className="text-[10px] text-white/50 ml-1">(Tap to expand)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Quick Controls */}
+          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+            {callStatus === 'incoming' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleDecline}
+                  className="w-9 h-9 rounded-full bg-rose-600 hover:bg-rose-700 active:scale-95 text-white flex items-center justify-center shadow-lg transition-all cursor-pointer"
+                  title="Decline"
+                >
+                  <PhoneOff className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAccept}
+                  className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white flex items-center justify-center shadow-lg transition-all cursor-pointer animate-bounce"
+                  title="Accept"
+                >
+                  <Phone className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleToggleMute}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                    isMuted ? 'bg-rose-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'
+                  }`}
+                  title={isMuted ? 'Unmute' : 'Mute'}
+                >
+                  {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleHangUp('normal')}
+                  className="w-9 h-9 rounded-full bg-rose-600 hover:bg-rose-700 active:scale-95 text-white flex items-center justify-center shadow-lg shadow-rose-600/40 transition-all cursor-pointer"
+                  title="End Call"
+                >
+                  <PhoneOff className="w-4 h-4" />
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setIsMinimized(false)}
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all cursor-pointer ml-0.5"
+              title="Expand to Full Screen"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div 
+          className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-between p-6 sm:p-8 text-white select-none animate-in fade-in duration-200"
+          onClick={(e) => e.stopPropagation()}
+        >
 
       {/* Background ambient lighting ripple */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -858,9 +869,9 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
               <PhoneOff className="w-7 h-7" />
             </button>
           </>
-        )}
-
+        </div>
       </div>
-    </div>
-  );
+    )}
+  </>
+);
 };

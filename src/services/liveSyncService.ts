@@ -94,6 +94,7 @@ export class LiveSyncService {
   private lastPongTime = Date.now();
   private networkListenersBound = false;
   private activeOnlineMembers: OnlineMember[] = [];
+  private keepAliveTimer: number | undefined;
 
   getOnlineMembers(): OnlineMember[] {
     return this.activeOnlineMembers;
@@ -104,6 +105,18 @@ export class LiveSyncService {
     this.stopped = false;
     this.retryDelay = 2000;
     this.lastPongTime = Date.now();
+
+    // Keep Render instance awake 24/7 via client keep-alive heartbeat
+    if (!this.keepAliveTimer && typeof window !== 'undefined') {
+      const pingRender = () => {
+        try {
+          fetch('https://gatewayconnect.onrender.com/health', { method: 'GET', cache: 'no-store' })
+            .catch(() => {});
+        } catch {}
+      };
+      pingRender();
+      this.keepAliveTimer = window.setInterval(pingRender, 150000); // Every 2.5 minutes
+    }
 
     // 1. Cross-tab Zero-Latency Broadcast Channel
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window && !this.broadcastChannel) {
@@ -231,6 +244,11 @@ export class LiveSyncService {
       this.connectTimeout = undefined;
     }
 
+    if (this.keepAliveTimer) {
+      window.clearInterval(this.keepAliveTimer);
+      this.keepAliveTimer = undefined;
+    }
+
     if (this.networkListenersBound && typeof window !== 'undefined') {
       window.removeEventListener('online', this.handleNetworkOrFocusChange);
       window.removeEventListener('focus', this.handleNetworkOrFocusChange);
@@ -264,7 +282,7 @@ export class LiveSyncService {
     if (!supabase || !this.currentUser) return;
 
     try {
-      const channel = supabase.channel('gcz-live-hub', {
+      const channel = supabase.channel('gcz_social_realtime', {
         config: {
           broadcast: { self: false },
           presence: { key: this.currentUser.id },
@@ -274,6 +292,18 @@ export class LiveSyncService {
       channel.on('broadcast', { event: 'live_event' }, (envelope: any) => {
         if (envelope?.payload) {
           this.handleLiveEvent(envelope.payload as LiveEvent);
+        }
+      });
+
+      channel.on('broadcast', { event: 'call_signal' }, (envelope: any) => {
+        if (envelope?.payload) {
+          this.handleLiveEvent({ type: 'call_signal', payload: envelope.payload });
+        }
+      });
+
+      channel.on('broadcast', { event: 'new_direct_message' }, (envelope: any) => {
+        if (envelope?.payload) {
+          this.handleLiveEvent({ type: 'direct_message', payload: envelope.payload });
         }
       });
 

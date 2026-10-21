@@ -1038,8 +1038,14 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     }
   }, [messages, groupMessages, activeTab]);
 
-  const activeThread = threads.find(t => t.other_user.id === activeUserId);
-  const activeUser = activeThread?.other_user || (activeUserId ? StorageService.getAllUsers().find(u => u.id === activeUserId) : null);
+  const activeThread = threads.find(t => t.other_user.id === activeUserId || arePhoneNumbersEqual(t.other_user.phone, activeUserId));
+  const activeUser = activeThread?.other_user || (activeUserId ? StorageService.getAllUsers().find(u => u.id === activeUserId || arePhoneNumbersEqual(u.phone, activeUserId)) : null) || (activeUserId ? {
+    id: activeUserId,
+    full_name: activeUserId.startsWith('+') || /^\d+$/.test(activeUserId) ? activeUserId : 'Believer',
+    phone: activeUserId.startsWith('+') || /^\d+$/.test(activeUserId) ? activeUserId : '',
+    role: 'member',
+    created_at: new Date().toISOString()
+  } as User : null);
 
   const isDeveloper = currentUser.role === 'developer' || arePhoneNumbersEqual(currentUser.phone, '0780699988');
 
@@ -1306,7 +1312,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
   const handleSendMessage = (textToSend?: string) => {
     const content = textToSend || inputText;
-    if (!content.trim() || !activeUserId || !activeUser) return;
+    if (!content.trim() || !activeUserId) return;
 
     const replyPayload = replyingToMessage 
       ? { id: replyingToMessage.id, sender_name: replyingToMessage.sender_name, text: replyingToMessage.text } 
@@ -2682,69 +2688,102 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       </div>
                     ) : (
                       filteredCallLogs.map((log) => {
-                        const partnerUser = prioritizedContacts.find(u => u.id === log.partner_id) || {
+                        const partnerUser = prioritizedContacts.find(u => u.id === log.partner_id || arePhoneNumbersEqual(u.phone, log.partner_id)) || {
                           id: log.partner_id,
                           full_name: log.partner_name || 'Church Believer',
                           avatar_url: log.partner_avatar,
-                          role: (log.partner_role as any) || 'member'
+                          role: (log.partner_role as any) || 'member',
+                          phone: log.partner_id.startsWith('+') || /^\d+$/.test(log.partner_id) ? log.partner_id : ''
                         } as User;
 
                         return (
                           <div
                             key={log.id}
-                            className="w-full p-3 sm:px-3.5 flex items-center gap-3 transition-colors hover:bg-secondary/40 group relative"
+                            className="w-full p-3 sm:px-3.5 flex items-center justify-between gap-3 transition-colors hover:bg-secondary/40 group relative border-b border-border/30 last:border-b-0"
                           >
-                            {/* Partner Avatar */}
-                            <div className="relative w-11 h-11 rounded-full border border-border overflow-hidden bg-secondary flex items-center justify-center text-primary font-bold text-xs shrink-0 shadow-xs">
-                              {log.partner_avatar ? (
-                                <img src={log.partner_avatar} alt={log.partner_name || 'Caller'} className="w-full h-full object-cover" />
-                              ) : (
-                                (log.partner_name || 'GC').slice(0, 2).toUpperCase()
-                              )}
-                            </div>
-
-                            {/* Call Info */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between">
-                                <span className={`font-semibold text-xs truncate ${
-                                  log.type === 'missed' ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'
-                                }`}>
-                                  {log.partner_name}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground whitespace-nowrap ml-2">
-                                  {formatCallTimestamp(log.timestamp)}
-                                </span>
-                              </div>
-
-                              <div className="flex items-center gap-1.5 mt-0.5 text-[11px]">
-                                {log.type === 'missed' ? (
-                                  <span className="flex items-center gap-1 text-rose-500 font-medium">
-                                    <PhoneMissed className="w-3.5 h-3.5 shrink-0" />
-                                    <span>Missed call</span>
-                                  </span>
-                                ) : log.type === 'incoming' ? (
-                                  <span className="flex items-center gap-1 text-emerald-500 font-medium">
-                                    <PhoneIncoming className="w-3.5 h-3.5 shrink-0" />
-                                    <span>Incoming ({formatCallDuration(log.duration_sec)})</span>
-                                  </span>
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              {/* Partner Avatar */}
+                              <div 
+                                onClick={() => setViewUserProfile(partnerUser)}
+                                className="relative w-11 h-11 rounded-full border border-border overflow-hidden bg-secondary flex items-center justify-center text-primary font-bold text-xs shrink-0 shadow-xs cursor-pointer hover:ring-2 hover:ring-primary/40 transition-all"
+                              >
+                                {log.partner_avatar || partnerUser.avatar_url ? (
+                                  <img src={log.partner_avatar || partnerUser.avatar_url} alt={log.partner_name || 'Caller'} className="w-full h-full object-cover" />
                                 ) : (
-                                  <span className="flex items-center gap-1 text-sky-500 font-medium">
-                                    <PhoneOutgoing className="w-3.5 h-3.5 shrink-0" />
-                                    <span>Outgoing ({formatCallDuration(log.duration_sec)})</span>
-                                  </span>
+                                  (log.partner_name || partnerUser.full_name || 'GC').slice(0, 2).toUpperCase()
                                 )}
                               </div>
+
+                              {/* Call Info */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between">
+                                  <span 
+                                    onClick={() => setViewUserProfile(partnerUser)}
+                                    className={`font-semibold text-xs sm:text-sm truncate cursor-pointer hover:underline ${
+                                      log.type === 'missed' ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-foreground'
+                                    }`}
+                                  >
+                                    {log.partner_name || partnerUser.full_name}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-muted-foreground flex-wrap">
+                                  {log.type === 'missed' ? (
+                                    <span className="flex items-center gap-1 text-rose-500 font-medium">
+                                      <PhoneMissed className="w-3.5 h-3.5 shrink-0" />
+                                      <span>Missed</span>
+                                    </span>
+                                  ) : log.type === 'incoming' ? (
+                                    <span className="flex items-center gap-1 text-emerald-500 font-medium">
+                                      <PhoneIncoming className="w-3.5 h-3.5 shrink-0" />
+                                      <span>Incoming</span>
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                                      <PhoneOutgoing className="w-3.5 h-3.5 shrink-0" />
+                                      <span>Outgoing</span>
+                                    </span>
+                                  )}
+                                  <span className="text-muted-foreground/40">•</span>
+                                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                                    {formatCallTimestamp(log.timestamp)}
+                                  </span>
+                                  {log.type !== 'missed' && log.duration_sec && log.duration_sec > 0 ? (
+                                    <>
+                                      <span className="text-muted-foreground/40">•</span>
+                                      <span className="text-[11px] text-muted-foreground font-mono">
+                                        ({formatCallDuration(log.duration_sec)})
+                                      </span>
+                                    </>
+                                  ) : null}
+                                </div>
+                              </div>
                             </div>
 
-                            {/* Direct 1-Tap Voice Call Button */}
-                            <button
-                              type="button"
-                              onClick={() => handleInitiateVoiceCall(partnerUser)}
-                              className="w-9 h-9 rounded-full bg-emerald-500/10 hover:bg-emerald-500 text-emerald-600 dark:text-emerald-400 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer active:scale-95 shrink-0 ml-1"
-                              title={`Call ${log.partner_name}`}
-                            >
-                              <Phone className="w-4 h-4" />
-                            </button>
+                            {/* Actions: Call back & Delete Call Log */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleInitiateVoiceCall(partnerUser)}
+                                className="w-9 h-9 rounded-full bg-emerald-500/10 hover:bg-emerald-500 text-emerald-600 dark:text-emerald-400 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer active:scale-95"
+                                title={`Call ${log.partner_name || partnerUser.full_name}`}
+                              >
+                                <Phone className="w-4 h-4" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  StorageService.deleteCallLog(log.id);
+                                  setCallLogs(prev => prev.filter(c => c.id !== log.id));
+                                }}
+                                className="w-8 h-8 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive flex items-center justify-center transition-all cursor-pointer opacity-70 hover:opacity-100"
+                                title="Delete call from log"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
                         );
                       })

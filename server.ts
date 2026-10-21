@@ -432,4 +432,27 @@ const port = Number(process.env.PORT || CONFIG.PORT || 3000);
 
 server.listen(port, '0.0.0.0', () => {
   console.log('Gateway Connect server listening on 0.0.0.0:' + port);
+
+  // 24/7 Render Anti-Sleep Keep-Alive Worker
+  // Automatically self-pings the public Render URL every 4 minutes to prevent idle spin-down
+  const RENDER_PUBLIC_URL = process.env.RENDER_EXTERNAL_URL || 'https://gatewayconnect.onrender.com';
+  const keepAliveEndpoints = [
+    `${RENDER_PUBLIC_URL}/health`,
+    `http://127.0.0.1:${port}/health`
+  ];
+
+  console.log(`[KeepAlive] Initializing 24/7 anti-sleep pings to ${RENDER_PUBLIC_URL}/health`);
+
+  setInterval(async () => {
+    for (const url of keepAliveEndpoints) {
+      try {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'GatewayConnect-KeepAlive/2.0' }
+        });
+        console.log(`[KeepAlive] Pinged ${url} -> HTTP ${res.status} [${new Date().toISOString()}]`);
+      } catch (err: any) {
+        console.warn(`[KeepAlive] Notice pinging ${url}:`, err.message);
+      }
+    }
+  }, 4 * 60 * 1000); // 4 minutes (Render idle limit is 15 minutes)
 });
