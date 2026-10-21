@@ -925,7 +925,6 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
   // Fast background polling (every 2.5 seconds) while modal is open for zero-delay message receipt
   useEffect(() => {
-    if (!isOpen) return;
     const interval = setInterval(() => {
       if (activeTab === 'direct' && activeUserId) {
         StorageService.syncDirectMessagesWithRemote(currentUser.id)
@@ -944,7 +943,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       }
     }, 2500);
     return () => clearInterval(interval);
-  }, [isOpen, activeTab, activeUserId, activeGroupId, currentUser.id]);
+  }, [activeTab, activeUserId, activeGroupId, currentUser.id]);
 
   useEffect(() => {
     if (activeTab === 'direct') {
