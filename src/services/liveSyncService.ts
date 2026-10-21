@@ -1,6 +1,7 @@
 import { DirectMessage, PrayerRequest, Testimony, ChatGroupMessage, User } from '../types';
 import { StorageService } from './storageService';
 import { getSupabase } from './supabaseClient';
+import { SupabaseSyncService } from './supabaseSyncService';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 // Live WebSocket URL: defaults to production Render WebSocket gateway
@@ -519,13 +520,20 @@ export class LiveSyncService {
     // 3. Render WebSocket Hub (Internet-wide)
     this.sendWs({ type: 'event', payload: event });
 
-    // 4. LocalStorage Cross-Tab Fallback
-    if (event.type === 'call_signal' && typeof window !== 'undefined') {
+    // 4. LocalStorage Cross-Tab Fallback (Instant zero-latency across browser windows)
+    if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem('gcz_active_call_signal', JSON.stringify({
-          payload: event.payload,
-          _t: Date.now()
-        }));
+        if (event.type === 'call_signal') {
+          localStorage.setItem('gcz_active_call_signal', JSON.stringify({
+            payload: event.payload,
+            _t: Date.now()
+          }));
+        } else if (event.type === 'direct_message') {
+          localStorage.setItem('gcz_active_dm_signal', JSON.stringify({
+            payload: event.payload,
+            _t: Date.now()
+          }));
+        }
       } catch {}
     }
   }
@@ -545,6 +553,9 @@ export class LiveSyncService {
   }
 
   sendCallSignal(payload: CallSignalPayload): void {
+    try {
+      SupabaseSyncService.syncCallSignal(payload);
+    } catch {}
     this.broadcastEvent({ type: 'call_signal', payload });
   }
 

@@ -95,11 +95,15 @@ export default function App() {
   });
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [showOnboardingModal, setShowOnboardingModal] = useState<boolean>(false);
-  const [incomingCallState, setIncomingCallState] = useState<{ caller: User; callId: string } | null>(null);
+  const [activeCall, setActiveCall] = useState<{
+    partner: User;
+    isIncoming: boolean;
+    callId: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!currentUser) return;
-    const handleIncomingCall = (e: any) => {
+    const handleCallSignal = (e: any) => {
       const signal = e?.detail;
       if (!signal) return;
       const isTarget = signal.targetUserId === currentUser.id || 
@@ -108,37 +112,60 @@ export default function App() {
                        (currentUser.phone && typeof signal.targetUserId === 'string' && signal.targetUserId.replace(/[^0-9]/g, '') === currentUser.phone.replace(/[^0-9]/g, ''));
 
       if ((signal.action === 'offer' || signal.action === 'incoming_call') && isTarget && signal.caller) {
-        setIncomingCallState({
-          caller: {
+        setActiveCall({
+          partner: {
             ...signal.caller,
             full_name: signal.caller.full_name || 'Church Believer',
             avatar_url: signal.caller.avatar_url || '/assets/apostle_joe_daniels_main.jpg'
           } as User,
+          isIncoming: true,
           callId: signal.callId || `call_${Date.now()}`
         });
       }
-      if ((signal.action === 'hangup' || signal.action === 'decline') && incomingCallState?.callId === signal.callId) {
-        setIncomingCallState(null);
+
+      // Instant dismissal on hangup or decline from either caller or receiver
+      if (signal.action === 'hangup' || signal.action === 'decline') {
+        setActiveCall(prev => {
+          if (!prev) return null;
+          if (!signal.callId || prev.callId === signal.callId || prev.partner.id === signal.caller?.id || signal.targetUserId === currentUser.id) {
+            return null;
+          }
+          return prev;
+        });
       }
     };
 
     const handleDirectIncomingTrigger = (e: any) => {
       const detail = e?.detail;
       if (detail && detail.caller) {
-        setIncomingCallState({
-          caller: detail.caller,
+        setActiveCall({
+          partner: detail.caller,
+          isIncoming: true,
           callId: detail.callId || `call_${Date.now()}`
         });
       }
     };
 
-    window.addEventListener('gcz_call_signal', handleIncomingCall);
-    window.addEventListener('gcz_trigger_incoming_call', handleDirectIncomingTrigger);
-    return () => {
-      window.removeEventListener('gcz_call_signal', handleIncomingCall);
-      window.removeEventListener('gcz_trigger_incoming_call', handleDirectIncomingTrigger);
+    const handleStartOutgoingCall = (e: any) => {
+      const detail = e?.detail;
+      if (detail && detail.partner) {
+        setActiveCall({
+          partner: detail.partner,
+          isIncoming: false,
+          callId: detail.callId || `call_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+        });
+      }
     };
-  }, [currentUser?.id, currentUser?.phone, currentUser?.handle, incomingCallState?.callId]);
+
+    window.addEventListener('gcz_call_signal', handleCallSignal);
+    window.addEventListener('gcz_trigger_incoming_call', handleDirectIncomingTrigger);
+    window.addEventListener('gcz_start_outgoing_call', handleStartOutgoingCall);
+    return () => {
+      window.removeEventListener('gcz_call_signal', handleCallSignal);
+      window.removeEventListener('gcz_trigger_incoming_call', handleDirectIncomingTrigger);
+      window.removeEventListener('gcz_start_outgoing_call', handleStartOutgoingCall);
+    };
+  }, [currentUser?.id, currentUser?.phone, currentUser?.handle]);
 
   useEffect(() => {
     // Purge any community posts older than 8 days immediately
@@ -288,28 +315,64 @@ export default function App() {
       SupabaseSyncService.getSocialChannel();
     } catch {}
 
+    // Global Supabase Realtime subscription for instant zero-latency messages & profile updates
+    const unsubSocial = SupabaseSyncService.subscribeToSocialMessaging({
+      onNewDirectMessage: (incomingDm) => {
+        StorageService.receiveIncomingDirectMessage(incomingDm);
+        refreshAppData();
+      },
+      onNewGroupMessage: (incomingGroupMsg) => {
+        StorageService.receiveIncomingGroupMessage(incomingGroupMsg);
+        refreshAppData();
+      },
+      onUserProfileUpdated: () => {
+        refreshAppData();
+      },
+      onFollowUpdated: () => {
+        refreshAppData();
+      }
+    });
+
+    // Cross-tab / cross-window zero-latency direct message dispatch
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'gcz_active_dm_signal' && e.newValue) {
+        try {
+          const data = JSON.parse(e.newValue);
+          if (data?.payload) {
+            StorageService.receiveIncomingDirectMessage(data.payload);
+            refreshAppData();
+          }
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
     StorageService.syncUsersWithRemote().catch(() => {});
     StorageService.syncPostsWithRemote().catch(() => {});
     StorageService.syncStoriesWithRemote().catch(() => {});
     StorageService.syncAllFollowsFromSupabase().catch(() => {});
-    // Hydrate community posts, comments and prayers from Cloudflare R2 & Supabase so a fresh
-    // install / new member sees everything the church has already shared.
     StorageService.syncPostsAndPrayersWithRemote()
       .catch(() => {})
       .finally(() => refreshAppData());
+
     if (!currentUser) {
       liveSyncService.disconnect();
-      return;
+      return () => {
+        unsubSocial();
+        window.removeEventListener('storage', handleStorageChange);
+      };
     }
+
     if (currentUser?.id && currentUser?.role !== 'guest') {
       StorageService.hydrateFollowsFromSupabase(currentUser.id).catch(() => {});
-      // Hydrate chat history so a new login sees conversations from other devices.
       StorageService.syncDirectMessagesWithRemote(currentUser.id).catch(() => {});
       StorageService.syncGroupMessagesWithRemote(currentUser.id).catch(() => {});
     }
+
     liveSyncService.connect(currentUser);
     const unbind = liveSyncService.bindLocalEvents();
-      const handleOpenProfile = (e: any) => {
+
+    const handleOpenProfile = (e: any) => {
       if (e?.detail?.userId) {
         setGlobalProfileUserId(e.detail.userId);
       }
@@ -321,6 +384,7 @@ export default function App() {
       }
       refreshAppData();
     };
+
     window.addEventListener('gcz_banned_users_updated', refreshLiveState);
     window.addEventListener('gcz_current_user_banned', refreshLiveState);
     window.addEventListener('gcz_testimony_updated', refreshLiveState);
@@ -332,6 +396,7 @@ export default function App() {
     window.addEventListener('gcz_direct_messages_updated', refreshLiveState);
     window.addEventListener('gcz_group_messages_updated', refreshLiveState);
     window.addEventListener('gcz_users_synced', refreshAppData);
+
     const handleUserDeleted = (e: any) => {
       const deletedId = e?.detail?.userId;
       if (!deletedId || currentUser?.id === deletedId) {
@@ -341,22 +406,30 @@ export default function App() {
       }
     };
 
-    // Periodic background sync across Web and Android WebView (every 25 seconds + on window focus)
+    // Fast background sync across Web and Android WebView (every 5 seconds + on window focus)
     const periodicSync = () => {
-      StorageService.syncUsersWithRemote().catch(() => {});
+      StorageService.syncUsersWithRemote().then(() => refreshAppData()).catch(() => {});
       StorageService.syncPostsWithRemote().catch(() => {});
+      if (currentUser?.id && currentUser?.role !== 'guest') {
+        StorageService.syncDirectMessagesWithRemote(currentUser.id).then(() => {
+          refreshAppData();
+        }).catch(() => {});
+      }
     };
-    const syncInterval = setInterval(periodicSync, 25000);
+    const syncInterval = setInterval(periodicSync, 5000);
     window.addEventListener('focus', periodicSync);
 
     window.addEventListener('gcz_open_user_profile', handleOpenProfile);
     window.addEventListener('gcz_user_profile_updated', handleProfileUpdated);
     window.addEventListener('gcz_user_deleted', handleUserDeleted);
+
     return () => {
       unbind();
+      unsubSocial();
       liveSyncService.disconnect();
       clearInterval(syncInterval);
       window.removeEventListener('focus', periodicSync);
+      window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('gcz_banned_users_updated', refreshLiveState);
       window.removeEventListener('gcz_current_user_banned', refreshLiveState);
       window.removeEventListener('gcz_testimony_updated', refreshLiveState);
@@ -889,29 +962,29 @@ export default function App() {
         </div>
       )}
 
-      {/* InDrive Real-Time Incoming Voice Call Modal (Global) */}
-      {incomingCallState && currentUser && (
+      {/* Real-Time Voice Call Modal (Global - Supports WhatsApp-Style Minimization) */}
+      {activeCall && currentUser && (
         <InDriveCallModal
           currentUser={currentUser}
-          partnerUser={incomingCallState.caller}
-          isIncoming={true}
-          incomingCallId={incomingCallState.callId}
+          partnerUser={activeCall.partner}
+          isIncoming={activeCall.isIncoming}
+          incomingCallId={activeCall.callId}
           onEndCall={(durationSec, resultText) => {
             if (resultText) {
               StorageService.sendDirectMessage(
-                incomingCallState.caller.id,
-                currentUser.id,
+                activeCall.isIncoming ? activeCall.partner.id : currentUser.id,
+                activeCall.isIncoming ? currentUser.id : activeCall.partner.id,
                 resultText
               );
             }
-            setIncomingCallState(null);
+            setActiveCall(null);
             refreshAppData();
           }}
           onAcceptIncoming={() => {
             // Connected
           }}
           onDeclineIncoming={() => {
-            setIncomingCallState(null);
+            setActiveCall(null);
           }}
         />
       )}

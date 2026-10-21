@@ -11,7 +11,10 @@ import {
   Clock,
   CheckCircle2,
   ArrowLeft,
-  X
+  X,
+  ChevronDown,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { User } from '../../types';
 import { liveSyncService, CallSignalPayload } from '../../services/liveSyncService';
@@ -41,6 +44,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
   const [callStatus, setCallStatus] = useState<'incoming' | 'calling' | 'ringing' | 'connected' | 'ended' | 'declined' | 'no_answer'>(
     isIncoming ? 'incoming' : 'calling'
   );
+  const [isMinimized, setIsMinimized] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [durationSeconds, setDurationSeconds] = useState(0);
@@ -236,7 +240,11 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
     // Listen for peer call signals
     const handleSignal = (e: any) => {
       const signal: CallSignalPayload & { sdp?: any; candidate?: any } = e?.detail;
-      if (!signal || signal.callId !== callId) return;
+      if (!signal) return;
+      const isMatch = signal.callId === callId || 
+                      (signal.targetUserId === currentUser.id && signal.caller?.id === partnerUser.id) ||
+                      (signal.targetUserId === partnerUser.id && signal.caller?.id === currentUser.id);
+      if (!isMatch) return;
 
       // When callee acknowledges ringing
       if (signal.action === 'ringing' && callStatus === 'calling') {
@@ -284,28 +292,30 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
         peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(() => {});
       }
 
-      // When peer declines call
+      // When peer declines call - close screen instantly
       if (signal.action === 'decline') {
         if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
         stopRingtone();
         setCallStatus('declined');
-        setTimeout(() => {
-          onEndCall(0, '📞 Declined Call');
-        }, 1500);
+        if (localStreamRef.current) {
+          localStreamRef.current.getTracks().forEach(t => t.stop());
+        }
+        onEndCall(0, '📞 Declined Call');
       }
 
-      // When peer hangs up
+      // When peer hangs up - close screen instantly
       if (signal.action === 'hangup') {
         if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
         stopRingtone();
         setCallStatus('ended');
+        if (localStreamRef.current) {
+          localStreamRef.current.getTracks().forEach(t => t.stop());
+        }
         const dur = durationSeconds;
-        setTimeout(() => {
-          const m = Math.floor(dur / 60);
-          const s = dur % 60;
-          const durText = `${m}m ${s.toString().padStart(2, '0')}s`;
-          onEndCall(dur, dur > 0 ? `📞 Voice Call (${durText})` : '📞 Missed Call');
-        }, 800);
+        const m = Math.floor(dur / 60);
+        const s = dur % 60;
+        const durText = `${m}m ${s.toString().padStart(2, '0')}s`;
+        onEndCall(dur, dur > 0 ? `📞 Voice Call (${durText})` : '📞 Missed Call');
       }
     };
 
@@ -398,10 +408,12 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
       targetUserId: partnerUser.id
     });
 
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(t => t.stop());
+    }
+
     if (onDeclineIncoming) onDeclineIncoming();
-    setTimeout(() => {
-      onEndCall(0, '📞 Declined Call');
-    }, 400);
+    onEndCall(0, '📞 Declined Call');
   };
 
   // Hang Up / End Active Call
@@ -448,9 +460,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
       localStreamRef.current.getTracks().forEach(t => t.stop());
     }
 
-    setTimeout(() => {
-      onEndCall(dur, label);
-    }, 400);
+    onEndCall(dur, label);
   };
 
   // Toggle Microphone Mute
@@ -480,6 +490,102 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // WhatsApp-style Minimized Floating Call Bar (PIP mode)
+  if (isMinimized) {
+    return (
+      <div 
+        className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-[95%] max-w-md bg-slate-900/95 backdrop-blur-2xl border border-emerald-500/40 shadow-2xl rounded-2xl p-2.5 sm:p-3 flex items-center justify-between text-white animate-in slide-in-from-top-4 duration-200 select-none cursor-pointer"
+        onClick={() => setIsMinimized(false)}
+      >
+        {/* Hidden in-DOM audio element for mobile & web audio streams - MUST REMAIN MOUNTED */}
+        <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
+
+        {/* Left: Caller Avatar + Name + Pulse + Timer */}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="relative">
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-800 border-2 border-emerald-500/60 flex items-center justify-center shrink-0">
+              {partnerUser?.avatar_url ? (
+                <img src={partnerUser.avatar_url} alt={partnerUser?.full_name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-xs font-bold text-white/80">{(partnerUser?.full_name || 'GC').slice(0, 2).toUpperCase()}</span>
+              )}
+            </div>
+            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-slate-900 animate-pulse" />
+          </div>
+
+          <div className="min-w-0">
+            <div className="text-xs font-bold truncate text-white flex items-center gap-1.5">
+              <span className="truncate">{partnerUser?.full_name || 'Voice Call'}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                {callStatus === 'connected' ? 'In Call' : callStatus === 'incoming' ? 'Incoming...' : 'Calling...'}
+              </span>
+            </div>
+            <div className="text-[11px] font-mono text-emerald-400 flex items-center gap-1 mt-0.5">
+              <Clock className="w-3 h-3" />
+              <span>{callStatus === 'connected' ? formatTimer(durationSeconds) : 'Connecting...'}</span>
+              <span className="text-[10px] text-white/50 ml-1">(Tap to expand)</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Quick Controls */}
+        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {callStatus === 'incoming' ? (
+            <>
+              <button
+                type="button"
+                onClick={handleDecline}
+                className="w-9 h-9 rounded-full bg-rose-600 hover:bg-rose-700 active:scale-95 text-white flex items-center justify-center shadow-lg transition-all cursor-pointer"
+                title="Decline"
+              >
+                <PhoneOff className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleAccept}
+                className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white flex items-center justify-center shadow-lg transition-all cursor-pointer animate-bounce"
+                title="Accept"
+              >
+                <Phone className="w-4 h-4" />
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={handleToggleMute}
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                  isMuted ? 'bg-rose-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+                title={isMuted ? 'Unmute' : 'Mute'}
+              >
+                {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleHangUp('normal')}
+                className="w-9 h-9 rounded-full bg-rose-600 hover:bg-rose-700 active:scale-95 text-white flex items-center justify-center shadow-lg shadow-rose-600/40 transition-all cursor-pointer"
+                title="End Call"
+              >
+                <PhoneOff className="w-4 h-4" />
+              </button>
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsMinimized(false)}
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all cursor-pointer ml-0.5"
+            title="Expand to Full Screen"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div 
       className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-between p-6 sm:p-8 text-white select-none animate-in fade-in duration-200"
@@ -494,16 +600,16 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
         <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl" />
       </div>
 
-      {/* Top Header Badge & Back Button */}
+      {/* Top Header Badge & WhatsApp-style Minimize Controls */}
       <div className="relative z-10 w-full max-w-sm flex items-center justify-between text-xs text-white/70">
         <button
           type="button"
-          onClick={() => handleHangUp('normal')}
-          className="p-1.5 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer flex items-center gap-1"
-          title="Back / Close"
+          onClick={() => setIsMinimized(true)}
+          className="px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/90 hover:text-white transition-all cursor-pointer flex items-center gap-1.5 shadow-xs border border-white/10 active:scale-95"
+          title="Minimize call (WhatsApp style)"
         >
-          <ArrowLeft className="w-5 h-5" />
-          <span className="text-[11px] font-semibold hidden xs:inline">Back</span>
+          <ChevronDown className="w-4 h-4 text-emerald-400" />
+          <span className="text-[11px] font-bold">Minimize</span>
         </button>
 
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
@@ -511,10 +617,14 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
           <span className="font-semibold tracking-wide text-[11px] text-white/90">Voice Call</span>
         </div>
 
-        <div className="flex items-center gap-1 text-[11px] font-mono text-white/60">
-          <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-          <span>HD Audio</span>
-        </div>
+        <button
+          type="button"
+          onClick={() => handleHangUp('normal')}
+          className="p-1.5 rounded-full hover:bg-rose-500/20 text-white/60 hover:text-rose-400 transition-colors cursor-pointer"
+          title="End Call"
+        >
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Center Body: InDrive Circular Pulsing Radar Waves & Avatar */}

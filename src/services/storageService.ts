@@ -4889,6 +4889,12 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     }
 
     if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('gcz_active_dm_signal', JSON.stringify({
+          payload: newMsg,
+          _t: Date.now()
+        }));
+      } catch {}
       window.dispatchEvent(new CustomEvent('gcz_direct_messages_updated', { detail: newMsg }));
       window.dispatchEvent(new CustomEvent('gcz_dms_updated'));
     }

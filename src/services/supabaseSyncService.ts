@@ -1072,6 +1072,12 @@ export class SupabaseSyncService {
 
         // 1. Unified Broadcast listeners (Instant real-time dispatch across all devices)
         channel
+          .on('broadcast', { event: 'call_signal' }, ({ payload }: any) => {
+            if (!payload) return;
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gcz_call_signal', { detail: payload }));
+            }
+          })
           .on('broadcast', { event: 'new_group_message' }, ({ payload }: any) => {
             if (!payload || !payload.group_id) return;
             try {
@@ -1829,6 +1835,20 @@ export class SupabaseSyncService {
     }
 
     return true;
+  }
+
+  /**
+   * Broadcasts VoIP call signaling (offer, ringing, accept, decline, hangup) instantly across all devices
+   */
+  static syncCallSignal(payload: any): void {
+    const channel = this.getSocialChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'call_signal',
+        payload
+      });
+    }
   }
 
   /**

@@ -266,6 +266,10 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   const [newGroupDuration, setNewGroupDuration] = useState(3);
   const [inDriveCall, setInDriveCall] = useState<{ isOpen: boolean; partner: User } | null>(null);
 
+  const handleInitiateVoiceCall = (partner: User) => {
+    window.dispatchEvent(new CustomEvent('gcz_start_outgoing_call', { detail: { partner } }));
+  };
+
   const handleSimulateIncomingCall = (callerUser?: User) => {
     const caller = callerUser || prioritizedContacts.find(u => u.id === 'usr_apostle_joe') || prioritizedContacts[0];
     const callId = `call_test_${Date.now()}`;
@@ -918,6 +922,29 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       fetchRealtimeMessages();
     }
   }, [activeUserId, activeGroupId, activeTab]);
+
+  // Fast background polling (every 2.5 seconds) while modal is open for zero-delay message receipt
+  useEffect(() => {
+    if (!isOpen) return;
+    const interval = setInterval(() => {
+      if (activeTab === 'direct' && activeUserId) {
+        StorageService.syncDirectMessagesWithRemote(currentUser.id)
+          .then(() => {
+            refreshMessages();
+            refreshThreads();
+          })
+          .catch(() => {});
+      } else if (activeTab === 'groups' && activeGroupId) {
+        StorageService.syncGroupMessagesWithRemote(currentUser.id)
+          .then(() => {
+            const msgs = StorageService.getChatGroupMessagesForUser(activeGroupId, currentUser.id);
+            setGroupMessages(msgs);
+          })
+          .catch(() => {});
+      }
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [isOpen, activeTab, activeUserId, activeGroupId, currentUser.id]);
 
   useEffect(() => {
     if (activeTab === 'direct') {
@@ -2488,7 +2515,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       <button
                         key={contact.id}
                         onClick={() => {
-                          setInDriveCall({ isOpen: true, partner: contact });
+                          handleInitiateVoiceCall(contact);
                           setShowNewChatPicker(false);
                           setSearchQuery('');
                         }}
@@ -2628,7 +2655,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                             {/* Direct 1-Tap Voice Call Button */}
                             <button
                               type="button"
-                              onClick={() => setInDriveCall({ isOpen: true, partner: partnerUser })}
+                              onClick={() => handleInitiateVoiceCall(partnerUser)}
                               className="w-9 h-9 rounded-full bg-emerald-500/10 hover:bg-emerald-500 text-emerald-600 dark:text-emerald-400 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer active:scale-95 shrink-0 ml-1"
                               title={`Call ${log.partner_name}`}
                             >
@@ -2849,7 +2876,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       <div className="relative flex items-center gap-1 sm:gap-2">
                         <button
                           type="button"
-                          onClick={() => setInDriveCall({ isOpen: true, partner: activeUser })}
+                          onClick={() => handleInitiateVoiceCall(activeUser)}
                           className="p-2 sm:p-2.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 active:scale-95 transition-all cursor-pointer shadow-xs"
                           title="Voice Call"
                         >
@@ -4360,7 +4387,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         </div>
                         <button
                           type="button"
-                          onClick={() => setInDriveCall({ isOpen: true, partner: pastor })}
+                          onClick={() => handleInitiateVoiceCall(pastor)}
                           className="px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0"
                         >
                           <Phone className="w-3 h-3" />
@@ -5136,22 +5163,6 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
             setViewUserProfile(null);
             setActiveTab('direct');
             setActiveUserId(targetId);
-          }}
-        />
-      )}
-
-      {/* InDrive-Inspired Real-Time VoIP Audio Calling Modal */}
-      {inDriveCall && inDriveCall.isOpen && (
-        <InDriveCallModal
-          currentUser={currentUser}
-          partnerUser={inDriveCall.partner}
-          onEndCall={(durationSec, callResultText) => {
-            if (callResultText) {
-              StorageService.sendDirectMessage(currentUser.id, inDriveCall.partner.id, callResultText);
-              refreshMessages();
-              refreshThreads();
-            }
-            setInDriveCall(null);
           }}
         />
       )}
