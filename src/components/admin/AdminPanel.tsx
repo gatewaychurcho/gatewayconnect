@@ -136,6 +136,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   const [adminStreamUrl, setAdminStreamUrl] = useState<string>(liveSermonStatus.streamUrl || 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP');
   const [adminObsStreamKey, setAdminObsStreamKey] = useState<string>(() => StorageService.getObsStreamKey());
   const [copiedObsServer, setCopiedObsServer] = useState<boolean>(false);
+  const [copiedObsKey, setCopiedObsKey] = useState<boolean>(false);
   const [showAdminStreamPreview, setShowAdminStreamPreview] = useState<boolean>(false);
   const [isUploadingMp4, setIsUploadingMp4] = useState<boolean>(false);
   const [mp4UploadFeedback, setMp4UploadFeedback] = useState<string | null>(null);
@@ -2756,19 +2757,37 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                     )}
                   </div>
 
-                  {/* OBS Stream Key Input & Start Stream Action */}
+                  {/* OBS Stream Key Input & Actions */}
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     <div className="flex-1 relative">
                       <input
                         type="text"
                         value={adminObsStreamKey}
                         onChange={(e) => setAdminObsStreamKey(e.target.value)}
-                        placeholder="Paste OBS Stream Key (e.g. live_... or stream-key)..."
+                        placeholder="Church OBS Stream Key (e.g. gcz_live_apostle_joe_2026)..."
                         className="w-full bg-background/80 border border-purple-500/30 focus:border-purple-400 rounded-lg px-3 py-2 text-xs font-mono text-white placeholder:text-white/30 focus:outline-none"
                       />
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
+                      {/* 1-Tap Copy Stream Key button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const keyToCopy = adminObsStreamKey.trim() || 'gcz_live_apostle_joe_2026';
+                          if (navigator.clipboard) {
+                            navigator.clipboard.writeText(keyToCopy);
+                            setCopiedObsKey(true);
+                            setTimeout(() => setCopiedObsKey(false), 2200);
+                          }
+                        }}
+                        className="px-3 py-2 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm"
+                        title="Copy Stream Key to clipboard for OBS Studio"
+                      >
+                        <Copy className="w-3.5 h-3.5 text-purple-400" />
+                        <span>{copiedObsKey ? 'Copied Key!' : 'Copy Key'}</span>
+                      </button>
+
                       {/* Paste from clipboard */}
                       <button
                         type="button"
@@ -2794,11 +2813,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                       <button
                         type="button"
                         onClick={() => {
-                          const key = adminObsStreamKey.trim();
-                          if (!key) {
-                            alert('Please paste or enter your OBS Stream Key first.');
-                            return;
-                          }
+                          const key = adminObsStreamKey.trim() || 'gcz_live_apostle_joe_2026';
                           StorageService.setObsStreamKey(key);
                           const cleanUrl = key.startsWith('http') || key.startsWith('rtmp') ? key : `obs://${key}`;
                           StorageService.setLiveStreamUrl(cleanUrl);
@@ -2823,28 +2838,67 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                     </div>
                   </div>
 
-                  {/* RTMP Server Configuration info for OBS Studio */}
-                  <div className="bg-black/40 border border-white/5 rounded-lg p-2.5 text-[11px] space-y-1.5">
+                  {/* RTMP Server & Stream Key Configuration info for OBS Studio */}
+                  <div className="bg-black/40 border border-purple-500/20 rounded-xl p-3 space-y-2.5 text-[11px]">
                     <div className="flex items-center justify-between text-white/70">
-                      <span className="font-semibold text-white/90">OBS Server (Ingest RTMP URL):</span>
+                      <span className="font-semibold text-white/90 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-purple-400 animate-ping" />
+                        <span>1. OBS Server (Ingest RTMP URL):</span>
+                      </span>
                       <button
                         type="button"
                         onClick={() => {
                           if (navigator.clipboard) {
                             navigator.clipboard.writeText('rtmp://stream.gatewayconnect.joedaniels.org/live/');
                             setCopiedObsServer(true);
-                            setTimeout(() => setCopiedObsServer(false), 2000);
+                            setTimeout(() => setCopiedObsServer(false), 2200);
                           }
                         }}
-                        className="text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 cursor-pointer"
+                        className="text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 cursor-pointer bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20"
                       >
                         <Copy className="w-3 h-3" />
                         <span>{copiedObsServer ? 'Copied Server URL!' : 'Copy Server URL'}</span>
                       </button>
                     </div>
-                    <code className="block bg-black/60 p-1.5 rounded font-mono text-[10.5px] text-purple-300 break-all select-all">
+                    <code className="block bg-black/60 p-2 rounded-lg font-mono text-[11px] text-purple-300 break-all select-all border border-white/5">
                       rtmp://stream.gatewayconnect.joedaniels.org/live/
                     </code>
+
+                    <div className="flex items-center justify-between text-white/70 pt-1">
+                      <span className="font-semibold text-white/90 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-indigo-400" />
+                        <span>2. Church Stream Key:</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const keyToCopy = adminObsStreamKey.trim() || 'gcz_live_apostle_joe_2026';
+                          if (navigator.clipboard) {
+                            navigator.clipboard.writeText(keyToCopy);
+                            setCopiedObsKey(true);
+                            setTimeout(() => setCopiedObsKey(false), 2200);
+                          }
+                        }}
+                        className="text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1 cursor-pointer bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20"
+                      >
+                        <Copy className="w-3 h-3" />
+                        <span>{copiedObsKey ? 'Copied Stream Key!' : 'Copy Stream Key'}</span>
+                      </button>
+                    </div>
+                    <code className="block bg-black/60 p-2 rounded-lg font-mono text-[11px] text-indigo-300 break-all select-all border border-white/5">
+                      {adminObsStreamKey.trim() || 'gcz_live_apostle_joe_2026'}
+                    </code>
+
+                    {/* How to Connect OBS to Gateway Connect Guidance */}
+                    <div className="pt-2 border-t border-white/10 text-[10.5px] text-white/70 space-y-1">
+                      <p className="font-semibold text-white/90">How to connect OBS Studio to Gateway Connect:</p>
+                      <ol className="list-decimal list-inside space-y-0.5 text-white/60">
+                        <li>In OBS Studio, open <strong className="text-white/80">Settings &gt; Stream</strong>.</li>
+                        <li>Under <strong className="text-white/80">Service</strong>, select <strong className="text-white/80">Custom...</strong></li>
+                        <li>Paste the <strong className="text-purple-300">Server URL</strong> and <strong className="text-indigo-300">Stream Key</strong> copied from above.</li>
+                        <li>Click <strong className="text-white/80">Start Streaming</strong> in OBS, then click <strong className="text-white/80">Start OBS Stream</strong> above to broadcast to all members on Web and Mobile.</li>
+                      </ol>
+                    </div>
                   </div>
                 </div>
 

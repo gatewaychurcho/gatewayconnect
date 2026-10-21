@@ -5142,7 +5142,8 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
 
   // OBS Studio Live Streaming Key & Source
   static getObsStreamKey(): string {
-    return getLocal<string>('gcz_obs_stream_key_v1', '');
+    const key = getLocal<string>('gcz_obs_stream_key_v1', 'gcz_live_apostle_joe_2026');
+    return key || 'gcz_live_apostle_joe_2026';
   }
 
   static setObsStreamKey(key: string): void {

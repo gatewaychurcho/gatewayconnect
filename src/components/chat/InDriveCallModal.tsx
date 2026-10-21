@@ -53,6 +53,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const pendingCandidatesRef = useRef<any[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
   const ringIntervalRef = useRef<any>(null);
   const timerIntervalRef = useRef<any>(null);
@@ -125,9 +126,14 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
   // Initialize WebRTC Peer Connection for real 2-way microphone voice audio
   const setupWebRTC = async (isInitiator: boolean) => {
     try {
+      if (peerConnectionRef.current) {
+        try { peerConnectionRef.current.close(); } catch {}
+      }
       const pc = new RTCPeerConnection({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
           { urls: 'stun:global.stun.twilio.com:3478' }
         ]
       });
@@ -135,17 +141,26 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
 
       // Handle remote incoming audio stream
       pc.ontrack = (event) => {
-        if (event.streams && event.streams[0]) {
-          if (remoteAudioRef.current) {
-            remoteAudioRef.current.srcObject = event.streams[0];
-            remoteAudioRef.current.play().catch(() => {});
-          }
+        console.log('[WebRTC] Received remote track:', event.track.kind);
+        const incomingStream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track]);
+        if (remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = incomingStream;
+          remoteAudioRef.current.volume = 1.0;
+          remoteAudioRef.current.muted = false;
+          remoteAudioRef.current.play().catch((err) => {
+            console.warn('[WebRTC] Autoplay remote audio caught:', err);
+          });
         }
       };
 
       // Send local ICE candidates to peer
       pc.onicecandidate = (event) => {
         if (event.candidate) {
+          const candJson = event.candidate.toJSON ? event.candidate.toJSON() : {
+            candidate: event.candidate.candidate,
+            sdpMid: event.candidate.sdpMid,
+            sdpMLineIndex: event.candidate.sdpMLineIndex
+          };
           liveSyncService.sendCallSignal({
             callId,
             action: 'candidate' as any,
@@ -155,18 +170,27 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
               avatar_url: currentUser.avatar_url
             },
             targetUserId: partnerUser.id,
-            candidate: event.candidate
+            candidate: candJson
           } as any);
         }
       };
 
-      // Get local microphone stream
+      // Get local microphone stream with professional acoustic echo cancellation & noise suppression
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-          localStreamRef.current = stream;
-          stream.getTracks().forEach((track) => {
-            pc.addTrack(track, stream);
+          if (!localStreamRef.current) {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+              },
+              video: false
+            });
+            localStreamRef.current = stream;
+          }
+          localStreamRef.current.getTracks().forEach((track) => {
+            pc.addTrack(track, localStreamRef.current!);
           });
         } catch (micErr) {
           console.warn('Microphone permission not granted or device missing:', micErr);
@@ -174,7 +198,10 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
       }
 
       if (isInitiator) {
-        const offer = await pc.createOffer();
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: false
+        });
         await pc.setLocalDescription(offer);
         liveSyncService.sendCallSignal({
           callId,
@@ -257,7 +284,6 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
         stopRingtone();
         setCallStatus('connected');
         setupWebRTC(true);
-        void agoraService.joinVoiceCall(`indrive_call_${callId}`, currentUser.id);
       }
 
       // When SDP offer arrives (on receiver side)
@@ -266,10 +292,20 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
           if (!peerConnectionRef.current) {
             await setupWebRTC(false);
           }
-          if (peerConnectionRef.current) {
-            await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-            const answer = await peerConnectionRef.current.createAnswer();
-            await peerConnectionRef.current.setLocalDescription(answer);
+          const pc = peerConnectionRef.current;
+          if (pc) {
+            await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+            // Drain buffered ICE candidates
+            if (pendingCandidatesRef.current.length > 0) {
+              for (const cand of pendingCandidatesRef.current) {
+                try { await pc.addIceCandidate(new RTCIceCandidate(cand)); } catch (e) {}
+              }
+              pendingCandidatesRef.current = [];
+            }
+            const answer = await pc.createAnswer({
+              offerToReceiveAudio: true
+            });
+            await pc.setLocalDescription(answer);
             liveSyncService.sendCallSignal({
               callId,
               action: 'answer_sdp' as any,
@@ -279,17 +315,32 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
             } as any);
           }
         };
-        processOffer().catch(() => {});
+        processOffer().catch((err) => console.warn('processOffer error:', err));
       }
 
       // When SDP answer arrives (on caller side)
       if ((signal.action as any) === 'answer_sdp' && signal.sdp && peerConnectionRef.current) {
-        peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp)).catch(() => {});
+        const pc = peerConnectionRef.current;
+        pc.setRemoteDescription(new RTCSessionDescription(signal.sdp)).then(async () => {
+          // Drain buffered ICE candidates
+          if (pendingCandidatesRef.current.length > 0) {
+            for (const cand of pendingCandidatesRef.current) {
+              try { await pc.addIceCandidate(new RTCIceCandidate(cand)); } catch (e) {}
+            }
+            pendingCandidatesRef.current = [];
+          }
+        }).catch((err) => console.warn('setRemoteDescription answer error:', err));
       }
 
       // When ICE candidate arrives
-      if ((signal.action as any) === 'candidate' && signal.candidate && peerConnectionRef.current) {
-        peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(() => {});
+      if ((signal.action as any) === 'candidate' && signal.candidate) {
+        const cand = signal.candidate;
+        const pc = peerConnectionRef.current;
+        if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+          pc.addIceCandidate(new RTCIceCandidate(cand)).catch((err) => console.warn('addIceCandidate error:', err));
+        } else {
+          pendingCandidatesRef.current.push(cand);
+        }
       }
 
       // When peer declines call - close screen instantly
@@ -358,7 +409,6 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
     stopRingtone();
     setCallStatus('connected');
     setupWebRTC(false);
-    void agoraService.joinVoiceCall(`indrive_call_${callId}`, currentUser.id);
 
     liveSyncService.sendCallSignal({
       callId,
@@ -478,9 +528,10 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
 
   // Toggle Speaker Output
   const handleToggleSpeaker = () => {
-    setIsSpeakerOn(!isSpeakerOn);
+    const nextSpeaker = !isSpeakerOn;
+    setIsSpeakerOn(nextSpeaker);
     if (remoteAudioRef.current) {
-      remoteAudioRef.current.muted = isSpeakerOn;
+      remoteAudioRef.current.muted = !nextSpeaker;
     }
   };
 
@@ -497,8 +548,13 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
         className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-[95%] max-w-md bg-slate-900/95 backdrop-blur-2xl border border-emerald-500/40 shadow-2xl rounded-2xl p-2.5 sm:p-3 flex items-center justify-between text-white animate-in slide-in-from-top-4 duration-200 select-none cursor-pointer"
         onClick={() => setIsMinimized(false)}
       >
-        {/* Hidden in-DOM audio element for mobile & web audio streams - MUST REMAIN MOUNTED */}
-        <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
+        {/* Real in-DOM audio element for mobile & web audio streams - MUST REMAIN MOUNTED & DECODING */}
+        <audio 
+          ref={remoteAudioRef} 
+          autoPlay 
+          playsInline 
+          style={{ position: 'fixed', top: -9999, left: -9999, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }} 
+        />
 
         {/* Left: Caller Avatar + Name + Pulse + Timer */}
         <div className="flex items-center gap-2.5 min-w-0">
@@ -591,8 +647,13 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
       className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-between p-6 sm:p-8 text-white select-none animate-in fade-in duration-200"
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Hidden in-DOM audio element for mobile & web audio streams */}
-      <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
+      {/* Real in-DOM audio element for mobile & web audio streams - MUST REMAIN MOUNTED & DECODING */}
+      <audio 
+        ref={remoteAudioRef} 
+        autoPlay 
+        playsInline 
+        style={{ position: 'fixed', top: -9999, left: -9999, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }} 
+      />
 
       {/* Background ambient lighting ripple */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">

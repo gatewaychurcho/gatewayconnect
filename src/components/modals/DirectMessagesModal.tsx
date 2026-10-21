@@ -282,69 +282,154 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   };
 
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [voiceRecordingDuration, setVoiceRecordingDuration] = useState(0);
+  const voiceRecordingTimerRef = useRef<any>(null);
+  const voiceMediaStreamRef = useRef<MediaStream | null>(null);
+  const isVoiceCancelledRef = useRef<boolean>(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  const handleVoiceRecordToggle = async () => {
-    if (isRecordingVoice) {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
+  const formatVoiceTimer = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getSupportedAudioMimeType = () => {
+    if (typeof MediaRecorder === 'undefined') return '';
+    const candidates = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',
+      'audio/aac',
+      'audio/ogg'
+    ];
+    for (const t of candidates) {
+      if (MediaRecorder.isTypeSupported(t)) return t;
+    }
+    return '';
+  };
+
+  const handleStartVoiceRecording = async () => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        alert('Microphone recording is not supported on this browser.');
+        return;
       }
-      setIsRecordingVoice(false);
-    } else {
-      try {
-        if (!navigator.mediaDevices?.getUserMedia) {
-          alert('Microphone recording is not supported on this browser.');
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      voiceMediaStreamRef.current = stream;
+      audioChunksRef.current = [];
+      isVoiceCancelledRef.current = false;
+
+      const mimeType = getSupportedAudioMimeType();
+      const options: MediaRecorderOptions = mimeType ? { mimeType } : {};
+      const recorder = new MediaRecorder(stream, options);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        if (voiceRecordingTimerRef.current) {
+          clearInterval(voiceRecordingTimerRef.current);
+          voiceRecordingTimerRef.current = null;
+        }
+        if (voiceMediaStreamRef.current) {
+          voiceMediaStreamRef.current.getTracks().forEach((track) => track.stop());
+          voiceMediaStreamRef.current = null;
+        }
+        setIsRecordingVoice(false);
+        setVoiceRecordingDuration(0);
+
+        if (isVoiceCancelledRef.current) {
+          audioChunksRef.current = [];
           return;
         }
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioChunksRef.current = [];
-        const recorder = new MediaRecorder(stream);
-        mediaRecorderRef.current = recorder;
 
-        recorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) {
-            audioChunksRef.current.push(e.data);
+        if (audioChunksRef.current.length === 0) return;
+
+        const blob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64Audio = reader.result as string;
+          if (activeTab === 'direct' && activeUserId) {
+            StorageService.sendDirectMessage(
+              currentUser.id,
+              activeUserId,
+              'Voice note',
+              undefined,
+              base64Audio,
+              'audio'
+            );
+            refreshMessages();
+            refreshThreads();
+          } else if (activeTab === 'groups' && activeGroupId) {
+            StorageService.sendChatGroupMessage(activeGroupId, {
+              sender_id: currentUser.id,
+              sender_name: currentUser.full_name,
+              text: 'Voice note',
+              media_url: base64Audio,
+              media_type: 'audio'
+            });
+            refreshGroupsData();
           }
         };
+        reader.readAsDataURL(blob);
+      };
 
-        recorder.onstop = () => {
-          stream.getTracks().forEach((track) => track.stop());
-          const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64Audio = reader.result as string;
-            if (activeTab === 'direct' && activeUserId) {
-              StorageService.sendDirectMessage(
-                currentUser.id,
-                activeUserId,
-                'Voice note',
-                undefined,
-                base64Audio,
-                'audio'
-              );
-              refreshMessages();
-              refreshThreads();
-            } else if (activeTab === 'groups' && activeGroupId) {
-              StorageService.sendChatGroupMessage(activeGroupId, {
-                sender_id: currentUser.id,
-                sender_name: currentUser.full_name,
-                text: 'Voice note',
-                media_url: base64Audio,
-                media_type: 'audio'
-              });
-              refreshGroupsData();
-            }
-          };
-          reader.readAsDataURL(blob);
-        };
+      recorder.start(250);
+      setIsRecordingVoice(true);
+      setVoiceRecordingDuration(0);
 
-        recorder.start();
-        setIsRecordingVoice(true);
-      } catch (err) {
-        console.warn('Microphone error:', err);
-        alert('Please allow microphone permissions to record a voice note.');
+      if (voiceRecordingTimerRef.current) clearInterval(voiceRecordingTimerRef.current);
+      voiceRecordingTimerRef.current = setInterval(() => {
+        setVoiceRecordingDuration((prev) => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.warn('Microphone error:', err);
+      alert('Please allow microphone permissions to record a voice note.');
+    }
+  };
+
+  const handleStopAndSendVoiceRecording = () => {
+    isVoiceCancelledRef.current = false;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const handleCancelVoiceRecording = () => {
+    isVoiceCancelledRef.current = true;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    } else {
+      if (voiceMediaStreamRef.current) {
+        voiceMediaStreamRef.current.getTracks().forEach((track) => track.stop());
+        voiceMediaStreamRef.current = null;
       }
+      if (voiceRecordingTimerRef.current) {
+        clearInterval(voiceRecordingTimerRef.current);
+        voiceRecordingTimerRef.current = null;
+      }
+      setIsRecordingVoice(false);
+      setVoiceRecordingDuration(0);
+    }
+  };
+
+  const handleVoiceRecordToggle = () => {
+    if (isRecordingVoice) {
+      handleStopAndSendVoiceRecording();
+    } else {
+      handleStartVoiceRecording();
     }
   };
   const groupAvatarInputRef = useRef<HTMLInputElement>(null);
@@ -3313,67 +3398,134 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                     }}
                     className="p-2 sm:p-2.5 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-border flex items-center gap-1.5 sm:gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
                   >
-                    <button
-                      type="button"
-                      onClick={() => setShowEmojiPicker(prev => !prev)}
-                      title="Quick Reactions"
-                      className={`p-2 rounded-full border transition-colors shrink-0 cursor-pointer ${
-                        showEmojiPicker 
-                          ? 'bg-[#00a884]/20 text-[#00a884] border-[#00a884]/40' 
-                          : 'bg-white dark:bg-[#2a3942] hover:bg-neutral-100 text-muted-foreground hover:text-foreground border-transparent'
-                      }`}
-                    >
-                      <Smile className="w-5 h-5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => mediaFileInputRef.current?.click()}
-                      title="Attach photo, video, audio or document"
-                      className="p-2 rounded-full bg-white dark:bg-[#2a3942] hover:bg-neutral-100 dark:hover:bg-[#32444f] text-muted-foreground hover:text-[#00a884] transition-colors shrink-0 cursor-pointer shadow-xs"
-                    >
-                      <Paperclip className="w-5 h-5" />
-                    </button>
-                    <input
-                      type="text"
-                      value={inputText}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setInputText(val);
-                        if (activeUserId) {
-                          window.dispatchEvent(new CustomEvent('gcz_user_typing', {
-                            detail: {
-                              userId: currentUser.id,
-                              userName: currentUser.full_name,
-                              targetId: activeUserId,
-                              isTyping: val.length > 0
-                            }
-                          }));
-                        }
-                      }}
-                      placeholder={`Message ${activeUser.full_name}...`}
-                      className="flex-1 bg-white dark:bg-[#2a3942] border-0 rounded-2xl px-4 py-2.5 text-xs sm:text-sm text-[#111b21] dark:text-[#e9edef] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#00a884] shadow-xs"
-                    />
-                    {inputText.trim() ? (
-                      <button
-                        type="submit"
-                        className="w-10 h-10 rounded-full bg-[#00a884] hover:bg-[#02906f] active:scale-95 text-white flex items-center justify-center transition-all shadow-md shrink-0 cursor-pointer"
-                        title="Send message"
-                      >
-                        <Send className="w-4 h-4 ml-0.5" />
-                      </button>
+                    {isRecordingVoice ? (
+                      /* WhatsApp Active Voice Recording Bar */
+                      <div className="flex-1 flex items-center justify-between gap-2 sm:gap-3 bg-white dark:bg-[#2a3942] rounded-2xl px-3 py-2 animate-in fade-in duration-200 shadow-xs">
+                        {/* Left: Red pulsing dot + timer + sound wave visualizer */}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-3 h-3 rounded-full bg-rose-500 animate-pulse shrink-0" />
+                          <span className="text-xs sm:text-sm font-semibold text-rose-500 font-mono">
+                            {formatVoiceTimer(voiceRecordingDuration)}
+                          </span>
+                          <div className="flex items-center gap-0.5 sm:gap-1 pl-1">
+                            <span className="w-1 h-3 bg-[#00a884] rounded-full animate-bounce [animation-delay:-0.3s]" />
+                            <span className="w-1 h-5 bg-[#00a884] rounded-full animate-bounce [animation-delay:-0.15s]" />
+                            <span className="w-1 h-2 bg-[#00a884] rounded-full animate-bounce [animation-delay:-0.4s]" />
+                            <span className="w-1 h-4 bg-[#00a884] rounded-full animate-bounce [animation-delay:-0.2s]" />
+                            <span className="w-1 h-6 bg-[#00a884] rounded-full animate-bounce [animation-delay:-0.05s]" />
+                            <span className="w-1 h-3 bg-[#00a884] rounded-full animate-bounce [animation-delay:-0.25s]" />
+                          </div>
+                        </div>
+
+                        {/* Middle status prompt */}
+                        <span className="hidden sm:inline text-[11px] text-muted-foreground truncate">
+                          Recording voice note...
+                        </span>
+
+                        {/* Right: Discard / Trash button + WhatsApp Send button */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={handleCancelVoiceRecording}
+                            className="p-2 rounded-full hover:bg-rose-500/10 text-rose-500 active:scale-95 transition-all cursor-pointer"
+                            title="Discard voice note"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleStopAndSendVoiceRecording}
+                            className="w-9 h-9 rounded-full bg-[#00a884] hover:bg-[#02906f] active:scale-95 text-white flex items-center justify-center transition-all shadow-md cursor-pointer"
+                            title="Send voice note"
+                          >
+                            <Send className="w-4 h-4 ml-0.5" />
+                          </button>
+                        </div>
+                      </div>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={handleVoiceRecordToggle}
-                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-md shrink-0 cursor-pointer active:scale-95 ${
-                          isRecordingVoice
-                            ? 'bg-rose-500 text-white animate-pulse'
-                            : 'bg-[#00a884] hover:bg-[#02906f] text-white'
-                        }`}
-                        title={isRecordingVoice ? "Recording voice note (tap to send)..." : "Hold or tap to record voice note"}
-                      >
-                        <Mic className="w-4 h-4" />
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setShowEmojiPicker(prev => !prev)}
+                          title="Quick Reactions"
+                          className={`p-2 rounded-full border transition-colors shrink-0 cursor-pointer ${
+                            showEmojiPicker 
+                              ? 'bg-[#00a884]/20 text-[#00a884] border-[#00a884]/40' 
+                              : 'bg-white dark:bg-[#2a3942] hover:bg-neutral-100 text-muted-foreground hover:text-foreground border-transparent'
+                          }`}
+                        >
+                          <Smile className="w-5 h-5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (mediaFileInputRef.current) {
+                              mediaFileInputRef.current.accept = "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar";
+                              mediaFileInputRef.current.click();
+                            }
+                          }}
+                          title="Attach photo, video, audio or document"
+                          className="p-2 rounded-full bg-white dark:bg-[#2a3942] hover:bg-neutral-100 dark:hover:bg-[#32444f] text-muted-foreground hover:text-[#00a884] transition-colors shrink-0 cursor-pointer shadow-xs"
+                        >
+                          <Paperclip className="w-5 h-5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (mediaFileInputRef.current) {
+                              mediaFileInputRef.current.accept = "image/*";
+                              mediaFileInputRef.current.click();
+                            }
+                          }}
+                          title="Take or select photo"
+                          className="p-2 rounded-full bg-white dark:bg-[#2a3942] hover:bg-neutral-100 dark:hover:bg-[#32444f] text-muted-foreground hover:text-[#00a884] transition-colors shrink-0 cursor-pointer shadow-xs"
+                        >
+                          <Camera className="w-5 h-5" />
+                        </button>
+
+                        <input
+                          type="text"
+                          value={inputText}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setInputText(val);
+                            if (activeUserId) {
+                              window.dispatchEvent(new CustomEvent('gcz_user_typing', {
+                                detail: {
+                                  userId: currentUser.id,
+                                  userName: currentUser.full_name,
+                                  targetId: activeUserId,
+                                  isTyping: val.length > 0
+                                }
+                              }));
+                            }
+                          }}
+                          placeholder={`Message ${activeUser.full_name}...`}
+                          className="flex-1 bg-white dark:bg-[#2a3942] border-0 rounded-2xl px-4 py-2.5 text-xs sm:text-sm text-[#111b21] dark:text-[#e9edef] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#00a884] shadow-xs"
+                        />
+
+                        {inputText.trim() ? (
+                          <button
+                            type="submit"
+                            className="w-10 h-10 rounded-full bg-[#00a884] hover:bg-[#02906f] active:scale-95 text-white flex items-center justify-center transition-all shadow-md shrink-0 cursor-pointer"
+                            title="Send message"
+                          >
+                            <Send className="w-4 h-4 ml-0.5" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleVoiceRecordToggle}
+                            className="w-10 h-10 rounded-full bg-[#00a884] hover:bg-[#02906f] active:scale-95 text-white flex items-center justify-center transition-all shadow-md shrink-0 cursor-pointer"
+                            title="Tap to record voice note"
+                          >
+                            <Mic className="w-4 h-4" />
+                          </button>
+                        )}
+                      </>
                     )}
                   </form>
                 </>
@@ -4222,63 +4374,128 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               <Smile className="w-5 h-5" />
                             </button>
 
-                            {/* Quick @ Tag button */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMentionSuggestionsOpen(prev => !prev);
-                                setMentionFilter('');
-                              }}
-                              title="Tag a group member"
-                              className={`p-2 rounded-full border text-xs transition-colors shrink-0 cursor-pointer ${
-                                mentionSuggestionsOpen
-                                  ? 'bg-[#00a884] text-white border-[#00a884]'
-                                  : 'bg-white dark:bg-[#2a3942] hover:bg-neutral-100 text-muted-foreground hover:text-foreground border-transparent'
-                              }`}
-                            >
-                              <AtSign className="w-4 h-4" />
-                            </button>
+                            {isRecordingVoice ? (
+                              /* WhatsApp Active Voice Recording Bar in Group */
+                              <div className="flex-1 flex items-center justify-between gap-2 sm:gap-3 bg-white dark:bg-[#2a3942] rounded-2xl px-3 py-2 animate-in fade-in duration-200 shadow-xs">
+                                {/* Left: Red pulsing dot + timer + sound wave visualizer */}
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="w-3 h-3 rounded-full bg-rose-500 animate-pulse shrink-0" />
+                                  <span className="text-xs sm:text-sm font-semibold text-rose-500 font-mono">
+                                    {formatVoiceTimer(voiceRecordingDuration)}
+                                  </span>
+                                  <div className="flex items-center gap-0.5 sm:gap-1 pl-1">
+                                    <span className="w-1 h-3 bg-[#00a884] rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                    <span className="w-1 h-5 bg-[#00a884] rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                    <span className="w-1 h-2 bg-[#00a884] rounded-full animate-bounce [animation-delay:-0.4s]" />
+                                    <span className="w-1 h-4 bg-[#00a884] rounded-full animate-bounce [animation-delay:-0.2s]" />
+                                    <span className="w-1 h-6 bg-[#00a884] rounded-full animate-bounce [animation-delay:-0.05s]" />
+                                    <span className="w-1 h-3 bg-[#00a884] rounded-full animate-bounce [animation-delay:-0.25s]" />
+                                  </div>
+                                </div>
 
-                            {/* Group attachment button */}
-                            <button
-                              type="button"
-                              onClick={() => mediaFileInputRef.current?.click()}
-                              title="Attach image, video, audio or document"
-                              className="p-2 rounded-full bg-white dark:bg-[#2a3942] hover:bg-neutral-100 dark:hover:bg-[#32444f] text-muted-foreground hover:text-[#00a884] transition-colors shrink-0 cursor-pointer shadow-xs"
-                            >
-                              <Paperclip className="w-5 h-5" />
-                            </button>
+                                {/* Status text */}
+                                <span className="hidden sm:inline text-[11px] text-muted-foreground truncate">
+                                  Recording voice note...
+                                </span>
 
-                            <input
-                              ref={groupInputRef}
-                              type="text"
-                              value={groupInputText}
-                              onChange={handleGroupInputChange}
-                              placeholder={`Message ${activeGroup.name} (type @ to tag)...`}
-                              className="flex-1 min-w-0 max-w-full bg-white dark:bg-[#2a3942] border-0 rounded-2xl px-3 sm:px-4 py-2.5 text-xs sm:text-sm text-[#111b21] dark:text-[#e9edef] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#00a884] shadow-xs"
-                            />
+                                {/* Right: Trash / Cancel button + WhatsApp Send button */}
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={handleCancelVoiceRecording}
+                                    className="p-2 rounded-full hover:bg-rose-500/10 text-rose-500 active:scale-95 transition-all cursor-pointer"
+                                    title="Discard voice note"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
 
-                            {groupInputText.trim() ? (
-                              <button
-                                type="submit"
-                                className="w-10 h-10 rounded-full bg-[#00a884] hover:bg-[#02906f] active:scale-95 text-white flex items-center justify-center transition-all shadow-md shrink-0 cursor-pointer"
-                                title="Send message"
-                              >
-                                <Send className="w-4 h-4 ml-0.5" />
-                              </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleStopAndSendVoiceRecording}
+                                    className="w-9 h-9 rounded-full bg-[#00a884] hover:bg-[#02906f] active:scale-95 text-white flex items-center justify-center transition-all shadow-md cursor-pointer"
+                                    title="Send voice note"
+                                  >
+                                    <Send className="w-4 h-4 ml-0.5" />
+                                  </button>
+                                </div>
+                              </div>
                             ) : (
-                              <button
-                                type="button"
-                                onClick={handleVoiceRecordToggle}
-                                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-md shrink-0 cursor-pointer active:scale-95 ${
-                                  isRecordingVoice
-                                    ? 'bg-rose-500 text-white animate-pulse'
-                                    : 'bg-[#00a884] hover:bg-[#02906f] text-white'
-                                }`}
-                                title={isRecordingVoice ? "Recording voice note (tap to send)..." : "Hold or tap to record voice note"}
-                              >
-                                <Mic className="w-4 h-4" />
-                              </button>
+                              <>
+                                {/* Quick @ Tag button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMentionSuggestionsOpen(prev => !prev);
+                                    setMentionFilter('');
+                                  }}
+                                  title="Tag a group member"
+                                  className={`p-2 rounded-full border text-xs transition-colors shrink-0 cursor-pointer ${
+                                    mentionSuggestionsOpen
+                                      ? 'bg-[#00a884] text-white border-[#00a884]'
+                                      : 'bg-white dark:bg-[#2a3942] hover:bg-neutral-100 text-muted-foreground hover:text-foreground border-transparent'
+                                  }`}
+                                >
+                                  <AtSign className="w-4 h-4" />
+                                </button>
+
+                                {/* Group attachment button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (mediaFileInputRef.current) {
+                                      mediaFileInputRef.current.accept = "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar";
+                                      mediaFileInputRef.current.click();
+                                    }
+                                  }}
+                                  title="Attach image, video, audio or document"
+                                  className="p-2 rounded-full bg-white dark:bg-[#2a3942] hover:bg-neutral-100 dark:hover:bg-[#32444f] text-muted-foreground hover:text-[#00a884] transition-colors shrink-0 cursor-pointer shadow-xs"
+                                >
+                                  <Paperclip className="w-5 h-5" />
+                                </button>
+
+                                {/* Group camera button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (mediaFileInputRef.current) {
+                                      mediaFileInputRef.current.accept = "image/*";
+                                      mediaFileInputRef.current.click();
+                                    }
+                                  }}
+                                  title="Take or select photo"
+                                  className="p-2 rounded-full bg-white dark:bg-[#2a3942] hover:bg-neutral-100 dark:hover:bg-[#32444f] text-muted-foreground hover:text-[#00a884] transition-colors shrink-0 cursor-pointer shadow-xs"
+                                >
+                                  <Camera className="w-5 h-5" />
+                                </button>
+
+                                <input
+                                  ref={groupInputRef}
+                                  type="text"
+                                  value={groupInputText}
+                                  onChange={handleGroupInputChange}
+                                  placeholder={`Message ${activeGroup.name} (type @ to tag)...`}
+                                  className="flex-1 min-w-0 max-w-full bg-white dark:bg-[#2a3942] border-0 rounded-2xl px-3 sm:px-4 py-2.5 text-xs sm:text-sm text-[#111b21] dark:text-[#e9edef] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#00a884] shadow-xs"
+                                />
+
+                                {groupInputText.trim() ? (
+                                  <button
+                                    type="submit"
+                                    className="w-10 h-10 rounded-full bg-[#00a884] hover:bg-[#02906f] active:scale-95 text-white flex items-center justify-center transition-all shadow-md shrink-0 cursor-pointer"
+                                    title="Send message"
+                                  >
+                                    <Send className="w-4 h-4 ml-0.5" />
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={handleVoiceRecordToggle}
+                                    className="w-10 h-10 rounded-full bg-[#00a884] hover:bg-[#02906f] active:scale-95 text-white flex items-center justify-center transition-all shadow-md shrink-0 cursor-pointer"
+                                    title="Tap to record voice note"
+                                  >
+                                    <Mic className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </>
                             )}
                           </form>
                         </>
@@ -5055,26 +5272,136 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
         </div>
       )}
 
-      {/* WhatsApp-Style Fullscreen Media Preview Lightbox Modal */}
+      {/* WhatsApp Native Fullscreen Photo & Media Sender Lightbox */}
       {showShareMediaPrompt && stagedLocalMedia && (
-        <div className="fixed inset-0 z-[70] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3" onClick={() => { setShowShareMediaPrompt(false); setStagedLocalMedia(null); }}>
-          <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Paperclip className="w-4 h-4 text-primary" />
-                <div><h3 className="font-bold text-sm text-foreground">Send attachment</h3><p className="text-[10px] text-muted-foreground truncate max-w-[250px]">{stagedLocalMedia.name} • {stagedLocalMedia.size}</p></div>
+        <div 
+          className="fixed inset-0 z-[120] bg-[#0b141a]/95 backdrop-blur-xl flex flex-col justify-between text-white animate-in fade-in duration-150 select-none"
+          onClick={() => { setShowShareMediaPrompt(false); setStagedLocalMedia(null); setShareMediaCaption(''); }}
+        >
+          {/* Top Bar: Back/Close, Contact Header, Switch/Change button */}
+          <div 
+            className="w-full h-16 px-4 flex items-center justify-between border-b border-white/10 shrink-0 bg-[#0b141a]/80"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => { setShowShareMediaPrompt(false); setStagedLocalMedia(null); setShareMediaCaption(''); }}
+                className="w-10 h-10 rounded-full hover:bg-white/10 active:scale-95 text-white/90 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                title="Cancel"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                  <span>Send to {activeUser ? activeUser.full_name : activeGroup ? activeGroup.name : 'Recipient'}</span>
+                </h4>
+                <p className="text-[11px] text-white/50 flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-[#00a884]" />
+                  <span>End-to-end encrypted • {stagedLocalMedia.name} ({stagedLocalMedia.size})</span>
+                </p>
               </div>
-              <button type="button" onClick={() => { setShowShareMediaPrompt(false); setStagedLocalMedia(null); }} className="p-1.5 rounded-lg hover:bg-secondary"><X className="w-4 h-4" /></button>
             </div>
-            <div className="p-4 space-y-3">
-              <div className="rounded-xl border border-border bg-background min-h-32 flex items-center justify-center overflow-hidden">
-                {stagedLocalMedia.type === 'image' ? <img src={stagedLocalMedia.url} alt="Attachment preview" className="max-h-64 max-w-full object-contain" /> : stagedLocalMedia.type === 'video' ? <video src={stagedLocalMedia.url} controls className="max-h-64 max-w-full" /> : stagedLocalMedia.type === 'audio' ? <div className="w-full p-5"><Music className="w-8 h-8 text-primary mx-auto mb-3" /><audio src={stagedLocalMedia.url} controls className="w-full" /></div> : <div className="p-8 text-center"><FileText className="w-12 h-12 text-primary mx-auto mb-2" /><p className="text-xs font-semibold text-foreground break-all">{stagedLocalMedia.name}</p></div>}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => mediaFileInputRef.current?.click()}
+                className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-semibold text-white/90 hover:text-white transition-all cursor-pointer flex items-center gap-1.5 border border-white/10"
+                title="Choose different photo or media"
+              >
+                <Camera className="w-3.5 h-3.5 text-[#00a884]" />
+                <span>Retake / Change</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowShareMediaPrompt(false); setStagedLocalMedia(null); setShareMediaCaption(''); }}
+                className="w-9 h-9 rounded-full hover:bg-white/10 text-white/70 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Center Media View: Crisp, Full Resolution Preview */}
+          <div 
+            className="flex-1 min-h-0 flex items-center justify-center p-3 sm:p-6 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {stagedLocalMedia.type === 'image' ? (
+              <div className="relative max-h-full max-w-full flex items-center justify-center">
+                <img 
+                  src={stagedLocalMedia.url} 
+                  alt="Photo preview" 
+                  className="max-h-[70vh] max-w-full rounded-2xl object-contain shadow-2xl border border-white/10" 
+                />
               </div>
-              <input value={shareMediaCaption} onChange={(e) => setShareMediaCaption(e.target.value)} placeholder="Add a caption (optional)" className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
-              <div className="flex gap-2">
-                <button type="button" onClick={() => mediaFileInputRef.current?.click()} className="flex-1 py-2 rounded-lg bg-secondary border border-border text-xs font-semibold">Choose another</button>
-                <button type="button" onClick={handleConfirmSendMedia} disabled={isUploadingMedia} className="flex-1 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors">{isUploadingMedia ? <span className="animate-pulse">Sending...</span> : <><Send className="w-3.5 h-3.5" />Send</>}</button>
+            ) : stagedLocalMedia.type === 'video' ? (
+              <video 
+                src={stagedLocalMedia.url} 
+                controls 
+                autoPlay 
+                className="max-h-[70vh] max-w-full rounded-2xl shadow-2xl border border-white/10" 
+              />
+            ) : stagedLocalMedia.type === 'audio' ? (
+              <div className="p-8 bg-[#1f2c34] border border-white/10 rounded-2xl max-w-md w-full text-center shadow-2xl space-y-4">
+                <div className="w-16 h-16 rounded-full bg-[#00a884]/20 text-[#00a884] flex items-center justify-center mx-auto">
+                  <Music className="w-8 h-8" />
+                </div>
+                <p className="text-sm font-bold text-white truncate">{stagedLocalMedia.name}</p>
+                <audio src={stagedLocalMedia.url} controls className="w-full" />
               </div>
+            ) : (
+              <div className="p-8 bg-[#1f2c34] border border-white/10 rounded-2xl max-w-md w-full text-center shadow-2xl space-y-4">
+                <div className="w-16 h-16 rounded-full bg-primary/20 text-primary flex items-center justify-center mx-auto">
+                  <FileText className="w-8 h-8" />
+                </div>
+                <p className="text-sm font-bold text-white break-all">{stagedLocalMedia.name}</p>
+                <p className="text-xs text-white/50">{stagedLocalMedia.size}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Floating WhatsApp Caption & Send Tray */}
+          <div 
+            className="w-full max-w-2xl mx-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* WhatsApp Caption Pill */}
+              <div className="flex-1 bg-[#1f2c34] border border-white/10 rounded-3xl px-4 py-2.5 flex items-center gap-2.5 shadow-xl">
+                <Smile className="w-5 h-5 text-[#8696a0] shrink-0" />
+                <input 
+                  type="text"
+                  value={shareMediaCaption} 
+                  onChange={(e) => setShareMediaCaption(e.target.value)} 
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (!isUploadingMedia) handleConfirmSendMedia();
+                    }
+                  }}
+                  placeholder="Add a caption..." 
+                  autoFocus
+                  className="flex-1 bg-transparent border-0 text-white placeholder:text-[#8696a0] text-xs sm:text-sm focus:outline-none" 
+                />
+              </div>
+
+              {/* Circular WhatsApp Green Send Button (#00a884) */}
+              <button 
+                type="button" 
+                onClick={handleConfirmSendMedia} 
+                disabled={isUploadingMedia} 
+                className="w-12 h-12 rounded-full bg-[#00a884] hover:bg-[#02906f] active:scale-95 text-white flex items-center justify-center transition-all shadow-xl shadow-[#00a884]/40 shrink-0 cursor-pointer disabled:opacity-50"
+                title="Send photo"
+              >
+                {isUploadingMedia ? (
+                  <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5 ml-0.5" />
+                )}
+              </button>
             </div>
           </div>
         </div>
