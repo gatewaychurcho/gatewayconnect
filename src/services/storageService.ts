@@ -5140,10 +5140,11 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     }
   }
 
-  // OBS Studio Live Streaming Key & Source
+  // OBS Studio Live Streaming Key & Source (Blank by default, waiting for key)
   static getObsStreamKey(): string {
-    const key = getLocal<string>('gcz_obs_stream_key_v1', 'gcz_live_apostle_joe_2026');
-    return key || 'gcz_live_apostle_joe_2026';
+    const key = getLocal<string>('gcz_obs_stream_key_v1', '');
+    if (key === 'gcz_live_apostle_joe_2026') return '';
+    return key || '';
   }
 
   static setObsStreamKey(key: string): void {
@@ -5177,6 +5178,12 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     });
     // Ensure viewerCount reflects real streamers
     status.viewerCount = Math.max(status.viewerCount || 0, realViewersCount);
+    if (status.streamUrl === 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP' || (status.streamUrl && status.streamUrl.includes('facebook.com/ApostleJoeDaniels'))) {
+      status.streamUrl = '';
+    }
+    if (status.obsStreamKey === 'gcz_live_apostle_joe_2026') {
+      status.obsStreamKey = '';
+    }
     if (!status.streamUrl) {
       status.streamUrl = savedUrl;
     }
@@ -5199,9 +5206,11 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
       this.setObsStreamKey(status.obsStreamKey);
     }
     setLocal(KEYS.LIVE_SERMON, status);
-    if (status.streamUrl) {
+    if (status.streamUrl !== undefined) {
       this.setLiveStreamUrl(status.streamUrl);
-      SupabaseSyncService.syncStreamUrl(status.streamUrl).catch(() => {});
+      if (status.streamUrl) {
+        SupabaseSyncService.syncStreamUrl(status.streamUrl).catch(() => {});
+      }
     }
     SupabaseSyncService.syncLiveSermonStatus(status).catch(() => {});
     if (status.isLive) {
@@ -5698,7 +5707,9 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
   // LIVE STREAM URL, FACEBOOK & YOUTUBE STREAMING HELPER
   // =========================================================================
   static getLiveStreamUrl(): string {
-    return getLocal<string>(KEYS.LIVE_STREAM_URL, 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP');
+    const url = getLocal<string>(KEYS.LIVE_STREAM_URL, '');
+    if (url === 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP' || url.includes('facebook.com/ApostleJoeDaniels')) return '';
+    return url || '';
   }
 
   static getOverridePlayingVideo(): { id: string; title: string; youtube_id?: string; video_url?: string; audio_url?: string; thumbnail_url?: string; speaker?: string; series?: string } | null {

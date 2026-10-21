@@ -133,8 +133,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   const [attendeeSearch, setAttendeeSearch] = useState<string>('');
   const [copiedAttendeeData, setCopiedAttendeeData] = useState<boolean>(false);
   const [liveSermonStatus, setLiveSermonStatus] = useState(StorageService.getLiveSermonStatus());
-  const [adminStreamUrl, setAdminStreamUrl] = useState<string>(liveSermonStatus.streamUrl || 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP');
-  const [adminObsStreamKey, setAdminObsStreamKey] = useState<string>(() => StorageService.getObsStreamKey());
+  const [adminStreamUrl, setAdminStreamUrl] = useState<string>(() => {
+    const saved = liveSermonStatus.streamUrl || StorageService.getLiveStreamUrl();
+    if (saved === 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP' || saved.includes('facebook.com/ApostleJoeDaniels')) return '';
+    return saved || '';
+  });
+  const [adminObsStreamKey, setAdminObsStreamKey] = useState<string>(() => {
+    const key = StorageService.getObsStreamKey();
+    if (key === 'gcz_live_apostle_joe_2026') return '';
+    return key || '';
+  });
   const [copiedObsServer, setCopiedObsServer] = useState<boolean>(false);
   const [copiedObsKey, setCopiedObsKey] = useState<boolean>(false);
   const [showAdminStreamPreview, setShowAdminStreamPreview] = useState<boolean>(false);
@@ -2764,7 +2772,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                         type="text"
                         value={adminObsStreamKey}
                         onChange={(e) => setAdminObsStreamKey(e.target.value)}
-                        placeholder="Church OBS Stream Key (e.g. gcz_live_apostle_joe_2026)..."
+                        placeholder="Waiting for OBS stream key (optional - leave blank if not needed)..."
                         className="w-full bg-background/80 border border-purple-500/30 focus:border-purple-400 rounded-lg px-3 py-2 text-xs font-mono text-white placeholder:text-white/30 focus:outline-none"
                       />
                     </div>
@@ -2774,7 +2782,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                       <button
                         type="button"
                         onClick={() => {
-                          const keyToCopy = adminObsStreamKey.trim() || 'gcz_live_apostle_joe_2026';
+                          const keyToCopy = adminObsStreamKey.trim();
+                          if (!keyToCopy) {
+                            alert('No OBS stream key entered yet. You can paste a stream key or leave it blank (key is optional).');
+                            return;
+                          }
                           if (navigator.clipboard) {
                             navigator.clipboard.writeText(keyToCopy);
                             setCopiedObsKey(true);
@@ -2809,20 +2821,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                         <span>Paste</span>
                       </button>
 
-                      {/* Start OBS Streaming Button */}
+                      {/* Clear OBS Stream Key button */}
+                      {adminObsStreamKey && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminObsStreamKey('');
+                            StorageService.setObsStreamKey('');
+                          }}
+                          className="px-2.5 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                          title="Clear stream key"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Clear</span>
+                        </button>
+                      )}
+
+                      {/* Start OBS Streaming Button (Non-mandatory key) */}
                       <button
                         type="button"
                         onClick={() => {
-                          const key = adminObsStreamKey.trim() || 'gcz_live_apostle_joe_2026';
+                          const key = adminObsStreamKey.trim();
                           StorageService.setObsStreamKey(key);
-                          const cleanUrl = key.startsWith('http') || key.startsWith('rtmp') ? key : `obs://${key}`;
-                          StorageService.setLiveStreamUrl(cleanUrl);
+                          const cleanUrl = key ? (key.startsWith('http') || key.startsWith('rtmp') ? key : `obs://${key}`) : '';
+                          if (cleanUrl) StorageService.setLiveStreamUrl(cleanUrl);
                           const newStatus = {
                             ...liveSermonStatus,
                             isLive: true,
                             streamSource: 'obs' as const,
                             obsStreamKey: key,
-                            streamUrl: cleanUrl,
+                            streamUrl: cleanUrl || liveSermonStatus.streamUrl || '',
                             title: 'Gateway Cathedral • Sunday Sanctuary Live Service (OBS Studio Live)'
                           };
                           StorageService.setLiveSermonStatus(newStatus);
@@ -2840,63 +2868,112 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
 
                   {/* RTMP Server & Stream Key Configuration info for OBS Studio */}
                   <div className="bg-black/40 border border-purple-500/20 rounded-xl p-3 space-y-2.5 text-[11px]">
-                    <div className="flex items-center justify-between text-white/70">
-                      <span className="font-semibold text-white/90 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-purple-400 animate-ping" />
-                        <span>1. OBS Server (Ingest RTMP URL):</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (navigator.clipboard) {
-                            navigator.clipboard.writeText('rtmp://stream.gatewayconnect.joedaniels.org/live/');
-                            setCopiedObsServer(true);
-                            setTimeout(() => setCopiedObsServer(false), 2200);
-                          }
-                        }}
-                        className="text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 cursor-pointer bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20"
-                      >
-                        <Copy className="w-3 h-3" />
-                        <span>{copiedObsServer ? 'Copied Server URL!' : 'Copy Server URL'}</span>
-                      </button>
+                    <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200/90 text-[11px] space-y-1">
+                      <p className="font-semibold flex items-center gap-1.5 text-amber-300">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>Why OBS says &quot;Failed to connect to server&quot;:</span>
+                      </p>
+                      <p className="text-[10.5px] leading-relaxed text-amber-200/80">
+                        OBS Studio transmits raw video streams over RTMP protocol (TCP port 1935). Web hosting platforms (like Vercel) only handle standard HTTP/HTTPS web traffic and do not run an RTMP media server on port 1935. To stream footage using OBS, broadcast through Facebook Live, YouTube Live, or an RTMP ingest server, then paste the stream link below.
+                      </p>
                     </div>
-                    <code className="block bg-black/60 p-2 rounded-lg font-mono text-[11px] text-purple-300 break-all select-all border border-white/5">
-                      rtmp://stream.gatewayconnect.joedaniels.org/live/
-                    </code>
 
-                    <div className="flex items-center justify-between text-white/70 pt-1">
-                      <span className="font-semibold text-white/90 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-indigo-400" />
-                        <span>2. Church Stream Key:</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const keyToCopy = adminObsStreamKey.trim() || 'gcz_live_apostle_joe_2026';
-                          if (navigator.clipboard) {
-                            navigator.clipboard.writeText(keyToCopy);
-                            setCopiedObsKey(true);
-                            setTimeout(() => setCopiedObsKey(false), 2200);
-                          }
-                        }}
-                        className="text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1 cursor-pointer bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20"
-                      >
-                        <Copy className="w-3 h-3" />
-                        <span>{copiedObsKey ? 'Copied Stream Key!' : 'Copy Stream Key'}</span>
-                      </button>
+                    <div className="space-y-2 pt-1">
+                      <p className="font-bold text-white/90 text-xs">Standard Streaming Ingest Servers for OBS:</p>
+
+                      {/* Facebook Live RTMP Server */}
+                      <div className="p-2 rounded-lg bg-black/60 border border-white/5 space-y-1">
+                        <div className="flex items-center justify-between text-white/70">
+                          <span className="font-semibold text-blue-300 flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-blue-400" />
+                            <span>Facebook Live RTMP Server:</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (navigator.clipboard) {
+                                navigator.clipboard.writeText('rtmps://live-api-s.facebook.com:443/rtmp/');
+                                setCopiedObsServer(true);
+                                setTimeout(() => setCopiedObsServer(false), 2200);
+                              }
+                            }}
+                            className="text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 cursor-pointer bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 text-[10px]"
+                          >
+                            <Copy className="w-3 h-3" />
+                            <span>{copiedObsServer ? 'Copied FB Server!' : 'Copy FB Server'}</span>
+                          </button>
+                        </div>
+                        <code className="block font-mono text-[10.5px] text-blue-200 break-all select-all">
+                          rtmps://live-api-s.facebook.com:443/rtmp/
+                        </code>
+                      </div>
+
+                      {/* YouTube Live RTMP Server */}
+                      <div className="p-2 rounded-lg bg-black/60 border border-white/5 space-y-1">
+                        <div className="flex items-center justify-between text-white/70">
+                          <span className="font-semibold text-red-300 flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-red-400" />
+                            <span>YouTube Live RTMP Server:</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (navigator.clipboard) {
+                                navigator.clipboard.writeText('rtmp://a.rtmp.youtube.com/live2');
+                                setCopiedObsServer(true);
+                                setTimeout(() => setCopiedObsServer(false), 2200);
+                              }
+                            }}
+                            className="text-red-400 hover:text-red-300 font-bold flex items-center gap-1 cursor-pointer bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 text-[10px]"
+                          >
+                            <Copy className="w-3 h-3" />
+                            <span>Copy YT Server</span>
+                          </button>
+                        </div>
+                        <code className="block font-mono text-[10.5px] text-red-200 break-all select-all">
+                          rtmp://a.rtmp.youtube.com/live2
+                        </code>
+                      </div>
+
+                      {/* Church Stream Key Status */}
+                      <div className="p-2 rounded-lg bg-black/60 border border-white/5 space-y-1">
+                        <div className="flex items-center justify-between text-white/70">
+                          <span className="font-semibold text-indigo-300 flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-indigo-400" />
+                            <span>Stream Key:</span>
+                          </span>
+                          {adminObsStreamKey.trim() && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (navigator.clipboard) {
+                                  navigator.clipboard.writeText(adminObsStreamKey.trim());
+                                  setCopiedObsKey(true);
+                                  setTimeout(() => setCopiedObsKey(false), 2200);
+                                }
+                              }}
+                              className="text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1 cursor-pointer bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 text-[10px]"
+                            >
+                              <Copy className="w-3 h-3" />
+                              <span>{copiedObsKey ? 'Copied Key!' : 'Copy Key'}</span>
+                            </button>
+                          )}
+                        </div>
+                        <code className="block font-mono text-[10.5px] text-indigo-200 break-all select-all">
+                          {adminObsStreamKey.trim() || <span className="text-white/40 italic">Waiting for stream key (optional - no default key)...</span>}
+                        </code>
+                      </div>
                     </div>
-                    <code className="block bg-black/60 p-2 rounded-lg font-mono text-[11px] text-indigo-300 break-all select-all border border-white/5">
-                      {adminObsStreamKey.trim() || 'gcz_live_apostle_joe_2026'}
-                    </code>
 
-                    {/* How to Connect OBS to Gateway Connect Guidance */}
+                    {/* How to Connect OBS Guidance */}
                     <div className="pt-2 border-t border-white/10 text-[10.5px] text-white/70 space-y-1">
-                      <p className="font-semibold text-white/90">How to connect OBS Studio to Gateway Connect:</p>
+                      <p className="font-semibold text-white/90">How to broadcast with OBS Studio:</p>
                       <ol className="list-decimal list-inside space-y-0.5 text-white/60">
                         <li>In OBS Studio, open <strong className="text-white/80">Settings &gt; Stream</strong>.</li>
-                        <li>Under <strong className="text-white/80">Service</strong>, select <strong className="text-white/80">Custom...</strong></li>
-                        <li>Paste the <strong className="text-purple-300">Server URL</strong> and <strong className="text-indigo-300">Stream Key</strong> copied from above.</li>
-                        <li>Click <strong className="text-white/80">Start Streaming</strong> in OBS, then click <strong className="text-white/80">Start OBS Stream</strong> above to broadcast to all members on Web and Mobile.</li>
+                        <li>Select your service (<strong className="text-white/80">Facebook Live</strong>, <strong className="text-white/80">YouTube</strong>, or <strong className="text-white/80">Custom...</strong>).</li>
+                        <li>Paste your Stream Key from your streaming platform (or enter your custom RTMP server).</li>
+                        <li>Click <strong className="text-white/80">Start Streaming</strong> in OBS Studio.</li>
+                        <li>Paste your Facebook/YouTube link into <strong className="text-white/80">Stream Ingest Sources</strong> below (optional key), and click <strong className="text-white/80">Save</strong> or <strong className="text-white/80">Start OBS Stream</strong>.</li>
                       </ol>
                     </div>
                   </div>
@@ -2910,7 +2987,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                         type="url"
                         value={adminStreamUrl}
                         onChange={(e) => setAdminStreamUrl(e.target.value)}
-                        placeholder="Paste Facebook Live or YouTube URL..."
+                        placeholder="Waiting for stream key or live URL (optional)..."
                         className="w-full bg-background border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
                       />
                     </div>
@@ -2930,6 +3007,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                         <span>{showAdminStreamPreview ? 'Hide' : 'Preview'}</span>
                       </button>
 
+                      {/* Clear button if URL is present */}
+                      {adminStreamUrl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminStreamUrl('');
+                            StorageService.setLiveStreamUrl('');
+                            const newStatus = {
+                              ...liveSermonStatus,
+                              streamUrl: '',
+                              isLive: false
+                            };
+                            StorageService.setLiveSermonStatus(newStatus);
+                            setLiveSermonStatus(newStatus);
+                            onRefreshAppState();
+                          }}
+                          className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-300 transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Clear stream link"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Clear</span>
+                        </button>
+                      )}
+
                       <button
                         onClick={() => {
                           const cleanUrl = adminStreamUrl.trim();
@@ -2937,15 +3038,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                           const newStatus = {
                             ...liveSermonStatus,
                             streamUrl: cleanUrl,
-                            isLive: true
+                            isLive: !!cleanUrl
                           };
                           StorageService.setLiveSermonStatus(newStatus);
                           setLiveSermonStatus(newStatus);
-                          StorageService.setOverridePlayingVideo({
-                            id: `stream_${Date.now()}`,
-                            title: newStatus.title || 'Sanctuary Live Stream',
-                            youtube_id: cleanUrl
-                          });
+                          if (cleanUrl) {
+                            StorageService.setOverridePlayingVideo({
+                              id: `stream_${Date.now()}`,
+                              title: newStatus.title || 'Sanctuary Live Stream',
+                              youtube_id: cleanUrl
+                            });
+                          }
                           confetti({ particleCount: 20, spread: 40 });
                           onRefreshAppState();
                         }}
@@ -2957,23 +3060,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                     </div>
                   </div>
 
-                  {/* Quick Preset Links & Local MP4 File Upload */}
+                  {/* Stream Ingest Status & Local MP4 File Upload */}
                   <div className="flex flex-wrap items-center gap-1.5 text-xs">
                     <span className="text-white/40 text-[10px] font-medium">Stream Ingest Sources:</span>
-                    <button
-                      type="button"
-                      onClick={() => setAdminStreamUrl('https://www.facebook.com/ApostleJoeDaniels/live')}
-                      className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 transition-colors text-[11px]"
-                    >
-                      Facebook Live
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAdminStreamUrl('https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP')}
-                      className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 transition-colors text-[11px]"
-                    >
-                      YouTube Live
-                    </button>
+                    <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                      {adminStreamUrl.trim() ? 'Stream Link Active' : 'Blank (Waiting for key / URL - optional)'}
+                    </span>
 
                     <input
                       ref={congregationMp4InputRef}
