@@ -134,6 +134,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
   const [copiedAttendeeData, setCopiedAttendeeData] = useState<boolean>(false);
   const [liveSermonStatus, setLiveSermonStatus] = useState(StorageService.getLiveSermonStatus());
   const [adminStreamUrl, setAdminStreamUrl] = useState<string>(liveSermonStatus.streamUrl || 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP');
+  const [adminObsStreamKey, setAdminObsStreamKey] = useState<string>(() => StorageService.getObsStreamKey());
+  const [copiedObsServer, setCopiedObsServer] = useState<boolean>(false);
   const [showAdminStreamPreview, setShowAdminStreamPreview] = useState<boolean>(false);
   const [isUploadingMp4, setIsUploadingMp4] = useState<boolean>(false);
   const [mp4UploadFeedback, setMp4UploadFeedback] = useState<string | null>(null);
@@ -2707,7 +2709,146 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                   </div>
                 </div>
 
-                {/* Live Stream URL Configuration */}
+                {/* 1. DEDICATED OBS STUDIO DIRECT STREAM KEY INGESTION */}
+                <div className="bg-gradient-to-r from-purple-950/40 via-background to-blue-950/30 border border-purple-500/30 rounded-xl p-3.5 space-y-3 shadow-inner">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-xs border border-purple-500/30 shrink-0">
+                        OBS
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <span>OBS Studio Direct Stream Key Ingest</span>
+                          {liveSermonStatus.isLive && liveSermonStatus.streamSource === 'obs' && (
+                            <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] font-bold animate-pulse">
+                              LIVE ON AIR
+                            </span>
+                          )}
+                        </h4>
+                        <p className="text-[10px] text-white/60">
+                          Paste your OBS stream key here to instantly broadcast across web and mobile.
+                        </p>
+                      </div>
+                    </div>
+
+                    {liveSermonStatus.isLive && liveSermonStatus.streamSource === 'obs' ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newStatus = {
+                            ...liveSermonStatus,
+                            isLive: false,
+                            streamSource: undefined
+                          };
+                          StorageService.setLiveSermonStatus(newStatus);
+                          setLiveSermonStatus(newStatus);
+                          onRefreshAppState();
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 text-white font-bold text-xs flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                      >
+                        <Radio className="w-3.5 h-3.5" />
+                        <span>Stop Stream</span>
+                      </button>
+                    ) : (
+                      <span className="text-[10px] font-mono text-purple-300 bg-purple-500/10 px-2 py-1 rounded-md border border-purple-500/20">
+                        RTMP / OBS Ready
+                      </span>
+                    )}
+                  </div>
+
+                  {/* OBS Stream Key Input & Start Stream Action */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <div className="flex-1 relative">
+                      <input
+                        type="text"
+                        value={adminObsStreamKey}
+                        onChange={(e) => setAdminObsStreamKey(e.target.value)}
+                        placeholder="Paste OBS Stream Key (e.g. live_... or stream-key)..."
+                        className="w-full bg-background/80 border border-purple-500/30 focus:border-purple-400 rounded-lg px-3 py-2 text-xs font-mono text-white placeholder:text-white/30 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Paste from clipboard */}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            if (navigator.clipboard) {
+                              const text = await navigator.clipboard.readText();
+                              if (text) {
+                                setAdminObsStreamKey(text.trim());
+                                confetti({ particleCount: 15, spread: 35 });
+                              }
+                            }
+                          } catch {}
+                        }}
+                        className="px-2.5 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 border border-white/15 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                        title="Paste from clipboard"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Paste</span>
+                      </button>
+
+                      {/* Start OBS Streaming Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const key = adminObsStreamKey.trim();
+                          if (!key) {
+                            alert('Please paste or enter your OBS Stream Key first.');
+                            return;
+                          }
+                          StorageService.setObsStreamKey(key);
+                          const cleanUrl = key.startsWith('http') || key.startsWith('rtmp') ? key : `obs://${key}`;
+                          StorageService.setLiveStreamUrl(cleanUrl);
+                          const newStatus = {
+                            ...liveSermonStatus,
+                            isLive: true,
+                            streamSource: 'obs' as const,
+                            obsStreamKey: key,
+                            streamUrl: cleanUrl,
+                            title: 'Gateway Cathedral • Sunday Sanctuary Live Service (OBS Studio Live)'
+                          };
+                          StorageService.setLiveSermonStatus(newStatus);
+                          setLiveSermonStatus(newStatus);
+                          confetti({ particleCount: 30, spread: 60 });
+                          onRefreshAppState();
+                        }}
+                        className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-purple-600/30 transition-all cursor-pointer active:scale-95"
+                      >
+                        <Radio className="w-3.5 h-3.5 text-white animate-pulse" />
+                        <span>Start OBS Stream</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* RTMP Server Configuration info for OBS Studio */}
+                  <div className="bg-black/40 border border-white/5 rounded-lg p-2.5 text-[11px] space-y-1.5">
+                    <div className="flex items-center justify-between text-white/70">
+                      <span className="font-semibold text-white/90">OBS Server (Ingest RTMP URL):</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (navigator.clipboard) {
+                            navigator.clipboard.writeText('rtmp://stream.gatewayconnect.joedaniels.org/live/');
+                            setCopiedObsServer(true);
+                            setTimeout(() => setCopiedObsServer(false), 2000);
+                          }
+                        }}
+                        className="text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Copy className="w-3 h-3" />
+                        <span>{copiedObsServer ? 'Copied Server URL!' : 'Copy Server URL'}</span>
+                      </button>
+                    </div>
+                    <code className="block bg-black/60 p-1.5 rounded font-mono text-[10.5px] text-purple-300 break-all select-all">
+                      rtmp://stream.gatewayconnect.joedaniels.org/live/
+                    </code>
+                  </div>
+                </div>
+
+                {/* 2. YouTube / Facebook Live Stream URL Configuration */}
                 <div className="bg-background border border-white/10 rounded-xl p-3 space-y-2.5">
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     <div className="flex-1">

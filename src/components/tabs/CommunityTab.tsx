@@ -1068,7 +1068,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
             Gateway Community & Fellowship
           </h2>
           <p className="text-xs text-muted-foreground">
-            Instagram Feed, Prayer Altar, Cell Groups & Church Events
+            Prayer Altar, Cell Groups & Church Events
           </p>
         </div>
 
@@ -1228,11 +1228,14 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="w-9 h-9 rounded-full border border-border overflow-hidden bg-secondary flex items-center justify-center text-xs font-semibold text-primary shrink-0">
-                        {member.avatar_url ? (
-                          <img src={member.avatar_url} alt={member.full_name} className="w-full h-full object-cover" />
-                        ) : (
-                          (member.full_name || 'GC').slice(0, 2).toUpperCase()
-                        )}
+                        <img 
+                          src={StorageService.getUserAvatar(member)} 
+                          alt={member.full_name} 
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80';
+                          }}
+                        />
                       </div>
                       <div className="min-w-0">
                         <h4 className="font-semibold text-xs text-foreground flex items-center gap-1 truncate">
@@ -1291,9 +1294,8 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground font-medium">
-                <span className="hidden sm:inline">Supabase Presence</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                <span className="text-emerald-500 font-semibold">Real-Time</span>
+                <span className="text-emerald-500 font-semibold">Active</span>
               </div>
             </div>
 
@@ -1303,7 +1305,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 const isSelf = member.id === currentUser?.id;
                 const memberUser = allRegisteredUsers.find(u => u.id === member.id);
                 const badge = (member.badge_type || memberUser?.verified_badge || memberUser?.badge_type || (member.role === 'developer' || member.role === 'super_admin' ? 'gold' : 'none')) as 'gold' | 'silver' | 'blue' | 'none';
-                const avatar = member.avatar_url || memberUser?.avatar_url || '/assets/apostle_joe_daniels_main.jpg';
+                const avatar = StorageService.getUserAvatar(memberUser || member.id);
                 const displayName = member.full_name || memberUser?.full_name || 'Believer';
                 const firstName = displayName.split(' ')[0];
 
@@ -2505,7 +2507,6 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                 </div>
                 <div>
                   <h4 className="text-xs sm:text-sm font-bold text-foreground">Church & School Events Management</h4>
-                  <p className="text-[11px] text-muted-foreground">Admin / Developer controls: schedule, update, or remove church & mentorship events.</p>
                 </div>
               </div>
               <button

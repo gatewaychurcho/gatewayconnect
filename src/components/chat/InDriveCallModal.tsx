@@ -508,7 +508,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
 
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="font-semibold tracking-wide text-[11px] text-white/90">InDrive Voice Call</span>
+          <span className="font-semibold tracking-wide text-[11px] text-white/90">Voice Call</span>
         </div>
 
         <div className="flex items-center gap-1 text-[11px] font-mono text-white/60">
@@ -575,7 +575,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
 
           {callStatus === 'calling' && (
             <div className="px-4 py-1.5 rounded-full bg-white/10 border border-white/15 text-white/80 font-medium text-xs tracking-wide animate-pulse">
-              Connecting InDrive VoIP...
+              Connecting Voice Call...
             </div>
           )}
 

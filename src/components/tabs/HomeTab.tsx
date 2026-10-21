@@ -846,7 +846,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 Welcome to Gateway Church Fellowship!
               </h4>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                The community feed has been power-washed and is clean for genuine users. Be the first believer to share an apostolic testimony, praise report, or word of edification!
+                Connect and grow with brethren in Christ across the nations.
               </p>
             </div>
             <button

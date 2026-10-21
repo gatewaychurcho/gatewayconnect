@@ -127,7 +127,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ user, onComp
       });
     }
 
-    if (isFemale || (!isMale && !isFemale)) {
+    if (isFemale && !isMale) {
       list.push({
         id: 'group_passion_ladies',
         name: 'Passion ladies',
@@ -152,10 +152,20 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ user, onComp
     return list;
   }, [user.gender, location, selectedInterests]);
 
-  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>(['group_ignite_worship', 'group_pride_of_lions', 'group_passion_ladies']);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>(() => {
+    const isMale = user?.gender === 'male';
+    const isFemale = user?.gender === 'female';
+    const initial = ['group_ignite_worship'];
+    if (isMale) initial.push('group_pride_of_lions');
+    if (isFemale && !isMale) initial.push('group_passion_ladies');
+    return initial;
+  });
 
   // Toggle group selection
   const toggleGroupSelection = (groupId: string) => {
+    if (groupId === 'group_passion_ladies' && user.gender === 'male') {
+      return;
+    }
     setSelectedGroupIds(prev =>
       prev.includes(groupId) ? prev.filter(id => id !== groupId) : [...prev, groupId]
     );

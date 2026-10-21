@@ -257,7 +257,11 @@ export const MeTab: React.FC<MeTabProps> = ({
   // Load user posts, followers, following in real-time
   const refreshUserData = () => {
     const freshUser = StorageService.getCurrentUser() || currentUser;
-    setLocalUser(freshUser);
+    if (freshUser) {
+      freshUser.avatar_url = StorageService.getUserAvatar(freshUser);
+      freshUser.followers_count = StorageService.getUserFollowerCount(freshUser.id);
+    }
+    setLocalUser({ ...freshUser });
 
     // Filter posts strictly for this user
     const allTestimonies = StorageService.getTestimonies();

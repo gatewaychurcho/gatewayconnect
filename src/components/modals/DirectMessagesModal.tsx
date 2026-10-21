@@ -2851,7 +2851,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                           type="button"
                           onClick={() => setInDriveCall({ isOpen: true, partner: activeUser })}
                           className="p-2 sm:p-2.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 active:scale-95 transition-all cursor-pointer shadow-xs"
-                          title="InDrive Voice Call"
+                          title="Voice Call"
                         >
                           <Phone className="w-4 h-4" />
                         </button>

@@ -400,18 +400,19 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
       };
     }
 
+    found.avatar_url = StorageService.getUserAvatar(found);
     setProfileUser(found);
 
     // Follow status
     const following = StorageService.isFollowingUser(currentUser.id, found.id);
     setIsFollowing(following);
-    setFollowersCount(StorageService.getUserFollowersCount(found.id));
+    setFollowersCount(StorageService.getUserFollowerCount(found.id));
     setFollowingCount(StorageService.getUserFollowingCount(found.id));
     setFollowersUsers(StorageService.getFollowersUsers(found.id));
 
     // Sync latest persistent follows from Supabase
     StorageService.syncFollowsForUser(found.id).then(() => {
-      setFollowersCount(StorageService.getUserFollowersCount(found.id));
+      setFollowersCount(StorageService.getUserFollowerCount(found.id));
       setFollowingCount(StorageService.getUserFollowingCount(found.id));
       setFollowersUsers(StorageService.getFollowersUsers(found.id));
       setIsFollowing(StorageService.isFollowingUser(currentUser.id, found.id));
@@ -453,8 +454,11 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
   useEffect(() => {
     const handleProfileUpdatedEvent = (e: any) => {
       const updatedUser: User | undefined = e?.detail?.user || e?.detail;
-      if (updatedUser && profileUser && (updatedUser.id === profileUser.id || updatedUser.phone === profileUser.phone)) {
-        setProfileUser(updatedUser);
+      if (profileUser) {
+        if (!updatedUser || updatedUser.id === profileUser.id || updatedUser.phone === profileUser.phone) {
+          const freshAvatar = StorageService.getUserAvatar(profileUser);
+          setProfileUser(prev => prev ? { ...prev, ...(updatedUser || {}), avatar_url: freshAvatar } : null);
+        }
       }
     };
     window.addEventListener('gcz_user_profile_updated', handleProfileUpdatedEvent);
@@ -465,12 +469,16 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
     const handleFollowChange = () => {
       if (profileUser) {
         setIsFollowing(StorageService.isFollowingUser(currentUser.id, profileUser.id));
-        setFollowersCount(StorageService.getUserFollowersCount(profileUser.id));
+        setFollowersCount(StorageService.getUserFollowerCount(profileUser.id));
         setFollowingCount(StorageService.getUserFollowingCount(profileUser.id));
       }
     };
     window.addEventListener('gcz_follow_updated', handleFollowChange);
-    return () => window.removeEventListener('gcz_follow_updated', handleFollowChange);
+    window.addEventListener('gcz_users_synced', handleFollowChange);
+    return () => {
+      window.removeEventListener('gcz_follow_updated', handleFollowChange);
+      window.removeEventListener('gcz_users_synced', handleFollowChange);
+    };
   }, [profileUser, currentUser.id]);
 
   useEffect(() => {

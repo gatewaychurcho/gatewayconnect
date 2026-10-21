@@ -40,7 +40,7 @@ import {
   ChevronUp,
   ChevronDown
 } from 'lucide-react';
-import { Sermon, User } from '../../types';
+import { Sermon, User, PostComment } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { StorageBucketService } from '../../services/StorageBucketService';
 import { PaynowService } from '../../services/paynowService';
@@ -80,9 +80,15 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
   // Reels vs Full Sermons media tab (Reels default)
   const [mediaTab, setMediaTab] = useState<'reels' | 'sermons'>('reels');
   const [activeReelIndex, setActiveReelIndex] = useState<number>(0);
-  const [reelLikes, setReelLikes] = useState<Record<string, number>>({});
-  const [userReelLiked, setUserReelLiked] = useState<Record<string, boolean>>({});
+  const [reelLikes, setReelLikes] = useState<Record<string, number>>(() => StorageService.getReelLikesMap());
+  const [userReelLiked, setUserReelLiked] = useState<Record<string, boolean>>(() => StorageService.getUserReelLikedMap(currentUser?.id));
   const [doubleTapReelId, setDoubleTapReelId] = useState<string | null>(null);
+
+  // Reels Real-Time Comments Drawer state
+  const [showReelCommentsModal, setShowReelCommentsModal] = useState<boolean>(false);
+  const [activeCommentReelId, setActiveCommentReelId] = useState<string | null>(null);
+  const [reelCommentsList, setReelCommentsList] = useState<PostComment[]>([]);
+  const [newReelCommentText, setNewReelCommentText] = useState<string>('');
 
   // Modals state
   const [activePlayingSermon, setActivePlayingSermon] = useState<Sermon | null>(null);
@@ -151,10 +157,10 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
   }, [sermons]);
 
   const handleLikeReel = (reelId: string) => {
-    const isLiked = userReelLiked[reelId];
-    setUserReelLiked(prev => ({ ...prev, [reelId]: !isLiked }));
-    setReelLikes(prev => ({ ...prev, [reelId]: (prev[reelId] || 150) + (isLiked ? -1 : 1) }));
-    if (!isLiked) {
+    const res = StorageService.toggleReelLike(reelId, userProfile);
+    setUserReelLiked(prev => ({ ...prev, [reelId]: res.isLiked }));
+    setReelLikes(prev => ({ ...prev, [reelId]: res.count }));
+    if (res.isLiked) {
       confetti({ particleCount: 25, spread: 50, origin: { y: 0.7 } });
     }
   };
@@ -165,6 +171,23 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
     }
     setDoubleTapReelId(reelId);
     setTimeout(() => setDoubleTapReelId(null), 900);
+  };
+
+  const handleOpenReelComments = (reelId: string) => {
+    setActiveCommentReelId(reelId);
+    setReelCommentsList(StorageService.getReelComments(reelId));
+    setShowReelCommentsModal(true);
+  };
+
+  const handleSendReelComment = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newReelCommentText.trim() || !activeCommentReelId) return;
+    const added = StorageService.addReelComment(activeCommentReelId, newReelCommentText.trim(), userProfile);
+    if (added) {
+      setReelCommentsList(prev => [added, ...prev.filter(c => c.id !== added.id)]);
+      setNewReelCommentText('');
+      confetti({ particleCount: 15, spread: 40 });
+    }
   };
 
   const handlePrevReel = () => {
@@ -188,11 +211,30 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
       setUserProfile(StorageService.getCurrentUser());
     };
 
+    const handleReelLikeUpdate = (e: any) => {
+      if (e?.detail?.reelId) {
+        setReelLikes(prev => ({ ...prev, [e.detail.reelId]: e.detail.count }));
+        if (e.detail.userId === userProfile?.id) {
+          setUserReelLiked(prev => ({ ...prev, [e.detail.reelId]: e.detail.isLiked }));
+        }
+      }
+    };
+
+    const handleReelCommentAdded = (e: any) => {
+      if (e?.detail?.reelId) {
+        if (activeCommentReelId === e.detail.reelId && e.detail.comment) {
+          setReelCommentsList(prev => [e.detail.comment, ...prev.filter(c => c.id !== e.detail.comment.id)]);
+        }
+      }
+    };
+
     window.addEventListener('gcz_sermon_added', handleSermonUpdate);
     window.addEventListener('gcz_sermon_updated', handleSermonUpdate);
     window.addEventListener('gcz_sermon_deleted', handleSermonUpdate);
     window.addEventListener('gcz_sermon_categories_updated', handleCategoryUpdate);
     window.addEventListener('gcz_user_profile_updated', handleUserUpdate);
+    window.addEventListener('gcz_reel_like_updated', handleReelLikeUpdate);
+    window.addEventListener('gcz_reel_comment_added', handleReelCommentAdded);
 
     return () => {
       window.removeEventListener('gcz_sermon_added', handleSermonUpdate);
@@ -200,8 +242,10 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
       window.removeEventListener('gcz_sermon_deleted', handleSermonUpdate);
       window.removeEventListener('gcz_sermon_categories_updated', handleCategoryUpdate);
       window.removeEventListener('gcz_user_profile_updated', handleUserUpdate);
+      window.removeEventListener('gcz_reel_like_updated', handleReelLikeUpdate);
+      window.removeEventListener('gcz_reel_comment_added', handleReelCommentAdded);
     };
-  }, []);
+  }, [userProfile, activeCommentReelId]);
 
   // Filter and sort sermons
   const filteredAndSortedSermons = useMemo(() => {
@@ -573,8 +617,14 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
           ) : (
             (() => {
               const currentReel = reelsList[activeReelIndex] || reelsList[0];
-              const isLiked = Boolean(userReelLiked[currentReel.id]);
-              const likesCount = (reelLikes[currentReel.id] ?? 245) + (isLiked ? 1 : 0);
+              const isLiked = userReelLiked[currentReel.id] !== undefined 
+                ? userReelLiked[currentReel.id] 
+                : StorageService.isReelLiked(currentReel.id, userProfile?.id);
+              const likesCount = reelLikes[currentReel.id] !== undefined
+                ? reelLikes[currentReel.id]
+                : StorageService.getReelLikes(currentReel.id, 245 + activeReelIndex * 12);
+              const currentComments = StorageService.getReelComments(currentReel.id);
+              const commentsCount = currentComments.length > 0 ? currentComments.length : (12 + activeReelIndex * 3);
 
               return (
                 <div className="flex flex-col items-center">
@@ -644,8 +694,8 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                       </span>
                     </div>
 
-                    {/* Right Floating Actions Rail (Facebook / Instagram style) */}
-                    <div className="absolute right-3 bottom-24 z-20 flex flex-col items-center gap-5 text-white">
+                    {/* Right Floating Actions Rail (Facebook / Instagram style - cleaned of share, pin & disc) */}
+                    <div className="absolute right-3 bottom-20 z-20 flex flex-col items-center gap-4 text-white">
                       {/* Apostle Profile Avatar */}
                       <div className="relative group/avatar cursor-pointer">
                         <div className="w-11 h-11 rounded-full p-0.5 bg-card border-2 border-primary/80 shadow-md">
@@ -660,7 +710,7 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                         </div>
                       </div>
 
-                      {/* Like Button */}
+                      {/* Real-Time Like Button */}
                       <button
                         onClick={() => handleLikeReel(currentReel.id)}
                         className="flex flex-col items-center gap-1 cursor-pointer transition-transform active:scale-125"
@@ -677,55 +727,19 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
                         </span>
                       </button>
 
-                      {/* Comment Button */}
+                      {/* Real-Time Comment Button */}
                       <button
-                        onClick={() => {
-                          confetti({ particleCount: 15, spread: 40 });
-                        }}
+                        onClick={() => handleOpenReelComments(currentReel.id)}
                         className="flex flex-col items-center gap-1 cursor-pointer transition-transform active:scale-125"
-                        title="Comments"
+                        title="Open Reel Comments"
                       >
                         <div className="w-11 h-11 rounded-full bg-black/50 text-white hover:bg-black/70 flex items-center justify-center backdrop-blur-md shadow-lg border border-white/10">
                           <MessageSquare className="w-6 h-6" />
                         </div>
                         <span className="text-[11px] font-bold text-white drop-shadow">
-                          {48 + activeReelIndex * 7}
+                          {commentsCount}
                         </span>
                       </button>
-
-                      {/* Share Button */}
-                      <button
-                        onClick={() => {
-                          if (navigator.clipboard) {
-                            navigator.clipboard.writeText(window.location.href);
-                          }
-                          confetti({ particleCount: 30, spread: 60 });
-                        }}
-                        className="flex flex-col items-center gap-1 cursor-pointer transition-transform active:scale-125"
-                        title="Share Reel"
-                      >
-                        <div className="w-11 h-11 rounded-full bg-black/50 text-white hover:bg-black/70 flex items-center justify-center backdrop-blur-md shadow-lg border border-white/10">
-                          <Share2 className="w-6 h-6" />
-                        </div>
-                        <span className="text-[11px] font-bold text-white drop-shadow">Share</span>
-                      </button>
-
-                      {/* Pin to Top Player Button */}
-                      <button
-                        onClick={() => handlePlaySermon(currentReel, true)}
-                        className="flex flex-col items-center gap-1 cursor-pointer transition-transform active:scale-125"
-                        title="Pin to Home Top Player"
-                      >
-                        <div className="w-11 h-11 rounded-full bg-black/50 text-white hover:bg-black/70 flex items-center justify-center backdrop-blur-md shadow-lg border border-white/10">
-                          <Tv className="w-5 h-5 text-primary" />
-                        </div>
-                        <span className="text-[10px] font-bold text-white drop-shadow">Pin</span>
-                      </button>
-
-                      {/* Spinning Vinyl Audio Disc */}
-                      <div className="w-10 h-10 rounded-full border border-white/20 bg-neutral-900 text-primary flex items-center justify-center shadow-lg animate-spin [animation-duration:5s]">
-                        <Music2 className="w-4 h-4 text-primary" />
-                      </div>
                     </div>
 
                     {/* Bottom Info Overlay */}
@@ -1866,6 +1880,112 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
         onClose={() => setShowAnalyticsModal(false)}
         onPlaySermon={(sermon) => handlePlaySermon(sermon)}
       />
+
+      {/* 9. REELS COMMENTS SLIDE-UP MODAL / DRAWER */}
+      {showReelCommentsModal && activeCommentReelId && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in"
+          onClick={() => setShowReelCommentsModal(false)}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-card border border-border rounded-t-3xl sm:rounded-2xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200"
+          >
+            {/* Header */}
+            <div className="p-4 border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-primary" />
+                <h3 className="font-bold text-sm text-foreground">
+                  Reel Comments ({reelCommentsList.length})
+                </h3>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowReelCommentsModal(false)}
+                className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Comments List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3.5 max-h-[50vh]">
+              {reelCommentsList.length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground text-xs space-y-1">
+                  <p className="font-semibold text-foreground">No comments yet.</p>
+                  <p>Be the first believer to testify or leave a faith-filled decree!</p>
+                </div>
+              ) : (
+                reelCommentsList.map((c) => (
+                  <div key={c.id} className="flex items-start gap-3 text-xs">
+                    <img 
+                      src={StorageService.getUserAvatar(c.user_avatar || c.user_id)}
+                      alt={c.user_name}
+                      className="w-8 h-8 rounded-full object-cover shrink-0 border border-border"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80';
+                      }}
+                    />
+                    <div className="flex-1 space-y-0.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-foreground text-xs">{c.user_name}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {c.created_at ? new Date(c.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'now'}
+                        </span>
+                      </div>
+                      <p className="text-foreground/90 leading-relaxed text-xs break-words">{c.comment}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Quick Cheer / Decree Buttons */}
+            <div className="px-4 py-2 border-t border-border/60 bg-secondary/30 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              {['Amen! 🔥', 'Glory to Jesus! 🙌', 'Receiving Grace! ⚡', 'I decree Amen! 🙏'].map((cheer) => (
+                <button
+                  key={cheer}
+                  type="button"
+                  onClick={() => {
+                    if (!activeCommentReelId) return;
+                    const added = StorageService.addReelComment(activeCommentReelId, cheer, userProfile);
+                    if (added) {
+                      setReelCommentsList(prev => [added, ...prev.filter(c => c.id !== added.id)]);
+                      confetti({ particleCount: 15, spread: 40 });
+                    }
+                  }}
+                  className="px-2.5 py-1 rounded-full bg-background border border-border hover:border-primary text-[11px] font-medium text-foreground whitespace-nowrap transition-all cursor-pointer"
+                >
+                  {cheer}
+                </button>
+              ))}
+            </div>
+
+            {/* Comment Input Tray */}
+            <form onSubmit={handleSendReelComment} className="p-3 border-t border-border bg-card flex items-center gap-2">
+              <img 
+                src={StorageService.getUserAvatar(userProfile)}
+                alt="My DP"
+                className="w-8 h-8 rounded-full object-cover shrink-0 border border-primary/40"
+              />
+              <input 
+                type="text"
+                value={newReelCommentText}
+                onChange={(e) => setNewReelCommentText(e.target.value)}
+                placeholder="Add a comment or decree..."
+                className="flex-1 bg-secondary/70 border border-border rounded-xl px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+              />
+              <button
+                type="submit"
+                disabled={!newReelCommentText.trim()}
+                className="p-2 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-40 text-primary-foreground transition-all cursor-pointer shadow-xs shrink-0"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

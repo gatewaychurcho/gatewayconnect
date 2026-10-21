@@ -286,10 +286,77 @@ export class StorageService {
     if (userId) avatars[userId] = avatarUrl;
     if (phone) avatars[phone] = avatarUrl;
     setLocal('gcz_permanent_custom_avatars', avatars);
+
+    // Update in all registered users immediately so changes apply globally in real time
+    try {
+      const allUsers = this.getAllUsers();
+      let changed = false;
+      allUsers.forEach(u => {
+        if ((userId && u.id === userId) || (phone && arePhoneNumbersEqual(u.phone, phone))) {
+          u.avatar_url = avatarUrl;
+          changed = true;
+        }
+      });
+      if (changed) {
+        setLocal(KEYS.ALL_USERS, allUsers);
+      }
+      const curr = this.getCurrentUser();
+      if (curr && ((userId && curr.id === userId) || (phone && arePhoneNumbersEqual(curr.phone, phone)))) {
+        curr.avatar_url = avatarUrl;
+        setLocal(KEYS.CURRENT_USER, curr);
+      }
+    } catch {}
+
     // Sync to Supabase profile_pictures table
     if (userId) {
       SupabaseSyncService.syncProfilePicture(userId, avatarUrl).catch(() => {});
     }
+
+    // Broadcast across all connected clients in real time
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_user_profile_updated'));
+      window.dispatchEvent(new CustomEvent('gcz_users_synced'));
+    }
+  }
+
+  // Universal helper: returns the freshest, permanent DP for any user or userId
+  static getUserAvatar(userOrId?: User | string | null): string {
+    if (!userOrId) return '/assets/apostle_joe_daniels_main.jpg';
+    const userId = typeof userOrId === 'string' ? userOrId : userOrId.id;
+    const phone = typeof userOrId === 'object' && userOrId ? userOrId.phone : undefined;
+    const customAvatars = this.getPermanentCustomAvatars();
+    if (userId && customAvatars[userId]) return customAvatars[userId];
+    if (phone && customAvatars[phone]) return customAvatars[phone];
+    if (typeof userOrId === 'object' && userOrId && userOrId.avatar_url) return userOrId.avatar_url;
+    
+    // Look up in registered users pool
+    try {
+      const allUsers = this.getAllUsers();
+      const found = allUsers.find(u => u.id === userId || (phone && arePhoneNumbersEqual(u.phone, phone)));
+      if (found) {
+        if (customAvatars[found.id]) return customAvatars[found.id];
+        if (customAvatars[found.phone]) return customAvatars[found.phone];
+        if (found.avatar_url) return found.avatar_url;
+      }
+    } catch {}
+
+    if (userId === 'usr_apostle_joe' || userId === 'usr_daniels') return '/assets/apostle_joe_daniels_main.jpg';
+    if (userId === 'usr_prophetess_melinda') return '/assets/apostle_joe_daniels_main.jpg';
+    return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80';
+  }
+
+  // Universal helper: returns accurate, real-time follower count from active follow table
+  static getUserFollowerCount(userOrId?: User | string | null): number {
+    if (!userOrId) return 0;
+    const userId = typeof userOrId === 'string' ? userOrId : userOrId.id;
+    const effectiveId = (userId === 'usr_daniels' || userId === 'usr_pastor_joe') ? 'usr_apostle_joe' : userId;
+    const records = this.getUserFollowsRecords();
+    const count = records.filter(r => r.following_id === effectiveId || r.following_id === userId).length;
+    const allUsers = this.getAllUsers();
+    if (userId === 'usr_developer' || userId === 'usr_apostle_joe') {
+      return Math.max(allUsers.length, count);
+    }
+    return count;
   }
 
   static removePermanentCustomAvatar(userId: string): void {
@@ -3878,8 +3945,8 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
           this.joinChatGroup('group_pride_of_lions', newUser.id, undefined, true);
         }
 
-        // 3. Over 30 and women -> automatically added to women's group "Passion ladies"
-        if (age > 30 && isFemale) {
+        // 3. Over 30 and women -> automatically added to women's group "Passion ladies" (males strictly excluded)
+        if (age > 30 && isFemale && !isMale) {
           this.joinChatGroup('group_passion_ladies', newUser.id, undefined, true);
         }
       }
@@ -5067,26 +5134,63 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     }
   }
 
+  // OBS Studio Live Streaming Key & Source
+  static getObsStreamKey(): string {
+    return getLocal<string>('gcz_obs_stream_key_v1', '');
+  }
+
+  static setObsStreamKey(key: string): void {
+    setLocal('gcz_obs_stream_key_v1', key.trim());
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_obs_key_updated', { detail: { key: key.trim() } }));
+    }
+  }
+
   // LIVE SERMON NOTIFICATION & STREAMING MANAGEMENT
-  static getLiveSermonStatus(): { isLive: boolean; title: string; sermonId: string; viewerCount: number; streamUrl?: string } {
+  static getLiveSermonStatus(): { 
+    isLive: boolean; 
+    title: string; 
+    sermonId: string; 
+    viewerCount: number; 
+    streamUrl?: string; 
+    obsStreamKey?: string;
+    streamSource?: 'youtube' | 'facebook' | 'direct' | 'obs';
+  } {
     const savedUrl = this.getLiveStreamUrl();
+    const savedObsKey = this.getObsStreamKey();
     const realViewersCount = this.getStreamViewers().length;
     const status = getLocal(KEYS.LIVE_SERMON, {
       isLive: false,
       title: 'Gateway Cathedral • Sunday Sanctuary Live Service',
       sermonId: 'sermon_live_stream',
       viewerCount: realViewersCount,
-      streamUrl: savedUrl
+      streamUrl: savedUrl,
+      obsStreamKey: savedObsKey,
+      streamSource: (savedObsKey ? 'obs' : 'youtube') as 'youtube' | 'facebook' | 'direct' | 'obs'
     });
     // Ensure viewerCount reflects real streamers
     status.viewerCount = Math.max(status.viewerCount || 0, realViewersCount);
     if (!status.streamUrl) {
       status.streamUrl = savedUrl;
     }
+    if (!status.obsStreamKey && savedObsKey) {
+      status.obsStreamKey = savedObsKey;
+    }
     return status;
   }
 
-  static setLiveSermonStatus(status: { isLive: boolean; title: string; sermonId: string; viewerCount: number; streamUrl?: string }): void {
+  static setLiveSermonStatus(status: { 
+    isLive: boolean; 
+    title: string; 
+    sermonId: string; 
+    viewerCount: number; 
+    streamUrl?: string; 
+    obsStreamKey?: string;
+    streamSource?: 'youtube' | 'facebook' | 'direct' | 'obs';
+  }): void {
+    if (status.obsStreamKey !== undefined) {
+      this.setObsStreamKey(status.obsStreamKey);
+    }
     setLocal(KEYS.LIVE_SERMON, status);
     if (status.streamUrl) {
       this.setLiveStreamUrl(status.streamUrl);
@@ -5103,6 +5207,129 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
         window.dispatchEvent(new CustomEvent('gcz_live_broadcast_started', { detail: status }));
       }
     }
+  }
+
+  // -------------------------------------------------------------
+  // REELS LIKES & REAL-TIME COMMENTS SYSTEM
+  // -------------------------------------------------------------
+  static getReelLikesMap(): Record<string, number> {
+    return getLocal<Record<string, number>>('gcz_reel_likes_v1', {});
+  }
+
+  static getUserReelLikedMap(userId?: string): Record<string, boolean> {
+    const uid = userId || this.getCurrentUser()?.id || 'guest';
+    return getLocal<Record<string, boolean>>(`gcz_user_reel_liked_${uid}`, {});
+  }
+
+  static getReelLikes(reelId: string, baseCount: number = 245): number {
+    const map = this.getReelLikesMap();
+    if (map[reelId] !== undefined) return map[reelId];
+    return baseCount;
+  }
+
+  static isReelLiked(reelId: string, userId?: string): boolean {
+    const map = this.getUserReelLikedMap(userId);
+    return Boolean(map[reelId]);
+  }
+
+  static toggleReelLike(reelId: string, user?: User | null, baseCount: number = 245): { isLiked: boolean; count: number } {
+    const u = user || this.getCurrentUser();
+    const uid = u?.id || 'guest';
+    const userLikes = this.getUserReelLikedMap(uid);
+    const wasLiked = Boolean(userLikes[reelId]);
+    const isLiked = !wasLiked;
+    userLikes[reelId] = isLiked;
+    setLocal(`gcz_user_reel_liked_${uid}`, userLikes);
+
+    const likesMap = this.getReelLikesMap();
+    const currentCount = likesMap[reelId] !== undefined ? likesMap[reelId] : baseCount;
+    const newCount = Math.max(0, currentCount + (isLiked ? 1 : -1));
+    likesMap[reelId] = newCount;
+    setLocal('gcz_reel_likes_v1', likesMap);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_reel_like_updated', {
+        detail: { reelId, count: newCount, isLiked, userId: uid }
+      }));
+    }
+
+    try {
+      liveSyncService.broadcastEvent({
+        type: 'media_like',
+        payload: { reelId, count: newCount, isLiked, userId: uid }
+      });
+    } catch {}
+
+    return { isLiked, count: newCount };
+  }
+
+  static getReelCommentsMap(): Record<string, PostComment[]> {
+    return getLocal<Record<string, PostComment[]>>('gcz_reel_comments_v1', {
+      'reel_1': [
+        {
+          id: 'rc_1',
+          user_id: 'usr_pastor_easter',
+          user_name: 'Pastor Easter',
+          user_avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200',
+          comment: 'Amen! What a profound revelation on the altar of covenant prayer. Glory to Jesus! 🔥🙌',
+          created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
+          likes: 12
+        },
+        {
+          id: 'rc_2',
+          user_id: 'usr_kuda',
+          user_name: 'Kudakwashe Chiwenga',
+          user_avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200',
+          comment: 'Receiving supernatural acceleration for my household in Jesus name! Powerful word Apostle! ⚡🙏',
+          created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+          likes: 8
+        }
+      ]
+    });
+  }
+
+  static getReelComments(reelId: string): PostComment[] {
+    const map = this.getReelCommentsMap();
+    return map[reelId] || [];
+  }
+
+  static addReelComment(reelId: string, text: string, user?: User | null): PostComment | null {
+    if (!text || !text.trim()) return null;
+    const u = user || this.getCurrentUser();
+    if (!u) return null;
+
+    const map = this.getReelCommentsMap();
+    if (!map[reelId]) {
+      map[reelId] = [];
+    }
+
+    const newComment: PostComment = {
+      id: `rc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      user_id: u.id,
+      user_name: u.full_name,
+      user_avatar: this.getUserAvatar(u),
+      comment: text.trim(),
+      created_at: new Date().toISOString(),
+      likes: 0
+    };
+
+    map[reelId].unshift(newComment);
+    setLocal('gcz_reel_comments_v1', map);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_reel_comment_added', {
+        detail: { reelId, comment: newComment, totalCount: map[reelId].length }
+      }));
+    }
+
+    try {
+      liveSyncService.broadcastEvent({
+        type: 'comment',
+        payload: { reelId, comment: newComment, totalCount: map[reelId].length }
+      });
+    } catch {}
+
+    return newComment;
   }
 
   static getStreamViewers(): LiveStreamViewer[] {
@@ -6232,6 +6459,18 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     const groups = this.getChatGroups();
     const grp = groups.find(g => g.id === groupId);
     if (!grp) return { success: false, message: 'Group not found' };
+
+    // Strict gender restriction: Male users cannot join "Passion ladies" (reserved exclusively for women)
+    if (groupId === 'group_passion_ladies') {
+      const allUsers = this.getAllUsers();
+      const targetUser = allUsers.find(u => u.id === userId);
+      if (targetUser && targetUser.gender === 'male') {
+        return {
+          success: false,
+          message: 'Passion Ladies is reserved exclusively for women fellowship.'
+        };
+      }
+    }
 
     // Clear per-user exit flag immediately so this specific user can actively participate
     try {

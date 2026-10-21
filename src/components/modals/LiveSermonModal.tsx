@@ -290,6 +290,11 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
                 <Radio className="w-3.5 h-3.5 text-white/40" />
                 <span>OFFLINE</span>
               </span>
+            ) : status.streamSource === 'obs' || status.obsStreamKey ? (
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-600 text-white font-black text-xs uppercase tracking-wider shadow-sm animate-pulse">
+                <Radio className="w-3.5 h-3.5" />
+                <span>OBS LIVE</span>
+              </span>
             ) : isFacebook ? (
               <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-600 text-white font-black text-xs uppercase tracking-wider shadow-sm animate-pulse">
                 <Radio className="w-3.5 h-3.5" />
@@ -369,7 +374,41 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
             
             {/* Real Video Player Embed (Facebook Live, Local MP4 / Direct Video, or YouTube Live with audio and controls) */}
             <div className="flex-1 relative bg-black flex items-center justify-center">
-              {streamEmbedInfo.isFacebook ? (
+              {(status.streamSource === 'obs' || status.obsStreamKey) && (!streamEmbedInfo.embedUrl || streamEmbedInfo.embedUrl.startsWith('obs://')) ? (
+                <div className="absolute inset-0 bg-gradient-to-b from-slate-950 via-purple-950/40 to-black flex flex-col items-center justify-center p-6 text-center select-none">
+                  <div className="relative mb-5">
+                    <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full p-1 bg-gradient-to-tr from-purple-500 via-primary to-amber-400 shadow-2xl animate-pulse">
+                      <img
+                        src="/assets/apostle_joe_daniels_main.jpg"
+                        alt="Apostle Joe Daniels"
+                        className="w-full h-full rounded-full object-cover border-4 border-slate-900"
+                      />
+                    </div>
+                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-red-600 text-white font-black text-[10px] tracking-wider uppercase shadow-lg flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                      <span>OBS ON AIR</span>
+                    </div>
+                  </div>
+
+                  <h3 className="text-lg sm:text-xl font-black text-white tracking-wide mb-1">
+                    Sanctuary Altar Live Broadcast
+                  </h3>
+                  <p className="text-xs text-purple-300/80 max-w-md mb-4 font-mono">
+                    Harare Cathedral Sanctuary • OBS Direct Ingest Active
+                  </p>
+
+                  {/* Audio Frequency Waves */}
+                  <div className="flex items-center gap-1.5 h-8">
+                    {[40, 75, 100, 60, 90, 45, 80, 95, 70, 50, 85, 65].map((h, i) => (
+                      <div
+                        key={i}
+                        className="w-1.5 bg-gradient-to-t from-primary to-purple-400 rounded-full animate-pulse"
+                        style={{ height: `${h}%`, animationDelay: `${i * 0.1}s`, animationDuration: '0.8s' }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : streamEmbedInfo.isFacebook ? (
                 <FacebookStreamPlayer
                   embedUrl={streamEmbedInfo.embedUrl}
                   directUrl={streamEmbedInfo.facebookDirectUrl || status.streamUrl}
