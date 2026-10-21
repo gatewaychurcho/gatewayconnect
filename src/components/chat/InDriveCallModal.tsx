@@ -869,9 +869,10 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
               <PhoneOff className="w-7 h-7" />
             </button>
           </>
-        </div>
+        )}
       </div>
-    )}
-  </>
+    </div>
+  )}
+</>
 );
 };
