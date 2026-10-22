@@ -1511,10 +1511,10 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
               {allRegisteredUsers.filter(u => u.id !== currentUser.id && u.role !== 'guest').slice(0, 10).map(u => {
                 const isFollowing = followingUsers[u.id];
                 const grantedBadge: 'gold' | 'silver' | 'blue' | 'none' = 
-                  (u.badge_type && u.badge_type !== 'none') ? u.badge_type :
-                  (u.verified_badge && u.verified_badge !== 'none') ? u.verified_badge :
-                  (u.id === 'usr_apostle_joe' || u.role === 'super_admin' || u.role === 'developer') ? 'gold' :
-                  (u.is_verified ? (u.badge_type || 'blue') : 'none');
+                  (u.id === 'usr_apostle_joe' || u.role === 'super_admin' || u.role === 'developer' || u.id === 'usr_developer') ? 'gold' :
+                  (u.badge_type && (u.badge_type === 'gold' || u.badge_type === 'silver' || u.badge_type === 'blue')) ? u.badge_type :
+                  (u.verified_badge && (u.verified_badge === 'gold' || u.verified_badge === 'silver' || u.verified_badge === 'blue')) ? u.verified_badge :
+                  (u.is_verified && (u.role === 'pastor' || u.role === 'leader')) ? 'blue' : 'none';
                 return (
                   <div
                     key={u.id}
@@ -1598,7 +1598,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                           <span className="font-semibold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors">
                             {post.user_name}
                           </span>
-                          {(post.page_verified || post.page_id) && (
+                          {post.page_verified && (
                             <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                           )}
                           {post.page_id && (
@@ -1608,14 +1608,29 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                           )}
                           {(() => {
                             if (post.page_id) return null;
-                            const postAuthorUser = allRegisteredUsers.find(u => u.id === post.user_id || (post.user_handle && u.handle === post.user_handle));
-                            const grantedBadge: 'gold' | 'silver' | 'blue' | 'none' = 
-                              (postAuthorUser?.badge_type && postAuthorUser.badge_type !== 'none') ? postAuthorUser.badge_type :
-                              (postAuthorUser?.verified_badge && postAuthorUser.verified_badge !== 'none') ? postAuthorUser.verified_badge :
-                              (post.user_id === 'usr_apostle_joe' || isApostlePost || postAuthorUser?.role === 'super_admin' || postAuthorUser?.role === 'developer') ? 'gold' :
-                              (postAuthorUser?.is_verified ? (postAuthorUser.badge_type || 'blue') : 'none');
-                            if (!grantedBadge || grantedBadge === 'none') return null;
-                            return <VerifiedBadge type={grantedBadge} size="xs" />;
+                            const postAuthorUser = allRegisteredUsers.find(u => 
+                              (post.user_id && u.id === post.user_id) || 
+                              (post.user_handle && u.handle && u.handle !== '@member' && u.handle.toLowerCase() === post.user_handle.toLowerCase())
+                            );
+                            if (!postAuthorUser) return null;
+
+                            // Gold badge: Apostle Joe Daniels and Developer / Super Admin
+                            if (post.user_id === 'usr_apostle_joe' || isApostlePost || postAuthorUser.id === 'usr_apostle_joe' || postAuthorUser.role === 'super_admin' || postAuthorUser.role === 'developer' || postAuthorUser.id === 'usr_developer') {
+                              return <VerifiedBadge type="gold" size="xs" />;
+                            }
+
+                            // Explicit badge check: User must have an active badge assigned
+                            const badge = postAuthorUser.badge_type || postAuthorUser.verified_badge;
+                            if (badge === 'gold' || badge === 'silver' || badge === 'blue') {
+                              return <VerifiedBadge type={badge} size="xs" />;
+                            }
+
+                            // Ordained pastors with verification
+                            if (postAuthorUser.is_verified && (postAuthorUser.role === 'pastor' || postAuthorUser.role === 'leader')) {
+                              return <VerifiedBadge type="blue" size="xs" />;
+                            }
+
+                            return null;
                           })()}
                         </div>
                         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -3390,11 +3405,11 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                             <span className="text-xs font-bold text-foreground">{user.full_name}</span>
                             {(() => {
                               const grantedBadge: 'gold' | 'silver' | 'blue' | 'none' = 
-                                (user.badge_type && user.badge_type !== 'none') ? user.badge_type :
-                                (user.verified_badge && user.verified_badge !== 'none') ? user.verified_badge :
-                                (user.id === 'usr_apostle_joe' || user.role === 'super_admin' || user.role === 'developer') ? 'gold' :
-                                (user.is_verified ? (user.badge_type || 'blue') : 'none');
-                              if (!grantedBadge || grantedBadge === 'none') return null;
+                                (user.id === 'usr_apostle_joe' || user.role === 'super_admin' || user.role === 'developer' || user.id === 'usr_developer') ? 'gold' :
+                                (user.badge_type && (user.badge_type === 'gold' || user.badge_type === 'silver' || user.badge_type === 'blue')) ? user.badge_type :
+                                (user.verified_badge && (user.verified_badge === 'gold' || user.verified_badge === 'silver' || user.verified_badge === 'blue')) ? user.verified_badge :
+                                (user.is_verified && (user.role === 'pastor' || user.role === 'leader')) ? 'blue' : 'none';
+                              if (grantedBadge === 'none') return null;
                               return <VerifiedBadge type={grantedBadge} size="xs" />;
                             })()}
                           </div>

@@ -13,6 +13,7 @@ import {
 
 interface YouTubeStyleVideoPlayerProps {
   src: string;
+  fallbackSrc?: string;
   poster?: string;
   title?: string;
   isLive?: boolean;
@@ -22,6 +23,7 @@ interface YouTubeStyleVideoPlayerProps {
 
 export const YouTubeStyleVideoPlayer: React.FC<YouTubeStyleVideoPlayerProps> = ({
   src,
+  fallbackSrc,
   poster,
   title = 'Sanctuary Live Stream • Gateway Cathedral',
   isLive = false,
@@ -40,7 +42,15 @@ export const YouTubeStyleVideoPlayer: React.FC<YouTubeStyleVideoPlayerProps> = (
   const [showControls, setShowControls] = useState<boolean>(true);
   const [isBuffering, setIsBuffering] = useState<boolean>(true);
   const [hasError, setHasError] = useState<boolean>(false);
+  const [activeSrc, setActiveSrc] = useState<string>(src);
+  const [hasTriedFallback, setHasTriedFallback] = useState<boolean>(false);
   const [generatedPoster, setGeneratedPoster] = useState<string | null>(poster || null);
+
+  useEffect(() => {
+    setActiveSrc(src);
+    setHasTriedFallback(false);
+    setHasError(false);
+  }, [src]);
 
   // Auto-hide controls timeout
   const controlsTimeoutRef = useRef<any>(null);
@@ -222,6 +232,13 @@ export const YouTubeStyleVideoPlayer: React.FC<YouTubeStyleVideoPlayerProps> = (
     };
     const onError = () => {
       setIsBuffering(false);
+      if (fallbackSrc && !hasTriedFallback && fallbackSrc !== activeSrc) {
+        console.warn('[YouTubeStyleVideoPlayer] Video failed, auto-recovering with fallback:', fallbackSrc);
+        setHasTriedFallback(true);
+        setActiveSrc(fallbackSrc);
+        setHasError(false);
+        return;
+      }
       setHasError(true);
     };
 
@@ -254,7 +271,7 @@ export const YouTubeStyleVideoPlayer: React.FC<YouTubeStyleVideoPlayerProps> = (
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('error', onError);
     };
-  }, [src, autoPlay]);
+  }, [activeSrc, autoPlay, fallbackSrc, hasTriedFallback]);
 
   return (
     <div
@@ -266,15 +283,17 @@ export const YouTubeStyleVideoPlayer: React.FC<YouTubeStyleVideoPlayerProps> = (
     >
       {/* HTML5 Video Element with Key prop to guarantee reload on src change */}
       <video
-        key={src}
+        key={activeSrc}
         ref={videoRef}
-        src={src}
+        src={activeSrc}
         poster={generatedPoster || undefined}
-        preload="auto"
+        preload="metadata"
         playsInline
         webkit-playsinline="true"
         className="w-full h-full object-contain bg-black"
-      />
+      >
+        <source src={activeSrc} type="video/mp4" />
+      </video>
 
       {/* Top Header Overlay: Apostle branding & Title (YouTube style) */}
       <div 
@@ -337,19 +356,35 @@ export const YouTubeStyleVideoPlayer: React.FC<YouTubeStyleVideoPlayerProps> = (
       {hasError && (
         <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-4 text-center z-30">
           <p className="text-white text-xs sm:text-sm font-semibold mb-2">Video playback could not be loaded</p>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (videoRef.current) {
-                videoRef.current.load();
-                videoRef.current.play().catch(() => {});
-              }
-            }}
-            className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold flex items-center gap-1 cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Retry</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setHasError(false);
+                if (videoRef.current) {
+                  videoRef.current.load();
+                  videoRef.current.play().catch(() => {});
+                }
+              }}
+              className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold flex items-center gap-1 cursor-pointer hover:brightness-110 shadow-md"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Retry</span>
+            </button>
+            {fallbackSrc && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setHasTriedFallback(true);
+                  setActiveSrc(fallbackSrc);
+                  setHasError(false);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors border border-white/10"
+              >
+                <span>Live Altar Stream</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
 

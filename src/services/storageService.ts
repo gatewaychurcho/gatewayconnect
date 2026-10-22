@@ -88,6 +88,20 @@ export interface ResolvedFacebookInfo {
   author?: string;
 }
 
+export interface TopVideoComment {
+  id: string;
+  user_id?: string;
+  user_name: string;
+  user_avatar?: string;
+  badge_type?: string;
+  role?: string;
+  text: string;
+  likes: number;
+  liked_by?: string[];
+  reply_to?: string;
+  created_at: string;
+}
+
 const fbResolutionCache = new Map<string, ResolvedFacebookInfo>();
 
 export function arePhoneNumbersEqual(phone1?: string, phone2?: string): boolean {
@@ -160,7 +174,8 @@ const KEYS = {
   SERMON_CATEGORIES: 'gcz_sermon_categories_v1',
   SERMON_ANALYTICS: 'gcz_sermon_analytics_v1',
   SHOW_HOME_TOP_VIDEO: 'gcz_show_home_top_video_v1',
-  CALL_LOGS: 'gcz_call_logs_v1'
+  CALL_LOGS: 'gcz_call_logs_v1',
+  TOP_VIDEO_COMMENTS: 'gcz_top_video_comments_v1'
 };
 
 export const DEFAULT_ADMIN_AVATARS: MediaLibraryItem[] = [
@@ -1703,9 +1718,8 @@ export class StorageService {
         handle: fidStr ? `@${fidStr.replace('usr_', '')}` : '@member',
         phone: '0780000000',
         role: (fidStr === 'usr_apostle_joe' || fidStr === 'usr_developer') ? 'super_admin' : 'member',
-        member_id: `GCZ-${(fidStr || '0000').slice(-4)}`,
-        is_verified: true,
-        badge_type: (fidStr === 'usr_apostle_joe' || fidStr === 'usr_developer') ? 'gold' : 'silver',
+        is_verified: (fidStr === 'usr_apostle_joe' || fidStr === 'usr_developer'),
+        badge_type: (fidStr === 'usr_apostle_joe' || fidStr === 'usr_developer') ? 'gold' : 'none',
         bio: 'Believer walking in covenant faith & supernatural grace at Gateway International Church.',
         location: 'Harare, Zimbabwe',
         created_at: new Date().toISOString(),
@@ -1734,8 +1748,8 @@ export class StorageService {
         phone: '0780000000',
         role: (fidStr === 'usr_apostle_joe' || fidStr === 'usr_developer') ? 'super_admin' : 'member',
         member_id: `GCZ-${(fidStr || '0000').slice(-4)}`,
-        is_verified: true,
-        badge_type: (fidStr === 'usr_apostle_joe' || fidStr === 'usr_developer') ? 'gold' : 'silver',
+        is_verified: (fidStr === 'usr_apostle_joe' || fidStr === 'usr_developer'),
+        badge_type: (fidStr === 'usr_apostle_joe' || fidStr === 'usr_developer') ? 'gold' : 'none',
         bio: 'Believer walking in covenant faith & supernatural grace at Gateway International Church.',
         location: 'Harare, Zimbabwe',
         created_at: new Date().toISOString(),
@@ -6195,6 +6209,93 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
   }
 
   // =========================================================================
+  // PLAYING ON TOP / LIVE STREAM REAL-TIME COMMENTS (FACEBOOK UX CLONE)
+  // =========================================================================
+  static getTopVideoComments(): TopVideoComment[] {
+    const defaultComments: TopVideoComment[] = [
+      {
+        id: 'top_c_1',
+        user_id: 'usr_pastor_tendai',
+        user_name: 'Pastor Tendai Moyo',
+        user_avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&auto=format&fit=crop&q=80',
+        badge_type: 'blue',
+        role: 'pastor',
+        text: 'Amen! Grace and Apostolic Fire overflowing in the Sanctuary! 🔥✝️',
+        likes: 14,
+        liked_by: [],
+        created_at: new Date(Date.now() - 360000).toISOString()
+      },
+      {
+        id: 'top_c_2',
+        user_id: 'usr_chipo_m',
+        user_name: 'Chipo Ruvimbo Mandaza',
+        user_avatar: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200&auto=format&fit=crop&q=80',
+        badge_type: 'none',
+        role: 'member',
+        text: 'Supernatural acceleration! Receiving every prophetic declaration from the UK diaspora fellowship. 🙌',
+        likes: 9,
+        liked_by: [],
+        created_at: new Date(Date.now() - 240000).toISOString()
+      },
+      {
+        id: 'top_c_3',
+        user_id: 'usr_tinashe_c',
+        user_name: 'Tinashe Chikwava',
+        user_avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80',
+        badge_type: 'none',
+        role: 'member',
+        text: 'Connecting with family from Bulawayo North Cell. God bless Apostle Joe Daniels!',
+        likes: 6,
+        liked_by: [],
+        created_at: new Date(Date.now() - 120000).toISOString()
+      }
+    ];
+
+    return getLocal<TopVideoComment[]>(KEYS.TOP_VIDEO_COMMENTS, defaultComments);
+  }
+
+  static addTopVideoComment(comment: TopVideoComment, broadcast: boolean = true): TopVideoComment {
+    const list = this.getTopVideoComments();
+    if (!list.some(c => c.id === comment.id)) {
+      list.push(comment);
+      setLocal(KEYS.TOP_VIDEO_COMMENTS, list);
+    }
+    if (broadcast && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_stream_chat_sent', { detail: comment }));
+      window.dispatchEvent(new CustomEvent('gcz_top_video_comments_updated', { detail: list }));
+    }
+    return comment;
+  }
+
+  static likeTopVideoComment(commentId: string, userId: string): { likes: number; isLiked: boolean } {
+    const list = this.getTopVideoComments();
+    const comment = list.find(c => c.id === commentId);
+    if (!comment) return { likes: 0, isLiked: false };
+
+    const likedBy = Array.isArray(comment.liked_by) ? [...comment.liked_by] : [];
+    const idx = likedBy.indexOf(userId);
+    let isLiked = false;
+
+    if (idx >= 0) {
+      likedBy.splice(idx, 1);
+      comment.likes = Math.max(0, (comment.likes || 1) - 1);
+      isLiked = false;
+    } else {
+      likedBy.push(userId);
+      comment.likes = (comment.likes || 0) + 1;
+      isLiked = true;
+    }
+    comment.liked_by = likedBy;
+    setLocal(KEYS.TOP_VIDEO_COMMENTS, list);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_top_video_comments_updated', { detail: list }));
+    }
+
+    return { likes: comment.likes, isLiked };
+  }
+
+  // =========================================================================
   // COMMUNITY CHAT GROUPS & FOUNDATION SCHOOL MEMBERSHIP LOGIC
   // =========================================================================
   static getChatGroups(): ChatGroup[] {
@@ -7398,6 +7499,19 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
         localStorage.removeItem(KEYS.OVERRIDE_PLAYING_VIDEO);
       }
       window.dispatchEvent(new CustomEvent('gcz_override_video_updated', { detail: video }));
+    } else if (type === 'stream_chat') {
+      const comment = payload as TopVideoComment;
+      if (comment && comment.text) {
+        this.addTopVideoComment(comment, false);
+        window.dispatchEvent(new CustomEvent('gcz_stream_chat_received', { detail: comment }));
+      }
+    } else if (type === 'stream_reaction') {
+      window.dispatchEvent(new CustomEvent('gcz_stream_reaction_received', { detail: payload }));
+    } else if (type === 'stream_like') {
+      const { commentId, userId } = (payload as any) || {};
+      if (commentId) {
+        this.likeTopVideoComment(commentId, userId || 'remote_user');
+      }
     } else if (type === 'user_created' || type === 'user_updated') {
       const newUser = payload as User;
       if (newUser && newUser.id) {

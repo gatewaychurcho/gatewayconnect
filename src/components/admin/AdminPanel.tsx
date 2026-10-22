@@ -541,36 +541,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       let videoUrl: string = instantUrl;
       setAdminStreamUrl(videoUrl);
       setShowAdminStreamPreview(true);
-      StorageService.setLiveStreamUrl(videoUrl);
 
       const streamTitle = sermonTitle || `${file.name.replace(/\.[^/.]+$/, '')} • Live Stream`;
-      const newStatus = {
-        ...liveSermonStatus,
-        streamUrl: videoUrl,
-        thumbnailUrl: posterDataUrl || liveSermonStatus.thumbnailUrl,
-        isLive: true,
-        title: streamTitle
-      };
-      StorageService.setLiveSermonStatus(newStatus);
-      setLiveSermonStatus(newStatus);
       const initialOverride = {
         id: `stream_${Date.now()}`,
         title: streamTitle,
         video_url: videoUrl,
         thumbnail_url: posterDataUrl || undefined
       };
+      // Set local override for instant preview on this device
       StorageService.setOverridePlayingVideo(initialOverride);
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('gcz_override_video_updated', {
           detail: initialOverride
         }));
-        window.dispatchEvent(new CustomEvent('gcz_live_status_updated', { detail: newStatus }));
       }
 
-      setMp4UploadFeedback(`✓ MP4 live & broadcasting on top: ${file.name}`);
-      confetti({ particleCount: 30, spread: 60 });
-      onRefreshAppState();
+      setMp4UploadFeedback(`✓ Previewing on this device... Syncing to cloud for all members...`);
+      confetti({ particleCount: 20, spread: 50 });
 
       // 2. Upload to storage bucket (Supabase / R2) so all other users and mobile platforms can stream it
       StorageBucketService.uploadFileToMediaBucket(file, 'media').then(remoteUrl => {
@@ -585,9 +574,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
           };
           StorageService.setOverridePlayingVideo(finalOverride);
           const finalStatus = {
-            ...newStatus,
+            ...liveSermonStatus,
             streamUrl: remoteUrl,
-            thumbnailUrl: posterDataUrl || newStatus.thumbnailUrl
+            thumbnailUrl: posterDataUrl || liveSermonStatus.thumbnailUrl,
+            isLive: true,
+            title: streamTitle
           };
           StorageService.setLiveSermonStatus(finalStatus);
           setLiveSermonStatus(finalStatus);
@@ -595,8 +586,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
             window.dispatchEvent(new CustomEvent('gcz_override_video_updated', { detail: finalOverride }));
             window.dispatchEvent(new CustomEvent('gcz_live_status_updated', { detail: finalStatus }));
           }
+          setMp4UploadFeedback(`✓ MP4 published globally to all church members!`);
+          confetti({ particleCount: 35, spread: 65 });
+          onRefreshAppState();
+        } else {
+          setMp4UploadFeedback(`✓ Playing locally on admin screen.`);
         }
-      }).catch(() => {});
+      }).catch(err => {
+        console.warn('Media upload notice:', err);
+        setMp4UploadFeedback(`✓ Playing locally on admin screen. (Cloud sync offline)`);
+      });
     } catch (err: any) {
       setMp4UploadFeedback(`Upload failed: ${err.message || 'Error loading video'}`);
     } finally {

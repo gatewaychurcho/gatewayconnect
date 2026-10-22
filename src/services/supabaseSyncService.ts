@@ -2272,6 +2272,9 @@ export class SupabaseSyncService {
   }
 
   static async setLiveStreamUrl(url: string): Promise<{ success: boolean; error?: string }> {
+    if (!url || url.startsWith('blob:')) {
+      return { success: false, error: 'Ephemeral blob URLs cannot be synced to database' };
+    }
     const supabase = getSupabase();
     if (!supabase) return { success: false, error: 'Supabase client not initialized' };
     try {
@@ -2288,23 +2291,25 @@ export class SupabaseSyncService {
 
   static async syncLiveSermonStatus(status: { isLive: boolean; title: string; sermonId: string; viewerCount: number; streamUrl?: string }): Promise<{ success: boolean; error?: string }> {
     const supabase = getSupabase();
+    const safeStreamUrl = status.streamUrl && !status.streamUrl.startsWith('blob:') ? status.streamUrl : undefined;
+    const safeStatus = { ...status, streamUrl: safeStreamUrl };
     const channel = this.getSocialChannel();
     if (channel) {
       channel.send({
         type: 'broadcast',
         event: 'live_status_updated',
-        payload: status
+        payload: safeStatus
       });
     }
     if (!supabase) return { success: false, error: 'Supabase client not initialized' };
     try {
       await supabase.from('church_settings').upsert({
         key: 'live_sermon_status',
-        is_live: status.isLive,
-        title: status.title,
-        sermon_id: status.sermonId,
-        stream_url: status.streamUrl,
-        viewer_count: status.viewerCount,
+        is_live: safeStatus.isLive,
+        title: safeStatus.title,
+        sermon_id: safeStatus.sermonId,
+        stream_url: safeStreamUrl,
+        viewer_count: safeStatus.viewerCount,
         updated_at: new Date().toISOString()
       }, { onConflict: 'key' });
       return { success: true };

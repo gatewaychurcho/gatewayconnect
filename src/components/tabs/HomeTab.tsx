@@ -38,7 +38,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Sermon, Devotional, Testimony, User, CommunityStory, PostComment } from '../../types';
-import { StorageService } from '../../services/storageService';
+import { StorageService, TopVideoComment } from '../../services/storageService';
 import { VerifiedBadge } from '../common/VerifiedBadge';
 import { PaidBookingModal } from '../modals/PaidBookingModal';
 import { UpgradeModal } from '../modals/UpgradeModal';
@@ -117,34 +117,14 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Facebook Live Stream & Interaction State (Facebook Live Clone)
-  const [liveComments, setLiveComments] = useState<Array<{ id: string; user_name: string; user_avatar?: string; text: string; created_at: string }>>([
-    {
-      id: 'lc_1',
-      user_name: 'Pastor Tendai Moyo',
-      user_avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&auto=format&fit=crop&q=80',
-      text: 'Amen! Grace and Apostolic Fire in the Sanctuary! 🔥✝️',
-      created_at: new Date(Date.now() - 180000).toISOString()
-    },
-    {
-      id: 'lc_2',
-      user_name: 'Chipo Ruvimbo Mandaza',
-      user_avatar: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200&auto=format&fit=crop&q=80',
-      text: 'Supernatural acceleration! Receiving every word from the UK diaspora fellowship. 🙌',
-      created_at: new Date(Date.now() - 120000).toISOString()
-    },
-    {
-      id: 'lc_3',
-      user_name: 'Tinashe Chikwava',
-      user_avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80',
-      text: 'Connecting from Bulawayo North Cell. God bless Apostle Joe Daniels!',
-      created_at: new Date(Date.now() - 60000).toISOString()
-    }
-  ]);
+  const [liveComments, setLiveComments] = useState<TopVideoComment[]>(() => StorageService.getTopVideoComments());
   const [liveCommentInput, setLiveCommentInput] = useState<string>('');
   const [liveReactionsCount, setLiveReactionsCount] = useState<number>(348);
   const [userReaction, setUserReaction] = useState<string | null>(null);
   const [showReactionPicker, setShowReactionPicker] = useState<boolean>(false);
   const [showCommentsSection, setShowCommentsSection] = useState<boolean>(true);
+  const [replyToUser, setReplyToUser] = useState<string | null>(null);
+  const commentInputRef = useRef<HTMLInputElement>(null);
 
   const handleLiveReaction = (emoji: string) => {
     setUserReaction(emoji);
@@ -159,23 +139,57 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     } catch {}
   };
 
+  const handleLikeComment = (commentId: string) => {
+    if (isGuest) {
+      if (onRequireAuth) onRequireAuth();
+      return;
+    }
+    const currentUid = activeUser?.id || 'guest_user';
+    const res = StorageService.likeTopVideoComment(commentId, currentUid);
+    setLiveComments(prev => prev.map(c => c.id === commentId ? {
+      ...c,
+      likes: res.likes,
+      liked_by: res.isLiked ? [...(c.liked_by || []), currentUid] : (c.liked_by || []).filter(id => id !== currentUid)
+    } : c));
+    try {
+      liveSyncService.broadcastEvent({
+        type: 'stream_like',
+        payload: { commentId, userId: currentUid }
+      });
+    } catch {}
+  };
+
+  const handleReplyComment = (userName: string) => {
+    setReplyToUser(userName);
+    setLiveCommentInput(`@${userName} `);
+    setTimeout(() => commentInputRef.current?.focus(), 50);
+  };
+
   const handleSendLiveComment = (e: React.FormEvent) => {
     e.preventDefault();
     if (isGuest) {
-      onRequireAuth();
+      if (onRequireAuth) onRequireAuth();
       return;
     }
     const txt = liveCommentInput.trim();
     if (!txt) return;
-    const newComment = {
-      id: `lc_${Date.now()}`,
+    const newComment: TopVideoComment = {
+      id: `top_c_${Date.now()}`,
+      user_id: activeUser?.id,
       user_name: activeUser?.full_name || 'Church Believer',
       user_avatar: activeUser?.avatar_url,
+      badge_type: activeUser?.badge_type || 'none',
+      role: activeUser?.role || 'member',
       text: txt,
+      likes: 0,
+      liked_by: [],
+      reply_to: replyToUser || undefined,
       created_at: new Date().toISOString()
     };
+    StorageService.addTopVideoComment(newComment, true);
     setLiveComments(prev => [...prev, newComment]);
     setLiveCommentInput('');
+    setReplyToUser(null);
     try {
       liveSyncService.broadcastEvent({
         type: 'stream_chat',
@@ -215,6 +229,27 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       setRealStories(StorageService.getSortedStories(activeUser?.id));
     };
 
+    const handleStreamChat = (e: Event) => {
+      const comment = (e as CustomEvent).detail as TopVideoComment;
+      if (comment && comment.id) {
+        setLiveComments(prev => {
+          if (prev.some(c => c.id === comment.id)) return prev;
+          return [...prev, comment];
+        });
+      }
+    };
+
+    const handleStreamCommentsUpdated = (e: Event) => {
+      const list = (e as CustomEvent).detail;
+      if (Array.isArray(list)) {
+        setLiveComments(list);
+      }
+    };
+
+    const handleStreamReaction = () => {
+      setLiveReactionsCount(prev => prev + 1);
+    };
+
     window.addEventListener('gcz_user_updated', handleUserUpdate);
     window.addEventListener('gcz_user_profile_updated', handleUserUpdate);
     window.addEventListener('gcz_testimony_updated', handleFeedUpdate);
@@ -222,6 +257,9 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     window.addEventListener('gcz_live_sermon_updated', handleLiveStatus);
     window.addEventListener('gcz_override_video_updated', handleLiveStatus);
     window.addEventListener('gcz_story_updated', handleStoriesUpdate);
+    window.addEventListener('gcz_stream_chat_received', handleStreamChat);
+    window.addEventListener('gcz_top_video_comments_updated', handleStreamCommentsUpdated);
+    window.addEventListener('gcz_stream_reaction_received', handleStreamReaction);
 
     return () => {
       window.removeEventListener('gcz_user_updated', handleUserUpdate);
@@ -231,6 +269,9 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       window.removeEventListener('gcz_live_sermon_updated', handleLiveStatus);
       window.removeEventListener('gcz_override_video_updated', handleLiveStatus);
       window.removeEventListener('gcz_story_updated', handleStoriesUpdate);
+      window.removeEventListener('gcz_stream_chat_received', handleStreamChat);
+      window.removeEventListener('gcz_top_video_comments_updated', handleStreamCommentsUpdated);
+      window.removeEventListener('gcz_stream_reaction_received', handleStreamReaction);
     };
   }, [activeUser?.id]);
 
@@ -668,6 +709,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             ) : (streamEmbedInfo.isDirectVideo || streamEmbedInfo.isMp4 || streamEmbedInfo.platform === 'direct' || /\.(mp4|webm|mov|mkv|m3u8)(\?.*)?$/i.test(streamEmbedInfo.embedUrl || streamEmbedInfo.originalUrl || currentStreamTarget) || (currentStreamTarget && (currentStreamTarget.startsWith('blob:') || currentStreamTarget.startsWith('data:video/')))) ? (
               <YouTubeStyleVideoPlayer
                 src={streamEmbedInfo.embedUrl || currentStreamTarget}
+                fallbackSrc="https://youtu.be/-CibsaxijIk"
                 poster={overridePlayingVideo?.thumbnail_url || liveSermonStatus.thumbnailUrl}
                 title={topVideoTitle}
                 isLive={liveSermonStatus.isLive}
@@ -771,50 +813,148 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             </button>
           </div>
 
-          {/* Real Facebook Live Comments Stream */}
+          {/* Real Facebook Live Comments Stream (Facebook UX Clone) */}
           {showCommentsSection && (
-            <div className="bg-secondary/20 p-3 sm:p-4 space-y-3">
-              {/* Comments list */}
-              <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1 scrollbar-thin">
-                {liveComments.map((c) => (
-                  <div key={c.id} className="flex items-start gap-2 text-xs">
-                    <img
-                      src={c.user_avatar || '/assets/apostle_joe_daniels_main.jpg'}
-                      alt={c.user_name}
-                      className="w-7 h-7 rounded-full object-cover shrink-0 mt-0.5"
-                    />
-                    <div className="bg-secondary/70 border border-border/40 rounded-2xl px-3 py-1.5 max-w-[85%]">
-                      <div className="font-bold text-foreground text-[11px]">
-                        {c.user_name}
-                      </div>
-                      <div className="text-foreground/90 text-xs mt-0.5 break-words">
-                        {c.text}
+            <div className="bg-secondary/15 dark:bg-[#18191a]/40 p-3.5 sm:p-4 space-y-3 border-t border-border/40">
+              {/* Header with Comments count & live badge */}
+              <div className="flex items-center justify-between text-xs text-muted-foreground pb-1">
+                <span className="font-bold text-foreground flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5 text-blue-500" />
+                  Live Church Comments ({liveComments.length})
+                </span>
+                <span className="text-[11px] font-medium text-emerald-500 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Real-time
+                </span>
+              </div>
+
+              {/* Comments list with authentic Facebook bubbles */}
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-1 scrollbar-thin">
+                {liveComments.map((c) => {
+                  const isMe = Boolean(activeUser?.id && c.user_id === activeUser.id);
+                  const isLikedByMe = Boolean(activeUser?.id && (c.liked_by || []).includes(activeUser.id));
+
+                  const isApostleOrSuperAdmin = c.user_id === 'usr_apostle_joe' || c.user_name?.toLowerCase().includes('apostle joe daniels') || c.badge_type === 'gold';
+                  const isPastorOrLeader = !isApostleOrSuperAdmin && (c.badge_type === 'blue' || c.role === 'pastor' || c.role === 'leader' || c.user_name?.toLowerCase().includes('pastor'));
+                  const badgeType: 'gold' | 'blue' | null = isApostleOrSuperAdmin ? 'gold' : isPastorOrLeader ? 'blue' : null;
+
+                  return (
+                    <div key={c.id} className="flex items-start gap-2.5 text-xs group animate-in fade-in duration-150">
+                      <img
+                        src={c.user_avatar || '/assets/apostle_silhouette.svg'}
+                        alt={c.user_name}
+                        className="w-8 h-8 rounded-full object-cover shrink-0 mt-0.5 border border-border/40 shadow-2xs"
+                      />
+                      <div className="flex-1 min-w-0">
+                        {/* Facebook Comment Bubble */}
+                        <div className="relative inline-block max-w-[95%] sm:max-w-[85%] bg-secondary/80 dark:bg-[#3a3b3c] border border-border/40 rounded-2xl sm:rounded-[18px] px-3.5 py-2 shadow-2xs">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-[13px] text-foreground hover:underline cursor-pointer">
+                              {c.user_name}
+                            </span>
+                            {badgeType && <VerifiedBadge type={badgeType} />}
+                          </div>
+                          <div className="text-foreground/90 text-[13px] leading-relaxed mt-0.5 whitespace-pre-wrap break-words">
+                            {c.text}
+                          </div>
+
+                          {/* Floating Reaction Counter Badge on bottom-right corner of bubble */}
+                          {c.likes > 0 && (
+                            <div className="absolute -bottom-2 right-2 bg-card dark:bg-[#242526] border border-border/60 rounded-full px-1.5 py-0.5 flex items-center gap-1 shadow-sm text-[10px] font-bold text-foreground">
+                              <span className="w-3.5 h-3.5 rounded-full bg-blue-600 text-white text-[8px] flex items-center justify-center font-bold">👍</span>
+                              <span>{c.likes}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action bar below bubble: Time • Like • Reply */}
+                        <div className="flex items-center gap-3 text-[11px] text-muted-foreground font-semibold px-2 mt-1">
+                          <span>{formatTimeAgo(c.created_at)}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleLikeComment(c.id)}
+                            className={`hover:underline cursor-pointer transition-colors ${
+                              isLikedByMe ? 'text-blue-600 dark:text-blue-400 font-bold' : 'hover:text-foreground'
+                            }`}
+                          >
+                            {isLikedByMe ? 'Liked' : 'Like'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleReplyComment(c.user_name)}
+                            className="hover:underline hover:text-foreground cursor-pointer transition-colors"
+                          >
+                            Reply
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  );
+                })}
+              </div>
+
+              {/* Replying banner */}
+              {replyToUser && (
+                <div className="flex items-center justify-between px-3 py-1 bg-primary/10 rounded-lg text-xs text-primary font-medium animate-in fade-in">
+                  <span>Replying to <span className="font-bold">@{replyToUser}</span></span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReplyToUser(null);
+                      setLiveCommentInput('');
+                    }}
+                    className="p-0.5 hover:bg-primary/20 rounded cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Quick Praise Reactions Shortcut Bar */}
+              <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
+                <span className="text-[11px] text-muted-foreground font-medium shrink-0">Quick praise:</span>
+                {[
+                  { label: '🔥 Fire', emoji: '🔥' },
+                  { label: '🙌 Amen', emoji: '🙌' },
+                  { label: '❤️ Love', emoji: '❤️' },
+                  { label: '✝️ Glory', emoji: '✝️' },
+                  { label: '🙏 Pray', emoji: '🙏' }
+                ].map((item) => (
+                  <button
+                    key={item.emoji}
+                    type="button"
+                    onClick={() => {
+                      setLiveCommentInput(prev => `${prev ? prev + ' ' : ''}${item.emoji}`);
+                      commentInputRef.current?.focus();
+                    }}
+                    className="px-2 py-0.5 rounded-full bg-secondary hover:bg-secondary/80 border border-border text-[11px] font-semibold text-foreground shrink-0 transition-colors cursor-pointer"
+                  >
+                    {item.label}
+                  </button>
                 ))}
               </div>
 
-              {/* Add live comment form */}
+              {/* Add live comment form (Facebook Style) */}
               <form onSubmit={handleSendLiveComment} className="flex items-center gap-2 pt-1 border-t border-border/30">
                 <img
-                  src={activeUser?.avatar_url || '/assets/apostle_joe_daniels_main.jpg'}
+                  src={activeUser?.avatar_url || '/assets/apostle_silhouette.svg'}
                   alt={activeUser?.full_name || 'Me'}
-                  className="w-7 h-7 rounded-full object-cover shrink-0"
+                  className="w-8 h-8 rounded-full object-cover shrink-0 border border-border/40"
                 />
-                <div className="flex-1 relative flex items-center">
+                <div className="flex-1 relative flex items-center bg-secondary/80 dark:bg-[#3a3b3c] border border-border/60 rounded-full px-3 py-1.5 focus-within:ring-2 focus-within:ring-blue-500/40">
                   <input
+                    ref={commentInputRef}
                     type="text"
                     value={liveCommentInput}
                     onChange={(e) => setLiveCommentInput(e.target.value)}
                     placeholder={`Write a comment as ${userFirstName}...`}
-                    className="w-full pl-3 pr-9 py-1.5 text-xs rounded-full bg-secondary border border-border focus:outline-none focus:ring-1 focus:ring-primary text-foreground placeholder:text-muted-foreground"
+                    className="w-full text-xs sm:text-sm bg-transparent border-0 focus:outline-none text-foreground placeholder:text-muted-foreground pr-8"
                   />
                   <button
                     type="submit"
                     disabled={!liveCommentInput.trim()}
-                    className="absolute right-1.5 p-1 rounded-full text-primary hover:bg-primary/10 disabled:opacity-40 transition-colors cursor-pointer"
-                    title="Send Comment"
+                    className="absolute right-1 p-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-30 disabled:pointer-events-none transition-all shadow-xs cursor-pointer"
+                    title="Post Comment"
                   >
                     <Send className="w-3.5 h-3.5" />
                   </button>
