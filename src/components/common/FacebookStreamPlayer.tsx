@@ -64,6 +64,14 @@ export const FacebookStreamPlayer: React.FC<FacebookStreamPlayerProps> = ({
 
   return (
     <div className={`relative aspect-video w-full bg-black overflow-hidden group select-none ${className}`}>
+      {/* Loading placeholder underneath iframe */}
+      {!hasLoaded && !showDirectCard && (
+        <div className="absolute inset-0 z-0 flex flex-col items-center justify-center bg-black/90 text-white">
+          <div className="w-9 h-9 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin mb-2" />
+          <p className="text-[11px] text-white/70 font-medium">Connecting to Facebook Stream...</p>
+        </div>
+      )}
+
       {/* Underlying Facebook iframe */}
       {!showDirectCard && currentEmbedUrl && (
         <iframe

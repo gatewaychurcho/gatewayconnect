@@ -5867,8 +5867,8 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
         directUrl = input;
       }
 
-      // Reconstruct clean, responsive embedUrl with valid params
-      const embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(directUrl)}&show_text=0&width=500`;
+      // Reconstruct clean, responsive embedUrl with valid params and autoplay
+      const embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(directUrl)}&show_text=0&width=500&autoplay=true`;
 
       return { 
         embedUrl, 
@@ -5994,8 +5994,8 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
       }
     }
 
-    // Valid Facebook plugin URL: width=500, show_text=0 (responsive via CSS)
-    const embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(canonicalVideoUrl)}&show_text=0&width=500`;
+    // Valid Facebook plugin URL: width=500, show_text=0 (responsive via CSS) with autoplay
+    const embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(canonicalVideoUrl)}&show_text=0&width=500&autoplay=true`;
 
     return {
       embedUrl,

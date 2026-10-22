@@ -83,6 +83,7 @@ import { StorageService } from '../../services/storageService';
 import { StorageBucketService } from '../../services/StorageBucketService';
 import { LocalMediaStore } from '../../services/localMediaStore';
 import { FacebookStreamPlayer } from '../common/FacebookStreamPlayer';
+import { YouTubeStyleVideoPlayer } from '../common/YouTubeStyleVideoPlayer';
 import { downloadCsvForExcel } from '../../utils/exportUtils';
 import { AdminCyberBackground } from './AdminCyberBackground';
 import { LocalImagePicker } from '../common/LocalImagePicker';
@@ -457,6 +458,66 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     });
   };
 
+  // Capture video thumbnail helper
+  const captureVideoThumbnail = (videoFileOrBlobUrl: File | string): Promise<string | null> => {
+    return new Promise((resolve) => {
+      try {
+        const video = document.createElement('video');
+        video.crossOrigin = 'anonymous';
+        video.muted = true;
+        video.playsInline = true;
+        const url = typeof videoFileOrBlobUrl === 'string' ? videoFileOrBlobUrl : URL.createObjectURL(videoFileOrBlobUrl);
+        video.src = url;
+        
+        const cleanUp = () => {
+          if (typeof videoFileOrBlobUrl !== 'string') {
+            try { URL.revokeObjectURL(url); } catch {}
+          }
+          video.remove();
+        };
+
+        video.onloadeddata = () => {
+          try {
+            video.currentTime = Math.min(0.5, (video.duration || 1) / 2);
+          } catch {
+            cleanUp();
+            resolve(null);
+          }
+        };
+
+        video.onseeked = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 360;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+              cleanUp();
+              resolve(dataUrl);
+              return;
+            }
+          } catch {}
+          cleanUp();
+          resolve(null);
+        };
+
+        video.onerror = () => {
+          cleanUp();
+          resolve(null);
+        };
+
+        setTimeout(() => {
+          cleanUp();
+          resolve(null);
+        }, 3000);
+      } catch {
+        resolve(null);
+      }
+    });
+  };
+
   // Congregation Live Stream Local MP4 File Upload
   const handleUploadLocalMp4 = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -470,11 +531,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
     setIsUploadingMp4(true);
     setMp4UploadFeedback(`Processing ${file.name}...`);
     try {
-      // 1. Instant local object URL & IndexedDB persistence for zero lag
+      // 1. Instant local object URL & snapshot generation
       const mediaId = `stream_mp4_${Date.now()}`;
       const instantUrl = URL.createObjectURL(file);
       await LocalMediaStore.saveMedia(mediaId, file).catch(() => {});
       
+      const posterDataUrl = await captureVideoThumbnail(file).catch(() => null);
+
       let videoUrl: string = instantUrl;
       setAdminStreamUrl(videoUrl);
       setShowAdminStreamPreview(true);
@@ -484,6 +547,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       const newStatus = {
         ...liveSermonStatus,
         streamUrl: videoUrl,
+        thumbnailUrl: posterDataUrl || liveSermonStatus.thumbnailUrl,
         isLive: true,
         title: streamTitle
       };
@@ -492,7 +556,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       const initialOverride = {
         id: `stream_${Date.now()}`,
         title: streamTitle,
-        video_url: videoUrl
+        video_url: videoUrl,
+        thumbnail_url: posterDataUrl || undefined
       };
       StorageService.setOverridePlayingVideo(initialOverride);
 
@@ -515,12 +580,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
           const finalOverride = {
             id: `stream_${Date.now()}`,
             title: streamTitle,
-            video_url: remoteUrl
+            video_url: remoteUrl,
+            thumbnail_url: posterDataUrl || undefined
           };
           StorageService.setOverridePlayingVideo(finalOverride);
           const finalStatus = {
             ...newStatus,
-            streamUrl: remoteUrl
+            streamUrl: remoteUrl,
+            thumbnailUrl: posterDataUrl || newStatus.thumbnailUrl
           };
           StorageService.setLiveSermonStatus(finalStatus);
           setLiveSermonStatus(finalStatus);
@@ -3150,13 +3217,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                             isLive={liveSermonStatus.isLive}
                           />
                         ) : (StorageService.getStreamEmbedInfo(adminStreamUrl).isMp4 || StorageService.getStreamEmbedInfo(adminStreamUrl).isDirectVideo || adminStreamUrl.endsWith('.mp4') || adminStreamUrl.startsWith('blob:') || adminStreamUrl.startsWith('data:video/')) ? (
-                          <video
-                            controls
-                            autoPlay
-                            muted
-                            playsInline
+                          <YouTubeStyleVideoPlayer
                             src={adminStreamUrl}
-                            className="w-full h-full object-contain bg-black"
+                            poster={liveSermonStatus.thumbnailUrl}
+                            title={liveSermonStatus.title || 'Sanctuary Live Stream'}
+                            isLive={liveSermonStatus.isLive}
                           />
                         ) : (
                           <iframe

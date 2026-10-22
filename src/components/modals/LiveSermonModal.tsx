@@ -27,6 +27,7 @@ import { liveSyncService } from '../../services/liveSyncService';
 import confetti from 'canvas-confetti';
 import { LivePouringComments } from '../broadcast/LivePouringComments';
 import { FacebookStreamPlayer } from '../common/FacebookStreamPlayer';
+import { YouTubeStyleVideoPlayer } from '../common/YouTubeStyleVideoPlayer';
 
 interface LiveSermonModalProps {
   currentUser: User;
@@ -418,13 +419,12 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
                   className="absolute inset-0 h-full !aspect-auto"
                 />
               ) : (streamEmbedInfo.isMp4 || streamEmbedInfo.isDirectVideo) ? (
-                <video
-                  id="mp4-congregation-stream-player"
-                  className="w-full h-full object-contain absolute inset-0 bg-black"
+                <YouTubeStyleVideoPlayer
                   src={streamEmbedInfo.embedUrl}
-                  controls
-                  autoPlay
-                  playsInline
+                  poster={status.thumbnailUrl}
+                  title={status.title || 'Gateway Connect Zimbabwe Live Service'}
+                  isLive={status.isLive}
+                  className="absolute inset-0 h-full !aspect-auto"
                 />
               ) : (
                 <iframe

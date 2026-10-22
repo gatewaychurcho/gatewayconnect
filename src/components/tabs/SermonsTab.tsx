@@ -45,6 +45,7 @@ import { StorageService } from '../../services/storageService';
 import { StorageBucketService } from '../../services/StorageBucketService';
 import { PaynowService } from '../../services/paynowService';
 import { VideoAnalyticsDashboard } from '../admin/VideoAnalyticsDashboard';
+import { YouTubeStyleVideoPlayer } from '../common/YouTubeStyleVideoPlayer';
 import { cn } from '../../lib/utils';
 import confetti from 'canvas-confetti';
 
@@ -1028,16 +1029,13 @@ export const SermonsTab: React.FC<SermonsTabProps> = ({
             {/* Player Frame */}
             <div className="relative aspect-video bg-black w-full flex items-center justify-center">
               {activePlayingSermon.video_url ? (
-                /* Direct local / storage video player (MP4, MKV, WebM, MOV) */
-                <video 
-                  controls 
-                  autoPlay 
-                  playsInline 
+                /* YouTube-style local / storage video player (MP4, MKV, WebM, MOV) */
+                <YouTubeStyleVideoPlayer
                   src={activePlayingSermon.video_url}
-                  className="w-full h-full max-h-[70vh] object-contain"
-                >
-                  Your browser does not support HTML5 video playback.
-                </video>
+                  poster={activePlayingSermon.thumbnail_url}
+                  title={activePlayingSermon.title}
+                  className="w-full h-full max-h-[70vh]"
+                />
               ) : activePlayingSermon.youtube_id ? (
                 /* YouTube embed player */
                 <iframe

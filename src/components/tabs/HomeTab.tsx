@@ -43,6 +43,7 @@ import { VerifiedBadge } from '../common/VerifiedBadge';
 import { PaidBookingModal } from '../modals/PaidBookingModal';
 import { UpgradeModal } from '../modals/UpgradeModal';
 import { FacebookStreamPlayer } from '../common/FacebookStreamPlayer';
+import { YouTubeStyleVideoPlayer } from '../common/YouTubeStyleVideoPlayer';
 import { cn } from '../../lib/utils';
 import { SupabaseSyncService } from '../../services/supabaseSyncService';
 import { liveSyncService } from '../../services/liveSyncService';
@@ -665,13 +666,11 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 isLive={liveSermonStatus.isLive}
               />
             ) : (streamEmbedInfo.isDirectVideo || streamEmbedInfo.isMp4 || streamEmbedInfo.platform === 'direct' || /\.(mp4|webm|mov|mkv|m3u8)(\?.*)?$/i.test(streamEmbedInfo.embedUrl || streamEmbedInfo.originalUrl || currentStreamTarget) || (currentStreamTarget && (currentStreamTarget.startsWith('blob:') || currentStreamTarget.startsWith('data:video/')))) ? (
-              <video
+              <YouTubeStyleVideoPlayer
                 src={streamEmbedInfo.embedUrl || currentStreamTarget}
-                controls
-                autoPlay
-                playsInline
-                className="w-full h-full object-contain bg-black"
+                poster={overridePlayingVideo?.thumbnail_url || liveSermonStatus.thumbnailUrl}
                 title={topVideoTitle}
+                isLive={liveSermonStatus.isLive}
               />
             ) : (
               <iframe
