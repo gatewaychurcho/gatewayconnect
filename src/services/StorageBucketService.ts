@@ -191,7 +191,6 @@ export class StorageBucketService {
     }
     return null;
   }
-  }
 
   /**
    * Uploads a base64 Data URL to the Supabase storage 'media' bucket and returns its public URL
