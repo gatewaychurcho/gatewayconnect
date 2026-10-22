@@ -369,9 +369,24 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   };
 
   // Top Video Stream Embed Info (If Enabled)
-  const currentStreamTarget = overridePlayingVideo?.youtube_id 
-    ? `https://www.youtube.com/watch?v=${overridePlayingVideo.youtube_id}` 
-    : (overridePlayingVideo?.video_url || liveSermonStatus.streamUrl || StorageService.getLiveStreamUrl() || 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP');
+  const getStreamTarget = () => {
+    if (overridePlayingVideo?.video_url) return overridePlayingVideo.video_url;
+    if (overridePlayingVideo?.youtube_id) {
+      const yid = overridePlayingVideo.youtube_id;
+      if (
+        yid.startsWith('http://') || 
+        yid.startsWith('https://') || 
+        yid.startsWith('blob:') || 
+        yid.startsWith('data:') || 
+        /\.(mp4|webm|mov|mkv|m3u8)/i.test(yid)
+      ) {
+        return yid;
+      }
+      return `https://www.youtube.com/watch?v=${yid}`;
+    }
+    return liveSermonStatus.streamUrl || StorageService.getLiveStreamUrl() || 'https://youtu.be/-CibsaxijIk?si=w71mOHPl8igh5XIP';
+  };
+  const currentStreamTarget = getStreamTarget();
   const streamEmbedInfo = StorageService.getStreamEmbedInfo(currentStreamTarget);
   const topVideoTitle = overridePlayingVideo?.title || liveSermonStatus.title || 'Gateway Cathedral Sunday Service';
 
@@ -569,9 +584,13 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                     className="w-full h-full rounded-full object-cover"
                   />
                 </div>
-                {liveSermonStatus.isLive && (
+                {liveSermonStatus.isLive ? (
                   <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-rose-600 text-white font-black text-[8px] px-1.5 py-0.2 rounded-full uppercase tracking-wider shadow-xs">
                     LIVE
+                  </span>
+                ) : (
+                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-slate-800 text-white/90 font-black text-[7px] px-1.5 py-0.2 rounded-full uppercase tracking-wider border border-white/20 shadow-xs whitespace-nowrap">
+                    WAS LIVE
                   </span>
                 )}
               </div>
@@ -584,7 +603,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                   </span>
                   <VerifiedBadge type="gold" />
                   <span className="text-xs text-muted-foreground">
-                    {liveSermonStatus.isLive ? 'was live now' : 'was live'}
+                    {liveSermonStatus.isLive ? 'is live now' : 'was live'}
                   </span>
                 </div>
                 
@@ -637,13 +656,22 @@ export const HomeTab: React.FC<HomeTabProps> = ({
           </div>
 
           {/* Embedded Video Player */}
-          <div className="relative aspect-video bg-black overflow-hidden shadow-inner">
+          <div className="relative aspect-video bg-black overflow-hidden shadow-inner flex items-center justify-center">
             {streamEmbedInfo.isFacebook ? (
               <FacebookStreamPlayer
                 embedUrl={streamEmbedInfo.embedUrl || streamEmbedInfo.originalUrl}
                 directUrl={streamEmbedInfo.facebookDirectUrl || streamEmbedInfo.originalUrl}
                 title={topVideoTitle}
                 isLive={liveSermonStatus.isLive}
+              />
+            ) : (streamEmbedInfo.isDirectVideo || streamEmbedInfo.isMp4 || streamEmbedInfo.platform === 'direct' || /\.(mp4|webm|mov|mkv|m3u8)(\?.*)?$/i.test(streamEmbedInfo.embedUrl || streamEmbedInfo.originalUrl || currentStreamTarget) || (currentStreamTarget && (currentStreamTarget.startsWith('blob:') || currentStreamTarget.startsWith('data:video/')))) ? (
+              <video
+                src={streamEmbedInfo.embedUrl || currentStreamTarget}
+                controls
+                autoPlay
+                playsInline
+                className="w-full h-full object-contain bg-black"
+                title={topVideoTitle}
               />
             ) : (
               <iframe

@@ -78,8 +78,8 @@ export class StorageBucketService {
   static async uploadFileToMediaBucket(file: File, folder: string = 'uploads'): Promise<string | null> {
     const supabase = getSupabase();
     if (!supabase) {
-      console.warn('Supabase is not configured. Falling back to local data URL.');
-      return null;
+      console.warn('Supabase is not configured. Falling back to Cloudflare R2 storage.');
+      return await this.uploadToCloudflareR2(file, folder);
     }
 
     try {
@@ -143,6 +143,10 @@ export class StorageBucketService {
             return fallbackUrl.publicUrl;
           }
         }
+        
+        // Supabase quota exhausted or bucket error: Seamlessly fallback to Cloudflare R2
+        const r2Url = await this.uploadToCloudflareR2(finalFile, targetFolder);
+        if (r2Url) return r2Url;
         return null;
       }
 
@@ -153,9 +157,40 @@ export class StorageBucketService {
       console.log(`Successfully uploaded to bucket '${this.BUCKET_NAME}':`, publicUrlData.publicUrl);
       return publicUrlData.publicUrl;
     } catch (err) {
-      console.error('Unexpected error during file upload:', err);
-      return null;
+      console.warn('Supabase upload exception, falling back to Cloudflare R2:', err);
+      return await this.uploadToCloudflareR2(file, folder);
     }
+  }
+
+  /**
+   * High-reliability fallback: Uploads directly to Cloudflare R2 via /api/storage/upload
+   */
+  static async uploadToCloudflareR2(file: File, folder: string = 'media'): Promise<string | null> {
+    try {
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
+      reader.readAsDataURL(file);
+      const base64 = await base64Promise;
+      const res = await fetch('/api/storage/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: base64, folder, contentType: file.type || 'video/mp4' })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.url) {
+          console.log('Successfully uploaded file to Cloudflare R2:', json.url);
+          return json.url;
+        }
+      }
+    } catch (e) {
+      console.warn('Cloudflare R2 upload fallback error:', e);
+    }
+    return null;
+  }
   }
 
   /**

@@ -574,9 +574,11 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     if (!file) return;
 
     let mType: 'image' | 'video' | 'audio' | 'document' = 'document';
-    if (file.type.startsWith('image/')) mType = 'image';
-    else if (file.type.startsWith('video/')) mType = 'video';
-    else if (file.type.startsWith('audio/')) mType = 'audio';
+    if (file.type && typeof file.type === 'string') {
+      if (file.type.startsWith('image/')) mType = 'image';
+      else if (file.type.startsWith('video/')) mType = 'video';
+      else if (file.type.startsWith('audio/')) mType = 'audio';
+    }
 
     const sizeStr = file.size > 1024 * 1024
       ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
@@ -1038,11 +1040,11 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     }
   }, [messages, groupMessages, activeTab]);
 
-  const activeThread = threads.find(t => t.other_user.id === activeUserId || arePhoneNumbersEqual(t.other_user.phone, activeUserId));
-  const activeUser = activeThread?.other_user || (activeUserId ? StorageService.getAllUsers().find(u => u.id === activeUserId || arePhoneNumbersEqual(u.phone, activeUserId)) : null) || (activeUserId ? {
+  const activeThread = threads.find(t => (t.other_user?.id && t.other_user.id === activeUserId) || (t.other_user?.phone && arePhoneNumbersEqual(t.other_user.phone, activeUserId)));
+  const activeUser = activeThread?.other_user || (activeUserId ? StorageService.getAllUsers().find(u => u.id === activeUserId || (u.phone && arePhoneNumbersEqual(u.phone, activeUserId))) : null) || (activeUserId ? {
     id: activeUserId,
-    full_name: activeUserId.startsWith('+') || /^\d+$/.test(activeUserId) ? activeUserId : 'Believer',
-    phone: activeUserId.startsWith('+') || /^\d+$/.test(activeUserId) ? activeUserId : '',
+    full_name: (typeof activeUserId === 'string' && (activeUserId.startsWith('+') || /^\d+$/.test(activeUserId))) ? activeUserId : 'Believer',
+    phone: (typeof activeUserId === 'string' && (activeUserId.startsWith('+') || /^\d+$/.test(activeUserId))) ? activeUserId : '',
     role: 'member',
     created_at: new Date().toISOString()
   } as User : null);
@@ -2688,12 +2690,17 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       </div>
                     ) : (
                       filteredCallLogs.map((log) => {
-                        const partnerUser = prioritizedContacts.find(u => u.id === log.partner_id || arePhoneNumbersEqual(u.phone, log.partner_id)) || {
-                          id: log.partner_id,
-                          full_name: log.partner_name || 'Church Believer',
-                          avatar_url: log.partner_avatar,
+                        const partnerId = log.partner_id || (log as any).receiver_id || (log as any).caller_id || '';
+                        const partnerIdStr = typeof partnerId === 'string' ? partnerId : (partnerId ? String(partnerId) : '');
+                        const partnerName = log.partner_name || (log as any).receiver_name || (log as any).caller_name || 'Church Believer';
+                        const partnerAvatar = log.partner_avatar || (log as any).receiver_avatar || (log as any).caller_avatar || '';
+
+                        const partnerUser = prioritizedContacts.find(u => (partnerIdStr && u.id === partnerIdStr) || (u.phone && partnerIdStr && arePhoneNumbersEqual(u.phone, partnerIdStr))) || {
+                          id: partnerIdStr || 'unknown',
+                          full_name: partnerName,
+                          avatar_url: partnerAvatar,
                           role: (log.partner_role as any) || 'member',
-                          phone: log.partner_id.startsWith('+') || /^\d+$/.test(log.partner_id) ? log.partner_id : ''
+                          phone: (partnerIdStr && (partnerIdStr.startsWith('+') || /^\d+$/.test(partnerIdStr))) ? partnerIdStr : ''
                         } as User;
 
                         return (

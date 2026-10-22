@@ -1692,23 +1692,24 @@ export class StorageService {
     return followingIds.map(fid => {
       const existing = allUsers.find(u => u.id === fid || (u.role === 'super_admin' && fid === 'usr_apostle_joe'));
       if (existing) return existing;
+      const fidStr = typeof fid === 'string' ? fid : (fid ? String(fid) : '');
       return {
-        id: fid,
-        full_name: fid === 'usr_apostle_joe' ? 'Apostle Joe Daniels' :
-                   fid === 'usr_prophetess_melinda' ? 'Prophetess Melinda' :
-                   fid === 'usr_pastor_easter' ? 'Pastor Easter' :
-                   fid === 'usr_developer' ? 'Platform Developer' :
-                   fid.startsWith('usr_') ? fid.replace('usr_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Believer',
-        handle: `@${fid.replace('usr_', '')}`,
+        id: fidStr,
+        full_name: fidStr === 'usr_apostle_joe' ? 'Apostle Joe Daniels' :
+                   fidStr === 'usr_prophetess_melinda' ? 'Prophetess Melinda' :
+                   fidStr === 'usr_pastor_easter' ? 'Pastor Easter' :
+                   fidStr === 'usr_developer' ? 'Platform Developer' :
+                   (fidStr && fidStr.startsWith('usr_')) ? fidStr.replace('usr_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : (fidStr || 'Believer'),
+        handle: fidStr ? `@${fidStr.replace('usr_', '')}` : '@member',
         phone: '0780000000',
-        role: (fid === 'usr_apostle_joe' || fid === 'usr_developer') ? 'super_admin' : 'member',
-        member_id: `GCZ-${fid.slice(-4)}`,
+        role: (fidStr === 'usr_apostle_joe' || fidStr === 'usr_developer') ? 'super_admin' : 'member',
+        member_id: `GCZ-${(fidStr || '0000').slice(-4)}`,
         is_verified: true,
-        badge_type: (fid === 'usr_apostle_joe' || fid === 'usr_developer') ? 'gold' : 'silver',
+        badge_type: (fidStr === 'usr_apostle_joe' || fidStr === 'usr_developer') ? 'gold' : 'silver',
         bio: 'Believer walking in covenant faith & supernatural grace at Gateway International Church.',
         location: 'Harare, Zimbabwe',
         created_at: new Date().toISOString(),
-        avatar_url: fid === 'usr_apostle_joe' ? '/assets/apostle_joe_daniels_main.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+        avatar_url: fidStr === 'usr_apostle_joe' ? '/assets/apostle_joe_daniels_main.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
         followers_count: 0,
         following_count: 0
       } as User;
@@ -1721,23 +1722,24 @@ export class StorageService {
     return followerIds.map(fid => {
       const existing = allUsers.find(u => u.id === fid);
       if (existing) return existing;
+      const fidStr = typeof fid === 'string' ? fid : (fid ? String(fid) : '');
       return {
-        id: fid,
-        full_name: fid === 'usr_apostle_joe' ? 'Apostle Joe Daniels' :
-                   fid === 'usr_prophetess_melinda' ? 'Prophetess Melinda' :
-                   fid === 'usr_pastor_easter' ? 'Pastor Easter' :
-                   fid === 'usr_developer' ? 'Platform Developer' :
-                   fid.startsWith('usr_') ? fid.replace('usr_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Believer',
-        handle: `@${fid.replace('usr_', '')}`,
+        id: fidStr,
+        full_name: fidStr === 'usr_apostle_joe' ? 'Apostle Joe Daniels' :
+                   fidStr === 'usr_prophetess_melinda' ? 'Prophetess Melinda' :
+                   fidStr === 'usr_pastor_easter' ? 'Pastor Easter' :
+                   fidStr === 'usr_developer' ? 'Platform Developer' :
+                   (fidStr && fidStr.startsWith('usr_')) ? fidStr.replace('usr_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : (fidStr || 'Believer'),
+        handle: fidStr ? `@${fidStr.replace('usr_', '')}` : '@member',
         phone: '0780000000',
-        role: (fid === 'usr_apostle_joe' || fid === 'usr_developer') ? 'super_admin' : 'member',
-        member_id: `GCZ-${fid.slice(-4)}`,
+        role: (fidStr === 'usr_apostle_joe' || fidStr === 'usr_developer') ? 'super_admin' : 'member',
+        member_id: `GCZ-${(fidStr || '0000').slice(-4)}`,
         is_verified: true,
-        badge_type: (fid === 'usr_apostle_joe' || fid === 'usr_developer') ? 'gold' : 'silver',
+        badge_type: (fidStr === 'usr_apostle_joe' || fidStr === 'usr_developer') ? 'gold' : 'silver',
         bio: 'Believer walking in covenant faith & supernatural grace at Gateway International Church.',
         location: 'Harare, Zimbabwe',
         created_at: new Date().toISOString(),
-        avatar_url: fid === 'usr_apostle_joe' ? '/assets/apostle_joe_daniels_main.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+        avatar_url: fidStr === 'usr_apostle_joe' ? '/assets/apostle_joe_daniels_main.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
         followers_count: 0,
         following_count: 0
       } as User;
@@ -1904,12 +1906,13 @@ export class StorageService {
     return ids.map(id => {
       const found = allUsers.find(u => u.id === id);
       if (found) return found;
+      const idStr = typeof id === 'string' ? id : (id ? String(id) : '');
       return {
-        id,
-        full_name: id === 'usr_apostle_joe' ? 'Apostle Joe Daniels' :
-                   id.startsWith('usr_') ? id.replace('usr_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Believer',
-        handle: `@${id.replace('usr_', '')}`,
-        avatar_url: id === 'usr_apostle_joe' ? '/assets/apostle_joe_daniels_main.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+        id: idStr,
+        full_name: idStr === 'usr_apostle_joe' ? 'Apostle Joe Daniels' :
+                   (idStr && idStr.startsWith('usr_')) ? idStr.replace('usr_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : (idStr || 'Believer'),
+        handle: idStr ? `@${idStr.replace('usr_', '')}` : '@member',
+        avatar_url: idStr === 'usr_apostle_joe' ? '/assets/apostle_joe_daniels_main.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
         role: 'member'
       } as User;
     });
@@ -2057,12 +2060,13 @@ export class StorageService {
     return ids.map(id => {
       const found = allUsers.find(u => u.id === id);
       if (found) return found;
+      const idStr = typeof id === 'string' ? id : (id ? String(id) : '');
       return {
-        id,
-        full_name: id === 'usr_apostle_joe' ? 'Apostle Joe Daniels' :
-                   id.startsWith('usr_') ? id.replace('usr_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Believer',
-        handle: `@${id.replace('usr_', '')}`,
-        avatar_url: id === 'usr_apostle_joe' ? '/assets/apostle_joe_daniels_main.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+        id: idStr,
+        full_name: idStr === 'usr_apostle_joe' ? 'Apostle Joe Daniels' :
+                   (idStr && idStr.startsWith('usr_')) ? idStr.replace('usr_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : (idStr || 'Believer'),
+        handle: idStr ? `@${idStr.replace('usr_', '')}` : '@member',
+        avatar_url: idStr === 'usr_apostle_joe' ? '/assets/apostle_joe_daniels_main.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
         role: 'member'
       } as User;
     });

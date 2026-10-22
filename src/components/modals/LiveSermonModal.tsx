@@ -288,7 +288,7 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
             {!status.isLive ? (
               <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 text-white/80 font-black text-xs uppercase tracking-wider shadow-sm">
                 <Radio className="w-3.5 h-3.5 text-white/40" />
-                <span>OFFLINE</span>
+                <span>WAS LIVE</span>
               </span>
             ) : status.streamSource === 'obs' || status.obsStreamKey ? (
               <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-600 text-white font-black text-xs uppercase tracking-wider shadow-sm animate-pulse">
@@ -308,7 +308,7 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
             )}
             <div>
               <h2 className="font-bold text-sm sm:text-base text-white truncate max-w-[240px] sm:max-w-md">
-                {!status.isLive ? 'Sanctuary Broadcast (Standby)' : liveFeedTitle}
+                {!status.isLive ? 'Sanctuary Broadcast (Was Live)' : liveFeedTitle}
               </h2>
               <div className="flex items-center gap-3 text-[11px] text-white/70">
                 <span className={`flex items-center gap-1 font-semibold ${isFacebook ? 'text-blue-300' : 'text-red-300'}`}>
@@ -374,7 +374,7 @@ export const LiveSermonModal: React.FC<LiveSermonModalProps> = ({
             
             {/* Real Video Player Embed (Facebook Live, Local MP4 / Direct Video, or YouTube Live with audio and controls) */}
             <div className="flex-1 relative bg-black flex items-center justify-center">
-              {(status.streamSource === 'obs' || status.obsStreamKey) && (!streamEmbedInfo.embedUrl || streamEmbedInfo.embedUrl.startsWith('obs://')) ? (
+              {(status.streamSource === 'obs' || status.obsStreamKey) && (!streamEmbedInfo?.embedUrl || (typeof streamEmbedInfo.embedUrl === 'string' && streamEmbedInfo.embedUrl.startsWith('obs://'))) ? (
                 <div className="absolute inset-0 bg-gradient-to-b from-slate-950 via-purple-950/40 to-black flex flex-col items-center justify-center p-6 text-center select-none">
                   <div className="relative mb-5">
                     <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full p-1 bg-gradient-to-tr from-purple-500 via-primary to-amber-400 shadow-2xl animate-pulse">

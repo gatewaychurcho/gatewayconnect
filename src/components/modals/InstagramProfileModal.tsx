@@ -365,29 +365,31 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeStoryHighlight, activeDetailPost, showMemberIdCard, showEditProfile, showFollowsListModal, showDmDrawer, profileHistory]);
 
-  const loadUserData = (targetUserId: string) => {
+  const loadUserData = (targetUserId?: string) => {
+    const rawTarget = typeof targetUserId === 'string' ? targetUserId : '';
+    const safeTargetId = rawTarget || currentUser?.id || 'usr_apostle_joe';
     const allUsers = StorageService.getAllUsers();
     let found = allUsers.find((u) =>
-      u.id === targetUserId ||
-      u.phone === targetUserId ||
-      u.handle === targetUserId ||
-      u.handle?.toLowerCase() === targetUserId.toLowerCase() ||
-      u.full_name.toLowerCase() === targetUserId.toLowerCase()
+      u.id === safeTargetId ||
+      u.phone === safeTargetId ||
+      u.handle === safeTargetId ||
+      (u.handle && u.handle.toLowerCase() === safeTargetId.toLowerCase()) ||
+      (u.full_name && u.full_name.toLowerCase() === safeTargetId.toLowerCase())
     );
 
     if (!found) {
       found = INITIAL_USERS.find((u) =>
-        u.id === targetUserId ||
-        u.handle?.toLowerCase() === targetUserId.toLowerCase() ||
-        u.full_name.toLowerCase().includes(targetUserId.toLowerCase())
+        u.id === safeTargetId ||
+        (u.handle && u.handle.toLowerCase() === safeTargetId.toLowerCase()) ||
+        (u.full_name && u.full_name.toLowerCase().includes(safeTargetId.toLowerCase()))
       );
     }
 
     if (!found) {
       found = {
-        id: targetUserId,
-        full_name: targetUserId.replace(/[@_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        handle: targetUserId.startsWith('@') ? targetUserId : `@${targetUserId}`,
+        id: safeTargetId,
+        full_name: safeTargetId.replace(/[@_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        handle: safeTargetId.startsWith('@') ? safeTargetId : `@${safeTargetId}`,
         phone: '+263770000000',
         role: 'member',
         member_id: `GCZ-${Math.floor(1000 + Math.random() * 9000)}`,

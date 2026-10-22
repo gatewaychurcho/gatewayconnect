@@ -489,21 +489,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       };
       StorageService.setLiveSermonStatus(newStatus);
       setLiveSermonStatus(newStatus);
-      StorageService.setOverridePlayingVideo({
+      const initialOverride = {
         id: `stream_${Date.now()}`,
         title: streamTitle,
-        youtube_id: videoUrl,
         video_url: videoUrl
-      });
+      };
+      StorageService.setOverridePlayingVideo(initialOverride);
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('gcz_override_video_updated', {
-          detail: {
-            id: `stream_${Date.now()}`,
-            title: streamTitle,
-            youtube_id: videoUrl,
-            video_url: videoUrl
-          }
+          detail: initialOverride
         }));
         window.dispatchEvent(new CustomEvent('gcz_live_status_updated', { detail: newStatus }));
       }
@@ -512,16 +507,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
       confetti({ particleCount: 30, spread: 60 });
       onRefreshAppState();
 
-      // 2. Background attempt to upload to Supabase storage bucket without blocking playback
+      // 2. Upload to storage bucket (Supabase / R2) so all other users and mobile platforms can stream it
       StorageBucketService.uploadFileToMediaBucket(file, 'media').then(remoteUrl => {
         if (remoteUrl) {
+          setAdminStreamUrl(remoteUrl);
           StorageService.setLiveStreamUrl(remoteUrl);
-          StorageService.setOverridePlayingVideo({
+          const finalOverride = {
             id: `stream_${Date.now()}`,
             title: streamTitle,
-            youtube_id: remoteUrl,
             video_url: remoteUrl
-          });
+          };
+          StorageService.setOverridePlayingVideo(finalOverride);
+          const finalStatus = {
+            ...newStatus,
+            streamUrl: remoteUrl
+          };
+          StorageService.setLiveSermonStatus(finalStatus);
+          setLiveSermonStatus(finalStatus);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('gcz_override_video_updated', { detail: finalOverride }));
+            window.dispatchEvent(new CustomEvent('gcz_live_status_updated', { detail: finalStatus }));
+          }
         }
       }).catch(() => {});
     } catch (err: any) {
@@ -2751,6 +2757,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                           };
                           StorageService.setLiveSermonStatus(newStatus);
                           setLiveSermonStatus(newStatus);
+                          if (typeof window !== 'undefined') {
+                            window.dispatchEvent(new CustomEvent('gcz_live_status_updated', { detail: newStatus }));
+                          }
                           onRefreshAppState();
                         }}
                         className="px-3 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 text-white font-bold text-xs flex items-center gap-1 shadow-sm transition-all cursor-pointer"
@@ -3021,6 +3030,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                             };
                             StorageService.setLiveSermonStatus(newStatus);
                             setLiveSermonStatus(newStatus);
+                            StorageService.setOverridePlayingVideo(null);
+                            if (typeof window !== 'undefined') {
+                              window.dispatchEvent(new CustomEvent('gcz_override_video_updated', { detail: null }));
+                              window.dispatchEvent(new CustomEvent('gcz_live_status_updated', { detail: newStatus }));
+                            }
                             onRefreshAppState();
                           }}
                           className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-300 transition-colors flex items-center gap-1 cursor-pointer"
@@ -3043,11 +3057,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefreshAppSta
                           StorageService.setLiveSermonStatus(newStatus);
                           setLiveSermonStatus(newStatus);
                           if (cleanUrl) {
-                            StorageService.setOverridePlayingVideo({
+                            const ytId = StorageService.extractYoutubeId(cleanUrl);
+                            const isFb = StorageService.isFacebookUrl(cleanUrl);
+                            const overrideObj = {
                               id: `stream_${Date.now()}`,
                               title: newStatus.title || 'Sanctuary Live Stream',
-                              youtube_id: cleanUrl
-                            });
+                              youtube_id: ytId && !isFb ? ytId : undefined,
+                              video_url: cleanUrl
+                            };
+                            StorageService.setOverridePlayingVideo(overrideObj);
+                            if (typeof window !== 'undefined') {
+                              window.dispatchEvent(new CustomEvent('gcz_override_video_updated', {
+                                detail: overrideObj
+                              }));
+                            }
+                          }
+                          if (typeof window !== 'undefined') {
+                            window.dispatchEvent(new CustomEvent('gcz_live_status_updated', { detail: newStatus }));
                           }
                           confetti({ particleCount: 20, spread: 40 });
                           onRefreshAppState();
