@@ -107,6 +107,8 @@ export interface Sermon {
   size_mb?: number;
   likes_count?: number;
   top_player_views?: number;
+  tags?: string[];
+  hashtags?: string[];
 }
 
 export interface PremiumPlan {

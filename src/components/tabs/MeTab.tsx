@@ -49,7 +49,7 @@ import { User, Sermon, NotificationSettings, Testimony, PostComment, ChurchPage 
 import { StorageService } from '../../services/storageService';
 import { StorageBucketService } from '../../services/StorageBucketService';
 import { PaynowService } from '../../services/paynowService';
-import { MOCK_SERMONS, INITIAL_USERS } from '../../data/mockData';
+import { INITIAL_USERS } from '../../data/mockData';
 import { ImagePickerModal } from '../modals/ImagePickerModal';
 import { UpgradeModal } from '../modals/UpgradeModal';
 import { PaynowConfigModal } from '../modals/PaynowConfigModal';
@@ -1062,55 +1062,73 @@ export const MeTab: React.FC<MeTabProps> = ({
       )}
 
       {/* TAB 2: SERMON REELS */}
-      {activeSubTab === 'reels' && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {MOCK_SERMONS.map((s) => (
-            <div
-              key={s.id}
-              onClick={() => {
-                StorageService.setOverridePlayingVideo({
-                  id: s.id,
-                  title: s.title,
-                  youtube_id: s.youtube_id
-                });
-                showToast(`Loaded ${s.title}`);
-              }}
-              className="group relative aspect-[9/16] rounded-xl overflow-hidden bg-muted border border-border cursor-pointer shadow-xs hover:border-primary transition-all"
-            >
-              <img
-                src={s.thumbnail_url}
-                alt={s.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-              
-              {/* Gradient Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent p-2.5 flex flex-col justify-between">
-                <div className="flex items-center justify-between text-[10px]">
-                  <span className="px-1.5 py-0.5 rounded bg-black/70 text-white font-mono">
-                    {s.duration}
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded bg-primary text-primary-foreground font-semibold">
-                    Reel
-                  </span>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1 text-[10px] text-white/80 font-mono">
-                    <Play className="w-3 h-3 fill-current text-primary" />
-                    <span>{(s.view_count || 1200).toLocaleString()} views</span>
+      {activeSubTab === 'reels' && (() => {
+        const userSermons = StorageService.getSermons();
+        if (userSermons.length === 0) {
+          return (
+            <div className="py-12 text-center space-y-2 bg-card border border-border rounded-xl p-6">
+              <Play className="w-8 h-8 text-muted-foreground mx-auto opacity-40" />
+              <p className="text-xs font-semibold text-foreground">No videos in archive yet</p>
+              <p className="text-[11px] text-muted-foreground">Uploaded sermon videos will appear here.</p>
+            </div>
+          );
+        }
+        return (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {userSermons.map((s) => (
+              <div
+                key={s.id}
+                onClick={() => {
+                  StorageService.setOverridePlayingVideo({
+                    id: s.id,
+                    title: s.title,
+                    youtube_id: s.youtube_id,
+                    video_url: s.video_url,
+                    thumbnail_url: s.thumbnail_url,
+                    speaker: s.speaker,
+                    series: s.series
+                  });
+                  showToast(`Loaded ${s.title}`);
+                }}
+                className="group relative aspect-[9/16] rounded-xl overflow-hidden bg-muted border border-border cursor-pointer shadow-xs hover:border-primary transition-all"
+              >
+                <img
+                  src={s.thumbnail_url}
+                  alt={s.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  loading="lazy"
+                  decoding="async"
+                />
+                
+                {/* Gradient Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent p-2.5 flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="px-1.5 py-0.5 rounded bg-black/70 text-white font-mono">
+                      {s.duration}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-primary text-primary-foreground font-semibold">
+                      Video
+                    </span>
                   </div>
-                  <h4 className="text-xs font-semibold text-white line-clamp-2 leading-tight">
-                    {s.title}
-                  </h4>
-                  <p className="text-[10px] text-white/70 truncate">
-                    {s.speaker}
-                  </p>
+
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1 text-[10px] text-white/80 font-mono">
+                      <Play className="w-3 h-3 fill-current text-primary" />
+                      <span>{(s.view_count || 1).toLocaleString()} views</span>
+                    </div>
+                    <h4 className="text-xs font-semibold text-white line-clamp-2 leading-tight">
+                      {s.title}
+                    </h4>
+                    <p className="text-[10px] text-white/70 truncate">
+                      {s.speaker}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        );
+      })()}
 
       {/* TAB 3: OFFLINE DOWNLOADS VAULT */}
       {activeSubTab === 'downloads' && (

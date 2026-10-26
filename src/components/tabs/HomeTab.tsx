@@ -110,6 +110,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
 
   // Active post menu dropdown: postId -> boolean
   const [activeMenuPostId, setActiveMenuPostId] = useState<string | null>(null);
+  const [activePlayingFeedId, setActivePlayingFeedId] = useState<string | null>(null);
 
   // Modals
   const [showPaidBookingModal, setShowPaidBookingModal] = useState<boolean>(false);
@@ -1157,13 +1158,33 @@ export const HomeTab: React.FC<HomeTabProps> = ({
 
                 {post.youtube_id && !post.image_url && (
                   <div className="relative aspect-video bg-black overflow-hidden border-t border-border/50">
-                    <iframe
-                      src={`https://www.youtube-nocookie.com/embed/${post.youtube_id}?controls=1&modestbranding=1&rel=0&playsinline=1`}
-                      title={post.title || 'Sermon Video'}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      className="w-full h-full border-0"
-                    />
+                    {activePlayingFeedId === post.id ? (
+                      <iframe
+                        src={`https://www.youtube-nocookie.com/embed/${post.youtube_id}?autoplay=1&controls=1&modestbranding=1&rel=0&playsinline=1`}
+                        title={post.title || 'Sermon Video'}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="w-full h-full border-0"
+                      />
+                    ) : (
+                      <div
+                        onClick={() => setActivePlayingFeedId(post.id)}
+                        className="relative w-full h-full cursor-pointer group"
+                      >
+                        <img
+                          src={`https://img.youtube.com/vi/${post.youtube_id}/hqdefault.jpg`}
+                          alt={post.title || 'Video'}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                        <div className="absolute inset-0 bg-black/35 group-hover:bg-black/15 transition-colors flex items-center justify-center">
+                          <div className="w-12 h-12 rounded-full bg-red-600 text-white flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
+                            <Play className="w-5 h-5 fill-current ml-0.5" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

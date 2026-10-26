@@ -411,17 +411,16 @@ export default function App() {
       }
     };
 
-    // Fast background sync across Web and Android WebView (every 5 seconds + on window focus)
+    // Gentle background sync across Web and Android WebView (lightweight, runs on focus + 60s idle only when tab is visible)
     const periodicSync = () => {
-      StorageService.syncUsersWithRemote().then(() => refreshAppData()).catch(() => {});
+      if (typeof document !== 'undefined' && document.hidden) return; // Prevent background battery drain & phone heating
+      StorageService.syncUsersWithRemote().catch(() => {});
       StorageService.syncPostsWithRemote().catch(() => {});
       if (currentUser?.id && currentUser?.role !== 'guest') {
-        StorageService.syncDirectMessagesWithRemote(currentUser.id).then(() => {
-          refreshAppData();
-        }).catch(() => {});
+        StorageService.syncDirectMessagesWithRemote(currentUser.id).catch(() => {});
       }
     };
-    const syncInterval = setInterval(periodicSync, 5000);
+    const syncInterval = setInterval(periodicSync, 60000);
     window.addEventListener('focus', periodicSync);
 
     window.addEventListener('gcz_open_user_profile', handleOpenProfile);

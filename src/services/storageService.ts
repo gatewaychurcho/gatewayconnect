@@ -1069,49 +1069,44 @@ export class StorageService {
     setLocal(KEYS.LOW_DATA_MODE, val);
   }
 
-  // Sermons Library (Supports 200+ Videos - Exclusively @joedaniels-official and @JoeDanielsPodcastshow)
+  // Sermons Library - Clean user/admin upload archive (Default seed videos removed per user request)
   static getSermons(): Sermon[] {
-    let list = getLocal<Sermon[]>(KEYS.SERMONS, INITIAL_EXTENDED_SERMONS);
-    if (!list || list.length < 20) {
-      const existingIds = new Set((list || []).map(s => s.id));
-      const additions = INITIAL_EXTENDED_SERMONS.filter(s => !existingIds.has(s.id));
-      list = [...(list || []), ...additions];
-      setLocal(KEYS.SERMONS, list);
+    const raw = getLocal<Sermon[]>(KEYS.SERMONS, []);
+    // Automatically purge legacy mock/seed sermons (sermon_1 through sermon_205, sermon_church_politics, etc.)
+    const filtered = (raw || []).filter(s => {
+      if (!s || !s.id) return false;
+      if (/^sermon_[0-9]{1,3}$/.test(s.id)) return false;
+      if (s.id === 'sermon_church_politics' || s.id.startsWith('sermon_official_') || s.id.startsWith('sermon_podcast_')) return false;
+      return true;
+    });
+
+    if (filtered.length !== (raw || []).length) {
+      setLocal(KEYS.SERMONS, filtered);
     }
-    // Strict requirement: Sermons must ONLY contain videos from @joedaniels-official and @JoeDanielsPodcastshow
-    return list
-      .filter(s => {
-        if (!s) return false;
-        if (s.channel && s.channel !== '@joedaniels-official' && s.channel !== '@JoeDanielsPodcastshow') {
-          return false;
-        }
-        return true;
-      })
-      .map(s => {
-        const channel: '@joedaniels-official' | '@JoeDanielsPodcastshow' = (
-          s.channel === '@JoeDanielsPodcastshow' ||
-          ['Kingdom Wealth & Business', 'Family & Marriage', 'Youth & Purpose'].includes(s.series) ||
-          (s.title && s.title.toLowerCase().includes('podcast'))
-            ? '@JoeDanielsPodcastshow'
-            : '@joedaniels-official'
-        );
-        const requires_verification = s.requires_verification !== undefined ? s.requires_verification : true;
-        const cached = LocalMediaStore.getCachedMediaUrl(s.id);
-        let video_url = s.video_url;
-        let audio_url = s.audio_url;
-        if (cached) {
-          if (s.video_url?.startsWith('indexeddb://')) video_url = cached;
-          if (s.audio_url?.startsWith('indexeddb://')) audio_url = cached;
-        }
-        return {
-          ...s,
-          channel,
-          speaker: 'Apostle Joe Daniels',
-          requires_verification,
-          video_url,
-          audio_url
-        };
-      });
+
+    return filtered.map(s => {
+      const cached = LocalMediaStore.getCachedMediaUrl(s.id);
+      let video_url = s.video_url;
+      let audio_url = s.audio_url;
+      if (cached) {
+        if (s.video_url?.startsWith('indexeddb://')) video_url = cached;
+        if (s.audio_url?.startsWith('indexeddb://')) audio_url = cached;
+      }
+      return {
+        ...s,
+        speaker: s.speaker || 'Apostle Joe Daniels',
+        video_url,
+        audio_url
+      };
+    });
+  }
+
+  static clearAllSermons(): void {
+    setLocal(KEYS.SERMONS, []);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gcz_sermon_deleted'));
+      window.dispatchEvent(new CustomEvent('gcz_sermon_updated'));
+    }
   }
 
   static importChannelVideos(channel: '@joedaniels-official' | '@JoeDanielsPodcastshow'): { count: number; imported: Sermon[] } {
@@ -1200,17 +1195,11 @@ export class StorageService {
   }
 
   static addSermon(sermon: Sermon): void {
-    const channel: '@joedaniels-official' | '@JoeDanielsPodcastshow' = (
-      sermon.channel === '@JoeDanielsPodcastshow' ||
-      (sermon.title && sermon.title.toLowerCase().includes('podcast')) ||
-      (sermon.series && sermon.series.toLowerCase().includes('podcast'))
-        ? '@JoeDanielsPodcastshow'
-        : '@joedaniels-official'
-    );
     const normalized: Sermon = {
       ...sermon,
-      channel,
-      speaker: sermon.speaker || 'Apostle Joe Daniels'
+      speaker: sermon.speaker || 'Apostle Joe Daniels',
+      tags: sermon.tags || sermon.hashtags || [],
+      hashtags: sermon.hashtags || sermon.tags || []
     };
     const sermons = this.getSermons();
     const filtered = sermons.filter(s => s.id !== normalized.id);

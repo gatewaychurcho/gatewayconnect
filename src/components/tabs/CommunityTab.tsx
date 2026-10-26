@@ -408,6 +408,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
   // Countdown Timer & Event Interaction States
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [activePlayingCommunityPostId, setActivePlayingCommunityPostId] = useState<string | null>(null);
   const [eventFeedbackToast, setEventFeedbackToast] = useState<{ title: string; message: string } | null>(null);
 
   // Admin & Developer Event Governance States
@@ -450,9 +451,12 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   };
 
   useEffect(() => {
+    // Throttled to 60s: prevents continuous 1-second re-renders of the entire 3,800-line feed component
     const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+      if (typeof document !== 'undefined' && !document.hidden) {
+        setCurrentTime(new Date());
+      }
+    }, 60000);
     return () => clearInterval(timer);
   }, []);
 
@@ -1707,14 +1711,34 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                           className="w-full max-h-[460px]"
                         />
                       ) : StorageService.extractYoutubeId(post.video_url) ? (
-                        <iframe
-                          className="w-full aspect-video border-0"
-                          src={StorageService.getYoutubeEmbedUrl(StorageService.extractYoutubeId(post.video_url)!)}
-                          title={post.title}
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                          referrerPolicy="strict-origin-when-cross-origin"
-                          allowFullScreen
-                        />
+                        activePlayingCommunityPostId === post.id ? (
+                          <iframe
+                            className="w-full aspect-video border-0"
+                            src={`${StorageService.getYoutubeEmbedUrl(StorageService.extractYoutubeId(post.video_url)!)}?autoplay=1`}
+                            title={post.title}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            referrerPolicy="strict-origin-when-cross-origin"
+                            allowFullScreen
+                          />
+                        ) : (
+                          <div 
+                            onClick={() => setActivePlayingCommunityPostId(post.id)}
+                            className="relative w-full aspect-video cursor-pointer group bg-black"
+                          >
+                            <img
+                              src={`https://img.youtube.com/vi/${StorageService.extractYoutubeId(post.video_url)}/hqdefault.jpg`}
+                              alt={post.title || 'Video'}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                            <div className="absolute inset-0 bg-black/35 group-hover:bg-black/15 transition-colors flex items-center justify-center">
+                              <div className="w-12 h-12 rounded-full bg-red-600 text-white flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
+                                <Play className="w-5 h-5 fill-current ml-0.5" />
+                              </div>
+                            </div>
+                          </div>
+                        )
                       ) : (
                         <InViewAutoPlayVideo
                           src={post.video_url}
