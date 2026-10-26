@@ -709,23 +709,25 @@ export class StorageService {
     } catch {}
   }
 
-  static async syncUsersWithRemote(): Promise<void> {
+  static async syncUsersWithRemote(forcePush: boolean = false): Promise<void> {
     try {
       const localUsers = this.getAllUsers();
       const customAvatars = this.getPermanentCustomAvatars();
 
-      // 1. Two-way sync: Push local authentic registered users to remote server so all devices share them
-      try {
-        if (typeof fetch !== 'undefined' && localUsers.length > 0) {
-          await fetch(getApiUrl('/api/db/sync?collection=users'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'merge_pool', data: localUsers })
-          });
-        }
-      } catch {}
+      // 1. Two-way sync: Push local users to remote server ONLY on explicit push or write (saves Vercel serverless quotas)
+      if (forcePush) {
+        try {
+          if (typeof fetch !== 'undefined' && localUsers.length > 0) {
+            await fetch(getApiUrl('/api/db/sync?collection=users'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'merge_pool', data: localUsers })
+            });
+          }
+        } catch {}
+      }
 
-      // 2. Sync with Cloudflare R2 / Serverless users database (primary reliable document store)
+      // 2. Sync with Cloudflare R2 / Serverless users database (GET request is Edge CDN cached)
       const r2Users = await this.fetchCloudflareR2Users();
       if (r2Users && r2Users.length > 0) {
         let changed = false;
