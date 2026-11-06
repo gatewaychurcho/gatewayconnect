@@ -54,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({
   isLiveSermon,
   unreadDmsCount = 0
 }) => {
-  const isDeveloper = currentUser.role === 'developer' || currentUser.phone === '0780699988' || currentUser.id === 'usr_developer';
+  const isDeveloper = currentUser.role === 'developer';
   const isSuperAdmin = currentUser.role === 'super_admin' || isDeveloper;
   const isGuest = currentUser.role === 'guest';
 
@@ -341,4 +341,3 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
-

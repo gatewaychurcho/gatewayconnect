@@ -34,7 +34,6 @@ import {
 } from 'lucide-react';
 import { User, Testimony, DirectMessage, PostComment } from '../../types';
 import { StorageService } from '../../services/storageService';
-import { INITIAL_USERS } from '../../data/mockData';
 import { VerifiedBadge } from '../common/VerifiedBadge';
 import { ImagePickerModal } from './ImagePickerModal';
 import confetti from 'canvas-confetti';
@@ -157,6 +156,7 @@ const RHEMA_SCRIPTURE_DETAILS: Record<string, { text: string; category: string; 
 };
 
 interface InstagramProfileModalProps {
+  currentUser: User;
   userId: string | null;
   isOpen: boolean;
   onClose: () => void;
@@ -167,6 +167,7 @@ interface InstagramProfileModalProps {
 }
 
 export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
+  currentUser,
   userId,
   isOpen,
   onClose,
@@ -238,7 +239,6 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
   const [followsSearchQuery, setFollowsSearchQuery] = useState<string>('');
   const [profileHistory, setProfileHistory] = useState<string[]>([]);
 
-  const currentUser = StorageService.getCurrentUser() || StorageService.getAllUsers()[0];
   const isMe = Boolean(
     currentUser &&
     profileUser &&
@@ -367,7 +367,11 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
 
   const loadUserData = (targetUserId?: string) => {
     const rawTarget = typeof targetUserId === 'string' ? targetUserId : '';
-    const safeTargetId = rawTarget || currentUser?.id || 'usr_apostle_joe';
+    const safeTargetId = rawTarget || currentUser?.id || '';
+    if (!safeTargetId) {
+      onClose();
+      return;
+    }
     const allUsers = StorageService.getAllUsers();
     let found = allUsers.find((u) =>
       u.id === safeTargetId ||
@@ -378,41 +382,28 @@ export const InstagramProfileModal: React.FC<InstagramProfileModalProps> = ({
     );
 
     if (!found) {
-      found = INITIAL_USERS.find((u) =>
-        u.id === safeTargetId ||
-        (u.handle && u.handle.toLowerCase() === safeTargetId.toLowerCase()) ||
-        (u.full_name && u.full_name.toLowerCase().includes(safeTargetId.toLowerCase()))
-      );
-    }
-
-    if (!found) {
-      found = {
-        id: safeTargetId,
-        full_name: safeTargetId.replace(/[@_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        handle: safeTargetId.startsWith('@') ? safeTargetId : `@${safeTargetId}`,
-        phone: '+263770000000',
-        role: 'member',
-        member_id: `GCZ-${Math.floor(1000 + Math.random() * 9000)}`,
-        is_verified: (safeTargetId === 'usr_apostle_joe' || safeTargetId === 'usr_developer'),
-        badge_type: (safeTargetId === 'usr_apostle_joe' || safeTargetId === 'usr_developer') ? 'gold' : 'none',
-        bio: 'Believer walking in covenant faith & supernatural acceleration at Gateway International Church.',
-        location: 'Harare, Zimbabwe',
-        created_at: new Date().toISOString(),
-        avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'
-      };
+      onClose();
+      return;
     }
 
     found.avatar_url = StorageService.getUserAvatar(found);
     setProfileUser(found);
 
     // Follow status
-    const following = StorageService.isFollowingUser(currentUser.id, found.id);
+    const following = currentUser ? StorageService.isFollowingUser(currentUser.id, found.id) : false;
     setIsFollowing(following);
     setFollowersCount(StorageService.getUserFollowerCount(found.id));
     setFollowingCount(StorageService.getUserFollowingCount(found.id));
     setFollowersUsers(StorageService.getFollowersUsers(found.id));
 
     // Sync latest persistent follows from Supabase
+    if (!currentUser || currentUser.role === 'guest') {
+      setFollowersUsers([]);
+      setUserPosts([]);
+      setDmList([]);
+      return;
+    }
+
     StorageService.syncFollowsForUser(found.id).then(() => {
       setFollowersCount(StorageService.getUserFollowerCount(found.id));
       setFollowingCount(StorageService.getUserFollowingCount(found.id));

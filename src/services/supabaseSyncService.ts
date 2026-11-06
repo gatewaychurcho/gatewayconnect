@@ -1742,21 +1742,20 @@ export class SupabaseSyncService {
         .map((row: any) => ({
           id: row.id,
           phone: row.phone,
-          password: row.password_hash || 'juice2026',
-          full_name: row.full_name || 'Church Member',
+          full_name: row.full_name || '',
           handle: row.referral_code?.startsWith('@') ? row.referral_code : `@${(row.full_name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
           role: row.role || 'member',
           badge_type: (row.role === 'super_admin' || row.role === 'developer') ? 'gold' : 'none',
           avatar_url: row.avatar_url || null,
-          cell_group: row.cell_group || 'Harare Assembly',
+          cell_group: row.cell_group || '',
           is_verified: row.is_verified || false,
-          member_id: row.member_id || `GCZ-MEM-${Math.floor(1000 + Math.random() * 9000)}`,
-          location: row.location || 'Harare',
-          city_location: row.city_location || 'Harare',
+          member_id: row.member_id || '',
+          location: row.location || '',
+          city_location: row.city_location || '',
           created_at: row.created_at || new Date().toISOString(),
           followers_count: row.followers_count || 0,
           following_count: row.following_count || 0,
-          saved_verses: row.saved_verses || ['John 1:1', 'Isaiah 40:31']
+          saved_verses: row.saved_verses || []
         }));
     } catch {
       return [];
@@ -2574,4 +2573,3 @@ export class SupabaseSyncService {
     }
   }
 }
-

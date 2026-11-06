@@ -61,6 +61,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [durationSeconds, setDurationSeconds] = useState(0);
+  const [callError, setCallError] = useState<string | null>(null);
   const [callId] = useState<string>(() => incomingCallId || `call_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
 
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -151,6 +152,27 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
         ]
       });
       peerConnectionRef.current = pc;
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'connected') {
+          if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+          setCallStatus('connected');
+          setCallError(null);
+        } else if (pc.connectionState === 'failed') {
+          if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+          setCallError('The call connection failed. Check your network and try again.');
+          setCallStatus('ended');
+          pc.close();
+          localStreamRef.current?.getTracks().forEach(track => track.stop());
+        }
+      };
+      callTimeoutRef.current = setTimeout(() => {
+        if (pc.connectionState !== 'connected') {
+          setCallError('Could not establish the call. Check your network and try again.');
+          setCallStatus('ended');
+          pc.close();
+          localStreamRef.current?.getTracks().forEach(track => track.stop());
+        }
+      }, 20000);
 
       // Handle remote incoming audio stream with high fidelity playback
       pc.ontrack = (event) => {
@@ -198,8 +220,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
                 noiseSuppression: { ideal: true },
                 autoGainControl: { ideal: true },
                 sampleRate: { ideal: 48000 },
-                channelCount: { ideal: 1 },
-                latency: { ideal: 0.01 }
+                channelCount: { ideal: 1 }
               },
               video: false
             });
@@ -209,8 +230,14 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
             pc.addTrack(track, localStreamRef.current!);
           });
         } catch (micErr) {
-          console.warn('Microphone permission not granted or device missing:', micErr);
+          throw new Error(
+            micErr instanceof Error && micErr.name === 'NotAllowedError'
+              ? 'Microphone access was denied. Allow microphone access and try again.'
+              : 'Unable to access a microphone. Check that one is connected and try again.'
+          );
         }
+      } else {
+        throw new Error('Microphone calling is not supported by this browser.');
       }
 
       if (isInitiator) {
@@ -234,7 +261,14 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
         } as any);
       }
     } catch (err) {
-      console.warn('WebRTC initialization warning:', err);
+      const message = err instanceof Error ? err.message : 'Unable to start the call.';
+      setCallError(message);
+      setCallStatus('ended');
+      if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+      peerConnectionRef.current?.close();
+      peerConnectionRef.current = null;
+      localStreamRef.current?.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
     }
   };
 
@@ -300,7 +334,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
       if (signal.action === 'accept') {
         if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
         stopRingtone();
-        setCallStatus('connected');
+        setCallStatus('calling');
         setupWebRTC(true);
       }
 
@@ -427,7 +461,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
   const handleAccept = () => {
     if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
     stopRingtone();
-    setCallStatus('connected');
+    setCallStatus('calling');
     setupWebRTC(false);
 
     liveSyncService.sendCallSignal({
@@ -788,7 +822,7 @@ export const InDriveCallModal: React.FC<InDriveCallModalProps> = ({
 
           {callStatus === 'ended' && (
             <div className="px-4 py-1.5 rounded-full bg-white/10 border border-white/10 text-white/70 font-bold text-xs">
-              Call Ended
+              {callError || 'Call Ended'}
             </div>
           )}
         </div>

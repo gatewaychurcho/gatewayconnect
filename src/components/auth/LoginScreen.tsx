@@ -31,7 +31,6 @@ import confetti from 'canvas-confetti';
 
 interface LoginScreenProps {
   onLoginSuccess: (user: UserType, isNewUser?: boolean) => void;
-  onInstantJoin: (nameOrHandle: string) => void;
   onContinueAsGuest: () => void;
   onClose?: () => void;
   initialView?: 'signin' | 'signup' | 'forgot_password';
@@ -42,7 +41,6 @@ type ForgotStep = 'request' | 'verify' | 'new_password' | 'success';
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({
   onLoginSuccess,
-  onInstantJoin,
   onContinueAsGuest,
   onClose,
   initialView = 'signin'
@@ -72,8 +70,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   // UI & Loading States
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [showInstantJoin, setShowInstantJoin] = useState<boolean>(false);
-  const [instantJoinName, setInstantJoinName] = useState<string>('');
 
   // Forgot Password Flow State Machine
   const [forgotStep, setForgotStep] = useState<ForgotStep>('request');
@@ -165,7 +161,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             } catch {}
 
             StorageService.saveUser(mappedUser);
-            StorageService.autoFollowSuperAdminAndDeveloper(mappedUser.id);
             StorageService.setCurrentUser(mappedUser);
             confetti({ particleCount: 35, spread: 60 });
             onLoginSuccess(mappedUser, false);
@@ -186,12 +181,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             if (!dbUser.password_hash || dbUser.password_hash === pwd || dbUser.password === pwd) {
               const mappedUser: UserType = {
                 id: dbUser.id,
-                phone: dbUser.phone || fullPhone || '0780000000',
+                phone: dbUser.phone || fullPhone || '',
                 email: isEmail ? identifier : dbUser.email,
-                full_name: dbUser.full_name || 'Member',
+                full_name: dbUser.full_name || '',
                 handle: dbUser.handle || `@${(dbUser.full_name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
                 role: dbUser.role || 'member',
-                location: dbUser.location || 'Harare',
+                location: dbUser.location || '',
                 member_id: dbUser.member_id || dbUser.id.substring(0, 8),
                 avatar_url: dbUser.avatar_url || '',
                 created_at: dbUser.created_at || new Date().toISOString(),
@@ -202,7 +197,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               };
 
               StorageService.saveUser(mappedUser);
-              StorageService.autoFollowSuperAdminAndDeveloper(mappedUser.id);
               StorageService.setCurrentUser(mappedUser);
               confetti({ particleCount: 35, spread: 60 });
               onLoginSuccess(mappedUser, false);
@@ -344,7 +338,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         }
 
         StorageService.saveUser(newUser);
-        StorageService.autoFollowSuperAdminAndDeveloper(newUser.id);
         StorageService.setCurrentUser(newUser);
         confetti({ particleCount: 40, spread: 70 });
         onLoginSuccess(newUser, true);

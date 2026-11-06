@@ -49,7 +49,6 @@ import { User, Sermon, NotificationSettings, Testimony, PostComment, ChurchPage 
 import { StorageService } from '../../services/storageService';
 import { StorageBucketService } from '../../services/StorageBucketService';
 import { PaynowService } from '../../services/paynowService';
-import { INITIAL_USERS } from '../../data/mockData';
 import { ImagePickerModal } from '../modals/ImagePickerModal';
 import { UpgradeModal } from '../modals/UpgradeModal';
 import { PaynowConfigModal } from '../modals/PaynowConfigModal';
@@ -66,7 +65,6 @@ import confetti from 'canvas-confetti';
 
 interface MeTabProps {
   currentUser: User;
-  onSwitchUser: (user: User) => void;
   onOpenAdminPanel: () => void;
   onOpenDevConsole: () => void;
   onOpenFlutterExport: () => void;
@@ -90,7 +88,6 @@ const DEFAULT_HIGHLIGHTS: StoryHighlight[] = [];
 
 export const MeTab: React.FC<MeTabProps> = ({
   currentUser,
-  onSwitchUser,
   onOpenAdminPanel,
   onOpenDevConsole,
   onOpenFlutterExport,
@@ -1545,26 +1542,6 @@ export const MeTab: React.FC<MeTabProps> = ({
                 </button>
               </div>
 
-              {/* Profile switcher */}
-              <div className="pt-2 border-t border-purple-500/20">
-                <p className="text-[11px] text-purple-600 dark:text-purple-300 font-semibold mb-1.5">Switch Dev Test Accounts</p>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {INITIAL_USERS.slice(0, 4).map(u => (
-                    <button
-                      key={u.id}
-                      onClick={() => {
-                        StorageService.setCurrentUser(u);
-                        onSwitchUser(u);
-                        showToast(`Switched to ${u.full_name}`);
-                      }}
-                      className="p-2 rounded-lg bg-secondary/50 border border-border text-left hover:border-primary transition-all"
-                    >
-                      <p className="text-xs font-bold text-foreground truncate">{u.full_name}</p>
-                      <p className="text-[10px] text-muted-foreground font-mono">{u.role}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
 

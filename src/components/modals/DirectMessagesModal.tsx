@@ -129,6 +129,19 @@ const formatCallDuration = (sec?: number): string => {
   return `${mins}m ${remainingSec}s`;
 };
 
+const getCallLogPartner = (log: CallLog, currentUser: User) => {
+  const isOutgoing = log.type === 'outgoing';
+  const fallback = isOutgoing
+    ? { id: log.receiver_id, name: log.receiver_name, avatar: log.receiver_avatar }
+    : { id: log.caller_id, name: log.caller_name, avatar: log.caller_avatar };
+  const hasPartner = Boolean(log.partner_id && log.partner_id !== currentUser.id);
+  return {
+    id: hasPartner ? log.partner_id! : fallback.id,
+    name: (hasPartner ? log.partner_name : undefined) || fallback.name || 'Church Believer',
+    avatar: (hasPartner ? log.partner_avatar : undefined) || fallback.avatar || ''
+  };
+};
+
 const getBubbleRounding = (isMine: boolean, isFirstInGroup: boolean, isLastInGroup: boolean): string => {
   if (isMine) {
     if (isFirstInGroup && isLastInGroup) return 'rounded-2xl rounded-tr-xs';
@@ -261,6 +274,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
   const [newGroupDesc, setNewGroupDesc] = useState('');
   const [newGroupCategory, setNewGroupCategory] = useState<'Worship' | 'Men' | 'Women' | 'Youth' | 'School' | 'General'>('General');
   const [newGroupAvatar, setNewGroupAvatar] = useState('');
+  const [newGroupPinnedNotice, setNewGroupPinnedNotice] = useState('');
   const [newGroupIsPaid, setNewGroupIsPaid] = useState(false);
   const [newGroupPrice, setNewGroupPrice] = useState(150);
   const [newGroupDuration, setNewGroupDuration] = useState(3);
@@ -268,17 +282,6 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
   const handleInitiateVoiceCall = (partner: User) => {
     window.dispatchEvent(new CustomEvent('gcz_start_outgoing_call', { detail: { partner } }));
-  };
-
-  const handleSimulateIncomingCall = (callerUser?: User) => {
-    const caller = callerUser || prioritizedContacts.find(u => u.id === 'usr_apostle_joe') || prioritizedContacts[0];
-    const callId = `call_test_${Date.now()}`;
-    window.dispatchEvent(new CustomEvent('gcz_trigger_incoming_call', {
-      detail: {
-        caller,
-        callId
-      }
-    }));
   };
 
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
@@ -1182,109 +1185,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
         date: m.created_at
       }));
 
-    const defaultMedia: Record<string, Array<{ id: string; url: string; type: 'image' | 'video' | 'audio'; caption: string; sender: string; date: string }>> = {
-      group_ignite_worship: [
-        {
-          id: 'med_w1',
-          url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop&q=80',
-          type: 'image',
-          caption: 'Altar Worship & Praise Night in Harare Sanctuary',
-          sender: 'Apostle Joe Daniels',
-          date: '2026-03-01'
-        },
-        {
-          id: 'med_w2',
-          url: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=800&auto=format&fit=crop&q=80',
-          type: 'image',
-          caption: 'Sanctuary Choir & Strings Rehearsal Session',
-          sender: 'Pastor Easter',
-          date: '2026-03-03'
-        },
-        {
-          id: 'med_w3',
-          url: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&auto=format&fit=crop&q=80',
-          type: 'image',
-          caption: 'Miracle Praise and Healing Service Atmosphere',
-          sender: 'Chipo Moyo',
-          date: '2026-03-05'
-        }
-      ],
-      group_pride_lions: [
-        {
-          id: 'med_m1',
-          url: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=800&auto=format&fit=crop&q=80',
-          type: 'image',
-          caption: "Kingdom Men's Annual Leadership Breakfast Fellowship",
-          sender: 'Apostle Joe Daniels',
-          date: '2026-02-28'
-        },
-        {
-          id: 'med_m2',
-          url: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&auto=format&fit=crop&q=80',
-          type: 'image',
-          caption: 'Brothers in Midnight Prayer Mountain Summit',
-          sender: 'Tinashe Chikore',
-          date: '2026-03-02'
-        }
-      ],
-      group_passion_ladies: [
-        {
-          id: 'med_l1',
-          url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&auto=format&fit=crop&q=80',
-          type: 'image',
-          caption: 'Virtuous Women Prayer & Kingdom Entrepreneurship Gala',
-          sender: 'Prophetess Melinda Daniels',
-          date: '2026-03-02'
-        },
-        {
-          id: 'med_l2',
-          url: 'https://images.unsplash.com/photo-1529333166437-7750a6dd5a70?w=800&auto=format&fit=crop&q=80',
-          type: 'image',
-          caption: 'Daughters of Grace Worship & Prophetic Fellowship',
-          sender: 'Pastor Grace',
-          date: '2026-03-04'
-        }
-      ],
-      group_foundation_school: [
-        {
-          id: 'med_f1',
-          url: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=800&auto=format&fit=crop&q=80',
-          type: 'image',
-          caption: 'Class of 2026 Discipleship Graduation Ceremony',
-          sender: 'Pastor Tendai Ndlovu',
-          date: '2026-02-15'
-        },
-        {
-          id: 'med_f2',
-          url: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?w=800&auto=format&fit=crop&q=80',
-          type: 'image',
-          caption: 'Believers Foundation Manual Class Interactive Study',
-          sender: 'Apostle Joe Daniels',
-          date: '2026-02-22'
-        }
-      ]
-    };
-
-    const curated: Array<{ id: string; url: string; type: 'image' | 'video' | 'audio'; caption: string; sender: string; date: string }> = defaultMedia[activeGroup.id] || [
-      {
-        id: 'med_gen1',
-        url: 'https://images.unsplash.com/photo-1438232992991-995b7058bbb3?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Gateway Church Fellowship Gathering in Harare',
-        sender: 'Gateway Media',
-        date: '2026-02-20'
-      },
-      {
-        id: 'med_gen2',
-        url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Sunday Holy Communion & Anointing Service',
-        sender: 'Gateway Media',
-        date: '2026-02-27'
-      }
-    ];
-
-    return [...fromMsgs, ...curated];
+    return fromMsgs;
   };
 
   // WhatsApp-style Share Photo to Group
@@ -1969,7 +1870,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
 
   const filteredCallLogs = callLogs.filter(l => {
     if (!searchQuery.trim()) return true;
-    return l.partner_name.toLowerCase().includes(searchQuery.toLowerCase());
+    return getCallLogPartner(l, currentUser).name.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
   const isMobileChatActive = isMobile && ((activeTab === 'direct' && Boolean(activeUserId) && !showNewChatPicker) || (activeTab === 'groups' && Boolean(activeGroupId)));
@@ -2646,15 +2547,6 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                         <span>Recent Voice Calls ({callLogs.length})</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleSimulateIncomingCall()}
-                          className="px-2 py-1 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 font-semibold text-[11px] flex items-center gap-1 transition-colors border border-emerald-500/20 shadow-xs cursor-pointer"
-                          title="Simulate incoming WhatsApp voice call"
-                        >
-                          <PhoneIncoming className="w-3 h-3" />
-                          <span>Test Incoming Call</span>
-                        </button>
                         {callLogs.length > 0 && (
                           <button
                             onClick={() => {
@@ -2690,18 +2582,19 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                       </div>
                     ) : (
                       filteredCallLogs.map((log) => {
-                        const partnerId = log.partner_id || (log as any).receiver_id || (log as any).caller_id || '';
-                        const partnerIdStr = typeof partnerId === 'string' ? partnerId : (partnerId ? String(partnerId) : '');
-                        const partnerName = log.partner_name || (log as any).receiver_name || (log as any).caller_name || 'Church Believer';
-                        const partnerAvatar = log.partner_avatar || (log as any).receiver_avatar || (log as any).caller_avatar || '';
+                        const partner = getCallLogPartner(log, currentUser);
+                        const partnerIdStr = partner.id || '';
 
                         const partnerUser = prioritizedContacts.find(u => (partnerIdStr && u.id === partnerIdStr) || (u.phone && partnerIdStr && arePhoneNumbersEqual(u.phone, partnerIdStr))) || {
                           id: partnerIdStr || 'unknown',
-                          full_name: partnerName,
-                          avatar_url: partnerAvatar,
-                          role: (log.partner_role as any) || 'member',
-                          phone: (partnerIdStr && (partnerIdStr.startsWith('+') || /^\d+$/.test(partnerIdStr))) ? partnerIdStr : ''
-                        } as User;
+                          full_name: partner.name,
+                          avatar_url: partner.avatar || undefined,
+                          role: log.partner_role || 'member',
+                          phone: (partnerIdStr && (partnerIdStr.startsWith('+') || /^\d+$/.test(partnerIdStr))) ? partnerIdStr : '',
+                          member_id: 'GCZ-CALL',
+                          is_verified: false,
+                          created_at: log.created_at
+                        };
 
                         return (
                           <div
@@ -2714,10 +2607,10 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                 onClick={() => setViewUserProfile(partnerUser)}
                                 className="relative w-11 h-11 rounded-full border border-border overflow-hidden bg-secondary flex items-center justify-center text-primary font-bold text-xs shrink-0 shadow-xs cursor-pointer hover:ring-2 hover:ring-primary/40 transition-all"
                               >
-                                {log.partner_avatar || partnerUser.avatar_url ? (
-                                  <img src={log.partner_avatar || partnerUser.avatar_url} alt={log.partner_name || 'Caller'} className="w-full h-full object-cover" />
+                                {partner.avatar || partnerUser.avatar_url ? (
+                                  <img src={partner.avatar || partnerUser.avatar_url} alt={partner.name} className="w-full h-full object-cover" />
                                 ) : (
-                                  (log.partner_name || partnerUser.full_name || 'GC').slice(0, 2).toUpperCase()
+                                  (partner.name || partnerUser.full_name || 'GC').slice(0, 2).toUpperCase()
                                 )}
                               </div>
 
@@ -2730,7 +2623,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                       log.type === 'missed' ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-foreground'
                                     }`}
                                   >
-                                    {log.partner_name || partnerUser.full_name}
+                                    {partner.name || partnerUser.full_name}
                                   </span>
                                 </div>
 
@@ -2753,13 +2646,13 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                   )}
                                   <span className="text-muted-foreground/40">•</span>
                                   <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-                                    {formatCallTimestamp(log.timestamp)}
+                                    {formatCallTimestamp(log.timestamp || log.created_at)}
                                   </span>
-                                  {log.type !== 'missed' && log.duration_sec && log.duration_sec > 0 ? (
+                                  {(log.duration_sec ?? log.duration_seconds) > 0 && log.type !== 'missed' ? (
                                     <>
                                       <span className="text-muted-foreground/40">•</span>
                                       <span className="text-[11px] text-muted-foreground font-mono">
-                                        ({formatCallDuration(log.duration_sec)})
+                                        ({formatCallDuration(log.duration_sec ?? log.duration_seconds)})
                                       </span>
                                     </>
                                   ) : null}
@@ -2773,7 +2666,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                                 type="button"
                                 onClick={() => handleInitiateVoiceCall(partnerUser)}
                                 className="w-9 h-9 rounded-full bg-emerald-500/10 hover:bg-emerald-500 text-emerald-600 dark:text-emerald-400 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer active:scale-95"
-                                title={`Call ${log.partner_name || partnerUser.full_name}`}
+                                title={`Call ${partner.name || partnerUser.full_name}`}
                               >
                                 <Phone className="w-4 h-4" />
                               </button>
@@ -4620,7 +4513,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                   </div>
                   <div className="p-3 rounded-2xl bg-secondary/50 border border-border text-center">
                     <p className="text-base font-extrabold text-emerald-500">
-                      {Math.floor(callLogs.reduce((acc, c) => acc + (c.duration_sec || 0), 0) / 60)}m
+                      {Math.floor(callLogs.reduce((acc, c) => acc + (c.duration_sec ?? c.duration_seconds ?? 0), 0) / 60)}m
                     </p>
                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mt-0.5">Duration</p>
                   </div>
@@ -5528,6 +5421,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
       {/* User Profile Modal when clicking View Profile in chat */}
       {viewUserProfile && (
         <InstagramProfileModal
+          currentUser={currentUser}
           userId={viewUserProfile.id}
           isOpen={Boolean(viewUserProfile)}
           onClose={() => setViewUserProfile(null)}
@@ -5542,10 +5436,5 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     </div>
   );
 };
-
-
-
-
-
 
 

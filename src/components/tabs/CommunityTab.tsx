@@ -36,6 +36,7 @@ import {
   LogIn,
   Trash2,
   Film,
+  Play,
   Video,
   Flag,
   FileEdit,
@@ -3607,6 +3608,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
 
       {/* Instagram Profile Modal (Follow, Followers, Following, DMs, 3x3 Grid) */}
       <InstagramProfileModal
+        currentUser={currentUser}
         userId={profileModalUserId}
         isOpen={showProfileModal}
         onClose={() => setShowProfileModal(false)}
@@ -3832,7 +3834,5 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     </div>
   );
 };
-
-
 
 

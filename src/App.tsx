@@ -115,8 +115,8 @@ export default function App() {
         setActiveCall({
           partner: {
             ...signal.caller,
-            full_name: signal.caller.full_name || 'Church Believer',
-            avatar_url: signal.caller.avatar_url || '/assets/apostle_joe_daniels_main.jpg'
+            full_name: signal.caller.full_name || 'Member',
+            avatar_url: signal.caller.avatar_url
           } as User,
           isIncoming: true,
           callId: signal.callId || `call_${Date.now()}`
@@ -135,20 +135,9 @@ export default function App() {
       }
     };
 
-    const handleDirectIncomingTrigger = (e: any) => {
-      const detail = e?.detail;
-      if (detail && detail.caller) {
-        setActiveCall({
-          partner: detail.caller,
-          isIncoming: true,
-          callId: detail.callId || `call_${Date.now()}`
-        });
-      }
-    };
-
     const handleStartOutgoingCall = (e: any) => {
       const detail = e?.detail;
-      if (detail && detail.partner) {
+      if (detail && detail.partner && currentUser.role !== 'guest') {
         setActiveCall({
           partner: detail.partner,
           isIncoming: false,
@@ -158,11 +147,9 @@ export default function App() {
     };
 
     window.addEventListener('gcz_call_signal', handleCallSignal);
-    window.addEventListener('gcz_trigger_incoming_call', handleDirectIncomingTrigger);
     window.addEventListener('gcz_start_outgoing_call', handleStartOutgoingCall);
     return () => {
       window.removeEventListener('gcz_call_signal', handleCallSignal);
-      window.removeEventListener('gcz_trigger_incoming_call', handleDirectIncomingTrigger);
       window.removeEventListener('gcz_start_outgoing_call', handleStartOutgoingCall);
     };
   }, [currentUser?.id, currentUser?.phone, currentUser?.handle]);
@@ -171,10 +158,6 @@ export default function App() {
     // Purge any community posts older than 8 days immediately
     try {
       StorageService.purgeOldPosts(8);
-      const cur = StorageService.getCurrentUser();
-      if (cur && cur.id && cur.id !== 'usr_guest') {
-        StorageService.autoFollowSuperAdminAndDeveloper(cur.id);
-      }
     } catch {}
 
     const handleOpenLive = () => {
@@ -188,7 +171,7 @@ export default function App() {
       supabase.auth.getSession().then(async ({ data: { session } }) => {
         if (session?.user) {
           const localUser = StorageService.getCurrentUser();
-          if (!localUser || localUser.id === 'usr_guest') {
+          if (!localUser || localUser.role === 'guest' || localUser.id.startsWith('usr_guest')) {
             try {
               const { data: dbUser } = await supabase.from('users').select('*').eq('id', session.user.id).single();
               if (dbUser) {
@@ -280,43 +263,21 @@ export default function App() {
     refreshAppData();
   };
 
-  const handleInstantJoin = (nameOrHandle: string) => {
-    const trimmedName = nameOrHandle.trim();
-    const displayName = trimmedName.replace(/^@/, '') || 'Gateway Believer';
-    const instantUser: User = {
-      id: `usr_instant_${Date.now()}`,
-      phone: `instant_${Date.now()}`,
-      full_name: displayName,
-      handle: `@${displayName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'believer'}`,
-      role: 'member',
-      member_id: `GCZ-INSTANT-${Date.now().toString().slice(-6)}`,
-      is_verified: false,
-      badge_type: 'none',
-      is_premium: false,
-      created_at: new Date().toISOString(),
-      location: 'Harare',
-      city_location: 'Harare',
-      saved_verses: [],
-      offline_sermon_ids: [],
-      followers_count: 0,
-      following_count: 0
-    };
-    StorageService.saveUser(instantUser);
-    StorageService.autoFollowSuperAdminAndDeveloper(instantUser.id);
-    StorageService.setCurrentUser(instantUser);
-    setCurrentUser(instantUser);
-    confetti({ particleCount: 30, spread: 60 });
-  };
-
   useEffect(() => {
+    const canSyncRemotely = Boolean(
+      currentUser &&
+      currentUser.role !== 'guest' &&
+      !currentUser.id.startsWith('usr_guest') &&
+      getSupabase()
+    );
+
     // Initialize persistent social realtime broadcast channel & purge posts 8+ days old
     try {
       StorageService.purgeOldPosts(8);
-      SupabaseSyncService.getSocialChannel();
     } catch {}
 
     // Global Supabase Realtime subscription for instant zero-latency messages & profile updates
-    const unsubSocial = SupabaseSyncService.subscribeToSocialMessaging({
+    const unsubSocial = canSyncRemotely ? SupabaseSyncService.subscribeToSocialMessaging({
       onNewDirectMessage: (incomingDm) => {
         StorageService.receiveIncomingDirectMessage(incomingDm);
         refreshAppData();
@@ -336,7 +297,7 @@ export default function App() {
       onFollowUpdated: () => {
         refreshAppData();
       }
-    });
+    }) : () => {};
 
     // Cross-tab / cross-window zero-latency direct message dispatch
     const handleStorageChange = (e: StorageEvent) => {
@@ -352,13 +313,15 @@ export default function App() {
     };
     window.addEventListener('storage', handleStorageChange);
 
-    StorageService.syncUsersWithRemote().catch(() => {});
-    StorageService.syncPostsWithRemote().catch(() => {});
-    StorageService.syncStoriesWithRemote().catch(() => {});
-    StorageService.syncAllFollowsFromSupabase().catch(() => {});
-    StorageService.syncPostsAndPrayersWithRemote()
-      .catch(() => {})
-      .finally(() => refreshAppData());
+    if (canSyncRemotely) {
+      StorageService.syncUsersWithRemote().catch(() => {});
+      StorageService.syncPostsWithRemote().catch(() => {});
+      StorageService.syncStoriesWithRemote().catch(() => {});
+      StorageService.syncAllFollowsFromSupabase().catch(() => {});
+      StorageService.syncPostsAndPrayersWithRemote()
+        .catch(() => {})
+        .finally(() => refreshAppData());
+    }
 
     if (!currentUser) {
       liveSyncService.disconnect();
@@ -368,7 +331,7 @@ export default function App() {
       };
     }
 
-    if (currentUser?.id && currentUser?.role !== 'guest') {
+    if (canSyncRemotely && currentUser?.id) {
       StorageService.hydrateFollowsFromSupabase(currentUser.id).catch(() => {});
       StorageService.syncDirectMessagesWithRemote(currentUser.id).catch(() => {});
       StorageService.syncGroupMessagesWithRemote(currentUser.id).catch(() => {});
@@ -414,6 +377,7 @@ export default function App() {
     // Gentle background sync across Web and Android WebView (lightweight, runs on focus + 60s idle only when tab is visible)
     const periodicSync = () => {
       if (typeof document !== 'undefined' && document.hidden) return; // Prevent background battery drain & phone heating
+      if (!canSyncRemotely) return;
       StorageService.syncUsersWithRemote().catch(() => {});
       StorageService.syncPostsWithRemote().catch(() => {});
       if (currentUser?.id && currentUser?.role !== 'guest') {
@@ -554,20 +518,28 @@ export default function App() {
 
   const handleGuestLogin = () => {
     const guestUser: User = {
-      id: `usr_guest_${Date.now()}`,
-      phone: '0770000000',
-      full_name: 'Guest Believer',
+      id: `guest_session_${Date.now()}`,
+      phone: '',
+      full_name: 'Guest',
       role: 'guest',
-      member_id: 'GCZ-GST-000',
+      member_id: '',
       is_verified: false,
       badge_type: 'none',
       is_premium: false,
       created_at: new Date().toISOString(),
       saved_verses: []
     };
-    StorageService.setCurrentUser(guestUser);
     setCurrentUser(guestUser);
     setShowAuthModal(false);
+  };
+
+  const canOpenAdminPanel = currentUser?.role === 'super_admin' || currentUser?.role === 'developer';
+  const canOpenDevConsole = currentUser?.role === 'developer';
+  const openAdminPanel = () => {
+    if (canOpenAdminPanel) setShowAdminPanel(true);
+  };
+  const openDevConsole = () => {
+    if (canOpenDevConsole) setShowDevConsole(true);
   };
 
   // Website splash screen
@@ -583,7 +555,6 @@ export default function App() {
           setCurrentUser(user);
           refreshAppData();
         }}
-        onInstantJoin={handleInstantJoin}
         onContinueAsGuest={handleGuestLogin}
       />
     );
@@ -610,7 +581,6 @@ export default function App() {
     currentUser && 
     currentUser.role !== 'guest' && 
     !currentUser.id.startsWith('usr_guest') && 
-    !currentUser.id.startsWith('usr_instant_') &&
     (currentUser.onboarding_completed === false || (!currentUser.avatar_url && currentUser.onboarding_completed !== true))
   );
 
@@ -637,8 +607,8 @@ export default function App() {
         onOpenAuthModal={() => setShowAuthModal(true)}
         onOpenProfileModal={() => setShowProfileModal(true)}
         onLogout={handleLogout}
-        onOpenAdminPanel={() => setShowAdminPanel(true)}
-        onOpenDevConsole={() => setShowDevConsole(true)}
+        onOpenAdminPanel={openAdminPanel}
+        onOpenDevConsole={openDevConsole}
         onOpenFlutterExport={() => setShowFlutterExport(true)}
         onOpenDirectMessages={() => handleOpenDirectChat()}
         onOpenNotifications={() => setShowNotificationsModal(true)}
@@ -664,8 +634,8 @@ export default function App() {
               setAuthMode('login');
               setShowAuthModal(true);
             }}
-            onOpenDevConsole={() => setShowDevConsole(true)}
-            onOpenAdminPanel={() => setShowAdminPanel(true)}
+            onOpenDevConsole={openDevConsole}
+            onOpenAdminPanel={openAdminPanel}
             onOpenLiveModal={() => setShowLiveSermonModal(true)}
           />
         )}
@@ -735,9 +705,8 @@ export default function App() {
         {activeTab === 'me' && (
           <MeTab
             currentUser={currentUser}
-            onSwitchUser={handleSwitchUser}
-            onOpenAdminPanel={() => setShowAdminPanel(true)}
-            onOpenDevConsole={() => setShowDevConsole(true)}
+            onOpenAdminPanel={openAdminPanel}
+            onOpenDevConsole={openDevConsole}
             onOpenFlutterExport={() => setShowFlutterExport(true)}
             lowDataMode={lowDataMode}
             onToggleLowData={handleToggleLowData}
@@ -784,7 +753,7 @@ export default function App() {
       {/* 6. Modals & Drawers */}
       
       {/* Super Admin Panel Modal */}
-      {showAdminPanel && (
+      {showAdminPanel && canOpenAdminPanel && (
         <AdminPanel
           onClose={() => {
             setShowAdminPanel(false);
@@ -795,7 +764,7 @@ export default function App() {
       )}
 
       {/* Developer Console Modal */}
-      {showDevConsole && (
+      {showDevConsole && canOpenDevConsole && (
         <DevConsole
           onClose={() => setShowDevConsole(false)}
           onOpenFlutterExport={() => {
@@ -814,8 +783,9 @@ export default function App() {
       )}
 
       {/* Instagram-Style User Profile Modal (Self & Global Member Profile) */}
-      {(showProfileModal || globalProfileUserId) && (
+      {currentUser && (showProfileModal || globalProfileUserId) && (
         <InstagramProfileModal
+          currentUser={currentUser}
           userId={globalProfileUserId || currentUser?.id || null}
           isOpen={Boolean(showProfileModal || globalProfileUserId)}
           onClose={() => {
@@ -937,10 +907,6 @@ export default function App() {
                 refreshAppData();
                 setShowAuthModal(false);
               }}
-              onInstantJoin={(nameOrHandle) => {
-                handleInstantJoin(nameOrHandle);
-                setShowAuthModal(false);
-              }}
               onContinueAsGuest={() => {
                 handleGuestLogin();
                 setShowAuthModal(false);
@@ -973,14 +939,7 @@ export default function App() {
           partnerUser={activeCall.partner}
           isIncoming={activeCall.isIncoming}
           incomingCallId={activeCall.callId}
-          onEndCall={(durationSec, resultText) => {
-            if (resultText) {
-              StorageService.sendDirectMessage(
-                activeCall.isIncoming ? activeCall.partner.id : currentUser.id,
-                activeCall.isIncoming ? currentUser.id : activeCall.partner.id,
-                resultText
-              );
-            }
+          onEndCall={() => {
             setActiveCall(null);
             refreshAppData();
           }}

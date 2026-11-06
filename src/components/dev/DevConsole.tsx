@@ -590,7 +590,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
   };
 
   const handleClearLogs = () => {
-    setLogs(['[SYSTEM] Logs cleared by developer 0780699988']);
+    setLogs(['[SYSTEM] Logs cleared by developer']);
   };
 
   const handleToggleBanUser = (targetUser: User) => {
@@ -667,30 +667,13 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
 
   const handleSyncDeveloperAccount = async () => {
     setIsSyncingEcosystem(true);
-    setLogs(prev => [`[${new Date().toLocaleTimeString()}] [DEV_SYNC] Syncing developer account mr_juice7 (0780699988) with Supabase...`, ...prev]);
+    setLogs(prev => [`[${new Date().toLocaleTimeString()}] [DEV_SYNC] Syncing the configured developer account with Supabase...`, ...prev]);
     try {
       const allUsers = StorageService.getAllUsers();
-      let devUser = allUsers.find(u => u.role === 'developer' || u.phone === '0780699988');
+      const devUser = allUsers.find(u => u.role === 'developer');
       if (!devUser) {
-        devUser = {
-          id: 'usr_developer',
-          phone: '0780699988',
-          password: 'juice2026',
-          full_name: 'mr_juice7',
-          handle: '@mr_juice7',
-          role: 'developer' as UserRole,
-          badge_type: 'gold' as const,
-          is_verified: true,
-          is_premium: true,
-          cell_group: 'Gateway Tech Ministry',
-          location: 'Harare, Zimbabwe',
-          city_location: 'Harare',
-          member_id: 'GCZ-DEV-007',
-          created_at: new Date().toISOString(),
-        };
-        StorageService.saveUser(devUser);
-      } else {
-        StorageService.saveUser(devUser);
+        setLogs(prev => [`[${new Date().toLocaleTimeString()}] [DEV_SYNC] No developer account exists to sync.`, ...prev]);
+        return;
       }
       const ok = await SupabaseSyncService.syncUser(devUser);
       setUsersList(StorageService.getAllUsers());
@@ -699,9 +682,9 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
         window.dispatchEvent(new CustomEvent('gcz_user_profile_updated', { detail: devUser }));
       }
       if (ok) {
-        setLogs(prev => [`[${new Date().toLocaleTimeString()}] [DEV_SYNC] Developer account 0780699988 successfully synced to Supabase ecosystem!`, ...prev]);
+        setLogs(prev => [`[${new Date().toLocaleTimeString()}] [DEV_SYNC] Configured developer account synced to Supabase.`, ...prev]);
       } else {
-        setLogs(prev => [`[${new Date().toLocaleTimeString()}] [DEV_SYNC] Developer account synced locally (Supabase remote offline/unreachable).`, ...prev]);
+        setLogs(prev => [`[${new Date().toLocaleTimeString()}] [DEV_SYNC] Supabase sync was unavailable; the account remains unchanged locally.`, ...prev]);
       }
     } catch (err: any) {
       setLogs(prev => [`[${new Date().toLocaleTimeString()}] [DEV_SYNC] Sync notice: ${err?.message || err}`, ...prev]);
@@ -771,7 +754,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                   ? "bg-cyan-500/15 text-cyan-300 border-cyan-400/40"
                   : "bg-purple-500/20 text-purple-300 border-purple-500/40"
               )}>
-                {consoleTheme === 'jarvis' ? 'STARK PROTOCOL' : '0780699988'}
+                {consoleTheme === 'jarvis' ? 'STARK PROTOCOL' : 'DEVELOPER CONSOLE'}
               </span>
             </div>
             <p className={cn(
@@ -2029,31 +2012,19 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                       ? "bg-cyan-500/20 text-cyan-300 border border-cyan-400/60 shadow-[0_0_15px_rgba(6,182,212,0.4)]"
                       : "bg-primary text-primary-foreground"
                   )}>
-                    MJ
+                    DEV
                   </div>
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-base sm:text-lg font-black text-white">
-                        mr_juice7
+                        Developer Console
                       </h3>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 font-bold">
-                        SYSTEM ARCHITECT
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-400/20 text-cyan-300 border border-cyan-400/40 font-bold">
-                        DEV GODMODE 0
-                      </span>
                     </div>
                     <p className="text-xs text-slate-300 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="text-emerald-400 font-bold">Phone: 0780699988</span>
-                      <span>•</span>
-                      <span className="text-purple-300">Handle: @mr_juice7</span>
-                      <span>•</span>
-                      <span className="text-slate-400">ID: GCZ-DEV-007</span>
-                      <span>•</span>
-                      <span className="text-slate-400">Harare, Zimbabwe</span>
+                      <span className="text-emerald-400 font-bold">Authorized developer tools</span>
                     </p>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      Full-stack ecosystem controller with Supabase PostgreSQL bidirectional synchronization & live telemetry.
+                      Operational tools for account management, configuration, and live telemetry.
                     </p>
                   </div>
                 </div>
@@ -2068,10 +2039,10 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                         ? "bg-amber-500/20 border-amber-500/40 text-amber-300 animate-pulse"
                         : "bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/50"
                     )}
-                    title="Sync developer account (0780699988) directly to Supabase"
+                    title="Sync the configured developer account to Supabase"
                   >
                     <RefreshCw className={cn("w-3.5 h-3.5", isSyncingEcosystem && "animate-spin")} />
-                    <span>Sync Developer (0780699988)</span>
+                    <span>Sync Developer</span>
                   </button>
 
                   <button
@@ -2089,37 +2060,6 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                     <span>Sync Entire Ecosystem</span>
                   </button>
 
-                  {onSwitchUser && (
-                    <button
-                      onClick={() => {
-                        const devU = usersList.find(u => u.role === 'developer' || u.phone === '0780699988') || {
-                          id: 'usr_developer',
-                          phone: '0780699988',
-                          password: 'juice2026',
-                          full_name: 'mr_juice7',
-                          handle: '@mr_juice7',
-                          role: 'developer' as UserRole,
-                          badge_type: 'gold' as const,
-                          is_verified: true,
-                          is_premium: true,
-                          cell_group: 'Gateway Tech Ministry',
-                          location: 'Harare, Zimbabwe',
-                          city_location: 'Harare',
-                          member_id: 'GCZ-DEV-007',
-                          created_at: new Date().toISOString(),
-                        };
-                        StorageService.saveUser(devU);
-                        StorageService.setCurrentUser(devU);
-                        onSwitchUser(devU);
-                        setLogs(prev => [`[${new Date().toLocaleTimeString()}] [SESSION] Switched active session to Developer mr_juice7 (Real-time Synced)`, ...prev]);
-                      }}
-                      className="px-3 py-2 rounded-xl text-xs font-bold bg-purple-600/30 hover:bg-purple-600/40 text-purple-200 border border-purple-500/50 flex items-center gap-2 transition-all cursor-pointer shadow-sm"
-                      title="Quickly switch current logged-in session to mr_juice7"
-                    >
-                      <Zap className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Switch Session to Dev</span>
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
@@ -2211,7 +2151,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                       })
                       .map(user => {
                         const isBanned = Boolean(bannedUsersMap[user.id] || (user.phone && bannedUsersMap[user.phone]) || user.is_banned);
-                        const isDev = user.role === 'developer' || user.phone === '0780699988';
+                        const isDev = user.role === 'developer';
                         return (
                           <tr key={user.id} className="hover:bg-slate-800/40 transition-colors">
                             <td className="p-3">
@@ -2320,7 +2260,7 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                   </h4>
                 </div>
                 <p className="text-xs text-slate-400 mt-1">
-                  Exclusive to Developer <strong>0780699988</strong>: Penetrate any account session, modify credentials & roles, or delete rogue records.
+                  Developer tools: inspect accounts, manage roles, and resolve account issues.
                 </p>
               </div>
               <span className="px-3 py-1 rounded-full bg-purple-950 text-purple-300 font-mono text-xs border border-purple-500/50 font-black shrink-0">
@@ -2399,8 +2339,8 @@ export const DevConsole: React.FC<DevConsoleProps> = ({ onClose, onOpenFlutterEx
                       );
                     })
                     .map(u => {
-                      const isDev = u.phone === '0780699988';
-                      const isCurrentUser = StorageService.getCurrentUser()?.phone === u.phone;
+                      const isDev = u.role === 'developer';
+                      const isCurrentUser = StorageService.getCurrentUser()?.id === u.id;
                       const isBanned = !!StorageService.getBannedUsers()[u.phone];
                       const isMenuOpen = activeUserMenuId === u.id;
 
