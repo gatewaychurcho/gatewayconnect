@@ -577,8 +577,16 @@ export default function App() {
   }
 
   // Multi-step Onboarding Wizard for new users immediately after sign-up (Facebook-style flow)
-  // Developers and Administrators bypass onboarding directly into dashboard
-  const isPrivilegedUser = currentUser?.role === 'developer' || currentUser?.role === 'super_admin' || currentUser?.role === 'admin';
+  // Developers, Leadership and Administrators bypass onboarding directly into dashboard
+  const isPrivilegedUser = 
+    currentUser?.role === 'developer' || 
+    currentUser?.role === 'super_admin' || 
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'pastor' ||
+    currentUser?.role === 'moderator' ||
+    currentUser?.id === 'usr_developer' || 
+    currentUser?.id === 'usr_howard' || 
+    (currentUser?.phone ? (arePhoneNumbersEqual(currentUser.phone, '0780699988') || arePhoneNumbersEqual(currentUser.phone, '0784667632')) : false);
   const needsOnboarding = Boolean(
     !isPrivilegedUser &&
     currentUser && 
