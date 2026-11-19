@@ -904,7 +904,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
   };
 
   const handleDeleteGroup = (group: CommunityGroup) => {
-    const isDev = currentUser?.role === 'developer' || (currentUser?.phone ? arePhoneNumbersEqual(currentUser.phone, '0780699988') : false);
+    const isDev = currentUser?.role === 'developer' || currentUser?.id === 'usr_developer' || currentUser?.id === 'usr_howard' || (currentUser?.phone ? (arePhoneNumbersEqual(currentUser.phone, '0780699988') || arePhoneNumbersEqual(currentUser.phone, '0784667632')) : false);
     const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
     if (!isAdmin && !isDev) {
       alert('Only Administrators and Developers have permissions to delete and dissolve groups.');
@@ -993,7 +993,7 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
-  const isDeveloper = currentUser?.role === 'developer' || (currentUser?.phone ? arePhoneNumbersEqual(currentUser.phone, '0780699988') : false);
+  const isDeveloper = currentUser?.role === 'developer' || currentUser?.id === 'usr_developer' || currentUser?.id === 'usr_howard' || (currentUser?.phone ? (arePhoneNumbersEqual(currentUser.phone, '0780699988') || arePhoneNumbersEqual(currentUser.phone, '0784667632')) : false);
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
   const isAdminOrDev = isAdmin || isDeveloper;
 
@@ -1659,7 +1659,9 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                                            isSamePhone ||
                                            (Boolean(post.page_id) && StorageService.getPages().some(p => p.id === post.page_id && (p.creator_id === currentUser?.id || p.admin_ids?.includes(currentUser?.id || ''))));
                       const isDeveloperUser = currentUser?.role === 'developer' || 
-                                              Boolean(currentUser?.phone && arePhoneNumbersEqual(currentUser.phone, '0780699988')) || 
+                                              currentUser?.id === 'usr_developer' ||
+                                              currentUser?.id === 'usr_howard' ||
+                                              Boolean(currentUser?.phone && (arePhoneNumbersEqual(currentUser.phone, '0780699988') || arePhoneNumbersEqual(currentUser.phone, '0784667632'))) || 
                                               (currentUser as any)?.is_developer || 
                                               Boolean(typeof StorageService?.isDeveloperMode === 'function' && StorageService.isDeveloperMode());
                       const isModOrAdmin = isDeveloperUser || isAdminOrDev || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || (currentUser?.role as string) === 'moderator' || (currentUser?.role as string) === 'mod' || canModeratePosts;
@@ -3498,7 +3500,9 @@ export const CommunityTab: React.FC<CommunityTabProps> = ({
                                    isSamePhone ||
                                    (Boolean(selectedPostOptions.page_id) && StorageService.getPages().some(p => p.id === selectedPostOptions.page_id && (p.creator_id === currentUser?.id || p.admin_ids?.includes(currentUser?.id || ''))));
               const isDeveloperUser = currentUser?.role === 'developer' || 
-                                      Boolean(currentUser?.phone && arePhoneNumbersEqual(currentUser.phone, '0780699988')) || 
+                                      currentUser?.id === 'usr_developer' ||
+                                      currentUser?.id === 'usr_howard' ||
+                                      Boolean(currentUser?.phone && (arePhoneNumbersEqual(currentUser.phone, '0780699988') || arePhoneNumbersEqual(currentUser.phone, '0784667632'))) || 
                                       (currentUser as any)?.is_developer || 
                                       Boolean(typeof StorageService?.isDeveloperMode === 'function' && StorageService.isDeveloperMode());
               const isModOrAdmin = isDeveloperUser || isAdminOrDev || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || (currentUser?.role as string) === 'moderator' || (currentUser?.role as string) === 'mod' || canModeratePosts;

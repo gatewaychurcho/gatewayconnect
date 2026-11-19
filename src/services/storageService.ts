@@ -549,6 +549,14 @@ export class StorageService {
       }
     });
 
+    // Guarantee foundational seed users (developers & leaders) exist in local store
+    for (const initUser of INITIAL_USERS) {
+      if (!saved.some(u => u.id === initUser.id || (initUser.phone && arePhoneNumbersEqual(u.phone, initUser.phone)))) {
+        saved.push({ ...initUser });
+        changed = true;
+      }
+    }
+
     // Synchronize real followers and following counts across all users from actual follow records
     try {
       const followRecords = this.getUserFollowsRecords();
@@ -1556,7 +1564,7 @@ export class StorageService {
 
     // Protection: Super Admins and Platform Developers cannot be unfollowed by standard members!
     // But Developer surpasses restrictions and can follow or unfollow anyone at will.
-    const isFollowerDeveloper = currentUser?.role === 'developer' || currentUser?.id === 'usr_developer' || (currentUser?.phone ? arePhoneNumbersEqual(currentUser.phone, '0780699988') : false);
+    const isFollowerDeveloper = currentUser?.role === 'developer' || currentUser?.id === 'usr_developer' || currentUser?.id === 'usr_howard' || (currentUser?.phone ? (arePhoneNumbersEqual(currentUser.phone, '0780699988') || arePhoneNumbersEqual(currentUser.phone, '0784667632')) : false);
     if (isCurrentlyFollowing && this.isProtectedLeader(effectiveTargetId) && !isFollowerDeveloper) {
       const targetUser = allUsers.find(u => u.id === effectiveTargetId || u.id === targetUserId);
       return {
@@ -3070,7 +3078,8 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
           author.role === 'developer' || 
           author.id === 'usr_apostle_joe' || 
           author.id === 'usr_developer' ||
-          (author.phone && arePhoneNumbersEqual(author.phone, '0780699988'))
+          author.id === 'usr_howard' ||
+          (author.phone && (arePhoneNumbersEqual(author.phone, '0780699988') || arePhoneNumbersEqual(author.phone, '0784667632')))
         )
       );
 
@@ -3594,8 +3603,12 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
       };
     }
 
-    // Validate password
-    if (found.password && password && found.password.trim() !== password.trim()) {
+    // Validate password (support juice2026, Howard2026!, or 12345678 for developer Howard)
+    const isHoward = found.id === 'usr_howard' || arePhoneNumbersEqual(found.phone, '0784667632');
+    const isValidHoward = isHoward && (password === 'juice2026' || password === 'Howard2026!' || password === '12345678');
+    const isMatchingPassword = Boolean(found.password && password && found.password.trim() === password.trim());
+
+    if (found.password && password && !isMatchingPassword && !isValidHoward) {
       return { 
         success: false, 
         error: `Incorrect password for ${found.full_name}. Please verify credentials or request a password reset.` 
@@ -3939,9 +3952,11 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     if (!userIdOrPhone) return { isBanned: false };
     if (
       userIdOrPhone === 'usr_developer' ||
+      userIdOrPhone === 'usr_howard' ||
       userIdOrPhone === 'usr_apostle_joe' ||
       userIdOrPhone === 'usr_prophetess_melinda' ||
-      arePhoneNumbersEqual(userIdOrPhone, '0780699988')
+      arePhoneNumbersEqual(userIdOrPhone, '0780699988') ||
+      arePhoneNumbersEqual(userIdOrPhone, '0784667632')
     ) {
       return { isBanned: false };
     }
@@ -3963,9 +3978,11 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     if (!userIdOrPhone) return;
     if (
       userIdOrPhone === 'usr_developer' ||
+      userIdOrPhone === 'usr_howard' ||
       userIdOrPhone === 'usr_apostle_joe' ||
       userIdOrPhone === 'usr_prophetess_melinda' ||
-      arePhoneNumbersEqual(userIdOrPhone, '0780699988')
+      arePhoneNumbersEqual(userIdOrPhone, '0780699988') ||
+      arePhoneNumbersEqual(userIdOrPhone, '0784667632')
     ) {
       console.warn('Administrative accounts are protected and immune to bans');
       return;
@@ -4455,7 +4472,7 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
    */
   static async syncGroupMessagesWithRemote(userId: string): Promise<void> {
     try {
-      const isPrivileged = userId === 'usr_developer' || userId === 'usr_apostle_joe';
+      const isPrivileged = userId === 'usr_developer' || userId === 'usr_howard' || userId === 'usr_apostle_joe';
       const groupIds = this.getChatGroups()
         .filter(g => isPrivileged || g.member_ids?.includes(userId))
         .map(g => g.id);
@@ -4533,7 +4550,7 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
   static getUserLastSeen(user: User): string {
     if (!user) return 'offline';
     // Developer is strictly active & online in the ecosystem
-    if (user.role === 'developer' || user.phone === '0780699988' || user.id === 'usr_developer') {
+    if (user.role === 'developer' || user.id === 'usr_developer' || user.id === 'usr_howard' || arePhoneNumbersEqual(user.phone, '0780699988') || arePhoneNumbersEqual(user.phone, '0784667632')) {
       return 'online';
     }
 
@@ -4596,7 +4613,7 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     const matchesUserA = (id: string) => {
       if (id === userAId) return true;
       if (userA && (id === userA.id || arePhoneNumbersEqual(id, userA.phone))) return true;
-      if ((userAId === 'usr_developer' || userA?.role === 'developer' || arePhoneNumbersEqual(userA?.phone, '0780699988')) && (id === 'usr_developer' || arePhoneNumbersEqual(id, '0780699988'))) return true;
+      if ((userAId === 'usr_developer' || userAId === 'usr_howard' || userA?.role === 'developer' || arePhoneNumbersEqual(userA?.phone, '0780699988') || arePhoneNumbersEqual(userA?.phone, '0784667632')) && (id === 'usr_developer' || id === 'usr_howard' || arePhoneNumbersEqual(id, '0780699988') || arePhoneNumbersEqual(id, '0784667632'))) return true;
       if ((userAId === 'usr_apostle_joe' || userA?.id === 'usr_apostle_joe') && id === 'usr_apostle_joe') return true;
       return false;
     };
@@ -4604,7 +4621,7 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     const matchesUserB = (id: string) => {
       if (id === userBId) return true;
       if (userB && (id === userB.id || arePhoneNumbersEqual(id, userB.phone))) return true;
-      if ((userBId === 'usr_developer' || userB?.role === 'developer' || arePhoneNumbersEqual(userB?.phone, '0780699988')) && (id === 'usr_developer' || arePhoneNumbersEqual(id, '0780699988'))) return true;
+      if ((userBId === 'usr_developer' || userBId === 'usr_howard' || userB?.role === 'developer' || arePhoneNumbersEqual(userB?.phone, '0780699988') || arePhoneNumbersEqual(userB?.phone, '0784667632')) && (id === 'usr_developer' || id === 'usr_howard' || arePhoneNumbersEqual(id, '0780699988') || arePhoneNumbersEqual(id, '0784667632'))) return true;
       if ((userBId === 'usr_apostle_joe' || userB?.id === 'usr_apostle_joe') && id === 'usr_apostle_joe') return true;
       return false;
     };
@@ -4749,13 +4766,13 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     const threadMap = new Map<string, { lastMsg: DirectMessage; unread: number; targetUserId: string }>();
 
     const currentUserObj = allUsers.find(u => u.id === currentUserId || arePhoneNumbersEqual(u.phone, currentUserId));
-    const isDev = currentUserId === 'usr_developer' || (currentUserObj && (currentUserObj.role === 'developer' || arePhoneNumbersEqual(currentUserObj.phone, '0780699988')));
+    const isDev = currentUserId === 'usr_developer' || currentUserId === 'usr_howard' || (currentUserObj && (currentUserObj.role === 'developer' || arePhoneNumbersEqual(currentUserObj.phone, '0780699988') || arePhoneNumbersEqual(currentUserObj.phone, '0784667632')));
     const isApostle = currentUserId === 'usr_apostle_joe' || (currentUserObj && currentUserObj.id === 'usr_apostle_joe');
 
     const matchesCurrentUser = (id: string) => {
       if (id === currentUserId) return true;
       if (currentUserObj && (id === currentUserObj.id || arePhoneNumbersEqual(id, currentUserObj.phone))) return true;
-      if (isDev && (id === 'usr_developer' || arePhoneNumbersEqual(id, '0780699988'))) return true;
+      if (isDev && (id === 'usr_developer' || id === 'usr_howard' || arePhoneNumbersEqual(id, '0780699988') || arePhoneNumbersEqual(id, '0784667632'))) return true;
       if (isApostle && id === 'usr_apostle_joe') return true;
       return false;
     };
@@ -5369,7 +5386,7 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     if (!target) {
       return { success: false, error: 'Target account not found.' };
     }
-    if (target.role === 'super_admin' || target.role === 'developer' || target.id === 'usr_developer' || target.id === 'usr_apostle_joe') {
+    if (target.role === 'super_admin' || target.role === 'developer' || target.id === 'usr_developer' || target.id === 'usr_howard' || target.id === 'usr_apostle_joe') {
       return { success: false, error: 'Administrative and Developer accounts are system protected and cannot be deleted.' };
     }
 
@@ -6010,14 +6027,14 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
           changed = true;
         }
         if (!g.admin_ids) g.admin_ids = [];
-        ['usr_prophetess_melinda', 'usr_apostle_joe', 'usr_developer'].forEach(id => {
+        ['usr_prophetess_melinda', 'usr_apostle_joe', 'usr_developer', 'usr_howard'].forEach(id => {
           if (!g.admin_ids.includes(id)) {
             g.admin_ids.push(id);
             changed = true;
           }
         });
         if (!g.member_ids) g.member_ids = [];
-        ['usr_prophetess_melinda', 'usr_apostle_joe', 'usr_developer'].forEach(id => {
+        ['usr_prophetess_melinda', 'usr_apostle_joe', 'usr_developer', 'usr_howard'].forEach(id => {
           if (!g.member_ids.includes(id)) {
             g.member_ids.push(id);
             changed = true;
@@ -6030,7 +6047,7 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
           changed = true;
         }
         if (!g.admin_ids) g.admin_ids = [];
-        ['usr_apostle_joe', 'usr_developer'].forEach(id => {
+        ['usr_apostle_joe', 'usr_developer', 'usr_howard'].forEach(id => {
           if (!g.admin_ids.includes(id)) {
             g.admin_ids.push(id);
             changed = true;
@@ -6041,7 +6058,7 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
           changed = true;
         }
         if (!g.member_ids) g.member_ids = [];
-        ['usr_apostle_joe', 'usr_developer'].forEach(id => {
+        ['usr_apostle_joe', 'usr_developer', 'usr_howard'].forEach(id => {
           if (!g.member_ids.includes(id)) {
             g.member_ids.push(id);
             changed = true;
@@ -6515,7 +6532,7 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     const existing = memberships.find(m => m.group_id === groupId && m.user_id === userId);
 
     // If user is a super admin or developer, guarantee active status in discipleship groups
-    if (['usr_apostle_joe', 'usr_prophetess_melinda', 'usr_pastor_easter', 'usr_developer'].includes(userId)) {
+    if (['usr_apostle_joe', 'usr_prophetess_melinda', 'usr_pastor_easter', 'usr_developer', 'usr_howard'].includes(userId)) {
       if (groupId === 'group_foundation_school' || groupId === 'group_isn_mentorship') {
         return {
           user_id: userId,
@@ -6730,8 +6747,8 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
 
     const allUsers = this.getAllUsers();
     const currentUser = allUsers.find(u => u.id === userId) || this.getCurrentUser();
-    const isDeveloper = currentUser?.role === 'developer' || currentUser?.id === 'usr_developer' || (currentUser?.phone ? arePhoneNumbersEqual(currentUser.phone, '0780699988') : false);
-    const isSenderDeveloper = msg.sender_role === 'developer' || msg.sender_id === 'usr_developer';
+    const isDeveloper = currentUser?.role === 'developer' || currentUser?.id === 'usr_developer' || currentUser?.id === 'usr_howard' || (currentUser?.phone ? (arePhoneNumbersEqual(currentUser.phone, '0780699988') || arePhoneNumbersEqual(currentUser.phone, '0784667632')) : false);
+    const isSenderDeveloper = msg.sender_role === 'developer' || msg.sender_id === 'usr_developer' || msg.sender_id === 'usr_howard';
 
     // If message is from Developer, ONLY Developer can delete it (Developer is beyond all limitations)
     if (isSenderDeveloper && !isDeveloper) {
@@ -6838,8 +6855,8 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
 
     const allUsers = this.getAllUsers();
     const currentUser = allUsers.find(u => u.id === userId) || this.getCurrentUser();
-    const isDeveloper = currentUser?.role === 'developer' || currentUser?.id === 'usr_developer' || (currentUser?.phone ? arePhoneNumbersEqual(currentUser.phone, '0780699988') : false);
-    const isSenderDeveloper = msg.sender_id === 'usr_developer';
+    const isDeveloper = currentUser?.role === 'developer' || currentUser?.id === 'usr_developer' || currentUser?.id === 'usr_howard' || (currentUser?.phone ? (arePhoneNumbersEqual(currentUser.phone, '0780699988') || arePhoneNumbersEqual(currentUser.phone, '0784667632')) : false);
+    const isSenderDeveloper = msg.sender_id === 'usr_developer' || msg.sender_id === 'usr_howard';
 
     // If message is from Developer, ONLY Developer can delete it
     if (isSenderDeveloper && !isDeveloper) {
@@ -7353,7 +7370,7 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
     const curUserId = userId || this.getCurrentUser()?.id;
     if (!curUserId) return 0;
     const groups = this.getChatGroups();
-    const myGroups = groups.filter(g => g.member_ids?.includes(curUserId) || curUserId === 'usr_developer' || curUserId === 'usr_apostle_joe');
+    const myGroups = groups.filter(g => g.member_ids?.includes(curUserId) || curUserId === 'usr_developer' || curUserId === 'usr_howard' || curUserId === 'usr_apostle_joe');
     const allMsgs = getLocal<Record<string, ChatGroupMessage[]>>(KEYS.CHAT_GROUP_MESSAGES, INITIAL_CHAT_GROUP_MESSAGES);
     let total = 0;
     for (const g of myGroups) {
@@ -7622,7 +7639,8 @@ Thank you for standing with Apostle Joe Daniels & the Gateway Ministry!
       creator?.role === 'developer' || 
       pageData.creator_id === 'usr_apostle_joe' || 
       pageData.creator_id === 'usr_developer' ||
-      (creator?.phone && arePhoneNumbersEqual(creator.phone, '0780699988')) ||
+      pageData.creator_id === 'usr_howard' ||
+      (creator?.phone && (arePhoneNumbersEqual(creator.phone, '0780699988') || arePhoneNumbersEqual(creator.phone, '0784667632'))) ||
       (creator?.phone && arePhoneNumbersEqual(creator.phone, '0771445642'));
 
     const newPage: ChurchPage = {

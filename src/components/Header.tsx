@@ -18,7 +18,7 @@ import {
   MoreVertical
 } from 'lucide-react';
 import { User, PushNotification, NotificationSettings } from '../types';
-import { StorageService } from '../services/storageService';
+import { StorageService, arePhoneNumbersEqual } from '../services/storageService';
 
 interface HeaderProps {
   currentUser: User;
@@ -54,8 +54,8 @@ export const Header: React.FC<HeaderProps> = ({
   isLiveSermon,
   unreadDmsCount = 0
 }) => {
-  const isDeveloper = currentUser.role === 'developer';
-  const isSuperAdmin = currentUser.role === 'super_admin' || isDeveloper;
+  const isDeveloper = currentUser.role === 'developer' || currentUser.id === 'usr_developer' || currentUser.id === 'usr_howard' || (currentUser.phone ? (arePhoneNumbersEqual(currentUser.phone, '0780699988') || arePhoneNumbersEqual(currentUser.phone, '0784667632')) : false);
+  const isSuperAdmin = currentUser.role === 'super_admin' || currentUser.role === 'admin' || isDeveloper;
   const isGuest = currentUser.role === 'guest';
 
   const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);

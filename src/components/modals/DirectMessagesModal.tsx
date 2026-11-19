@@ -667,8 +667,9 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     currentUser.role === 'developer' ||
     currentUser.role === 'super_admin' ||
     currentUser.role === 'admin' ||
-    (Boolean(currentUser.phone) && arePhoneNumbersEqual(currentUser.phone, '0780699988')) ||
+    (Boolean(currentUser.phone) && (arePhoneNumbersEqual(currentUser.phone, '0780699988') || arePhoneNumbersEqual(currentUser.phone, '0784667632'))) ||
     currentUser.id === 'usr_developer' ||
+    currentUser.id === 'usr_howard' ||
     currentUser.id === 'usr_apostle_joe';
   const isAdminOrDev = ['super_admin', 'developer', 'pastor', 'moderator'].includes(currentUser.role) || isPrivilegedAdminOrDev;
   const isSuperAdminOrDev = ['super_admin', 'developer'].includes(currentUser.role) || isPrivilegedAdminOrDev;
@@ -1052,7 +1053,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
     created_at: new Date().toISOString()
   } as User : null);
 
-  const isDeveloper = currentUser.role === 'developer' || arePhoneNumbersEqual(currentUser.phone, '0780699988');
+  const isDeveloper = currentUser.role === 'developer' || currentUser.id === 'usr_developer' || currentUser.id === 'usr_howard' || arePhoneNumbersEqual(currentUser.phone, '0780699988') || arePhoneNumbersEqual(currentUser.phone, '0784667632');
 
   // Strict Group Visibility: only show groups user is added to, unless Developer
   const visibleGroups = isDeveloper
@@ -2844,7 +2845,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               ) : (
                                 (activeUser.full_name || 'GC').slice(0, 2).toUpperCase()
                               )}
-                              {(StorageService.getUserLastSeen(activeUser) === 'online' || activeUser.role === 'developer' || activeUser.phone === '0780699988') && (
+                              {(StorageService.getUserLastSeen(activeUser) === 'online' || activeUser.role === 'developer' || activeUser.phone === '0780699988' || activeUser.phone === '0784667632') && (
                                 <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-card" title="Online" />
                               )}
                             </div>
@@ -2870,7 +2871,7 @@ export const DirectMessagesModal: React.FC<DirectMessagesModalProps> = ({
                               </p>
                             ) : (
                               <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 truncate">
-                                {activeUser.role === 'developer' || activeUser.phone === '0780699988' ? (
+                                {activeUser.role === 'developer' || activeUser.phone === '0780699988' || activeUser.phone === '0784667632' ? (
                                   <>
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                                     <span className="truncate text-emerald-600 dark:text-emerald-400 font-semibold">Online</span>

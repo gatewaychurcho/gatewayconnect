@@ -46,7 +46,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { User, Sermon, NotificationSettings, Testimony, PostComment, ChurchPage } from '../../types';
-import { StorageService } from '../../services/storageService';
+import { StorageService, arePhoneNumbersEqual } from '../../services/storageService';
 import { StorageBucketService } from '../../services/StorageBucketService';
 import { PaynowService } from '../../services/paynowService';
 import { ImagePickerModal } from '../modals/ImagePickerModal';
@@ -529,8 +529,8 @@ export const MeTab: React.FC<MeTabProps> = ({
     );
   }
 
-  const isSuperAdmin = localUser.role === 'super_admin';
-  const isDeveloper = localUser.role === 'developer';
+  const isSuperAdmin = localUser.role === 'super_admin' || localUser.role === 'admin';
+  const isDeveloper = localUser.role === 'developer' || localUser.id === 'usr_developer' || localUser.id === 'usr_howard' || (localUser.phone ? (arePhoneNumbersEqual(localUser.phone, '0780699988') || arePhoneNumbersEqual(localUser.phone, '0784667632')) : false);
   const downloadQuota = StorageService.getDownloadQuota(localUser);
 
   return (

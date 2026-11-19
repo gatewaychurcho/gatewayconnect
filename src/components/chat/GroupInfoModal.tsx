@@ -192,7 +192,7 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
   });
 
   const allUsers = StorageService.getAllUsers();
-  const isDeveloper = currentUser.role === 'developer' || currentUser.id === 'usr_developer' || arePhoneNumbersEqual(currentUser.phone, '0780699988');
+  const isDeveloper = currentUser.role === 'developer' || currentUser.id === 'usr_developer' || currentUser.id === 'usr_howard' || arePhoneNumbersEqual(currentUser.phone, '0780699988') || arePhoneNumbersEqual(currentUser.phone, '0784667632');
   const isSuperAdmin = currentUser.role === 'super_admin' || currentUser.id === 'usr_apostle_joe';
   const isGroupAdmin = isDeveloper || isSuperAdmin || (currentGroup.admin_ids || [currentGroup.created_by]).includes(currentUser.id);
   const isGroupPinned = currentGroup.pinned_by_users?.includes(currentUser.id);

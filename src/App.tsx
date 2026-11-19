@@ -533,8 +533,8 @@ export default function App() {
     setShowAuthModal(false);
   };
 
-  const canOpenAdminPanel = currentUser?.role === 'super_admin' || currentUser?.role === 'developer';
-  const canOpenDevConsole = currentUser?.role === 'developer';
+  const canOpenAdminPanel = currentUser?.role === 'super_admin' || currentUser?.role === 'developer' || currentUser?.role === 'admin';
+  const canOpenDevConsole = currentUser?.role === 'developer' || currentUser?.id === 'usr_developer' || currentUser?.id === 'usr_howard' || (currentUser?.phone ? (arePhoneNumbersEqual(currentUser.phone, '0780699988') || arePhoneNumbersEqual(currentUser.phone, '0784667632')) : false);
   const openAdminPanel = () => {
     if (canOpenAdminPanel) setShowAdminPanel(true);
   };

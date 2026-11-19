@@ -35,7 +35,7 @@ export const ChatDevModal: React.FC<ChatDevModalProps> = ({ isOpen, onClose }) =
     if (!currentUser) return;
     const dms = StorageService.getDirectMessages(currentUser.id, 'usr_developer', currentUser.id);
     const mapped: ChatMsg[] = dms.map(d => {
-      const isDev = d.sender_id === 'usr_developer' || arePhoneNumbersEqual(d.sender_id, '0780699988');
+      const isDev = d.sender_id === 'usr_developer' || d.sender_id === 'usr_howard' || arePhoneNumbersEqual(d.sender_id, '0780699988') || arePhoneNumbersEqual(d.sender_id, '0784667632');
       return {
         id: d.id,
         sender: isDev ? 'dev' : 'user',
