@@ -121,6 +121,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     setIsLoading(true);
 
     try {
+      // 0. Quick local authentication for developers, leadership & existing local users (zero network latency)
+      const localDirect = StorageService.login(identifier, pwd);
+      if (localDirect.success && localDirect.user) {
+        StorageService.saveUser(localDirect.user);
+        StorageService.setCurrentUser(localDirect.user);
+        confetti({ particleCount: 35, spread: 60 });
+        onLoginSuccess(localDirect.user, false);
+        if (onClose) onClose();
+        return;
+      }
+
       const isEmail = identifier.includes('@');
       const fullPhone = isEmail ? '' : (identifier.startsWith('+') ? identifier : formatPhoneWithCountryCode(identifier, '+263'));
       const syntheticEmail = isEmail ? identifier : `${fullPhone.replace('+', '')}@gatewayconnect.joedaniels.org`;
@@ -209,8 +220,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       // 2. Cloudflare R2 & Local Storage Resilient Authentication
       const res = await StorageService.loginAsync(identifier, pwd);
       if (res.success && res.user) {
+        StorageService.saveUser(res.user);
+        StorageService.setCurrentUser(res.user);
         confetti({ particleCount: 35, spread: 60 });
         onLoginSuccess(res.user, false);
+        if (onClose) onClose();
       } else {
         setErrorMessage(res.error || 'Invalid credentials. Please verify your email/phone and password, or use Forgot Password.');
       }

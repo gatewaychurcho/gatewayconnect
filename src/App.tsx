@@ -552,6 +552,7 @@ export default function App() {
     return (
       <LoginScreen
         onLoginSuccess={(user, isNewUser) => {
+          StorageService.setCurrentUser(user);
           setCurrentUser(user);
           refreshAppData();
         }}
@@ -576,8 +577,10 @@ export default function App() {
   }
 
   // Multi-step Onboarding Wizard for new users immediately after sign-up (Facebook-style flow)
-  // Forces users to choose/upload an avatar before accessing the main dashboard
+  // Developers and Administrators bypass onboarding directly into dashboard
+  const isPrivilegedUser = currentUser?.role === 'developer' || currentUser?.role === 'super_admin' || currentUser?.role === 'admin';
   const needsOnboarding = Boolean(
+    !isPrivilegedUser &&
     currentUser && 
     currentUser.role !== 'guest' && 
     !currentUser.id.startsWith('usr_guest') && 
